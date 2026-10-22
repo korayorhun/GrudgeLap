@@ -83,7 +83,9 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
 - Cars: a loft through cross-sections built from a `BodyStyle`'s profile curves keyed along the body,
   monotone-cubic between keys; wheel arches cut into the loft; star-rimmed wheels that steer and spin.
   Quads are wound by the ring direction (tangent turned clockwise = outward), normals are smoothed below a
-  60 degree crease angle. Two styles: the flat-twelve (blade nose, lamp lids, dipped bonnet, small cabin,
+  60 degree crease angle. The three character lines of each section (shoulder, bonnet edge / greenhouse
+  base, crest) are rounded with 35-50 mm fillets in four sub-strips, so highlights roll over them like
+  pressed steel; glass, trim and seams are still decided on the twenty-point design outline. Two styles: the flat-twelve (blade nose, lamp lids, dipped bonnet, small cabin,
   strakes, louvres, slatted tail, A-pillar mirror) and the V8 (low wide nose, long screen, glass engine
   cover, side scoops, round lamps, four tips, lip). Panel shut lines are dark strips of the loft itself (a
   pair of stations 14 mm apart at each seam); a plate, indicators, door handles, brake discs with red
@@ -150,5 +152,7 @@ pushes, creates the GitHub release, updates the Scoop bucket and submits the win
    tune.
 4. More circuits built with the same turtle API; the hidden skid pad could grow cones and a timer.
 5. Scanned models instead of lofts and primitives: a car body with real curvature (the loft has twenty
-   points per section) and buildings with real geometry would be the next step past textured primitives;
-   a reflection probe on the car is worth measuring for the paint.
+   design points per section, three of them filleted) and buildings with real geometry would be the next
+   step past textured primitives. A reflection probe riding with the car was tried in 0.5 and left out:
+   with SDFGI and screen-space reflections already on the paint the difference was hard to see, while a
+   real-time probe renders the scene six more times a frame.

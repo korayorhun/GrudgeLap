@@ -119,7 +119,7 @@ best lap's ghost out of the picture.
 - `game/` — the Godot view: world generated from the track (terrain mesh from the ground field with a ring
   of hills, photo-textured road with worn wheel tracks, gravel shoulders, bridges with guardrails, pad,
   grass tufts, trees from leaf cards, fields, textured buildings and signs, the train), lofted car bodies
-  with panel seams and a furnished cabin behind tinted glass (dashboard, a steering wheel that turns with
+  with rounded character lines, panel seams and a furnished cabin behind tinted glass (dashboard, a steering wheel that turns with
   the steering, seats, slim A-pillars), a driver's-eye cockpit camera and a chase camera, HUD with a
   scrolling cluster, engine, tyre (squeal, howl, screech, gravel) and V8 overrun-pop sounds from
   recordings over synthesised road roar, wind and bump thumps, a synthesised engine and squeal for 1989 mode,
