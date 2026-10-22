@@ -42,8 +42,8 @@ then `scoop install korayorhun/grudgelap` (portable; updates arrive through `sco
 package (`winget install KorayOrhun.GrudgeLap`) follows with the 1.0 release.
 
 Or download `GrudgeLap-Setup-x.y.z.exe` (per-user install, no admin rights) or the portable
-`GrudgeLap-Portable-x.y.z.zip` (unzip, run `GrudgeLap.exe`; the `data_GrudgeLap_windows_x86_64` folder
-must stay next to it) from **[Releases](https://github.com/korayorhun/GrudgeLap/releases/latest)**. The
+`GrudgeLap-Portable-x.y.z.zip` (unzip, run `GrudgeLap.exe`; `GrudgeLap.pck` and the
+`data_GrudgeLap_windows_x86_64` folder must stay next to it) from **[Releases](https://github.com/korayorhun/GrudgeLap/releases/latest)**. The
 package is not code-signed yet, so SmartScreen may say "unrecognized app": *More info → Run anyway*.
 
 **Auto-update:** once a day the game asks GitHub Releases for a newer version and says so in the corner;

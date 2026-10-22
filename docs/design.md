@@ -151,6 +151,10 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   directions instead of the general solver) and the terrain is sampled in parallel, about 0.8 s on an
   8-core laptop; the engine adds about 1.3 s on the first frame. The boot splash (`game/splash.png`, drawn
   from a cockpit screenshot by `tools/make-splash.py`) shows the game rather than an empty window meanwhile.
+  The game data ships beside the exe (`GrudgeLap.pck`), not inside it: antivirus software can hold a new
+  unsigned executable back on its first launch (15-35 s measured with Acronis on the development laptop,
+  4 s afterwards), and the bare exe changes only with the engine or the version stamp. Signing it is the
+  real fix, planned for 1.0.
 
 ## Conventions
 

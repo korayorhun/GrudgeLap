@@ -38,7 +38,7 @@ if (Test-Path $portable) { Remove-Item $portable -Force }
 $stage = Join-Path $env:TEMP "GrudgeLap-portable-$Version"
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force $stage | Out-Null
-Copy-Item (Join-Path $root 'build\GrudgeLap.exe') $stage
+Copy-Item (Join-Path $root 'build\GrudgeLap.exe'), (Join-Path $root 'build\GrudgeLap.pck') $stage
 Copy-Item (Join-Path $root 'build\data_GrudgeLap_windows_x86_64') (Join-Path $stage 'data_GrudgeLap_windows_x86_64') -Recurse
 Copy-Item (Join-Path $root 'README.md'), (Join-Path $root 'LICENSE'), (Join-Path $root 'THIRD_PARTY.md') $stage
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $portable -CompressionLevel Optimal

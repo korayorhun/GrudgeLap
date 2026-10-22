@@ -52,6 +52,9 @@ Name: "desktopicon"; Description: "{cm:DesktopTask}"
 
 [Files]
 Source: "..\build\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+; The game's data sits beside the exe rather than inside it: the exe then stays the stock engine for a
+; version, and antivirus software that holds back a new unsigned executable on its first launch does so less.
+Source: "..\build\GrudgeLap.pck"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\build\data_GrudgeLap_windows_x86_64\*"; DestDir: "{app}\data_GrudgeLap_windows_x86_64"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion

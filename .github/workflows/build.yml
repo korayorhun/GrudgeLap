@@ -61,5 +61,6 @@ jobs:
           name: GrudgeLap-build
           path: |
             build/GrudgeLap.exe
+            build/GrudgeLap.pck
             build/data_GrudgeLap_windows_x86_64/
             dist/*.exe
