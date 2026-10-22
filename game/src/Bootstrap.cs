@@ -38,6 +38,7 @@ public sealed partial class Bootstrap : Node3D
     private bool _startChase;
     private bool _retro;
     private bool _invisible;
+    private bool _noGhost;
     private bool _noTraffic;
     private Vector3? _orbit;
     private bool _showAll;      // debug: draw the whole car from the driver's seat too
@@ -122,6 +123,7 @@ public sealed partial class Bootstrap : Node3D
             else if (arg == "--chase") _startChase = true;
             else if (arg == "--retro") _retro = true;
             else if (arg == "--invisible") _invisible = true;   // automated runs: no window on screen, no focus taken
+            else if (arg == "--no-ghost") _noGhost = true;       // pictures of the car without the best lap's ghost over it
             else if (arg == "--no-traffic") _noTraffic = true;
             else if (arg.StartsWith("--orbit=", System.StringComparison.Ordinal))
             {
@@ -160,7 +162,7 @@ public sealed partial class Bootstrap : Node3D
         }
         _carView.Name = $"Car-{spec.Style}";
         _audio.SetCar(spec.Style);
-        if (_savedBestLap is not null) _session.LoadBestLap(_savedBestLap);
+        if (_savedBestLap is not null && !_noGhost) _session.LoadBestLap(_savedBestLap);
         _hud.Bind(_session);
         _keyboard.Reset();
         _cameraRig.ResetChase();
@@ -331,6 +333,7 @@ public sealed partial class Bootstrap : Node3D
         }
         _carView.SetPose(car.Position, car.Orientation);
         _carView.SetWheels(car.Wheels, car.SteerAngle, car.Spec);
+        _cameraRig.Roughness = car.Wheels.Any(w => w.InContact && w.Surface != SurfaceType.Road) ? 1f : 0f;
         _cameraRig.FollowCar(_carView.GlobalTransform, MathF.Abs(car.Speed), dt);
     }
 

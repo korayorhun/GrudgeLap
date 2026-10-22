@@ -1,4 +1,6 @@
-# Engine recordings
+# Recordings
+
+## Engines (`flat12/`, `v8/`)
 
 The loops in this folder are short slices cut from recordings in the Internet Archive item
 **"Car Engine Sounds"** (identifier `car-engines`, uploaded 2015-09-01, dated 2011-02-22), which its uploader
@@ -19,6 +21,19 @@ Processing: decoded to mono 22.05 kHz, the tail of each slice folded into its he
 cross-fade so the loop is seamless, DC removed, peak-normalised. The nominal rpm is the firing-frequency
 estimate of the slice (harmonic product spectrum; rpm = f0 x 120 / cylinders), which only needs to be
 consistent between the loops of one set: the game pitches each loop by rpm / nominal.
+
+## Tyres (`tyres/`)
+
+| Loop | Source | Slice | License |
+|---|---|---|---|
+| `tyres/squeal.wav` | Freesound #850041 "tire-squeal" by JeffPearson, https://freesound.org/s/850041/ | 18.6 s + 3.0 s | CC0 1.0 |
+| `tyres/squeal_hard.wav` | Internet Archive item `Sound_Effects_2` ("Sounds Effects 2", Wayzata Technology, 1995), file "squealing tires", https://archive.org/details/Sound_Effects_2 | 2.0 s + 4.0 s | CC0 1.0 (item `licenseurl`) |
+| `tyres/skid.wav` | BigSoundBank #2370 "Screeching tires #3", https://bigsoundbank.com/detail-2370-screeching-tires-3.html | 0.35 s + 1.2 s | CC0 1.0 |
+| `tyres/gravel.wav` | Freesound #341069 "gravel road" by seth-m, https://freesound.org/s/341069/ | 1.0 s + 4.0 s | CC0 1.0 |
+
+Cut with `tools/make-loop.py` like the engine loops (mono 22.05 kHz, cross-faded tail, peak-normalised). The
+game pitches and fades them from the slip of the four wheels (`TyreAudio`). Road roar, wind, bumps and the
+V8's exhaust pops are synthesised.
 
 No recording of a flat-twelve with a usable licence was found; the twelve-cylinder loops of the 1984 car
 are from the Countach track, the closest in era and layout. Swap the files (same names, same nominal rpm

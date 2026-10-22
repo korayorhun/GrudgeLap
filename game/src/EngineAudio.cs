@@ -7,9 +7,10 @@ using SN = System.Numerics;
 namespace GrudgeLap.Game;
 
 /// <summary>
-/// Procedural sound: a flat-twelve style engine built from firing pulses, tyre squeal from filtered noise,
-/// crash and bonus bleeps. Deliberately a little raw, in the spirit of the 1989 sample DAC; recorded
-/// samples can replace each voice later without touching the rest of the game.
+/// The car's sound. Engine and tyres come from recordings (<see cref="SampledEngine"/>, <see cref="TyreAudio"/>);
+/// this node mixes the procedural layers on top: road roar and wind that grow with speed, suspension thumps
+/// over bumps, the exhaust pops of the V8 on the overrun, crash, bonus bleeps, the moo, the sign, the train,
+/// the title tune, and the 1989-mode voices (pulse-train engine, filtered-noise squeal).
 /// </summary>
 internal sealed partial class EngineAudio : Node
 {
@@ -36,6 +37,13 @@ internal sealed partial class EngineAudio : Node
     private float _musicPhaseLead, _musicPhaseBass;
 
     private SampledEngine _sampled = null!;
+    private TyreAudio _tyres = null!;
+    private CarStyle _style = CarStyle.FlatTwelve;
+    private float _roadRoar, _wind, _thump, _thumpPhase, _roarLp, _roarLp2, _windLp;
+    private float _lastLoad;
+    private readonly float[] _lastCompression = new float[4];
+    private readonly List<int> _popsPending = new();
+    private float _popEnv, _popLp, _popPhase;
 
     public float Volume { get; set; } = 0.8f;
     /// <summary>Plays the title/replay tune: a small synth arpeggio, faded in and out.</summary>
@@ -44,7 +52,11 @@ internal sealed partial class EngineAudio : Node
     public bool Retro { get; set; }
 
     /// <summary>Selects the recordings of the chosen car.</summary>
-    public void SetCar(CarStyle style) => _sampled.Load(style);
+    public void SetCar(CarStyle style)
+    {
+        _style = style;
+        _sampled.Load(style);
+    }
 
     // A-minor progression on four bars (Am, F, C, G) as MIDI notes: bass root and a four-note arpeggio each.
     private static readonly int[][] Chords =
@@ -65,6 +77,8 @@ internal sealed partial class EngineAudio : Node
         _playback = player.GetStreamPlayback() as AudioStreamGeneratorPlayback;
         _sampled = new SampledEngine();
         AddChild(_sampled);
+        _tyres = new TyreAudio();
+        AddChild(_tyres);
     }
 
     public void Update(RaceSession session, float dt)
@@ -105,7 +119,37 @@ internal sealed partial class EngineAudio : Node
             trainTarget = MathUtil.Clamp01(1f - nearest / 260f);
         }
         _trainLevel += (trainTarget - _trainLevel) * MathUtil.Clamp01(dt * 3f);
+
+        // Road roar and wind grow with speed; the roar is duller on grass, the wind only matters above town speeds.
+        var speed = MathF.Abs(car.Speed);
+        var onRoad = car.Wheels.Any(w => w.InContact && w.Surface == SurfaceType.Road);
+        var roarTarget = MathF.Pow(MathUtil.Clamp01((speed - 1f) / 45f), 1.3f) * (onRoad ? 1f : 0.7f);
+        _roadRoar += (roarTarget - _roadRoar) * MathUtil.Clamp01(dt * 4f);
+        var windTarget = MathF.Pow(MathUtil.Clamp01((speed - 12f) / 70f), 2f);
+        _wind += (windTarget - _wind) * MathUtil.Clamp01(dt * 3f);
+        // A sudden change of suspension travel is a bump: a low thump, louder for a harder hit.
+        var jolt = 0f;
+        for (var i = 0; i < 4 && i < car.Wheels.Length; i++)
+        {
+            var c = car.Wheels[i].InContact ? car.Wheels[i].Compression : 0f;
+            if (dt > 0f) jolt = MathF.Max(jolt, MathF.Abs(c - _lastCompression[i]) / dt);
+            _lastCompression[i] = c;
+        }
+        if (jolt > 0.8f) _thump = MathF.Max(_thump, MathUtil.Clamp01((jolt - 0.8f) / 2.5f));
+        // Sport exhaust: lifting off at high revs sets off two to four pops over the next half second.
+        if (_style == CarStyle.V8 && _running && _lastLoad > 0.5f && load < 0.15f && _rpm > 4800f && _popsPending.Count == 0)
+        {
+            var count = 2 + _random.Next(3);
+            var at = 0.04f;
+            for (var i = 0; i < count; i++)
+            {
+                _popsPending.Add((int)(at * MixRate));
+                at += 0.08f + 0.16f * (float)_random.NextDouble();
+            }
+        }
+        _lastLoad = load;
         _sampled.Update(_rpm, _load, _running, muted: Retro);
+        _tyres.Update(session, dt, muted: Retro);
         Fill();
     }
 
@@ -138,7 +182,8 @@ internal sealed partial class EngineAudio : Node
             const float f = 0.35f, q = 0.12f;
             _bp1 += f * (noise - _bp1 - q * _bp2);
             _bp2 += f * _bp1;
-            var squeal = _bp2 * _squeal * 0.5f;
+            // The filtered-noise squeal belongs to 1989 mode; otherwise the recorded tyres carry it.
+            var squeal = Retro ? _bp2 * _squeal * 0.5f : 0f;
 
             var crash = 0f;
             if (_crash > 0f)
@@ -161,11 +206,49 @@ internal sealed partial class EngineAudio : Node
             }
 
             var music = Music();
-            var extras = Moo() + Clang(noise) + TrainClack(noise);
+            var extras = Moo() + Clang(noise) + TrainClack(noise) + (Retro ? 0f : Road(noise) + Pops(noise));
             var sample = MathF.Tanh((engine + squeal + crash + rumble + bleep + music + extras) * Volume);
             buffer[i] = new Vector2(sample, sample);
         }
         _playback.PushBuffer(buffer);
+    }
+
+    /// <summary>Road roar (two-pole low-passed noise), wind (one-pole) and the bump thump (a 48 Hz burst).</summary>
+    private float Road(float noise)
+    {
+        _roarLp += (noise - _roarLp) * 0.045f;
+        _roarLp2 += (_roarLp - _roarLp2) * 0.045f;
+        var roar = _roarLp2 * 7f * _roadRoar * 0.26f;
+        _windLp += (noise - _windLp) * 0.12f;
+        var wind = _windLp * 2.6f * _wind * 0.22f;
+        var thump = 0f;
+        if (_thump > 0f)
+        {
+            _thumpPhase += 48f / MixRate;
+            if (_thumpPhase >= 1f) _thumpPhase -= 1f;
+            thump = MathF.Sin(_thumpPhase * MathF.Tau) * _thump * 0.55f + noise * _thump * 0.08f;
+            _thump -= 1f / (MixRate * 0.16f);
+        }
+        return roar + wind + thump;
+    }
+
+    /// <summary>Exhaust pops: scheduled bursts of low-passed noise with a 95 Hz thud, 30 ms each.</summary>
+    private float Pops(float noise)
+    {
+        for (var i = _popsPending.Count - 1; i >= 0; i--)
+        {
+            var remaining = _popsPending[i] - 1;
+            if (remaining > 0) { _popsPending[i] = remaining; continue; }
+            _popsPending.RemoveAt(i);
+            _popEnv = 0.6f + 0.4f * (float)_random.NextDouble();
+            _popPhase = 0f;
+        }
+        if (_popEnv <= 0f) return 0f;
+        _popLp += (noise - _popLp) * 0.3f;
+        _popPhase += 95f / MixRate;
+        var pop = (_popLp * 1.6f + MathF.Sin(_popPhase * MathF.Tau) * 0.5f) * _popEnv * _popEnv * 0.55f;
+        _popEnv -= 1f / (MixRate * 0.03f);
+        return pop;
     }
 
     /// <summary>A cow: two formants on a pitch that sags, over about a second.</summary>

@@ -27,6 +27,9 @@ internal sealed partial class CameraRig : Node3D
     public Vector3 Orbit { get; set; } = new(35f, 18f, 7f);
     /// <summary>Height of the car node's origin (its centre of gravity) above the road at rest; offsets below are ground-relative.</summary>
     public float CgHeight { get; set; } = 0.61f;
+    /// <summary>0 on asphalt, 1 on grass: how much the cockpit camera jitters.</summary>
+    public float Roughness { get; set; }
+    private readonly Random _rng = new(3);
 
     public override void _Ready()
     {
@@ -38,14 +41,18 @@ internal sealed partial class CameraRig : Node3D
     {
         if (Mode == CameraMode.Cockpit)
         {
-            // Driver's eye: left seat, 1.02 m above the road and right at the windscreen base, as the cabinet
-            // framed it, so the bonnet and its lamp lids fill the bottom of the picture; a touch of forward
-            // lean at speed, and the view aimed 3 degrees down.
+            // Driver's eye: left seat, 1.00 m above the road, 0.67 m behind the windscreen base, so the top of the
+            // wheel, the binnacle and the wipers sit at the bottom of the picture under the bonnet and its lamp
+            // lids; a touch of forward lean at speed, and the view aimed 3 degrees down.
             var lean = MathUtil.Clamp01(speedMps / 60f) * 0.06f;
-            var eye = car * new Vector3(-0.38f, 1.02f - CgHeight, -0.25f - lean);
+            // Road feel: a few millimetres of jitter that grow with speed and on rough ground, a touch more field of view at speed.
+            var jitter = (0.0012f + 0.0035f * MathUtil.Clamp01(speedMps / 60f) + 0.012f * Roughness) * MathUtil.Clamp01(speedMps / 4f);
+            var shake = new Vector3(Jitter() * jitter, Jitter() * jitter, 0f);
+            var eye = car * (new Vector3(-0.38f, 1.00f - CgHeight, -0.05f - lean) + shake);
             var look = car * new Vector3(-0.38f, 0.30f - CgHeight, -14f);
             _camera.GlobalTransform = new Transform3D(Basis.LookingAt(look - eye, car.Basis.Y), eye);
-            _camera.Fov = 72f;
+            // 62 degrees vertical is about what a windscreen frames; a little more at speed.
+            _camera.Fov = 62f + 6f * MathUtil.Clamp01(speedMps / 75f);
             return;
         }
 
@@ -83,4 +90,6 @@ internal sealed partial class CameraRig : Node3D
     }
 
     public void ResetChase() => _chaseInitialised = false;
+
+    private float Jitter() => (float)(_rng.NextDouble() * 2.0 - 1.0);
 }

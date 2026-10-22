@@ -10,8 +10,10 @@ namespace GrudgeLap.Game;
 /// curves, wheel arches cut into the loft, period details (lamp lids, strakes, louvres and slatted tail for
 /// the 1984 flat-twelve; slim lamps, side scoops, glass engine cover, round lamps and four exhaust tips for
 /// the 2012 V8) and four star-rimmed wheels that steer and spin from the simulation. The node's origin is
-/// the centre of gravity, as in the simulation, so the body sits lower by the static ride height. From the
-/// driver's seat only the bonnet, the lamps and a dashboard top are shown (<see cref="SetViewpoint"/>).
+/// the centre of gravity, as in the simulation, so the body sits lower by the static ride height. The cabin
+/// is furnished (dashboard, steering wheel that turns, seats, pillars) and seen through tinted glass; from
+/// the driver's seat the shell and the glass are hidden so only the bonnet, the dashboard and the wheel
+/// remain (<see cref="SetViewpoint"/>).
 /// </summary>
 internal sealed partial class CarView : Node3D
 {
@@ -21,11 +23,14 @@ internal sealed partial class CarView : Node3D
     private const int TopLast = RingSize - 6;              // last strip of the top skin, mirrored side
     private const float ArchRadius = 0.44f;                // wheel radius plus the gap to the wing lip
     private const float SmoothingCos = 0.5f;               // faces meeting at more than 60 degrees keep a hard edge
+    private const float SeamWidth = 0.014f;                // dark band of a panel shut line
+    private const float SteeringRatio = 12f;               // turns of the wheel per turn of the road wheels
 
     public static readonly Color DefaultPaint = new(0.76f, 0.03f, 0.05f);
     /// <summary>Paints for the drone cars, by their colour index.</summary>
     public static readonly Color[] DronePaints = [new(0.12f, 0.25f, 0.70f), new(0.88f, 0.88f, 0.84f), new(0.90f, 0.72f, 0.10f)];
     private static readonly Color Trim = new(0.06f, 0.06f, 0.065f);
+    private static readonly Color Amber = new(1f, 0.55f, 0.08f);
 
     private readonly Node3D[] _wheelPivots = new Node3D[4];
     private readonly Node3D[] _wheelSpinners = new Node3D[4];
@@ -36,6 +41,7 @@ internal sealed partial class CarView : Node3D
     private float _cgHeight;
     private float _wheelRadius;
     private float _wheelAngle;
+    private Node3D? _steeringSpin;
 
     public static CarView Create(VehicleSpec spec, Color? paint = null)
     {
@@ -99,6 +105,13 @@ internal sealed partial class CarView : Node3D
             _wheelSpinners[i].Rotation = new Vector3(-_wheelAngle, 0f, 0f);
             if (i < 2) _wheelPivots[i].Rotation = new Vector3(0f, -steerAngle, 0f);
         }
+        TurnSteeringWheel(steerAngle);
+    }
+
+    /// <summary>Right turn = clockwise for the driver: the column's axis points at the driver, so that is a negative angle.</summary>
+    private void TurnSteeringWheel(float steerAngle)
+    {
+        if (_steeringSpin is not null) _steeringSpin.Rotation = new Vector3(0f, -steerAngle * SteeringRatio, 0f);
     }
 
     // ---- body profile ----------------------------------------------------------------------------------
@@ -130,6 +143,9 @@ internal sealed partial class CarView : Node3D
         public float GlassDeckTo = -99f;
         public bool SlattedTail;             // full-width slatted tail with light bars (otherwise round lamps)
         public int ExhaustTips;
+        public float[] TopSeams = [];        // z of the shut lines across the top skin (bonnet rear edge, engine cover)
+        public float[] FlankSeams = [];      // z of the door shut lines on the flanks
+        public Color Upholstery = new(0.10f, 0.07f, 0.05f);
 
         /// <summary>The 1984 flat-twelve: blade nose, lamp lids, dipped bonnet, small cabin, widening rear, strakes, louvres, slatted tail.</summary>
         public static readonly BodyStyle FlatTwelve = new()
@@ -148,7 +164,10 @@ internal sealed partial class CarView : Node3D
             Strakes = true,
             Louvres = true,
             SlattedTail = true,
-            ExhaustTips = 0,
+            ExhaustTips = 4,
+            TopSeams = [-0.75f, 0.83f, 1.90f],
+            FlankSeams = [-0.60f, 0.68f],
+            Upholstery = new(0.30f, 0.20f, 0.12f),
         };
 
         /// <summary>The 2012 V8: low wide nose, long screen, teardrop cabin over a glass engine cover, strong rear haunches, round lamps.</summary>
@@ -172,6 +191,9 @@ internal sealed partial class CarView : Node3D
             GlassDeckFrom = 0.78f,
             GlassDeckTo = 1.80f,
             ExhaustTips = 4,
+            TopSeams = [-0.75f, 0.75f, 1.82f],
+            FlankSeams = [-0.65f, 0.70f],
+            Upholstery = new(0.08f, 0.08f, 0.09f),
         };
 
         /// <summary>
@@ -221,6 +243,12 @@ internal sealed partial class CarView : Node3D
         foreach (var axle in axles)
         {
             foreach (var offset in new[] { -0.46f, -0.44f, -0.40f, -0.30f, -0.15f, 0f, 0.15f, 0.30f, 0.40f, 0.44f, 0.46f }) zs.Add(axle + offset);
+        }
+        // A station pair at every shut line gives the seam its own thin strip of quads.
+        foreach (var seam in style.TopSeams.Concat(style.FlankSeams))
+        {
+            zs.Add(seam);
+            zs.Add(seam + SeamWidth);
         }
         zs.Sort();
         var stations = new List<Station>();
@@ -369,13 +397,21 @@ internal sealed partial class CarView : Node3D
         var paint = new StandardMaterial3D
         {
             VertexColorUseAsAlbedo = true,
-            Metallic = 0.12f,
-            Roughness = 0.30f,
+            Metallic = 0.18f,
+            Roughness = 0.26f,
             ClearcoatEnabled = true,
-            Clearcoat = 0.7f,
-            ClearcoatRoughness = 0.15f,
+            Clearcoat = 0.9f,
+            ClearcoatRoughness = 0.08f,
         };
-        var tint = new StandardMaterial3D { AlbedoColor = new Color(0.10f, 0.13f, 0.17f), Metallic = 0.9f, Roughness = 0.06f };
+        // Tinted glass the cabin shows through; the sky and the road reflect in it.
+        var tint = new StandardMaterial3D
+        {
+            AlbedoColor = new Color(0.05f, 0.08f, 0.11f, 0.62f),
+            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+            Metallic = 0.9f,
+            Roughness = 0.05f,
+            CullMode = BaseMaterial3D.CullModeEnum.Back,
+        };
         var bonnetMesh = new MeshInstance3D { Mesh = bonnet.Commit(), MaterialOverride = paint, Name = "Bonnet" };
         var shellMesh = new MeshInstance3D { Mesh = shell.Commit(), MaterialOverride = paint, Name = "Shell" };
         var glassMesh = new MeshInstance3D { Mesh = glass.Commit(), MaterialOverride = tint, Name = "Glass" };
@@ -396,6 +432,17 @@ internal sealed partial class CarView : Node3D
         if (lowerSide) return Trim;
         if (archWall && (front.ArchLift > 0f || back.ArchLift > 0f)) return Trim;
         if (_style.Louvres && front.Z >= 0.83f && back.Z <= 1.75f && k > TopFirst && k < TopLast) return Trim;
+        // Shut lines: the 14 mm strip at each seam station goes dark, across the top skin or down the flank.
+        var top = k > TopFirst && k < TopLast;
+        var flank = k is 3 or 4 || k == RingSize - 4 || k == RingSize - 5;
+        foreach (var seam in _style.TopSeams)
+        {
+            if (top && front.Z >= seam - 1e-3f && back.Z <= seam + SeamWidth + 1e-3f) return Trim;
+        }
+        foreach (var seam in _style.FlankSeams)
+        {
+            if (flank && front.Z >= seam - 1e-3f && back.Z <= seam + SeamWidth + 1e-3f) return Trim;
+        }
         return _paint;
     }
 
@@ -460,14 +507,12 @@ internal sealed partial class CarView : Node3D
     private void BuildDetails(Node3D body, VehicleSpec spec)
     {
         var style = _style;
-        var solidPaint = new StandardMaterial3D { AlbedoColor = _paint, Metallic = 0.12f, Roughness = 0.30f, ClearcoatEnabled = true, Clearcoat = 0.7f, ClearcoatRoughness = 0.15f };
+        var solidPaint = new StandardMaterial3D { AlbedoColor = _paint, Metallic = 0.18f, Roughness = 0.26f, ClearcoatEnabled = true, Clearcoat = 0.9f, ClearcoatRoughness = 0.08f };
         var trim = new StandardMaterial3D { AlbedoColor = Trim, Roughness = 0.75f };
         var lamp = new StandardMaterial3D { AlbedoColor = new Color(0.9f, 0.10f, 0.06f), EmissionEnabled = true, Emission = new Color(0.9f, 0.08f, 0.04f), EmissionEnergyMultiplier = 1.4f };
         var chrome = new StandardMaterial3D { AlbedoColor = new Color(0.8f, 0.8f, 0.82f), Metallic = 0.95f, Roughness = 0.2f };
 
-        // Dashboard top: fills the view below the cowl from the driver's seat.
-        var dash = Box(body, new Vector3(2.6f, 0.10f, 0.80f), new Vector3(0f, style.Sample(style.CentreH, style.CowlZ) - 0.06f, style.CowlZ + 0.42f), trim);
-        _cockpitOnly.Add(dash);
+        BuildInterior(body, trim);
 
         if (style.LampLids)
         {
@@ -590,6 +635,21 @@ internal sealed partial class CarView : Node3D
             outside.AddChild(tip);
         }
 
+        // Number plate, front indicators and door handles; a nose slot on the flat-twelve.
+        var plateMat = new StandardMaterial3D { AlbedoColor = new Color(0.92f, 0.92f, 0.9f), Roughness = 0.5f };
+        Box(outside, new Vector3(0.52f, 0.11f, 0.012f), new Vector3(0f, style.SlattedTail ? 0.45f : 0.56f, tailZ + 0.03f), plateMat);
+        var amber = new StandardMaterial3D { AlbedoColor = Amber, EmissionEnabled = true, Emission = Amber, EmissionEnergyMultiplier = 0.35f };
+        var noseZ = style.Keys[0] + 0.10f;
+        foreach (var side in new[] { -1f, 1f })
+        {
+            var y = style.Sample(style.ShoulderH, noseZ) - 0.07f;
+            var indicator = Box(outside, new Vector3(0.16f, 0.045f, 0.03f), new Vector3(side * 0.74f, y, noseZ), amber);
+            indicator.Rotation = new Vector3(0f, side * 0.45f, 0f);
+            var handleZ = style.CabinTo - 0.05f;
+            Box(outside, new Vector3(0.025f, 0.03f, 0.13f), new Vector3(side * (style.Sample(style.HalfWidth, handleZ) - 0.005f), style.Sample(style.ShoulderH, handleZ) - 0.12f, handleZ), trim);
+        }
+        if (style.LampLids) Box(outside, new Vector3(0.96f, 0.07f, 0.05f), new Vector3(0f, 0.43f, style.Keys[0] + 0.015f), trim);
+
         if (style.LampLids)
         {
             // Single high-mounted mirror on the driver's A-pillar, as on the early cars.
@@ -608,11 +668,91 @@ internal sealed partial class CarView : Node3D
         }
     }
 
+    /// <summary>
+    /// The cabin: floor, dashboard with the driver's binnacle, a steering wheel on a tilted column that turns
+    /// with the steering, two seats, the A-pillars and the wipers. Seen through the glass from outside and,
+    /// in part, from the driver's seat.
+    /// </summary>
+    private void BuildInterior(Node3D body, Material trim)
+    {
+        var style = _style;
+        var leather = new StandardMaterial3D { AlbedoColor = style.Upholstery, Roughness = 0.7f };
+        var dark = new StandardMaterial3D { AlbedoColor = new Color(0.035f, 0.035f, 0.04f), Roughness = 0.85f };
+        var cowlH = style.Sample(style.CentreH, style.CowlZ);
+        const float driverX = -0.38f;
+
+        Box(body, new Vector3(1.70f, 0.04f, 1.30f), new Vector3(0f, 0.36f, 0.05f), dark);                       // floor
+        Box(body, new Vector3(1.72f, 0.06f, 0.46f), new Vector3(0f, cowlH - 0.05f, style.CowlZ + 0.23f), dark);   // dashboard top
+        Box(body, new Vector3(1.72f, 0.34f, 0.26f), new Vector3(0f, cowlH - 0.24f, style.CowlZ + 0.33f), dark);   // fascia
+        Box(body, new Vector3(0.44f, 0.09f, 0.26f), new Vector3(driverX, cowlH + 0.015f, style.CowlZ + 0.22f), dark); // binnacle hood
+
+        // Steering wheel: the column leans back 22 degrees; the spin node turns with the steering.
+        var column = new Node3D { Name = "Column", Position = new Vector3(driverX, cowlH - 0.09f, style.CowlZ + 0.22f), Rotation = new Vector3(Mathf.DegToRad(68f), 0f, 0f) };
+        body.AddChild(column);
+        var spin = new Node3D { Name = "Wheel" };
+        column.AddChild(spin);
+        _steeringSpin = spin;
+        spin.AddChild(new MeshInstance3D { Mesh = new TorusMesh { InnerRadius = 0.160f, OuterRadius = 0.190f, Material = leather, RingSegments = 36, Rings = 10 } });
+        spin.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.05f, BottomRadius = 0.055f, Height = 0.04f, Material = dark, RadialSegments = 20 } });
+        foreach (var angle in new[] { 0f, 90f, -90f })
+        {
+            // Local +Z of the tilted column points down, so the spoke at 0 degrees is the bottom one.
+            var a = Mathf.DegToRad(angle);
+            spin.AddChild(new MeshInstance3D
+            {
+                Mesh = new BoxMesh { Size = new Vector3(0.03f, 0.012f, 0.16f), Material = dark },
+                Position = new Vector3(MathF.Sin(a) * 0.095f, 0f, MathF.Cos(a) * 0.095f),
+                Rotation = new Vector3(0f, a, 0f),
+            });
+        }
+
+        foreach (var x in new[] { driverX, -driverX })
+        {
+            Box(body, new Vector3(0.50f, 0.14f, 0.52f), new Vector3(x, 0.47f, 0.22f), leather);
+            var backrest = Box(body, new Vector3(0.50f, 0.52f, 0.12f), new Vector3(x, 0.72f, 0.50f), leather);
+            backrest.Rotation = new Vector3(-0.22f, 0f, 0f);
+            Box(body, new Vector3(0.26f, 0.12f, 0.10f), new Vector3(x, 0.99f, 0.54f), leather);
+        }
+
+        // A-pillars from the cowl corners to the roof corners above the screen.
+        var roofZ = style.Keys.First(k => k > style.CabinFrom);
+        foreach (var side in new[] { -1f, 1f })
+        {
+            var a = new Vector3(side * style.Sample(style.CrestW, style.CowlZ), style.Sample(style.CrestH, style.CowlZ) - 0.015f, style.CowlZ);
+            var b = new Vector3(side * style.Sample(style.CrestW, roofZ), style.Sample(style.CrestH, roofZ) - 0.015f, roofZ);
+            Strut(body, a, b, 0.045f, trim);
+        }
+
+        // Wipers parked across the base of the screen.
+        foreach (var x in new[] { -0.40f, 0.22f })
+        {
+            var blade = Box(body, new Vector3(0.52f, 0.012f, 0.03f), new Vector3(x, cowlH + 0.012f, style.CowlZ - 0.05f), trim);
+            blade.RotationDegrees = new Vector3(0f, 12f, 0f);
+        }
+    }
+
+    /// <summary>A square-section bar from <paramref name="a"/> to <paramref name="b"/>.</summary>
+    private static void Strut(Node3D parent, Vector3 a, Vector3 b, float thickness, Material material)
+    {
+        var strut = new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(thickness, thickness, a.DistanceTo(b)), Material = material } };
+        parent.AddChild(strut);
+        strut.LookAtFromPosition((a + b) * 0.5f, b, Vector3.Up);
+    }
+
     // ---- wheels --------------------------------------------------------------------------------------
 
     private void BuildWheels(VehicleSpec spec)
     {
         var rubber = new StandardMaterial3D { AlbedoColor = new Color(0.05f, 0.05f, 0.05f), Roughness = 0.92f };
+        // Cellular noise as a normal map gives the rubber a tread-like grain (triplanar: the lathe has no UVs).
+        var tread = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.Cellular, Frequency = 0.08f, Seed = 9 };
+        rubber.NormalEnabled = true;
+        rubber.NormalTexture = new NoiseTexture2D { Noise = tread, Width = 256, Height = 256, Seamless = true, AsNormalMap = true, BumpStrength = 4f };
+        rubber.NormalScale = 0.6f;
+        rubber.Uv1Triplanar = true;
+        rubber.Uv1Scale = new Vector3(14f, 14f, 14f);
+        var steel = new StandardMaterial3D { AlbedoColor = new Color(0.45f, 0.45f, 0.47f), Metallic = 0.85f, Roughness = 0.4f };
+        var caliperMat = new StandardMaterial3D { AlbedoColor = new Color(0.75f, 0.08f, 0.05f), Roughness = 0.5f };
         var alloy = new StandardMaterial3D { AlbedoColor = new Color(0.76f, 0.76f, 0.78f), Metallic = 0.9f, Roughness = 0.28f };
         var dish = new StandardMaterial3D { AlbedoColor = new Color(0.16f, 0.16f, 0.17f), Metallic = 0.6f, Roughness = 0.5f };
         var tyreMesh = Tyre(spec.WheelRadius, rubber);
@@ -634,6 +774,18 @@ internal sealed partial class CarView : Node3D
 
             // Five-spoke star rim on the outer face of the wheel.
             var side = MathF.Sign(hubs[i].X);
+            // Brake disc on the spinner and a red caliper on the pivot (it steers but does not spin), behind the spokes.
+            spinner.AddChild(new MeshInstance3D
+            {
+                Mesh = new CylinderMesh { TopRadius = 0.15f, BottomRadius = 0.15f, Height = 0.025f, Material = steel, RadialSegments = 32 },
+                Position = new Vector3(side * 0.03f, 0f, 0f),
+                RotationDegrees = new Vector3(0f, 0f, 90f),
+            });
+            pivot.AddChild(new MeshInstance3D
+            {
+                Mesh = new BoxMesh { Size = new Vector3(0.05f, 0.12f, 0.07f), Material = caliperMat },
+                Position = new Vector3(side * 0.03f, 0.10f, -0.06f),
+            });
             spinner.AddChild(new MeshInstance3D
             {
                 Mesh = new CylinderMesh { TopRadius = 0.215f, BottomRadius = 0.215f, Height = 0.02f, Material = dish, RadialSegments = 24 },
@@ -723,6 +875,7 @@ internal sealed partial class CarView : Node3D
             pivot.Rotation = new Vector3(0f, steer, 0f);
             _wheelSpinners[i].Rotation = new Vector3(-w.SpinAngle, 0f, 0f);
         }
+        TurnSteeringWheel(steerAngle);
     }
 
     private static MeshInstance3D Box(Node3D parent, Vector3 size, Vector3 position, Material material)
