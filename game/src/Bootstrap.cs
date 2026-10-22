@@ -1,0 +1,391 @@
+using Godot;
+using GrudgeLap.Physics;
+using GrudgeLap.Physics.Race;
+using GrudgeLap.Physics.Track;
+using GrudgeLap.Physics.Vehicle;
+using SN = System.Numerics;
+
+namespace GrudgeLap.Game;
+
+/// <summary>
+/// Root of the game: builds the world from the track definition, owns the race session and wires input,
+/// camera, HUD, audio, traffic, the ghost of the best lap and the updater to it. Also understands a few
+/// command-line switches used for automated checks: <c>--attract</c> (scripted driver), <c>--screenshot=&lt;file&gt;</c>
+/// with <c>--at=&lt;seconds&gt;</c>, <c>--chase</c>, <c>--orbit=yaw,pitch,distance</c>, <c>--speed-route</c>,
+/// <c>--retro</c>, <c>--no-traffic</c>, <c>--show-all</c> and <c>--quit-after=&lt;seconds&gt;</c>.
+/// </summary>
+public sealed partial class Bootstrap : Node3D
+{
+    private const string BestLapFile = "user://bestlap.bin";
+    private const string SettingsFile = "user://settings.cfg";
+
+    private RaceSession _session = null!;
+    private TrackGeometry _track = null!;
+    private CarView _carView = null!;
+    private CarView? _ghostView;
+    private readonly List<CarView> _droneViews = new();
+    private CameraRig _cameraRig = null!;
+    private Hud _hud = null!;
+    private EngineAudio _audio = null!;
+    private Updater _updater = null!;
+    private readonly KeyboardDriver _keyboard = new();
+    private readonly ScriptedDriver _scripted = new();
+    private LapRecording? _savedBestLap;
+    private bool _attract;
+    private bool _startChase;
+    private bool _retro;
+    private bool _noTraffic;
+    private Vector3? _orbit;
+    private bool _showAll;      // debug: draw the whole car from the driver's seat too
+    private bool _saveBest;
+    private int _carIndex;
+    private string? _screenshotPath;
+    private float _screenshotAt = 4f;
+    private float _quitAfter = -1f;
+    private float _elapsed;
+    private bool _screenshotTaken;
+    private TransmissionMode _attractMode = TransmissionMode.ManualAutoClutch;
+
+    public override void _Ready()
+    {
+        InputSetup.Register();
+        _carIndex = LoadCarChoice();
+        ParseArgs();   // may override the saved car with --car=
+
+        _track = OriginalInspiredTrack.Build();
+        WorldBuilder.Build(this, _track);
+
+        _carView = CarView.Create(VehicleSpec.Catalogue[_carIndex]);
+        AddChild(_carView);
+        _cameraRig = new CameraRig { Mode = _orbit is not null ? CameraMode.Orbit : _startChase ? CameraMode.Chase : CameraMode.Cockpit };
+        if (_orbit is { } orbit) _cameraRig.Orbit = orbit;
+        AddChild(_cameraRig);
+        _hud = new Hud();
+        var layer = new CanvasLayer();
+        layer.AddChild(_hud);
+        AddChild(layer);
+        _audio = new EngineAudio();
+        AddChild(_audio);
+        _updater = new Updater();
+        AddChild(_updater);
+
+        _savedBestLap = LoadBestLap();
+        NewSession();
+        GetWindow().Title = $"GrudgeLap {Updater.CurrentVersionText}";
+        if (_retro) SetRetro(true);
+        // Automated runs never phone home; a player can also switch the check off in settings.cfg.
+        if (!_attract && _screenshotPath is null && System.Environment.GetEnvironmentVariable("GRUDGELAP_NO_UPDATE") is null) _updater.CheckIfDue(manual: false);
+    }
+
+    private void ParseArgs()
+    {
+        foreach (var arg in OS.GetCmdlineUserArgs())
+        {
+            if (arg == "--attract") _attract = true;
+            else if (arg == "--chase") _startChase = true;
+            else if (arg == "--retro") _retro = true;
+            else if (arg == "--no-traffic") _noTraffic = true;
+            else if (arg.StartsWith("--orbit=", System.StringComparison.Ordinal))
+            {
+                // --orbit=yaw,pitch,distance: a fixed camera on the car for pictures of the car itself.
+                var parts = arg["--orbit=".Length..].Split(',');
+                if (parts.Length == 3
+                    && float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var yaw)
+                    && float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var pitch)
+                    && float.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var distance))
+                {
+                    _orbit = new Vector3(yaw, pitch, distance);
+                }
+            }
+            else if (arg == "--speed-route") _scripted.PreferStunt = false;
+            else if (arg.StartsWith("--screenshot=", System.StringComparison.Ordinal)) _screenshotPath = arg["--screenshot=".Length..];
+            else if (arg.StartsWith("--at=", System.StringComparison.Ordinal)) float.TryParse(arg["--at=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _screenshotAt);
+            else if (arg.StartsWith("--quit-after=", System.StringComparison.Ordinal)) float.TryParse(arg["--quit-after=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _quitAfter);
+            else if (arg == "--auto") _attractMode = TransmissionMode.Automatic;
+            else if (arg == "--show-all") _showAll = true;
+            else if (arg == "--save-best") _saveBest = true;   // debug: let an attract lap become the saved best lap
+            else if (arg == "--car=v8") _carIndex = 1;
+            else if (arg == "--car=flat12") _carIndex = 0;
+        }
+    }
+
+    private void NewSession()
+    {
+        var options = _noTraffic ? RaceOptions.MediumNoTraffic : RaceOptions.Medium;
+        var spec = VehicleSpec.Catalogue[_carIndex];
+        _session = new RaceSession(_track, spec, options);
+        if (_carView.IsInsideTree() && _carView.Name != $"Car-{spec.Style}")
+        {
+            _carView.QueueFree();
+            _carView = CarView.Create(spec);
+            AddChild(_carView);
+        }
+        _carView.Name = $"Car-{spec.Style}";
+        _audio.SetCar(spec.Style);
+        if (_savedBestLap is not null) _session.LoadBestLap(_savedBestLap);
+        _hud.Bind(_session);
+        _keyboard.Reset();
+        _cameraRig.ResetChase();
+        BuildDroneViews();
+        BuildGhostView();
+        if (_attract)
+        {
+            _session.ChooseTransmission(_attractMode);
+        }
+        SyncView();
+    }
+
+    private void BuildDroneViews()
+    {
+        foreach (var view in _droneViews) view.QueueFree();
+        _droneViews.Clear();
+        if (_session.Traffic is null) return;
+        foreach (var drone in _session.Traffic.Cars)
+        {
+            // The drones are the period cars of the original, whatever the player drives.
+            var view = CarView.Create(VehicleSpec.FlatTwelve, CarView.DronePaints[drone.Colour % CarView.DronePaints.Length]);
+            view.Name = "Drone";
+            view.SetViewpoint(false);
+            AddChild(view);
+            _droneViews.Add(view);
+        }
+    }
+
+    private void BuildGhostView()
+    {
+        _ghostView?.QueueFree();
+        _ghostView = null;
+        if (!_session.GrudgeMatch) return;
+        _ghostView = CarView.Create(VehicleSpec.Catalogue[_carIndex]);
+        _ghostView.Name = "Ghost";
+        _ghostView.MakeGhost();
+        _ghostView.Visible = false;
+        AddChild(_ghostView);
+    }
+
+    private static int LoadCarChoice()
+    {
+        var settings = new ConfigFile();
+        settings.Load(SettingsFile);
+        var index = (int)settings.GetValue("game", "car", 0).AsInt64();
+        return Math.Clamp(index, 0, VehicleSpec.Catalogue.Length - 1);
+    }
+
+    private static void SaveCarChoice(int index)
+    {
+        var settings = new ConfigFile();
+        settings.Load(SettingsFile);
+        settings.SetValue("game", "car", index);
+        settings.Save(SettingsFile);
+    }
+
+    private static LapRecording? LoadBestLap()
+    {
+        try
+        {
+            var path = ProjectSettings.GlobalizePath(BestLapFile);
+            if (!System.IO.File.Exists(path)) return null;
+            var recording = LapRecording.Deserialize(System.IO.File.ReadAllBytes(path));
+            if (recording is not null) GD.Print($"best lap loaded: {RaceSession.FormatLapTime(recording.Duration)} ({recording.Route})");
+            return recording;
+        }
+        catch (System.Exception ex)
+        {
+            GD.PrintErr($"best lap could not be loaded: {ex.Message}");
+            return null;
+        }
+    }
+
+    private void SaveBestLap(LapRecording recording)
+    {
+        try
+        {
+            var path = ProjectSettings.GlobalizePath(BestLapFile);
+            var directory = System.IO.Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(directory)) System.IO.Directory.CreateDirectory(directory);
+            System.IO.File.WriteAllBytes(path, recording.Serialize());
+            _savedBestLap = recording;
+        }
+        catch (System.Exception ex)
+        {
+            GD.PrintErr($"best lap could not be saved: {ex.Message}");
+        }
+    }
+
+    public override void _Process(double delta)
+    {
+        var dt = (float)delta;
+        _elapsed += dt;
+        HandleGlobalKeys();
+
+        var input = _attract ? _scripted.Next(_session) : _keyboard.Sample(dt, MathF.Abs(_session.Car.Speed));
+        if (!_attract) HandleMenuKeys();
+
+        if (_session.Phase == SessionPhase.Replay && Input.IsActionJustPressed(InputSetup.Abort)) _session.Abort();
+        else if (_session.Phase == SessionPhase.Driving && _session.OffRoad && Input.IsActionJustPressed(InputSetup.Abort)) _session.Abort();
+
+        _session.Step(input, dt);
+        if (_session.Events.Contains(RaceEvent.NewBestLap) && _session.BestLap is not null && (!_attract || _saveBest))
+        {
+            SaveBestLap(_session.BestLap);
+            if (_ghostView is null) BuildGhostView();
+        }
+        _audio.MusicOn = _session.Phase is SessionPhase.SelectTransmission or SessionPhase.Replay or SessionPhase.Finished;
+        _audio.Update(_session, dt);
+        _hud.Notice = _updater.Status;
+        SyncView();
+
+        if (_screenshotPath is not null && !_screenshotTaken && _elapsed >= _screenshotAt)
+        {
+            _screenshotTaken = true;
+            CallDeferred(nameof(TakeScreenshot), _screenshotPath);
+        }
+        if (_quitAfter > 0f && _elapsed >= _quitAfter) Shutdown();
+    }
+
+    public override void _Notification(int what)
+    {
+        if (what == NotificationWMCloseRequest) Shutdown();
+    }
+
+    /// <summary>
+    /// Quits after letting .NET finalise what it can while the engine is still alive; wrappers finalised after
+    /// shutdown are reported as leaks and have crashed the process on exit.
+    /// </summary>
+    private void Shutdown()
+    {
+        WorldBuilder.ReleaseShared();
+        System.GC.Collect();
+        System.GC.WaitForPendingFinalizers();
+        GetTree().Quit();
+    }
+
+    private void SyncView()
+    {
+        var car = _session.Car;
+        var dt = (float)GetProcessDeltaTime();
+        // From the driver's seat only the bonnet and the dashboard top are drawn; the HUD is the instrument panel.
+        _carView.SetViewpoint(insideCar: !_showAll && _cameraRig.Mode == CameraMode.Cockpit && _session.Phase != SessionPhase.Replay);
+        SyncTraffic(dt);
+        SyncGhost();
+        if (_session.Phase == SessionPhase.Replay && _session.Replay.Count > 1)
+        {
+            // Scrub through the recorded poses over the replay duration.
+            var samples = _session.Replay;
+            var t = MathUtil.Clamp01(_session.ReplayTime / _session.Options.ReplaySeconds);
+            var index = (int)(t * (samples.Count - 1));
+            var sample = samples[index];
+            _carView.SetPose(sample.Position, sample.Orientation);
+            var forward = SN.Vector3.Transform(SN.Vector3.UnitZ, sample.Orientation);
+            _cameraRig.Replay(Convert.ToGodot(sample.Position), Convert.ToGodot(forward));
+            return;
+        }
+        _carView.SetPose(car.Position, car.Orientation);
+        _carView.SetWheels(car.Wheels, car.SteerAngle, car.Spec);
+        _cameraRig.FollowCar(_carView.GlobalTransform, MathF.Abs(car.Speed), dt);
+    }
+
+    private void SyncTraffic(float dt)
+    {
+        if (_session.Traffic is null) return;
+        var cars = _session.Traffic.Cars;
+        for (var i = 0; i < cars.Count && i < _droneViews.Count; i++)
+        {
+            _droneViews[i].SetPose(cars[i].Position, cars[i].Orientation);
+            if (_session.Phase is SessionPhase.Driving or SessionPhase.StartEngine) _droneViews[i].AdvanceWheels(cars[i].Speed * dt, 0f);
+        }
+    }
+
+    private void SyncGhost()
+    {
+        if (_ghostView is null) return;
+        var visible = _session.GhostVisible && _session.Phase == SessionPhase.Driving;
+        if (visible)
+        {
+            var previous = _ghostView.GlobalPosition;
+            _ghostView.SetPose(_session.GhostPosition, _session.GhostOrientation);
+            if (_ghostView.Visible) _ghostView.AdvanceWheels(_ghostView.GlobalPosition.DistanceTo(previous), _session.GhostSteer);
+        }
+        _ghostView.Visible = visible;
+    }
+
+    private void HandleMenuKeys()
+    {
+        if (_session.Phase == SessionPhase.SelectTransmission)
+        {
+            // Left/right flips between the cars; the session is rebuilt around the new spec.
+            if (Input.IsActionJustPressed(InputSetup.SteerLeft) || Input.IsActionJustPressed(InputSetup.SteerRight))
+            {
+                _carIndex = (_carIndex + 1) % VehicleSpec.Catalogue.Length;
+                SaveCarChoice(_carIndex);
+                NewSession();
+                return;
+            }
+            if (Input.IsActionJustPressed(InputSetup.SelectAuto)) _session.ChooseTransmission(TransmissionMode.Automatic);
+            else if (Input.IsActionJustPressed(InputSetup.SelectManual)) _session.ChooseTransmission(TransmissionMode.ManualAutoClutch);
+            else if (Input.IsActionJustPressed(InputSetup.SelectClutch)) _session.ChooseTransmission(TransmissionMode.ManualClutch);
+        }
+    }
+
+    private void HandleGlobalKeys()
+    {
+        if (Input.IsActionJustPressed(InputSetup.Fullscreen))
+        {
+            var window = GetWindow();
+            window.Mode = window.Mode == Window.ModeEnum.Fullscreen ? Window.ModeEnum.Windowed : Window.ModeEnum.Fullscreen;
+        }
+        if (Input.IsActionJustPressed(InputSetup.Camera))
+        {
+            _cameraRig.Mode = _cameraRig.Mode == CameraMode.Chase ? CameraMode.Cockpit : CameraMode.Chase;
+            _cameraRig.ResetChase();
+        }
+        if (Input.IsActionJustPressed(InputSetup.Units)) _hud.UseKmh = !_hud.UseKmh;
+        if (Input.IsActionJustPressed(InputSetup.NewGame)) NewSession();
+        if (Input.IsActionJustPressed(InputSetup.Retro)) SetRetro(!_retro);
+        if (Input.IsActionJustPressed(InputSetup.Update))
+        {
+            if (_updater.Available is not null) _updater.DownloadAndInstall();
+            else _updater.CheckIfDue(manual: true);
+        }
+        if (Input.IsActionJustPressed(InputSetup.Attract))
+        {
+            _attract = !_attract;
+            if (_attract && _session.Phase == SessionPhase.SelectTransmission) _session.ChooseTransmission(_attractMode);
+        }
+        if (Input.IsActionJustPressed(InputSetup.Screenshot))
+        {
+            var dir = OS.GetUserDataDir();
+            CallDeferred(nameof(TakeScreenshot), System.IO.Path.Combine(dir, $"grudgelap-{System.DateTime.Now:yyyyMMdd-HHmmss}.png"));
+        }
+    }
+
+    /// <summary>"1989 mode": a third of the resolution, 20 frames a second, flat colours and no atmosphere.</summary>
+    private void SetRetro(bool retro)
+    {
+        _retro = retro;
+        var viewport = GetViewport();
+        viewport.Scaling3DScale = retro ? 0.32f : 1f;
+        viewport.Msaa3D = retro ? Viewport.Msaa.Disabled : Viewport.Msaa.Msaa2X;
+        viewport.ScreenSpaceAA = retro ? Viewport.ScreenSpaceAAEnum.Disabled : Viewport.ScreenSpaceAAEnum.Fxaa;
+        Engine.MaxFps = retro ? 20 : 0;
+        WorldBuilder.SetRetro(retro);
+        _audio.Retro = retro;
+        _hud.Retro = retro;
+    }
+
+    private void TakeScreenshot(string path)
+    {
+        try
+        {
+            var image = GetViewport().GetTexture().GetImage();
+            var directory = System.IO.Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(directory)) System.IO.Directory.CreateDirectory(directory);
+            var error = image.SavePng(path);
+            GD.Print(error == Error.Ok ? $"screenshot saved: {path}" : $"screenshot failed: {error}");
+        }
+        catch (System.Exception ex)
+        {
+            GD.PrintErr($"screenshot failed: {ex.Message}");
+        }
+    }
+}

@@ -1,0 +1,65 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Physics tests
+        run: dotnet test physics.tests/GrudgeLap.Physics.Tests.csproj --nologo -v q
+
+      - name: Godot .NET editor and export templates
+        shell: pwsh
+        run: |
+          $v = $env:GODOT_VERSION
+          $base = "https://github.com/godotengine/godot/releases/download/$v-stable"
+          Invoke-WebRequest "$base/Godot_v$v-stable_mono_win64.zip" -OutFile godot.zip
+          Expand-Archive godot.zip -DestinationPath godot -Force
+          Invoke-WebRequest "$base/Godot_v$v-stable_mono_export_templates.tpz" -OutFile templates.tpz
+          Expand-Archive templates.tpz -DestinationPath templates -Force
+          $dest = "$env:APPDATA\Godot\export_templates\$v.stable.mono"
+          New-Item -ItemType Directory -Force $dest | Out-Null
+          Copy-Item templates\templates\* $dest -Recurse -Force
+          $exe = Get-ChildItem godot -Recurse -Filter "Godot_v*_mono_win64_console.exe" | Select-Object -First 1
+          "GODOT_EXE=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Export GrudgeLap.exe
+        shell: pwsh
+        run: ./tools/build.ps1 -Godot "$env:GODOT_EXE" -SkipTests
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y | Out-Null
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' /Q installer\GrudgeLap.iss
+          Get-ChildItem dist | ForEach-Object { "$($_.Name)  $((Get-FileHash $_.FullName -Algorithm SHA256).Hash)" }
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: GrudgeLap-build
+          path: |
+            build/GrudgeLap.exe
+            build/data_GrudgeLap_windows_x86_64/
+            dist/*.exe

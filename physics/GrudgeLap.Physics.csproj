@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Engine-independent simulation core: vehicle dynamics, track geometry and race rules.
+       The Godot project (../game) only renders this and feeds it input, so everything here
+       must stay free of engine references and be testable headless with `dotnet test`. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GrudgeLap.Physics</RootNamespace>
+    <AssemblyName>GrudgeLap.Physics</AssemblyName>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="GrudgeLap.Physics.Tests" />
+  </ItemGroup>
+
+</Project>

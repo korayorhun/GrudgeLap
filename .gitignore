@@ -1,0 +1,25 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+
+# Godot
+game/.godot/
+game/.mono/
+game/*.import.tmp
+*.translation
+game/export/
+build/
+
+# Artefacts produced by tests / tools (maps, screenshots)
+artifacts/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Release artefacts
+dist/

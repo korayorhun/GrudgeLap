@@ -1,0 +1,22 @@
+<Project Sdk="Godot.NET.Sdk/4.7.2">
+
+  <!-- The Godot view: renders and feeds input to the engine-independent simulation in ../physics. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GrudgeLap.Game</RootNamespace>
+    <AssemblyName>GrudgeLap</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <Version>0.2.0</Version>
+    <FileVersion>0.2.0.0</FileVersion>
+    <Authors>Koray Orhun</Authors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\physics\GrudgeLap.Physics.csproj" />
+  </ItemGroup>
+
+</Project>
