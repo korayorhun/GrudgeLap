@@ -121,8 +121,8 @@ best lap's ghost out of the picture.
   grass tufts, trees from leaf cards, fields, textured buildings and signs, the train), lofted car bodies
   with panel seams and a furnished cabin behind tinted glass (dashboard, a steering wheel that turns with
   the steering, seats, slim A-pillars), a driver's-eye cockpit camera and a chase camera, HUD with a
-  scrolling cluster, engine and tyre sounds from recordings (squeal, howl, screech, gravel) over synthesised
-  road roar, wind, bump thumps and the V8's overrun pops, a synthesised engine and squeal for 1989 mode,
+  scrolling cluster, engine, tyre (squeal, howl, screech, gravel) and V8 overrun-pop sounds from
+  recordings over synthesised road roar, wind and bump thumps, a synthesised engine and squeal for 1989 mode,
   crash, moo, sign clang, train and title tune, updater. Design notes in [docs/design.md](docs/design.md), the checklist in
   [docs/feel-checklist.md](docs/feel-checklist.md), what the research found in
   [docs/research-notes.md](docs/research-notes.md).

@@ -32,8 +32,26 @@ consistent between the loops of one set: the game pitches each loop by rpm / nom
 | `tyres/gravel.wav` | Freesound #341069 "gravel road" by seth-m, https://freesound.org/s/341069/ | 1.0 s + 4.0 s | CC0 1.0 |
 
 Cut with `tools/make-loop.py` like the engine loops (mono 22.05 kHz, cross-faded tail, peak-normalised). The
-game pitches and fades them from the slip of the four wheels (`TyreAudio`). Road roar, wind, bumps and the
-V8's exhaust pops are synthesised.
+game pitches and fades them from the slip of the four wheels (`TyreAudio`). Road roar, wind and bumps are
+synthesised.
+
+## Exhaust pops (`v8/pop1.wav` … `v8/pop5.wav`, `v8/crackle.wav`)
+
+One-shots cut from Freesound #797835 "Car Antilag (No cleanup, 32float)" by modusmogulus,
+https://freesound.org/s/797835/ , licensed **CC0 1.0** (taken from its high-quality preview).
+
+| One-shot | Slice | Fade-out |
+|---|---|---|
+| `v8/pop1.wav` | 1.400 s + 0.13 s | 0.08 s |
+| `v8/pop2.wav` | 1.555 s + 0.13 s | 0.08 s |
+| `v8/pop3.wav` | 1.755 s + 0.13 s (a double crack) | 0.08 s |
+| `v8/pop4.wav` | 1.960 s + 0.13 s | 0.08 s |
+| `v8/pop5.wav` | 2.165 s + 0.13 s | 0.08 s |
+| `v8/crackle.wav` | 0.305 s + 0.33 s (a burst of crackles) | 0.10 s |
+
+Cut with `tools/make-oneshot.py` (mono 22.05 kHz, 2 ms ramp in, cosine fade-out so the recording's
+background dies with the bang, peak-normalised to 0.8). The V8 fires two to four of them, drawn at random
+with a spread of pitch and level, when the driver lifts off above 4800 rpm.
 
 No recording of a flat-twelve with a usable licence was found; the twelve-cylinder loops of the 1984 car
 are from the Countach track, the closest in era and layout. Swap the files (same names, same nominal rpm

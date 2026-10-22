@@ -105,10 +105,10 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   a log scale, through a low-pass that opens with the throttle, an off-throttle loop for the V8); tyres
   from recordings (`TyreAudio`: a cornering squeal from about four degrees of slip angle, a harder howl
   that joins it at big angles, a screech for wheelspin and locked wheels beyond 15 % slip, gravel while a
-  wheel is off the asphalt, each faded and pitched from the slip of the four wheels); synthesised road
-  roar and wind that grow with speed, a thump when the suspension is jolted, and two to four exhaust pops
-  when the V8 lifts off above 4800 rpm; the pulse-train engine and a filtered-noise squeal kept for 1989
-  mode; crash burst, checkpoint bleep, a cow's moo (formants on a sagging pitch), the clang of a sign going
+  wheel is off the asphalt, each faded and pitched from the slip of the four wheels); two to four exhaust
+  pops when the V8 lifts off above 4800 rpm, one-shots from a CC0 recording drawn at random with a spread
+  of pitch and level; synthesised road roar and wind that grow with speed and a thump when the suspension
+  is jolted; the pulse-train engine and a filtered-noise squeal kept for 1989 mode; crash burst, checkpoint bleep, a cow's moo (formants on a sagging pitch), the clang of a sign going
   over, the clack of the train's wheels when it runs nearby, and a four-bar synth tune on the title screen
   and in replays.
 - "1989 mode" (F8): a third of the render resolution, 20 fps, textures and normal maps off, nearest
@@ -146,8 +146,8 @@ pushes, creates the GitHub release, updates the Scoop bucket and submits the win
 1. Force-feedback wheel support through DirectInput (torque = model force + damping + friction + centring,
    the recipe of the expired 1991 patent); until then, keyboard only.
 2. A cleaner twelve-cylinder recording for the 1984 car if one with a usable licence turns up.
-3. Crash and exhaust-pop samples instead of the synthesised ones (the tyres are recorded since 0.4); a
-   longer tune.
+3. A crash sample instead of the synthesised burst (the tyres and the V8's pops are recorded); a longer
+   tune.
 4. More circuits built with the same turtle API; the hidden skid pad could grow cones and a timer.
 5. Scanned models instead of lofts and primitives: a car body with real curvature (the loft has twenty
    points per section) and buildings with real geometry would be the next step past textured primitives;

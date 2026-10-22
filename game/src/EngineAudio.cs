@@ -7,10 +7,10 @@ using SN = System.Numerics;
 namespace GrudgeLap.Game;
 
 /// <summary>
-/// The car's sound. Engine and tyres come from recordings (<see cref="SampledEngine"/>, <see cref="TyreAudio"/>);
-/// this node mixes the procedural layers on top: road roar and wind that grow with speed, suspension thumps
-/// over bumps, the exhaust pops of the V8 on the overrun, crash, bonus bleeps, the moo, the sign, the train,
-/// the title tune, and the 1989-mode voices (pulse-train engine, filtered-noise squeal).
+/// The car's sound. Engine, tyres and the V8's overrun pops come from recordings (<see cref="SampledEngine"/>,
+/// <see cref="TyreAudio"/>, the pop one-shots scheduled here); this node mixes the procedural layers on top:
+/// road roar and wind that grow with speed, suspension thumps over bumps, crash, bonus bleeps, the moo, the
+/// sign, the train, the title tune, and the 1989-mode voices (pulse-train engine, filtered-noise squeal).
 /// </summary>
 internal sealed partial class EngineAudio : Node
 {
@@ -42,8 +42,9 @@ internal sealed partial class EngineAudio : Node
     private float _roadRoar, _wind, _thump, _thumpPhase, _roarLp, _roarLp2, _windLp;
     private float _lastLoad;
     private readonly float[] _lastCompression = new float[4];
-    private readonly List<int> _popsPending = new();
-    private float _popEnv, _popLp, _popPhase;
+    private readonly List<float> _popsPending = new();   // seconds until each scheduled pop
+    private AudioStreamPlayer? _pops;
+    private static readonly string[] PopFiles = ["pop1.wav", "pop2.wav", "pop3.wav", "pop4.wav", "pop5.wav", "crackle.wav"];
 
     public float Volume { get; set; } = 0.8f;
     /// <summary>Plays the title/replay tune: a small synth arpeggio, faded in and out.</summary>
@@ -79,6 +80,31 @@ internal sealed partial class EngineAudio : Node
         AddChild(_sampled);
         _tyres = new TyreAudio();
         AddChild(_tyres);
+        _pops = PopPlayer();
+    }
+
+    /// <summary>
+    /// The V8's overrun pops: one-shots cut from a CC0 recording (assets/audio/SOURCES.md), drawn at random with
+    /// a little spread of pitch and level so that a burst never repeats itself; up to four ring at once.
+    /// </summary>
+    private AudioStreamPlayer? PopPlayer()
+    {
+        var randomizer = new AudioStreamRandomizer
+        {
+            PlaybackMode = AudioStreamRandomizer.PlaybackModeEnum.RandomNoRepeats,
+            RandomPitch = 1.12f,
+            RandomVolumeOffsetDb = 3f,
+        };
+        foreach (var file in PopFiles)
+        {
+            var path = $"res://assets/audio/v8/{file}";
+            if (ResourceLoader.Exists(path)) randomizer.AddStream(-1, GD.Load<AudioStreamWav>(path));
+            else GD.PrintErr($"exhaust pop missing: {file}");
+        }
+        if (randomizer.StreamsCount == 0) return null;
+        var player = new AudioStreamPlayer { Stream = randomizer, MaxPolyphony = 4, VolumeDb = -8f };
+        AddChild(player);
+        return player;
     }
 
     public void Update(RaceSession session, float dt)
@@ -143,9 +169,17 @@ internal sealed partial class EngineAudio : Node
             var at = 0.04f;
             for (var i = 0; i < count; i++)
             {
-                _popsPending.Add((int)(at * MixRate));
+                _popsPending.Add(at);
                 at += 0.08f + 0.16f * (float)_random.NextDouble();
             }
+        }
+        for (var i = _popsPending.Count - 1; i >= 0; i--)
+        {
+            _popsPending[i] -= dt;
+            if (_popsPending[i] > 0f) continue;
+            _popsPending.RemoveAt(i);
+            // 1989 mode has no exhaust pops, as the cabinet had none.
+            if (!Retro) _pops?.Play();
         }
         _lastLoad = load;
         _sampled.Update(_rpm, _load, _running, muted: Retro);
@@ -206,7 +240,7 @@ internal sealed partial class EngineAudio : Node
             }
 
             var music = Music();
-            var extras = Moo() + Clang(noise) + TrainClack(noise) + (Retro ? 0f : Road(noise) + Pops(noise));
+            var extras = Moo() + Clang(noise) + TrainClack(noise) + (Retro ? 0f : Road(noise));
             var sample = MathF.Tanh((engine + squeal + crash + rumble + bleep + music + extras) * Volume);
             buffer[i] = new Vector2(sample, sample);
         }
@@ -230,25 +264,6 @@ internal sealed partial class EngineAudio : Node
             _thump -= 1f / (MixRate * 0.16f);
         }
         return roar + wind + thump;
-    }
-
-    /// <summary>Exhaust pops: scheduled bursts of low-passed noise with a 95 Hz thud, 30 ms each.</summary>
-    private float Pops(float noise)
-    {
-        for (var i = _popsPending.Count - 1; i >= 0; i--)
-        {
-            var remaining = _popsPending[i] - 1;
-            if (remaining > 0) { _popsPending[i] = remaining; continue; }
-            _popsPending.RemoveAt(i);
-            _popEnv = 0.6f + 0.4f * (float)_random.NextDouble();
-            _popPhase = 0f;
-        }
-        if (_popEnv <= 0f) return 0f;
-        _popLp += (noise - _popLp) * 0.3f;
-        _popPhase += 95f / MixRate;
-        var pop = (_popLp * 1.6f + MathF.Sin(_popPhase * MathF.Tau) * 0.5f) * _popEnv * _popEnv * 0.55f;
-        _popEnv -= 1f / (MixRate * 0.03f);
-        return pop;
     }
 
     /// <summary>A cow: two formants on a pitch that sags, over about a second.</summary>
