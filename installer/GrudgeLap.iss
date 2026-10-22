@@ -1,7 +1,7 @@
 ; Inno Setup script for GrudgeLap (per-user install, no admin rights needed).
 ; The exe and its data folder come from tools/build.ps1 (Godot export into ..\build).
 #define MyAppName "GrudgeLap"
-#define MyAppVersion "0.2.0"
+#define MyAppVersion "0.3.0"
 #define MyAppPublisher "Koray Orhun"
 #define MyAppURL "https://github.com/korayorhun/GrudgeLap"
 #define MyAppExeName "GrudgeLap.exe"
