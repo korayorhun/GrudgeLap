@@ -94,13 +94,6 @@ public sealed partial class Bootstrap : Node3D
             _trainView = TrainView.Create(train, _track.Terrain);
             AddChild(_trainView);
         }
-        if (_exportWorld is not null)
-        {
-            _leaving = true;
-            WorldExport.Write(this, _exportWorld);
-            GetTree().Quit();
-            return;
-        }
         GetViewport().UseTaa = true;
 
         _carView = CarView.Create(VehicleSpec.Catalogue[_carIndex]);
@@ -125,6 +118,14 @@ public sealed partial class Bootstrap : Node3D
 
         _savedBestLap = LoadBestLap();
         NewSession();
+        if (_exportWorld is not null)
+        {
+            // After the session: the car stands at the start and the cockpit camera is placed.
+            _leaving = true;
+            WorldExport.Write(this, _exportWorld, _carView, GetViewport().GetCamera3D());
+            GetTree().Quit();
+            return;
+        }
         GetWindow().Title = $"GrudgeLap {Updater.CurrentVersionText}";
         if (_retro) SetRetro(true);
         // Automated runs never phone home; a player can also switch the check off in settings.cfg.
