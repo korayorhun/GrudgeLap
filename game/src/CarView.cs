@@ -710,7 +710,8 @@ internal sealed partial class CarView : Node3D
         {
             Box(body, new Vector3(0.50f, 0.14f, 0.52f), new Vector3(x, 0.47f, 0.22f), leather);
             var backrest = Box(body, new Vector3(0.50f, 0.52f, 0.12f), new Vector3(x, 0.72f, 0.50f), leather);
-            backrest.Rotation = new Vector3(-0.22f, 0f, 0f);
+            // A positive pitch tips the top towards +z, the tail: the backrest reclines from the cushion onto the headrest.
+            backrest.Rotation = new Vector3(0.22f, 0f, 0f);
             Box(body, new Vector3(0.26f, 0.12f, 0.10f), new Vector3(x, 0.99f, 0.54f), leather);
         }
 
