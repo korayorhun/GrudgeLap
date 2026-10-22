@@ -120,6 +120,9 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   for an installed copy, zip for a portable one), verifies the published SHA-256 and applies it (silent
   installer with `/UPDATE=1`, or a PowerShell script that waits for the game to exit, unpacks over the
   folder and relaunches).
+- One copy per computer (`SingleInstance`): the game holds a Global named mutex; a second launch signals a
+  named event, which the running game polls every frame to restore and raise its window, and quits before
+  building the world. `--invisible` runs neither take nor check the lock.
 - Command-line switches for automation: `--attract`, `--chase`, `--speed-route`, `--car=v8|flat12`,
   `--no-traffic`, `--no-ghost` (the saved best lap is not raced, for pictures of the car), `--retro`,
   `--screenshot=<file>`, `--at=<s>`, `--quit-after=<s>`,
@@ -141,7 +144,9 @@ Settings and the best lap live under `user://` (`%APPDATA%\Godot\app_userdata\Gr
 `tools/release.ps1 -Version x.y.z` stamps the version into `project.godot`, the csproj and the Inno script,
 runs the tests, exports, builds the installer and the portable zip with their SHA-256 files, commits, tags,
 pushes, creates the GitHub release, updates the Scoop bucket and submits the winget manifest. CI
-(`.github/workflows/build.yml`) repeats tests, export and installer on every push.
+(`.github/workflows/build.yml`) repeats tests, export and installer on every push. After 0.5.0 nothing is
+published until the stable 1.0 (no GitHub release, Scoop or winget); 1.0 will be the first winget
+submission, the earlier new-package requests were withdrawn.
 
 ## Roadmap
 

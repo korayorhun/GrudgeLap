@@ -12,7 +12,8 @@ namespace GrudgeLap.Game;
 /// camera, HUD, audio, traffic, the ghost of the best lap and the updater to it. Also understands a few
 /// command-line switches used for automated checks: <c>--attract</c> (scripted driver), <c>--screenshot=&lt;file&gt;</c>
 /// with <c>--at=&lt;seconds&gt;</c>, <c>--chase</c>, <c>--orbit=yaw,pitch,distance</c>, <c>--speed-route</c>,
-/// <c>--retro</c>, <c>--no-traffic</c>, <c>--show-all</c>, <c>--invisible</c> (no window on screen) and <c>--quit-after=&lt;seconds&gt;</c>.
+/// <c>--retro</c>, <c>--no-traffic</c>, <c>--show-all</c>, <c>--invisible</c> (no window on screen, and no claim on the
+/// one-copy-per-computer lock of <see cref="SingleInstance"/>) and <c>--quit-after=&lt;seconds&gt;</c>.
 /// </summary>
 public sealed partial class Bootstrap : Node3D
 {
@@ -38,6 +39,7 @@ public sealed partial class Bootstrap : Node3D
     private bool _startChase;
     private bool _retro;
     private bool _invisible;
+    private bool _leaving;      // a second launch on its way out: nothing was built
     private bool _noGhost;
     private bool _noTraffic;
     private Vector3? _orbit;
@@ -56,7 +58,21 @@ public sealed partial class Bootstrap : Node3D
         InputSetup.Register();
         _carIndex = LoadCarChoice();
         ParseArgs();   // may override the saved car with --car=
-        if (_invisible) HideWindow();
+        if (_invisible)
+        {
+            HideWindow();
+        }
+        else if (!SingleInstance.TryAcquire())
+        {
+            // Already running: hand over to that game and leave before the world is built. The hand-over comes
+            // first, while this launch still has the foreground right it can pass on.
+            _leaving = true;
+            GD.Print("GrudgeLap is already running; bringing it to the front");
+            SingleInstance.ActivateOther();
+            HideWindow();
+            GetTree().Quit();
+            return;
+        }
 
         _track = OriginalInspiredTrack.Build();
         WorldBuilder.Build(this, _track);
@@ -254,8 +270,10 @@ public sealed partial class Bootstrap : Node3D
 
     public override void _Process(double delta)
     {
+        if (_leaving) return;
         var dt = (float)delta;
         _elapsed += dt;
+        if (SingleInstance.ActivationRequested()) BringToFront();
         HandleGlobalKeys();
 
         var input = _attract ? _scripted.Next(_session) : _keyboard.Sample(dt, MathF.Abs(_session.Car.Speed));
@@ -295,7 +313,16 @@ public sealed partial class Bootstrap : Node3D
 
     public override void _Notification(int what)
     {
-        if (what == NotificationWMCloseRequest) Shutdown();
+        if (what == NotificationWMCloseRequest && !_leaving) Shutdown();
+    }
+
+    /// <summary>Another launch asked for the game: restore and raise this window instead of opening a second copy.</summary>
+    private void BringToFront()
+    {
+        GD.Print("another launch asked for the game; bringing it to the front");
+        var window = GetWindow();
+        if (window.Mode == Window.ModeEnum.Minimized) window.Mode = Window.ModeEnum.Windowed;
+        window.GrabFocus();
     }
 
     /// <summary>
@@ -305,6 +332,7 @@ public sealed partial class Bootstrap : Node3D
     private void Shutdown()
     {
         WorldBuilder.ReleaseShared();
+        SingleInstance.Release();
         System.GC.Collect();
         System.GC.WaitForPendingFinalizers();
         GetTree().Quit();

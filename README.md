@@ -36,14 +36,9 @@ copied. The car names are descriptions, not makes or models; the engine and tyre
 
 ## Install
 
-The quickest way, built into Windows 10/11:
-
-```
-winget install KorayOrhun.GrudgeLap
-```
-
 [Scoop](https://scoop.sh) users: `scoop bucket add korayorhun https://github.com/korayorhun/scoop-bucket`
-then `scoop install korayorhun/grudgelap` (portable; updates arrive through `scoop update`).
+then `scoop install korayorhun/grudgelap` (portable; updates arrive through `scoop update`). A winget
+package (`winget install KorayOrhun.GrudgeLap`) follows with the 1.0 release.
 
 Or download `GrudgeLap-Setup-x.y.z.exe` (per-user install, no admin rights) or the portable
 `GrudgeLap-Portable-x.y.z.zip` (unzip, run `GrudgeLap.exe`; the `data_GrudgeLap_windows_x86_64` folder
@@ -56,6 +51,7 @@ unpacking over itself) and restarts. Nothing is sent anywhere. To switch it off,
 `[update]` in `%APPDATA%\Godot\app_userdata\GrudgeLap\settings.cfg`.
 
 Starts windowed (1600x900); `F11` toggles full screen. Needs a Vulkan-capable GPU (any from the last ten years).
+One copy runs per computer: starting it again brings the running game to the front.
 
 ## Play
 
