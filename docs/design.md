@@ -141,6 +141,8 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   `--screenshot=<file>`, `--at=<s>`, `--quit-after=<s>`,
   `--orbit=<yaw>,<pitch>,<distance>` (degrees and metres, 0 = from behind), `--show-all` (whole car from
   the driver's seat, for checking the body), `--save-best` (an attract lap may become the saved best lap),
+  `--export-world=<file.glb>` (writes the generated terrain, roads, bridges and props to glTF for another
+  engine, without cars, lights, sky or grass, then quits),
   `--invisible` (the window is parked off-screen, made unfocusable and hidden, so an automated run never
   shows on the desktop or takes the keyboard; pair it with Godot's own `--position -32000,-32000` so the
   window is created off-screen in the first place). Rendering continues for a hidden window, only a

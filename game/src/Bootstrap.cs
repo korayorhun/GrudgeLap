@@ -48,6 +48,7 @@ public sealed partial class Bootstrap : Node3D
     private Vector3? _orbit;
     private bool _showAll;      // debug: draw the whole car from the driver's seat too
     private bool _saveBest;
+    private string? _exportWorld;  // --export-world=<file.glb>: write the track world for another engine, then quit
     private int _carIndex;
     private string? _screenshotPath;
     private float _screenshotAt = 4f;
@@ -92,6 +93,13 @@ public sealed partial class Bootstrap : Node3D
         {
             _trainView = TrainView.Create(train, _track.Terrain);
             AddChild(_trainView);
+        }
+        if (_exportWorld is not null)
+        {
+            _leaving = true;
+            WorldExport.Write(this, _exportWorld);
+            GetTree().Quit();
+            return;
         }
         GetViewport().UseTaa = true;
 
@@ -172,6 +180,7 @@ public sealed partial class Bootstrap : Node3D
             else if (arg == "--auto") _attractMode = TransmissionMode.Automatic;
             else if (arg == "--show-all") _showAll = true;
             else if (arg == "--save-best") _saveBest = true;   // debug: let an attract lap become the saved best lap
+            else if (arg.StartsWith("--export-world=", System.StringComparison.Ordinal)) _exportWorld = arg["--export-world=".Length..];
             else if (arg == "--car=v8") _carIndex = 1;
             else if (arg == "--car=flat12") _carIndex = 0;
         }
