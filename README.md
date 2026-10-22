@@ -7,9 +7,9 @@ traffic in both directions, checkpoints against the clock, an instant replay aft
 skid pad, a "1989 mode" and the *grudge match*: the ghost of your best lap races you on every lap after.
 The scenery is the one you remember: a red barn with "33" on its door, cows in the fields, a farmhouse after
 the curve, a gas station, a camouflaged hut, yellow signs that tip over when you clip them, sawhorses before
-the stunts and a level crossing where a train really does come through. You sit in a furnished cabin behind
-a steering wheel that turns as you steer, and the tyres squeal, howl and scrabble on gravel from real
-recordings. Keyboard-playable on Windows,
+the stunts and a level crossing where a train really does come through. You sit in a leather-lined cabin,
+reading working dials through a steering wheel that turns as you steer, with the road behind you in the
+mirror, and the tyres squeal, howl and scrabble on gravel from real recordings. Keyboard-playable on Windows,
 windowed or full screen. Free, open source, no assets copied from anywhere.
 
 **TR** · 1989'un arcade sürüş simülatörlerine saygı duruşu. İki araba (1984 flat-12, 4 vites; 2012 V8, 7
@@ -18,8 +18,9 @@ vites, spor egzoz; gerçek motor kayıtları), uzun *speed* ve kısa *stunt* (a�
 gizli skid pad, "1989 modu" ve *grudge match*: en iyi turunuzun hayaleti sonraki her turda sizinle yarışır.
 Manzara hatırladığınız gibi: kapısında "33" yazan kırmızı ahır, tarlalarda inekler, virajdan sonra çiftlik
 evi, benzin istasyonu, kamuflajlı kulübe, çarpınca devrilen sarı levhalar, stunt öncesi tahta bariyerler ve
-gerçekten tren geçen bir hemzemin geçit. Döşenmiş bir kabinde, siz çevirdikçe dönen bir direksiyonun
-arkasında oturursunuz; lastik ciyaklaması, patinaj ve çakıl sesleri gerçek kayıtlardan. Windows'ta
+gerçekten tren geçen bir hemzemin geçit. Deri kaplı bir kabinde oturur, çalışan göstergeleri siz
+çevirdikçe dönen direksiyonun içinden okur, arkanızdaki yolu dikiz aynasında görürsünüz; lastik
+ciyaklaması, patinaj ve çakıl sesleri gerçek kayıtlardan. Windows'ta
 klavyeyle oynanır; pencere veya tam ekran. Ücretsiz,
 açık kaynak.
 
@@ -115,9 +116,10 @@ best lap's ghost out of the picture.
 - `game/` — the Godot view: world generated from the track (terrain mesh from the ground field with a ring
   of hills, photo-textured road with worn wheel tracks, gravel shoulders, bridges with guardrails, pad,
   grass tufts, trees from leaf cards, fields, textured buildings and signs, the train), lofted car bodies
-  with rounded character lines, panel seams and a furnished cabin behind tinted glass (dashboard, a steering wheel that turns with
-  the steering, seats, slim A-pillars), a driver's-eye cockpit camera and a chase camera, HUD with a
-  scrolling cluster, engine, tyre (squeal, howl, screech, gravel) and V8 overrun-pop sounds from
+  with rounded character lines, panel seams and a lined cabin behind tinted glass (leather dashboard,
+  binnacle with live dials, a three-spoke wheel that turns with the steering, seats, slim A-pillars, a
+  rear-view mirror with its own camera), a driver's-eye cockpit camera whose head sways with the car and
+  a chase camera, HUD, engine, tyre (squeal, howl, screech, gravel) and V8 overrun-pop sounds from
   recordings over synthesised road roar, wind and bump thumps, a synthesised engine and squeal for 1989 mode,
   crash, moo, sign clang, train and title tune, updater. Design notes in [docs/design.md](docs/design.md), the checklist in
   [docs/feel-checklist.md](docs/feel-checklist.md), what the research found in

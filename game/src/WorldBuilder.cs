@@ -25,6 +25,7 @@ internal static class WorldBuilder
     private static StandardMaterial3D? _concrete;
     private static StandardMaterial3D? _gravel;
     private static Godot.Environment? _environment;
+    private static Godot.Environment? _mirrorEnvironment;
     private static DirectionalLight3D? _sun;
     private static readonly List<(StandardMaterial3D Material, Texture2D? Albedo, Texture2D? Normal, Texture2D? Roughness)> _textured = new();
     private static readonly Dictionary<string, StandardMaterial3D> _propMaterials = new();
@@ -43,6 +44,7 @@ internal static class WorldBuilder
         _concrete = null;
         _gravel = null;
         _environment = null;
+        _mirrorEnvironment = null;
         _sun = null;
         _textured.Clear();
         _propMaterials.Clear();
@@ -90,14 +92,42 @@ internal static class WorldBuilder
         _environment.SsilEnabled = !retro;
         _environment.SsrEnabled = !retro;
         _environment.GlowEnabled = !retro;
-        _environment.FogEnabled = !retro;
         _environment.VolumetricFogEnabled = !retro;
-        _environment.BackgroundMode = retro ? Godot.Environment.BGMode.Color : Godot.Environment.BGMode.Sky;
-        _environment.BackgroundColor = new Color(0.30f, 0.52f, 0.86f);
-        _environment.AmbientLightSource = retro ? Godot.Environment.AmbientSource.Color : Godot.Environment.AmbientSource.Sky;
-        _environment.AmbientLightColor = new Color(0.55f, 0.6f, 0.7f);
-        _environment.AmbientLightEnergy = retro ? 0.9f : 1f;
-        _environment.TonemapMode = retro ? Godot.Environment.ToneMapper.Linear : Godot.Environment.ToneMapper.Agx;
+        RetroLook(_environment, retro);
+        if (_mirrorEnvironment is not null) RetroLook(_mirrorEnvironment, retro);
+    }
+
+    /// <summary>The part of the 1989 look the rear-view mirror shares with the main view: flat sky, flat ambient, no fog, linear tones.</summary>
+    private static void RetroLook(Godot.Environment environment, bool retro)
+    {
+        environment.FogEnabled = !retro;
+        environment.BackgroundMode = retro ? Godot.Environment.BGMode.Color : Godot.Environment.BGMode.Sky;
+        environment.BackgroundColor = new Color(0.30f, 0.52f, 0.86f);
+        environment.AmbientLightSource = retro ? Godot.Environment.AmbientSource.Color : Godot.Environment.AmbientSource.Sky;
+        environment.AmbientLightColor = new Color(0.55f, 0.6f, 0.7f);
+        environment.AmbientLightEnergy = retro ? 0.9f : 1f;
+        environment.TonemapMode = retro ? Godot.Environment.ToneMapper.Linear : Godot.Environment.ToneMapper.Agx;
+    }
+
+    /// <summary>
+    /// The environment of the rear-view mirror's camera: the main sky, tone mapping and fog without global
+    /// illumination, screen-space effects, glow or volumetric fog, which would cost far more than the small
+    /// picture shows. Null before the world is built.
+    /// </summary>
+    public static Godot.Environment? MirrorEnvironment()
+    {
+        if (_environment is null) return null;
+        if (_mirrorEnvironment is null)
+        {
+            _mirrorEnvironment = (Godot.Environment)_environment.Duplicate();
+            _mirrorEnvironment.SdfgiEnabled = false;
+            _mirrorEnvironment.SsaoEnabled = false;
+            _mirrorEnvironment.SsilEnabled = false;
+            _mirrorEnvironment.SsrEnabled = false;
+            _mirrorEnvironment.GlowEnabled = false;
+            _mirrorEnvironment.VolumetricFogEnabled = false;
+        }
+        return _mirrorEnvironment;
     }
 
     // ---- materials ---------------------------------------------------------------------------------
@@ -148,19 +178,20 @@ internal static class WorldBuilder
     /// switch. The texture name is the base of the files in assets/textures (bark, siding, bricks...); a
     /// missing texture leaves a plain tinted material.
     /// </summary>
-    public static StandardMaterial3D PropMaterial(string texture, Color tint, float uvScale, bool triplanar = true)
+    public static StandardMaterial3D PropMaterial(string texture, Color tint, float uvScale, bool triplanar = true, bool matte = false)
     {
-        var key = $"{texture}|{tint}|{uvScale}|{triplanar}";
+        var key = $"{texture}|{tint}|{uvScale}|{triplanar}|{matte}";
         if (_propMaterials.TryGetValue(key, out var cached)) return cached;
         var material = new StandardMaterial3D
         {
             AlbedoColor = tint,
-            Roughness = 1f,
+            // Matte drops the photo's roughness map: a dashboard is grained to keep the sky out of the windscreen.
+            Roughness = matte ? 0.88f : 1f,
             Uv1Triplanar = triplanar,
             Uv1Scale = new Vector3(uvScale, uvScale, uvScale),
         };
         var albedo = Photo($"{texture}_color");
-        if (albedo is not null) Textured(material, albedo, Photo($"{texture}_normal"), 0.6f, Photo($"{texture}_roughness"));
+        if (albedo is not null) Textured(material, albedo, Photo($"{texture}_normal"), 0.6f, matte ? null : Photo($"{texture}_roughness"));
         _propMaterials[key] = material;
         return material;
     }

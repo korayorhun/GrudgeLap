@@ -11,7 +11,7 @@
 | BigSoundBank #2370 "Screeching tires #3" | the wheelspin and locked-wheel screech (`tyres/skid.wav`) | CC0 1.0 — https://bigsoundbank.com/detail-2370-screeching-tires-3.html |
 | Freesound #341069 "gravel road" by seth-m | the off-road gravel loop (`tyres/gravel.wav`) | CC0 1.0 — https://freesound.org/s/341069/ |
 | Freesound #797835 "Car Antilag (No cleanup, 32float)" by modusmogulus | the V8's exhaust pops (`v8/pop1.wav` … `v8/pop5.wav`, `v8/crackle.wav`) | CC0 1.0 — https://freesound.org/s/797835/ |
-| ambientCG textures Grass004, Asphalt004, Concrete034, Ground037, Bark012, WoodSiding009, RoofingTiles003, Bricks078, MetalPlates006, LeafSet001 (1K) | ground, road, shoulders, fields, trees, buildings, the train; the leaf-cluster atlas is composited from LeafSet001 (`game/assets/textures/SOURCES.md`) | CC0 1.0 — https://ambientcg.com |
+| ambientCG textures Grass004, Asphalt004, Concrete034, Ground037, Bark012, WoodSiding009, RoofingTiles003, Bricks078, MetalPlates006, LeafSet001, Leather037, Carpet016, Fabric030 (1K) | ground, road, shoulders, fields, trees, buildings, the train, the cabin's leather, carpet and roof lining; the leaf-cluster atlas is composited from LeafSet001 (`game/assets/textures/SOURCES.md`) | CC0 1.0 — https://ambientcg.com |
 | Poly Haven HDRI "kloofendal_48d_partly_cloudy_puresky" (2K) | sky, lighting and reflections | CC0 1.0 — https://polyhaven.com |
 | xunit, Microsoft.NET.Test.Sdk | tests only, not shipped | Apache-2.0 / MIT |
 | Inno Setup 6 | builds the installer, not shipped | Inno Setup License |

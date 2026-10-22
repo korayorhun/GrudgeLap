@@ -13,6 +13,9 @@ All CC0 (public domain dedication); re-encoded here at 1K as JPEG to keep the re
 | `roof_color.jpg`, `roof_normal.jpg`, `roof_roughness.jpg` | ambientCG **RoofingTiles003** (1K-JPG) — roofs | https://ambientcg.com/view?id=RoofingTiles003 | CC0 1.0 |
 | `bricks_color.jpg`, `bricks_normal.jpg`, `bricks_roughness.jpg` | ambientCG **Bricks078** (1K-JPG) — the hut, chimneys | https://ambientcg.com/view?id=Bricks078 | CC0 1.0 |
 | `metal_color.jpg`, `metal_normal.jpg`, `metal_roughness.jpg` | ambientCG **MetalPlates006** (1K-JPG) — shop roof and canopy, the train | https://ambientcg.com/view?id=MetalPlates006 | CC0 1.0 |
+| `leather_color.jpg`, `leather_normal.jpg`, `leather_roughness.jpg` | ambientCG **Leather037** (1K-JPG) — seats, door trim, the dashboard and the wheel rim (tinted black) | https://ambientcg.com/view?id=Leather037 | CC0 1.0 |
+| `carpet_color.jpg`, `carpet_normal.jpg` | ambientCG **Carpet016** (1K-JPG) — the cabin floor (tinted dark) | https://ambientcg.com/view?id=Carpet016 | CC0 1.0 |
+| `fabric_color.jpg`, `fabric_normal.jpg` | ambientCG **Fabric030** (1K-JPG) — the roof lining | https://ambientcg.com/view?id=Fabric030 | CC0 1.0 |
 | `leaf_clusters.png` | composited by `tools/make-foliage.py` from the cutouts of ambientCG **LeafSet001** (1K-JPG colour sheet kept as `tools/leafset001.png`) | https://ambientcg.com/view?id=LeafSet001 | CC0 1.0 |
 | `grass_blades.png` | drawn by `tools/make-foliage.py` (no source material) | this repository | MIT |
 | `sky.hdr` | Poly Haven **kloofendal_48d_partly_cloudy_puresky** (2K HDR) | https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky | CC0 1.0 |

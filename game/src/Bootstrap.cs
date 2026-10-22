@@ -30,6 +30,9 @@ public sealed partial class Bootstrap : Node3D
     private TrainView? _trainView;
     private CameraRig _cameraRig = null!;
     private Hud _hud = null!;
+    private InstrumentCluster _instruments = null!;
+    private Texture2D _instrumentPanel = null!;
+    private RearMirror? _mirror;
     private EngineAudio _audio = null!;
     private Updater _updater = null!;
     private readonly KeyboardDriver _keyboard = new();
@@ -102,6 +105,12 @@ public sealed partial class Bootstrap : Node3D
         AddChild(_audio);
         _updater = new Updater();
         AddChild(_updater);
+        SubViewport panel;
+        (panel, _instruments) = InstrumentCluster.Create();
+        AddChild(panel);
+        _instrumentPanel = panel.GetTexture();
+        _hud.Instruments = _instrumentPanel;
+        FitOutPlayerCar();
 
         _savedBestLap = LoadBestLap();
         NewSession();
@@ -165,6 +174,18 @@ public sealed partial class Bootstrap : Node3D
         }
     }
 
+    /// <summary>
+    /// What only the player's car has: the lit instruments in its binnacle, a working rear-view mirror, and the
+    /// eye point the cockpit camera sits at. Drones and the ghost stay without.
+    /// </summary>
+    private void FitOutPlayerCar()
+    {
+        _carView.MountInstruments(_instrumentPanel);
+        _mirror = RearMirror.Create(new StandardMaterial3D { AlbedoColor = new Color(0.05f, 0.05f, 0.055f), Roughness = 0.5f });
+        _carView.MountMirror(_mirror);
+        _cameraRig.Eye = _carView.Eye;
+    }
+
     private void NewSession()
     {
         var options = _noTraffic ? RaceOptions.MediumNoTraffic : RaceOptions.Medium;
@@ -175,11 +196,13 @@ public sealed partial class Bootstrap : Node3D
             _carView.QueueFree();
             _carView = CarView.Create(spec);
             AddChild(_carView);
+            FitOutPlayerCar();
         }
         _carView.Name = $"Car-{spec.Style}";
         _audio.SetCar(spec.Style);
         if (_savedBestLap is not null && !_noGhost) _session.LoadBestLap(_savedBestLap);
         _hud.Bind(_session);
+        _instruments.Bind(_session);
         _keyboard.Reset();
         _cameraRig.ResetChase();
         BuildDroneViews();
@@ -342,8 +365,12 @@ public sealed partial class Bootstrap : Node3D
     {
         var car = _session.Car;
         var dt = (float)GetProcessDeltaTime();
-        // From the driver's seat only the bonnet and the dashboard top are drawn; the HUD is the instrument panel.
-        _carView.SetViewpoint(insideCar: !_showAll && _cameraRig.Mode == CameraMode.Cockpit && _session.Phase != SessionPhase.Replay);
+        // From the driver's seat the cabin and the bonnet are drawn and the instruments are in the binnacle; in the
+        // other views the shell is drawn and the HUD shows the instruments.
+        var cockpit = _cameraRig.Mode == CameraMode.Cockpit && _session.Phase != SessionPhase.Replay;
+        _carView.SetViewpoint(insideCar: cockpit && !_showAll);
+        _hud.Cockpit = cockpit;
+        _mirror?.SetActive(cockpit);
         SyncTraffic(dt);
         SyncGhost();
         _trainView?.Sync();
@@ -362,6 +389,7 @@ public sealed partial class Bootstrap : Node3D
         _carView.SetPose(car.Position, car.Orientation);
         _carView.SetWheels(car.Wheels, car.SteerAngle, car.Spec);
         _cameraRig.Roughness = car.Wheels.Any(w => w.InContact && w.Surface != SurfaceType.Road) ? 1f : 0f;
+        _cameraRig.Acceleration = new Vector2(car.LateralAcceleration, car.LongitudinalAcceleration);
         _cameraRig.FollowCar(_carView.GlobalTransform, MathF.Abs(car.Speed), dt);
     }
 
@@ -432,7 +460,7 @@ public sealed partial class Bootstrap : Node3D
             _cameraRig.Mode = _cameraRig.Mode == CameraMode.Chase ? CameraMode.Cockpit : CameraMode.Chase;
             _cameraRig.ResetChase();
         }
-        if (Input.IsActionJustPressed(InputSetup.Units)) _hud.UseKmh = !_hud.UseKmh;
+        if (Input.IsActionJustPressed(InputSetup.Units)) _instruments.UseKmh = !_instruments.UseKmh;
         if (Input.IsActionJustPressed(InputSetup.NewGame)) NewSession();
         if (Input.IsActionJustPressed(InputSetup.Retro)) SetRetro(!_retro);
         if (Input.IsActionJustPressed(InputSetup.Update))

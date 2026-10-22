@@ -11,12 +11,14 @@ namespace GrudgeLap.Game;
 /// the 1984 flat-twelve; slim lamps, side scoops, glass engine cover, round lamps and four exhaust tips for
 /// the 2012 V8) and four star-rimmed wheels that steer and spin from the simulation. The node's origin is
 /// the centre of gravity, as in the simulation, so the body sits lower by the static ride height. The cabin
-/// is furnished (dashboard, steering wheel that turns, seats, pillars) and seen through tinted glass; from
-/// the driver's seat the shell and the glass are hidden so only the bonnet, the dashboard and the wheel
-/// remain (<see cref="SetViewpoint"/>).
+/// is furnished and lined (dashboard, instrument binnacle, steering wheel that turns, seats, door trim, roof
+/// lining, pillars) and seen through tinted glass; from the driver's seat the shell and the glass are not
+/// drawn but the shell still casts its shadow over the cabin (<see cref="SetViewpoint"/>).
 /// </summary>
 internal sealed partial class CarView : Node3D
 {
+    private const float DriverX = -0.38f;                  // the driver sits on the left
+    private const float LiningInset = 0.025f;              // the cabin lining sits this far inside the shell
     private const int HalfPoints = 11;                     // P0..P10 of the half profile, floor centre to roof centre
     private const int RingSize = HalfPoints * 2 - 2;       // points and strips of the design outline; both halves share the floor and roof centre points
     private const int TopFirst = 5;                        // first strip of the top skin (bonnet edge / greenhouse base)
@@ -32,17 +34,26 @@ internal sealed partial class CarView : Node3D
     public static readonly Color[] DronePaints = [new(0.12f, 0.25f, 0.70f), new(0.88f, 0.88f, 0.84f), new(0.90f, 0.72f, 0.10f)];
     private static readonly Color Trim = new(0.06f, 0.06f, 0.065f);
     private static readonly Color Amber = new(1f, 0.55f, 0.08f);
+    /// <summary>Tint that turns the brown leather photo into the black leather of the dashboard.</summary>
+    private static readonly Color BlackLeather = new(0.18f, 0.25f, 0.32f);
 
     private readonly Node3D[] _wheelPivots = new Node3D[4];
     private readonly Node3D[] _wheelSpinners = new Node3D[4];
-    private readonly List<Node3D> _outsideOnly = [];
+    private readonly List<Node3D> _outsideOnly = [];      // not drawn from the driver's seat, but still casting shadows
     private readonly List<Node3D> _cockpitOnly = [];
+    private MeshInstance3D? _glass;                       // hidden from the seat; glass casts no shadow at all
+    private MeshInstance3D? _gaugeFace;
+    private Node3D? _body;
+    private bool? _insideCar;
     private BodyStyle _style = BodyStyle.FlatTwelve;
     private Color _paint = DefaultPaint;
     private float _cgHeight;
     private float _wheelRadius;
     private float _wheelAngle;
     private Node3D? _steeringSpin;
+
+    /// <summary>The driver's eyes in this node's space (origin at the centre of gravity), for the cockpit camera.</summary>
+    public Vector3 Eye => new(DriverX, _style.EyeH - _cgHeight, _style.EyeZ);
 
     public static CarView Create(VehicleSpec spec, Color? paint = null)
     {
@@ -60,11 +71,50 @@ internal sealed partial class CarView : Node3D
         return view;
     }
 
-    /// <summary>Shows what the driver sees from the seat (bonnet, lamp lids, dashboard top) or the whole car.</summary>
+    /// <summary>
+    /// From the driver's seat the shell, the wheels and the outside details are not drawn, so the view is the
+    /// cabin and the bonnet beyond it; they keep casting their shadows, so the roof still shades the dashboard.
+    /// Called every frame; only a change of viewpoint touches the meshes.
+    /// </summary>
     public void SetViewpoint(bool insideCar)
     {
-        foreach (var node in _outsideOnly) node.Visible = !insideCar;
+        if (_insideCar == insideCar) return;
+        _insideCar = insideCar;
+        var cast = insideCar ? GeometryInstance3D.ShadowCastingSetting.ShadowsOnly : GeometryInstance3D.ShadowCastingSetting.On;
+        foreach (var node in _outsideOnly)
+        {
+            if (node is GeometryInstance3D own) own.CastShadow = cast;
+            foreach (var mesh in Descendants(node).OfType<GeometryInstance3D>()) mesh.CastShadow = cast;
+        }
+        if (_glass is not null) _glass.Visible = !insideCar;
         foreach (var node in _cockpitOnly) node.Visible = insideCar;
+    }
+
+    /// <summary>Puts the instrument panel (<see cref="InstrumentCluster"/>) into the binnacle: lit dials under the hood.</summary>
+    public void MountInstruments(Texture2D panel)
+    {
+        if (_gaugeFace is null) return;
+        _gaugeFace.MaterialOverride = new StandardMaterial3D
+        {
+            AlbedoTexture = panel,
+            EmissionEnabled = true,
+            EmissionTexture = panel,
+            EmissionEnergyMultiplier = 0.45f,
+            Roughness = 0.3f,
+        };
+    }
+
+    /// <summary>Hangs the rear-view mirror under the roof at the top of the windscreen, angled towards the driver.</summary>
+    public void MountMirror(RearMirror mirror)
+    {
+        if (_body is null) return;
+        // On the screen, 12 cm ahead of its top edge: under the roof it hung so close to the eyes that it filled a
+        // third of the view.
+        var roofZ = _style.Keys.First(k => k > _style.CabinFrom);
+        mirror.Position = new Vector3(-0.16f, _style.Sample(_style.CentreH, roofZ) - 0.10f, roofZ - 0.12f);
+        // Half the angle between the driver and the rear window, so the glass shows the driver the road behind.
+        mirror.Rotation = new Vector3(0f, -0.30f, 0f);
+        _body.AddChild(mirror);
     }
 
     /// <summary>Turns this car into the translucent ghost of the best lap: one glowing material, no shadow.</summary>
@@ -146,7 +196,12 @@ internal sealed partial class CarView : Node3D
         public int ExhaustTips;
         public float[] TopSeams = [];        // z of the shut lines across the top skin (bonnet rear edge, engine cover)
         public float[] FlankSeams = [];      // z of the door shut lines on the flanks
-        public Color Upholstery = new(0.10f, 0.07f, 0.05f);
+        public float RearBulkheadZ = 0.68f;  // back wall of the cabin, behind the seats; the lining ends here
+        public float EyeZ = 0.15f;           // driver's eyes: over the seat, well behind the screen header
+        public float EyeH = 0.98f;           // and their height above the road at rest
+        public Color LeatherTint = Colors.White;                  // multiplies the brown leather photo: seats, door trim, wheel rim
+        public Color CarpetTint = new(0.29f, 0.23f, 0.22f);       // multiplies the beige carpet photo
+        public Color HeadlinerTint = new(0.66f, 0.62f, 0.56f);    // multiplies the grey fabric photo of the roof lining
 
         /// <summary>The 1984 flat-twelve: blade nose, lamp lids, dipped bonnet, small cabin, widening rear, strakes, louvres, slatted tail.</summary>
         public static readonly BodyStyle FlatTwelve = new()
@@ -168,7 +223,8 @@ internal sealed partial class CarView : Node3D
             ExhaustTips = 4,
             TopSeams = [-0.75f, 0.83f, 1.90f],
             FlankSeams = [-0.60f, 0.68f],
-            Upholstery = new(0.30f, 0.20f, 0.12f),
+            RearBulkheadZ = 0.68f,
+            LeatherTint = new(0.80f, 0.85f, 0.75f),
         };
 
         /// <summary>The 2012 V8: low wide nose, long screen, teardrop cabin over a glass engine cover, strong rear haunches, round lamps.</summary>
@@ -194,7 +250,12 @@ internal sealed partial class CarView : Node3D
             ExhaustTips = 4,
             TopSeams = [-0.75f, 0.75f, 1.82f],
             FlankSeams = [-0.65f, 0.70f],
-            Upholstery = new(0.08f, 0.08f, 0.09f),
+            RearBulkheadZ = 0.70f,
+            EyeZ = 0.12f,
+            EyeH = 1.02f,
+            LeatherTint = BlackLeather,
+            CarpetTint = new(0.15f, 0.16f, 0.20f),
+            HeadlinerTint = new(0.45f, 0.45f, 0.48f),
         };
 
         /// <summary>
@@ -385,6 +446,7 @@ internal sealed partial class CarView : Node3D
         var style = _style;
         var body = new Node3D { Name = "Body", Position = new Vector3(0f, -_cgHeight, 0f) };
         AddChild(body);
+        _body = body;
 
         var stations = Stations(spec);
         var rings = new Vector3[stations.Length][];
@@ -426,6 +488,16 @@ internal sealed partial class CarView : Node3D
         shell.Begin(Mesh.PrimitiveType.Triangles);
         glass.Begin(Mesh.PrimitiveType.Triangles);
 
+        // Windscreen and rear window span a cabin and a non-cabin station; between cabin stations only the flank
+        // strips are side windows, the roof stays painted. A glass engine cover is glass on top.
+        bool IsGlass(Station front, Station back, int k)
+        {
+            var top = k >= TopFirst && k <= TopLast;
+            if (front.Cabin != back.Cabin) return top;
+            if (front.Cabin && (k == TopFirst || k == TopLast)) return true;
+            return k > TopFirst && k < TopLast && front.Z >= style.GlassDeckFrom - 0.01f && back.Z <= style.GlassDeckTo + 0.01f;
+        }
+
         for (var i = 0; i < faces.Length; i++)
         {
             var front = stations[i];
@@ -435,11 +507,7 @@ internal sealed partial class CarView : Node3D
             {
                 var j2 = (j + 1) % n;
                 var k = StripOrigin[j];
-                // Windscreen and rear window span a cabin and a non-cabin station; between cabin stations only
-                // the flank strips are side windows, the roof stays painted. A glass engine cover is glass on top.
-                var top = k >= TopFirst && k <= TopLast;
-                var isGlass = front.Cabin != back.Cabin ? top : front.Cabin && (k == TopFirst || k == TopLast);
-                if (!isGlass && k > TopFirst && k < TopLast && front.Z >= style.GlassDeckFrom - 0.01f && back.Z <= style.GlassDeckTo + 0.01f) isGlass = true;
+                var isGlass = IsGlass(front, back, k);
                 var target = isGlass ? glass : isBonnet ? bonnet : shell;
                 var colour = QuadColour(front, back, k);
                 var faceNormal = faces[i][j];
@@ -460,6 +528,49 @@ internal sealed partial class CarView : Node3D
         // Bulkhead at the cowl: from the driver's seat the bonnet must not read as an open tube with the wheels inside.
         var cowl = Array.FindIndex(stations, s => MathF.Abs(s.Z - style.CowlZ) < 1e-3f);
         Cap(bonnet, rings[cowl], new Vector3(0f, 0f, 1f), float.MaxValue, _paint);
+
+        // The inside of the cabin, from the windscreen base to the bulkhead behind the seats: every opaque strip
+        // of the upper body again, pushed in by the lining's thickness and facing inwards, as door trim and roof
+        // lining. From the seat the shell is not drawn, and without it the road showed through the doors and the
+        // sky through the roof.
+        var lining = new SurfaceTool();
+        var headliner = new SurfaceTool();
+        lining.Begin(Mesh.PrimitiveType.Triangles);
+        headliner.Begin(Mesh.PrimitiveType.Triangles);
+        for (var i = 0; i < faces.Length; i++)
+        {
+            var front = stations[i];
+            var back = stations[i + 1];
+            if (front.Z < style.CowlZ - 0.001f || back.Z > style.RearBulkheadZ + 0.001f) continue;
+            for (var j = 0; j < n; j++)
+            {
+                var k = StripOrigin[j];
+                // The sills and the floor are below the cabin floor, and the windows stay open.
+                if (k < 3 || k > RingSize - 4 || IsGlass(front, back, k)) continue;
+                var roof = front.Cabin && back.Cabin && k > TopFirst && k < TopLast;
+                var j2 = (j + 1) % n;
+                var faceNormal = faces[i][j];
+                var na = VertexNormal(faces, i, j, faceNormal);
+                var nb = VertexNormal(faces, i, j2, faceNormal);
+                var nc = VertexNormal(faces, i + 1, j, faceNormal);
+                var nd = VertexNormal(faces, i + 1, j2, faceNormal);
+                var a = rings[i][j] - na * LiningInset;
+                var b = rings[i][j2] - nb * LiningInset;
+                var c = rings[i + 1][j] - nc * LiningInset;
+                var d = rings[i + 1][j2] - nd * LiningInset;
+                var target = roof ? headliner : lining;
+                Tri(target, a, -na, c, -nc, b, -nb, Colors.White, -faceNormal);
+                Tri(target, b, -nb, c, -nc, d, -nd, Colors.White, -faceNormal);
+            }
+        }
+        var bulkhead = Array.FindIndex(stations, s => MathF.Abs(s.Z - style.RearBulkheadZ) < 1e-3f);
+        if (bulkhead >= 0) Cap(lining, rings[bulkhead], new Vector3(0f, 0f, -1f), float.MaxValue, Colors.White);
+        var lined = new[] { (lining, WorldBuilder.PropMaterial("leather", style.LeatherTint, 4f), "Lining"), (headliner, WorldBuilder.PropMaterial("fabric", style.HeadlinerTint, 3f), "Headliner") };
+        foreach (var (tool, material, name) in lined)
+        {
+            // The shell casts the cabin's shadow; the lining just inside it would only add shadow acne.
+            body.AddChild(new MeshInstance3D { Mesh = tool.Commit(), MaterialOverride = material, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Name = name });
+        }
 
         // Little metallic: a metallic albedo reflects the sky and turns the red pink; the gloss comes from the clearcoat.
         var paint = new StandardMaterial3D
@@ -487,7 +598,9 @@ internal sealed partial class CarView : Node3D
         body.AddChild(shellMesh);
         body.AddChild(glassMesh);
         _outsideOnly.Add(shellMesh);
-        _outsideOnly.Add(glassMesh);
+        // Tinted glass lets the sun through: no shadow, and from the seat it is not drawn at all.
+        glassMesh.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+        _glass = glassMesh;
 
         BuildDetails(body, spec);
     }
@@ -719,11 +832,15 @@ internal sealed partial class CarView : Node3D
         }
         if (style.LampLids) Box(outside, new Vector3(0.96f, 0.07f, 0.05f), new Vector3(0f, 0.43f, style.Keys[0] + 0.015f), trim);
 
+        // The outside mirrors hang on the body, not in "Outside": the driver sees them through the side windows.
+        // Each is a housing wide across the car with its glass on the rear face, towards the driver.
+        var mirrorGlass = new StandardMaterial3D { AlbedoColor = new Color(0.75f, 0.77f, 0.8f), Metallic = 1f, Roughness = 0.04f };
         if (style.LampLids)
         {
             // Single high-mounted mirror on the driver's A-pillar, as on the early cars.
-            Box(outside, new Vector3(0.22f, 0.03f, 0.03f), new Vector3(-0.81f, 0.975f, -0.42f), trim);
-            Box(outside, new Vector3(0.08f, 0.11f, 0.17f), new Vector3(-0.94f, 0.98f, -0.42f), trim);
+            Box(body, new Vector3(0.22f, 0.025f, 0.025f), new Vector3(-0.83f, 0.965f, -0.47f), trim);
+            Box(body, new Vector3(0.16f, 0.10f, 0.06f), new Vector3(-1.00f, 0.975f, -0.47f), trim);
+            Box(body, new Vector3(0.14f, 0.08f, 0.004f), new Vector3(-1.00f, 0.975f, -0.438f), mirrorGlass);
         }
         else
         {
@@ -731,51 +848,83 @@ internal sealed partial class CarView : Node3D
             foreach (var side in new[] { -1f, 1f })
             {
                 var y = style.Sample(style.ShoulderH, -0.30f);
-                Box(outside, new Vector3(0.14f, 0.03f, 0.03f), new Vector3(side * 0.96f, y + 0.02f, -0.30f), trim);
-                Box(outside, new Vector3(0.07f, 0.09f, 0.15f), new Vector3(side * 1.04f, y + 0.04f, -0.30f), solidPaint);
+                Box(body, new Vector3(0.14f, 0.03f, 0.03f), new Vector3(side * 0.96f, y + 0.02f, -0.30f), trim);
+                Box(body, new Vector3(0.15f, 0.09f, 0.07f), new Vector3(side * 1.07f, y + 0.04f, -0.30f), solidPaint);
+                Box(body, new Vector3(0.13f, 0.07f, 0.004f), new Vector3(side * 1.07f, y + 0.04f, -0.264f), mirrorGlass);
             }
         }
     }
 
     /// <summary>
-    /// The cabin: floor, dashboard with the driver's binnacle, a steering wheel on a tilted column that turns
-    /// with the steering, two seats, the A-pillars and the wipers. Seen through the glass from outside and,
-    /// in part, from the driver's seat.
+    /// The cabin: a carpeted floor, a leather dashboard swept across the car, a hooded binnacle whose face shows
+    /// the instrument panel (<see cref="MountInstruments"/>), a three-spoke wheel on a column leaning back 22
+    /// degrees that turns with the steering, two seats, the A-pillars and the wipers. The wheel and the binnacle
+    /// are placed from the driver's eyes (<see cref="BodyStyle.EyeZ"/>): from the seat the dials sit inside the
+    /// upper half of the wheel, and the hood stays below the line of sight to the road.
     /// </summary>
     private void BuildInterior(Node3D body, Material trim)
     {
         var style = _style;
-        var leather = new StandardMaterial3D { AlbedoColor = style.Upholstery, Roughness = 0.7f };
+        var leather = WorldBuilder.PropMaterial("leather", style.LeatherTint, 4f);
+        var dash = WorldBuilder.PropMaterial("leather", BlackLeather, 5f, matte: true);
+        var carpet = WorldBuilder.PropMaterial("carpet", style.CarpetTint, 3f);
+        var satin = new StandardMaterial3D { AlbedoColor = new Color(0.55f, 0.55f, 0.57f), Metallic = 0.85f, Roughness = 0.38f };
         var dark = new StandardMaterial3D { AlbedoColor = new Color(0.035f, 0.035f, 0.04f), Roughness = 0.85f };
         var cowlH = style.Sample(style.CentreH, style.CowlZ);
-        const float driverX = -0.38f;
+        var eye = new Vector3(DriverX, style.EyeH, style.EyeZ);
 
-        Box(body, new Vector3(1.70f, 0.04f, 1.30f), new Vector3(0f, 0.36f, 0.05f), dark);                       // floor
-        Box(body, new Vector3(1.72f, 0.06f, 0.46f), new Vector3(0f, cowlH - 0.05f, style.CowlZ + 0.23f), dark);   // dashboard top
-        Box(body, new Vector3(1.72f, 0.34f, 0.26f), new Vector3(0f, cowlH - 0.24f, style.CowlZ + 0.33f), dark);   // fascia
-        Box(body, new Vector3(0.44f, 0.09f, 0.26f), new Vector3(driverX, cowlH + 0.015f, style.CowlZ + 0.22f), dark); // binnacle hood
+        Box(body, new Vector3(1.70f, 0.04f, 1.30f), new Vector3(0f, 0.36f, 0.05f), carpet);   // floor
+        // Dashboard: a profile swept across the cabin, (metres behind the windscreen base, metres below it): along
+        // the top, over a rolled lip 0.24 m back and down the fascia to the knees. The wheel's hub sits well
+        // behind the fascia, as in a car, not inside it.
+        Vector2[] dashProfile =
+        [
+            new(-0.03f, -0.004f), new(0.08f, -0.010f), new(0.16f, -0.016f), new(0.20f, -0.026f), new(0.225f, -0.045f),
+            new(0.237f, -0.070f), new(0.230f, -0.100f), new(0.212f, -0.160f), new(0.200f, -0.280f), new(0.190f, -0.400f),
+            new(0.100f, -0.430f),
+        ];
+        body.AddChild(new MeshInstance3D { Mesh = SweepAcross(dashProfile.Select(p => new Vector2(style.CowlZ + p.X, cowlH + p.Y)).ToArray(), 0.88f), MaterialOverride = dash, Name = "Dashboard" });
 
-        // Steering wheel: the column leans back 22 degrees; the spin node turns with the steering.
-        var column = new Node3D { Name = "Column", Position = new Vector3(driverX, cowlH - 0.09f, style.CowlZ + 0.22f), Rotation = new Vector3(Mathf.DegToRad(68f), 0f, 0f) };
+        // Binnacle: its face 0.62 m ahead of the eyes and 17 degrees below them, turned to face them, in a pod
+        // under a curved visor whose top stays 9 degrees below the eyes, under the line of sight to the road.
+        var binnacle = new Node3D { Name = "Binnacle", Position = eye + new Vector3(0f, -0.19f, -0.62f), Rotation = new Vector3(-MathF.Atan2(0.19f, 0.62f), 0f, 0f) };
+        body.AddChild(binnacle);
+        Box(binnacle, new Vector3(0.42f, 0.16f, 0.12f), new Vector3(0f, -0.01f, -0.065f), dash);
+        // (z towards the driver, y up) in the binnacle's frame, from behind the pod over the top to the lip.
+        Vector2[] visor =
+        [
+            new(-0.13f, 0.0f), new(-0.13f, 0.06f), new(-0.10f, 0.095f), new(-0.04f, 0.11f), new(0.03f, 0.105f),
+            new(0.08f, 0.092f), new(0.10f, 0.078f), new(0.098f, 0.064f),
+        ];
+        binnacle.AddChild(new MeshInstance3D { Mesh = SweepAcross(visor, 0.215f), MaterialOverride = dash, Name = "Visor" });
+        var faceSize = new Vector2(0.36f, 0.36f * InstrumentCluster.PanelSize.Y / InstrumentCluster.PanelSize.X);
+        _gaugeFace = new MeshInstance3D { Mesh = new QuadMesh { Size = faceSize }, MaterialOverride = dark, Position = new Vector3(0f, 0f, 0.002f), Name = "Dials" };
+        binnacle.AddChild(_gaugeFace);
+
+        // Steering wheel: its hub 0.50 m ahead of the eyes and 26 degrees below them, so its rim passes just above
+        // the dials, with its column running down into the fascia; the spin node turns with the steering.
+        var hub = eye + new Vector3(0f, -0.50f * MathF.Tan(Mathf.DegToRad(26f)), -0.50f);
+        var column = new Node3D { Name = "Column", Position = hub, Rotation = new Vector3(Mathf.DegToRad(68f), 0f, 0f) };
         body.AddChild(column);
+        column.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.032f, BottomRadius = 0.038f, Height = 0.30f, Material = dark, RadialSegments = 16 }, Position = new Vector3(0f, -0.17f, 0f) });
         var spin = new Node3D { Name = "Wheel" };
         column.AddChild(spin);
         _steeringSpin = spin;
-        spin.AddChild(new MeshInstance3D { Mesh = new TorusMesh { InnerRadius = 0.160f, OuterRadius = 0.190f, Material = leather, RingSegments = 36, Rings = 10 } });
-        spin.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.05f, BottomRadius = 0.055f, Height = 0.04f, Material = dark, RadialSegments = 20 } });
+        spin.AddChild(new MeshInstance3D { Mesh = new TorusMesh { InnerRadius = 0.158f, OuterRadius = 0.194f, Material = dash, Rings = 48, RingSegments = 12 } });
+        spin.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.045f, BottomRadius = 0.05f, Height = 0.035f, Material = dark, RadialSegments = 24 } });
         foreach (var angle in new[] { 0f, 90f, -90f })
         {
             // Local +Z of the tilted column points down, so the spoke at 0 degrees is the bottom one.
             var a = Mathf.DegToRad(angle);
             spin.AddChild(new MeshInstance3D
             {
-                Mesh = new BoxMesh { Size = new Vector3(0.03f, 0.012f, 0.16f), Material = dark },
-                Position = new Vector3(MathF.Sin(a) * 0.095f, 0f, MathF.Cos(a) * 0.095f),
+                Mesh = new BoxMesh { Size = new Vector3(0.026f, 0.007f, 0.13f), Material = satin },
+                Position = new Vector3(MathF.Sin(a) * 0.105f, 0.004f, MathF.Cos(a) * 0.105f),
                 Rotation = new Vector3(0f, a, 0f),
             });
         }
 
-        foreach (var x in new[] { driverX, -driverX })
+        foreach (var x in new[] { DriverX, -DriverX })
         {
             Box(body, new Vector3(0.50f, 0.14f, 0.52f), new Vector3(x, 0.47f, 0.22f), leather);
             var backrest = Box(body, new Vector3(0.50f, 0.52f, 0.12f), new Vector3(x, 0.72f, 0.50f), leather);
@@ -784,18 +933,17 @@ internal sealed partial class CarView : Node3D
             Box(body, new Vector3(0.26f, 0.12f, 0.10f), new Vector3(x, 0.99f, 0.54f), leather);
         }
 
-        // A-pillars from the cowl corners to the roof corners above the screen. The driver's eye is 0.7 m from
-        // the foot of the left one but under 0.3 m from its top, so a bar of even section looks three times
-        // wider where it leaves the cockpit view than at its foot and reads as a black band across the top
-        // left. The pillar narrows towards the roof instead, which keeps it 2.5 to 4 degrees wide from the
-        // seat: a thin line that frames the screen. From outside it is seen through the tinted glass, where
-        // the taper does not show.
+        // A-pillars from the cowl corners to the roof corners above the screen. The eyes are twice as far from the
+        // foot of the left one as from its top, so a pillar of even section looks twice as wide where it meets
+        // the roof (a 45 mm square bar read as a black band across the view); it narrows towards the roof
+        // instead and stays a slim, even line framing the screen. From outside it is seen through the tinted
+        // glass, where the taper does not show.
         var roofZ = style.Keys.First(k => k > style.CabinFrom);
         foreach (var side in new[] { -1f, 1f })
         {
             var a = new Vector3(side * style.Sample(style.CrestW, style.CowlZ), style.Sample(style.CrestH, style.CowlZ) - 0.015f, style.CowlZ);
             var b = new Vector3(side * style.Sample(style.CrestW, roofZ), style.Sample(style.CrestH, roofZ) - 0.015f, roofZ);
-            Pillar(body, a, b, 0.016f, 0.009f, trim);
+            Pillar(body, a, b, 0.020f, 0.013f, dash);
         }
 
         // Wipers parked across the base of the screen.
@@ -804,6 +952,44 @@ internal sealed partial class CarView : Node3D
             var blade = Box(body, new Vector3(0.52f, 0.012f, 0.03f), new Vector3(x, cowlH + 0.012f, style.CowlZ - 0.05f), trim);
             blade.RotationDegrees = new Vector3(0f, 12f, 0f);
         }
+    }
+
+    /// <summary>
+    /// A profile in the (z, y) plane swept across the car from -<paramref name="half"/> to +<paramref name="half"/>
+    /// in x, its ends closed: the dashboard, the binnacle's visor. Smooth normals along the profile let a rolled
+    /// edge catch a highlight. The profile's outside is on its left when walked in order: up when it runs
+    /// towards +z, towards the driver (+z) when it runs down.
+    /// </summary>
+    private static ArrayMesh SweepAcross(Vector2[] profile, float half)
+    {
+        Vector3 At(int i, float x) => new(x, profile[i].Y, profile[i].X);
+        // Along the profile (z, y) turned a quarter counter-clockwise points out of the shape.
+        var normals = new Vector3[profile.Length];
+        for (var i = 0; i < profile.Length; i++)
+        {
+            var t = profile[Math.Min(i + 1, profile.Length - 1)] - profile[Math.Max(i - 1, 0)];
+            normals[i] = new Vector3(0f, t.X, -t.Y).Normalized();
+        }
+        var st = new SurfaceTool();
+        st.Begin(Mesh.PrimitiveType.Triangles);
+        for (var i = 0; i < profile.Length - 1; i++)
+        {
+            var outward = (normals[i] + normals[i + 1]).Normalized();
+            Tri(st, At(i, -half), normals[i], At(i + 1, -half), normals[i + 1], At(i, half), normals[i], Colors.White, outward);
+            Tri(st, At(i, half), normals[i], At(i + 1, -half), normals[i + 1], At(i + 1, half), normals[i + 1], Colors.White, outward);
+        }
+        foreach (var side in new[] { -1f, 1f })
+        {
+            var normal = new Vector3(side, 0f, 0f);
+            var centre = Vector3.Zero;
+            for (var i = 0; i < profile.Length; i++) centre += At(i, side * half);
+            centre /= profile.Length;
+            for (var i = 0; i < profile.Length; i++)
+            {
+                Tri(st, centre, normal, At(i, side * half), normal, At((i + 1) % profile.Length, side * half), normal, Colors.White, normal);
+            }
+        }
+        return st.Commit();
     }
 
     /// <summary>A round bar from <paramref name="a"/> to <paramref name="b"/> that narrows from <paramref name="radiusA"/> to <paramref name="radiusB"/>.</summary>

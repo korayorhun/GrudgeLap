@@ -29,7 +29,12 @@ internal sealed partial class CameraRig : Node3D
     public float CgHeight { get; set; } = 0.61f;
     /// <summary>0 on asphalt, 1 on grass: how much the cockpit camera jitters.</summary>
     public float Roughness { get; set; }
+    /// <summary>The driver's eyes in the car node's space (<see cref="CarView.Eye"/>).</summary>
+    public Vector3 Eye { get; set; } = new(-0.38f, 0.39f, -0.05f);
+    /// <summary>The car's lateral and longitudinal acceleration, m/s², which the driver's head lags.</summary>
+    public Vector2 Acceleration { get; set; }
     private readonly Random _rng = new(3);
+    private Vector3 _head;
 
     public override void _Ready()
     {
@@ -41,15 +46,21 @@ internal sealed partial class CameraRig : Node3D
     {
         if (Mode == CameraMode.Cockpit)
         {
-            // Driver's eye: left seat, 1.00 m above the road, 0.67 m behind the windscreen base, so the top of the
-            // wheel, the binnacle and the wipers sit at the bottom of the picture under the bonnet and its lamp
-            // lids; a touch of forward lean at speed, and the view aimed 3 degrees down.
+            // Driver's eyes over the seat (the car says where), the view aimed 3 degrees down; a touch of forward
+            // lean at speed.
             var lean = MathUtil.Clamp01(speedMps / 60f) * 0.06f;
             // Road feel: a few millimetres of jitter that grow with speed and on rough ground, a touch more field of view at speed.
             var jitter = (0.0012f + 0.0035f * MathUtil.Clamp01(speedMps / 60f) + 0.012f * Roughness) * MathUtil.Clamp01(speedMps / 4f);
             var shake = new Vector3(Jitter() * jitter, Jitter() * jitter, 0f);
-            var eye = car * (new Vector3(-0.38f, 1.00f - CgHeight, -0.05f - lean) + shake);
-            var look = car * new Vector3(-0.38f, 0.30f - CgHeight, -14f);
+            // The head on the neck lags the car: it sways out of a corner and nods forward under braking by a few
+            // centimetres, then settles; the cabin seems to move around the eyes the way the 1989 cabinet slid its
+            // painted dashboard (US 5,005,148).
+            var headTarget = new Vector3(
+                Mathf.Clamp(-Acceleration.X * 0.0035f, -0.045f, 0.045f), 0f,
+                Mathf.Clamp(Acceleration.Y * 0.0028f, -0.04f, 0.03f));
+            _head += (headTarget - _head) * MathUtil.Clamp01(dt * 6f);
+            var eye = car * (Eye + _head + new Vector3(0f, 0f, -lean) + shake);
+            var look = car * (Eye + new Vector3(_head.X * 0.5f, -0.70f, -14f));
             _camera.GlobalTransform = new Transform3D(Basis.LookingAt(look - eye, car.Basis.Y), eye);
             // 62 degrees vertical is about what a windscreen frames; a little more at speed.
             _camera.Fov = 62f + 6f * MathUtil.Clamp01(speedMps / 75f);

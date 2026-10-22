@@ -89,20 +89,32 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   strakes, louvres, slatted tail, A-pillar mirror) and the V8 (low wide nose, long screen, glass engine
   cover, side scoops, round lamps, four tips, lip). Panel shut lines are dark strips of the loft itself (a
   pair of stations 14 mm apart at each seam); a plate, indicators, door handles, brake discs with red
-  calipers and a cellular tread grain on the tyres finish the outside. The cabin is furnished and seen
-  through tinted glass: floor, dashboard and binnacle, a steering wheel on a column leaning back 22 degrees
-  that turns twelve times the road wheels' angle, two seats, the A-pillars and the wipers. From the
-  driver's seat the shell and the glass are hidden, so the bonnet, its lamps and the cabin remain; the
-  A-pillars narrow towards the roof, because the eye is under 0.3 m from their tops and a pillar of even
-  section would read as a band across the view. Drones reuse the loft in other paints; the ghost is the
-  same loft in one translucent glowing material without shadows.
-- Cockpit camera at the driver's eye (left seat, 1.00 m above the road, 0.67 m behind the windscreen base,
-  62 degrees of vertical field of view opening to 68 at speed, a few millimetres of jitter that grow with
-  speed and on grass; rolls with the car) and chase camera; crane shot for the replay; `--orbit` fixes a
-  camera on the car for pictures of it.
-- HUD: speedometer and tachometer scaled to the car, gear, transmission mode, time, score, lap, route, best
-  lap and ghost indicator, updater notice, messages; the cluster scrolls with lateral acceleration like the
-  original's moving dashboard. Title screen: car, transmission, version and the F-keys.
+  calipers and a cellular tread grain on the tyres finish the outside. The cabin is lined and furnished,
+  in CC0 leather, carpet and fabric: door trim and roof lining are the loft's opaque upper strips again,
+  25 mm further in and facing inwards, closed by a bulkhead behind the seats; a dashboard swept across the
+  car with a rolled lip; a binnacle under a curved visor whose face is the live instrument panel; a
+  three-spoke wheel on a column leaning back 22 degrees that turns twelve times the road wheels' angle;
+  seats, tapered A-pillars, wipers, outside mirrors with glass, and on the player's car a rear-view mirror
+  (below). The wheel and the binnacle are placed from the driver's eyes, so the dials sit inside the upper
+  half of the wheel and the visor stays under the line of sight to the road. From the driver's seat the
+  shell, the wheels and the outside details are not drawn but still cast shadows (`ShadowsOnly`), so the
+  roof shades the cabin; the glass is not drawn and never casts a shadow. Drones reuse the loft in other
+  paints; the ghost is the same loft in one translucent glowing material without shadows.
+- Cockpit camera at the driver's eyes over the seat (`CarView.Eye`: on the flat-twelve 0.98 m above the
+  road and 0.87 m behind the windscreen base), 62 degrees of vertical field of view opening to 68 at
+  speed, a few millimetres of jitter that grow with speed and on grass, and the head lagging the car's
+  accelerations by a few centimetres (it sways out of a corner and nods under braking, the cabin moving
+  around the eyes the way the 1989 cabinet slid its painted dashboard); chase camera; crane shot for the
+  replay; `--orbit` fixes a camera on the car for pictures of it.
+- Rear-view mirror (`RearMirror`): a camera of its own renders a 512x144 picture, flipped left to right,
+  starting 2.7 m out past the car's tail and with a lighter environment (no SDFGI, SSR, SSIL, SSAO, glow
+  or volumetric fog); it only runs in the cockpit view.
+- Instruments (`InstrumentCluster`), drawn into a viewport of their own: speedometer with odometer,
+  tachometer with its red zone, gear readout, oil and charge lamps that light while the engine is off.
+  The same picture is the binnacle's face in the cockpit and the panel at the foot of the screen in the
+  other views, where it scrolls with lateral acceleration like the original's moving dashboard. HUD:
+  time, score, lap, route, best lap and ghost indicator, updater notice, messages. Title screen: car,
+  transmission, version and the F-keys.
 - Audio: engine from recordings (`SampledEngine`: loops at known speeds pitched to the rpm, cross-faded on
   a log scale, through a low-pass that opens with the throttle, an off-throttle loop for the V8); tyres
   from recordings (`TyreAudio`: a cornering squeal from about four degrees of slip angle, a harder howl
