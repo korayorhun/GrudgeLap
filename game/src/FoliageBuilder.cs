@@ -170,8 +170,7 @@ internal static class FoliageBuilder
     /// <summary>Two crossed quads, 1.2 m wide and 0.75 m tall, mapped to one cell of the tuft atlas (4 x 2).</summary>
     private static ArrayMesh TuftMesh(int variant)
     {
-        var st = new SurfaceTool();
-        st.Begin(Mesh.PrimitiveType.Triangles);
+        var st = new MeshBuilder();
         var u0 = (variant % 4) / 4f;
         var v0 = (variant / 4) / 2f;
         var u1 = u0 + 0.25f;
@@ -221,8 +220,7 @@ internal static class FoliageBuilder
         }
 
         // Canopy: cards scattered through an ellipsoid above the trunk, each rotated at random and tinted a little.
-        var st = new SurfaceTool();
-        st.Begin(Mesh.PrimitiveType.Triangles);
+        var st = new MeshBuilder();
         var centre = new Vector3(0f, trunkHeight + height * 0.28f, 0f);
         var cards = 18 + (int)(height * 1.6f);
         var ry = height * 0.36f;
@@ -245,7 +243,7 @@ internal static class FoliageBuilder
     }
 
     /// <summary>A square card centred at <paramref name="centre"/>, mapped to one of the four leaf clusters (2 x 2 atlas).</summary>
-    private static void Card(SurfaceTool st, Vector3 centre, Basis basis, float size, int cell, Color colour)
+    private static void Card(MeshBuilder st, Vector3 centre, Basis basis, float size, int cell, Color colour)
     {
         var u0 = (cell % 2) * 0.5f;
         var v0 = (cell / 2) * 0.5f;
@@ -274,8 +272,7 @@ internal static class FoliageBuilder
         const float cell = 5f;
         var nx = (int)MathF.Ceiling(prop.Size.X / cell);
         var nz = (int)MathF.Ceiling(prop.Size.Z / cell);
-        var st = new SurfaceTool();
-        st.Begin(Mesh.PrimitiveType.Triangles);
+        var st = new MeshBuilder();
         var rows = prop.Label == "crop";
         for (var j = 0; j <= nz; j++)
         {

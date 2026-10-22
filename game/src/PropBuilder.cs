@@ -244,8 +244,7 @@ internal static class PropBuilder
     /// <summary>A flat black arrow on a sign face, pointing right or left.</summary>
     private static void Arrow(Node3D parent, bool right, Vector3 position)
     {
-        var st = new SurfaceTool();
-        st.Begin(Mesh.PrimitiveType.Triangles);
+        var st = new MeshBuilder();
         var s = right ? 1f : -1f;
         st.SetNormal(Vector3.Back);
         // Shaft.
@@ -257,7 +256,7 @@ internal static class PropBuilder
         parent.AddChild(new MeshInstance3D { Mesh = mesh, MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(0.05f, 0.05f, 0.05f), CullMode = BaseMaterial3D.CullModeEnum.Disabled, ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded }, Position = position });
     }
 
-    private static void Tri(SurfaceTool st, Vector3 a, Vector3 b, Vector3 c)
+    private static void Tri(MeshBuilder st, Vector3 a, Vector3 b, Vector3 c)
     {
         st.AddVertex(a);
         st.AddVertex(b);

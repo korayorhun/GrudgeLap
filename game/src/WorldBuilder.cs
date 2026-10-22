@@ -351,14 +351,14 @@ internal static class WorldBuilder
         var nz = (int)MathF.Ceiling((maxZ - minZ) / TerrainCell) + 1;
         var heights = new float[nx * nz];
         var roadWeights = new float[nx * nz];
-        for (var j = 0; j < nz; j++)
+        // The ground field only reads the finished track, so its rows can be sampled side by side.
+        Parallel.For(0, nz, j =>
         {
             for (var i = 0; i < nx; i++) heights[j * nx + i] = terrain.Height(minX + i * TerrainCell, minZ + j * TerrainCell, out roadWeights[j * nx + i]);
-        }
+        });
         var variation = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth, Frequency = 1f / 140f, FractalOctaves = 2, Seed = 77 };
 
-        var st = new SurfaceTool();
-        st.Begin(Mesh.PrimitiveType.Triangles);
+        var st = new MeshBuilder();
         for (var j = 0; j < nz; j++)
         {
             for (var i = 0; i < nx; i++)
@@ -382,7 +382,10 @@ internal static class WorldBuilder
                 g = MathUtil.Lerp(g, shade * 0.95f, edge * 0.6f);
                 b = MathUtil.Lerp(b, shade * 0.72f, edge * 0.6f);
                 st.SetColor(new Color(r, g, b));
-                st.SetNormal(Convert.ToGodot(normal));
+                var gNormal = Convert.ToGodot(normal);
+                // u follows x on this grid: the tangent is +x laid onto the slope, the bitangent then runs along v.
+                st.SetTangent((Vector3.Right - gNormal * gNormal.X).Normalized(), 1f);
+                st.SetNormal(gNormal);
                 st.SetUV(new Vector2(x / 5000f + 0.5f, z / 5000f + 0.5f));
                 st.AddVertex(Convert.ToGodot(new SN.Vector3(x, h, z)));
             }
@@ -400,7 +403,6 @@ internal static class WorldBuilder
                 st.AddIndex(b); st.AddIndex(d); st.AddIndex(c);
             }
         }
-        st.GenerateTangents();
         return new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = Grass, Name = "Terrain" };
     }
 
@@ -442,8 +444,7 @@ internal static class WorldBuilder
 
     private static MeshInstance3D BuildRoad(TrackPath path)
     {
-        var st = new SurfaceTool();
-        st.Begin(Mesh.PrimitiveType.Triangles);
+        var st = new MeshBuilder();
         var frames = path.Frames;
         for (var i = 0; i < frames.Count - 1; i++)
         {
@@ -467,7 +468,6 @@ internal static class WorldBuilder
                     a.Normal, b.Normal, colour, a.Distance, b.Distance, (f0 + 1f) * 0.5f, (f1 + 1f) * 0.5f);
             }
         }
-        st.GenerateTangents();
         return new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = Asphalt, Name = $"Road-{path.Kind}" };
     }
 
@@ -475,8 +475,7 @@ internal static class WorldBuilder
 
     private static MeshInstance3D BuildShoulders(TrackPath path)
     {
-        var st = new SurfaceTool();
-        st.Begin(Mesh.PrimitiveType.Triangles);
+        var st = new MeshBuilder();
         var frames = path.Frames;
         var gravel = new Color(0.95f, 0.92f, 0.85f);
         var orange = new Color(0.95f, 0.46f, 0.12f);
@@ -498,14 +497,12 @@ internal static class WorldBuilder
                 else Quad(st, ai, ao, bi, bo, a.Normal, b.Normal, colour, a.Distance, b.Distance);
             }
         }
-        st.GenerateTangents();
         return new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = Gravel, Name = $"Shoulder-{path.Kind}" };
     }
 
     private static MeshInstance3D BuildCentreLine(TrackPath path)
     {
-        var st = new SurfaceTool();
-        st.Begin(Mesh.PrimitiveType.Triangles);
+        var st = new MeshBuilder();
         var frames = path.Frames;
         var yellow = new Color(0.95f, 0.78f, 0.20f);
         var white = new Color(0.9f, 0.9f, 0.9f);
@@ -536,8 +533,7 @@ internal static class WorldBuilder
     private static IEnumerable<Node3D> BuildBridges(TrackPath path, TerrainField terrain)
     {
         var frames = path.Frames;
-        var railings = new SurfaceTool();
-        railings.Begin(Mesh.PrimitiveType.Triangles);
+        var railings = new MeshBuilder();
         var grey = new Color(0.75f, 0.75f, 0.75f);
         var anyRail = false;
         var lastPillar = -100f;
@@ -624,7 +620,7 @@ internal static class WorldBuilder
     }
 
     /// <summary>Two triangles between consecutive cross-sections (al, ar) and (bl, br), with per-vertex normals; u runs left to right across the strip.</summary>
-    internal static void Quad(SurfaceTool st, SN.Vector3 al, SN.Vector3 ar, SN.Vector3 bl, SN.Vector3 br, SN.Vector3 na, SN.Vector3 nb, Color colour, float ua, float ub, float uLeft = 0f, float uRight = 1f)
+    internal static void Quad(MeshBuilder st, SN.Vector3 al, SN.Vector3 ar, SN.Vector3 bl, SN.Vector3 br, SN.Vector3 na, SN.Vector3 nb, Color colour, float ua, float ub, float uLeft = 0f, float uRight = 1f)
     {
         var gal = Convert.ToGodot(al);
         var gar = Convert.ToGodot(ar);
@@ -633,6 +629,10 @@ internal static class WorldBuilder
         var gna = Convert.ToGodot(na);
         var gnb = Convert.ToGodot(nb);
         st.SetColor(colour);
+        // u runs across the strip and v along it, so the tangent is the strip's left-to-right edge; the sign
+        // turns the bitangent along v, as the general tangent solver would.
+        var tangent = (gar - gal).Normalized();
+        st.SetTangent(tangent, gna.Cross(tangent).Dot(gbl - gal) < 0f ? -1f : 1f);
         st.SetNormal(gna); st.SetUV(new Vector2(uLeft, ua)); st.AddVertex(gal);
         st.SetNormal(gnb); st.SetUV(new Vector2(uLeft, ub)); st.AddVertex(gbl);
         st.SetNormal(gna); st.SetUV(new Vector2(uRight, ua)); st.AddVertex(gar);

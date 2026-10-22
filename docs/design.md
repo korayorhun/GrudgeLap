@@ -113,8 +113,9 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   tachometer with its red zone, gear readout, oil and charge lamps that light while the engine is off.
   The same picture is the binnacle's face in the cockpit and the panel at the foot of the screen in the
   other views, where it scrolls with lateral acceleration like the original's moving dashboard. HUD:
-  time, score, lap, route, best lap and ghost indicator, updater notice, messages. Title screen: car,
-  transmission, version and the F-keys.
+  time, score, lap, route, best lap and ghost indicator, updater notice, messages. Title screen on a dark
+  panel: car, gearbox (the last choice is remembered, automatic at first), and one press of Enter, Space or
+  a click both chooses and turns the key.
 - Audio: engine from recordings (`SampledEngine`: loops at known speeds pitched to the rpm, cross-faded on
   a log scale, through a low-pass that opens with the throttle, an off-throttle loop for the V8); tyres
   from recordings (`TyreAudio`: a cornering squeal from about four degrees of slip angle, a harder howl
@@ -144,6 +145,12 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   shows on the desktop or takes the keyboard; pair it with Godot's own `--position -32000,-32000` so the
   window is created off-screen in the first place). Rendering continues for a hidden window, only a
   minimised one stops it, so `--screenshot` still works.
+
+- Start-up: the world is generated, not loaded. Meshes go to the engine through `MeshBuilder` (managed
+  arrays, one engine call per mesh; tangents of the terrain grid and the road strips come from their UV
+  directions instead of the general solver) and the terrain is sampled in parallel, about 0.8 s on an
+  8-core laptop; the engine adds about 1.3 s on the first frame. The boot splash (`game/splash.png`, drawn
+  from a cockpit screenshot by `tools/make-splash.py`) shows the game rather than an empty window meanwhile.
 
 ## Conventions
 

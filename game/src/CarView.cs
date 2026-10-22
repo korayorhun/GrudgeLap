@@ -481,12 +481,9 @@ internal sealed partial class CarView : Node3D
             }
         }
 
-        var bonnet = new SurfaceTool();
-        var shell = new SurfaceTool();
-        var glass = new SurfaceTool();
-        bonnet.Begin(Mesh.PrimitiveType.Triangles);
-        shell.Begin(Mesh.PrimitiveType.Triangles);
-        glass.Begin(Mesh.PrimitiveType.Triangles);
+        var bonnet = new MeshBuilder();
+        var shell = new MeshBuilder();
+        var glass = new MeshBuilder();
 
         // Windscreen and rear window span a cabin and a non-cabin station; between cabin stations only the flank
         // strips are side windows, the roof stays painted. A glass engine cover is glass on top.
@@ -533,10 +530,8 @@ internal sealed partial class CarView : Node3D
         // of the upper body again, pushed in by the lining's thickness and facing inwards, as door trim and roof
         // lining. From the seat the shell is not drawn, and without it the road showed through the doors and the
         // sky through the roof.
-        var lining = new SurfaceTool();
-        var headliner = new SurfaceTool();
-        lining.Begin(Mesh.PrimitiveType.Triangles);
-        headliner.Begin(Mesh.PrimitiveType.Triangles);
+        var lining = new MeshBuilder();
+        var headliner = new MeshBuilder();
         for (var i = 0; i < faces.Length; i++)
         {
             var front = stations[i];
@@ -657,7 +652,7 @@ internal sealed partial class CarView : Node3D
     }
 
     /// <summary>Adds a triangle wound so that its front face looks along <paramref name="outward"/> (Godot front faces wind clockwise).</summary>
-    private static void Tri(SurfaceTool st, Vector3 a, Vector3 na, Vector3 b, Vector3 nb, Vector3 c, Vector3 nc, Color colour, Vector3 outward)
+    private static void Tri(MeshBuilder st, Vector3 a, Vector3 na, Vector3 b, Vector3 nb, Vector3 c, Vector3 nc, Color colour, Vector3 outward)
     {
         if ((b - a).Cross(c - a).Dot(outward) > 0f)
         {
@@ -673,7 +668,7 @@ internal sealed partial class CarView : Node3D
         st.AddVertex(c);
     }
 
-    private static void Cap(SurfaceTool st, Vector3[] ring, Vector3 normal, float trimBelow, Color paint)
+    private static void Cap(MeshBuilder st, Vector3[] ring, Vector3 normal, float trimBelow, Color paint)
     {
         var centre = Centroid(ring);
         for (var j = 0; j < ring.Length; j++)
@@ -970,8 +965,7 @@ internal sealed partial class CarView : Node3D
             var t = profile[Math.Min(i + 1, profile.Length - 1)] - profile[Math.Max(i - 1, 0)];
             normals[i] = new Vector3(0f, t.X, -t.Y).Normalized();
         }
-        var st = new SurfaceTool();
-        st.Begin(Mesh.PrimitiveType.Triangles);
+        var st = new MeshBuilder();
         for (var i = 0; i < profile.Length - 1; i++)
         {
             var outward = (normals[i] + normals[i + 1]).Normalized();
@@ -1090,8 +1084,7 @@ internal sealed partial class CarView : Node3D
             new(radius - 0.006f, 0.11f), new(0.30f, 0.135f), new(0.225f, 0.13f),
         };
         const int segments = 28;
-        var st = new SurfaceTool();
-        st.Begin(Mesh.PrimitiveType.Triangles);
+        var st = new MeshBuilder();
         for (var p = 0; p < profile.Length; p++)
         {
             var p2 = (p + 1) % profile.Length;

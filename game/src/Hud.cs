@@ -1,6 +1,7 @@
 using Godot;
 using GrudgeLap.Physics;
 using GrudgeLap.Physics.Race;
+using GrudgeLap.Physics.Vehicle;
 
 namespace GrudgeLap.Game;
 
@@ -21,6 +22,8 @@ internal sealed partial class Hud : Control
     public Texture2D? Instruments { get; set; }
     /// <summary>The view is the driver's seat: the instruments are in the binnacle, so the foot of the screen stays clear.</summary>
     public bool Cockpit { get; set; }
+    /// <summary>The gearbox the title screen will start with (the player's last choice).</summary>
+    public TransmissionMode Gearbox { get; set; }
     public string Overlay { get; set; } = "";
     /// <summary>Small line under the lap readout: updater status and the like.</summary>
     public string Notice { get; set; } = "";
@@ -50,6 +53,9 @@ internal sealed partial class Hud : Control
         if (_session.Phase == SessionPhase.Driving) _drivingTime += dt;
         QueueRedraw();
     }
+
+    private void Centred(Font font, string text, float y, int fontSize, Color colour) =>
+        DrawString(font, new Vector2(0f, y), text, HorizontalAlignment.Center, GetViewportRect().Size.X, fontSize, colour);
 
     public override void _Draw()
     {
@@ -99,27 +105,34 @@ internal sealed partial class Hud : Control
 
         if (s.Phase == SessionPhase.SelectTransmission)
         {
-            var lines = new[]
+            // The title on a dark panel, readable over the cockpit behind it, with one thing to do: press Enter.
+            var white = new Color(1f, 1f, 1f);
+            var grey = new Color(0.72f, 0.75f, 0.8f);
+            var panel = new Rect2(size.X * 0.5f - 440f, size.Y * 0.22f, 880f, 450f);
+            DrawRect(panel, new Color(0.03f, 0.03f, 0.04f, 0.8f));
+            var y = panel.Position.Y + 70f;
+            Centred(font, "GRUDGELAP", y, 58, white);
+            Centred(font, $"<   {car.Spec.Name}   >", y + 62f, 28, white);
+            Centred(font, "left / right: car", y + 90f, 15, grey);
+            var options = new (string Key, string Label, TransmissionMode Mode)[]
             {
-                "GRUDGELAP",
-                "",
-                $"<  {car.Spec.Name}  >   (left / right to change car)",
-                "",
-                "choose your transmission",
-                "1   AUTOMATIC",
-                "2   STICK SHIFT  (clutch worked for you)",
-                "3   STICK SHIFT + CLUTCH  (you can stall)",
-                "",
-                "then turn the key: ENTER",
-                "",
-                s.GrudgeMatch ? $"grudge match: the ghost of your best lap, {RaceSession.FormatLapTime(s.BestLapTime)}, is waiting" : "finish a lap and its ghost will race you next time",
-                $"v{Updater.CurrentVersionText}   F8 1989 mode   F10 check for updates   F11 full screen",
+                ("1", "AUTOMATIC", TransmissionMode.Automatic),
+                ("2", "STICK", TransmissionMode.ManualAutoClutch),
+                ("3", "STICK + CLUTCH", TransmissionMode.ManualClutch),
             };
-            for (var i = 0; i < lines.Length; i++)
+            for (var i = 0; i < options.Length; i++)
             {
-                var small = i >= lines.Length - 2;
-                DrawString(font, new Vector2(0f, size.Y * 0.34f + i * 34f), lines[i], HorizontalAlignment.Center, size.X, i == 0 ? 54 : small ? 18 : 26, small ? new Color(0.75f, 0.8f, 0.85f) : new Color(1f, 1f, 1f));
+                var (key, label, mode) = options[i];
+                var chosen = mode == Gearbox;
+                var x = size.X * 0.5f - 420f + i * 280f;
+                if (chosen) DrawRect(new Rect2(x + 10f, y + 112f, 260f, 46f), new Color(1f, 0.85f, 0.3f, 0.16f));
+                DrawString(font, new Vector2(x, y + 144f), $"{key}  {label}", HorizontalAlignment.Center, 280f, 22, chosen ? new Color(1f, 0.85f, 0.3f) : grey);
             }
+            Centred(font, "STICK: you shift, the clutch is worked for you     STICK + CLUTCH: you can stall", y + 186f, 15, grey);
+            var pulse = 0.7f + 0.3f * MathF.Sin(_flash * 4f);
+            Centred(font, "PRESS ENTER TO START", y + 258f, 38, new Color(1f, 0.85f, 0.3f, pulse));
+            Centred(font, s.GrudgeMatch ? $"grudge match: the ghost of your best lap, {RaceSession.FormatLapTime(s.BestLapTime)}, is waiting" : "finish a lap and its ghost will race you next time", y + 312f, 18, new Color(0.6f, 0.9f, 1f));
+            Centred(font, $"v{Updater.CurrentVersionText}   F8 1989 mode   F10 check for updates   F11 full screen", y + 346f, 15, grey);
         }
         else if (s.Phase == SessionPhase.Finished)
         {

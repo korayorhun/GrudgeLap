@@ -55,11 +55,14 @@ public sealed partial class Bootstrap : Node3D
     private float _elapsed;
     private bool _screenshotTaken;
     private TransmissionMode _attractMode = TransmissionMode.ManualAutoClutch;
+    private TransmissionMode _gearbox;  // what the title screen starts with: the last choice, automatic at first
+    private bool _clicked;
 
     public override void _Ready()
     {
         InputSetup.Register();
-        _carIndex = LoadCarChoice();
+        _carIndex = Math.Clamp(LoadChoice("car", 0), 0, VehicleSpec.Catalogue.Length - 1);
+        _gearbox = (TransmissionMode)Math.Clamp(LoadChoice("transmission", (int)TransmissionMode.Automatic), 0, 2);
         ParseArgs();   // may override the saved car with --car=
         if (_invisible)
         {
@@ -97,7 +100,7 @@ public sealed partial class Bootstrap : Node3D
         _cameraRig = new CameraRig { Mode = _orbit is not null ? CameraMode.Orbit : _startChase ? CameraMode.Chase : CameraMode.Cockpit };
         if (_orbit is { } orbit) _cameraRig.Orbit = orbit;
         AddChild(_cameraRig);
-        _hud = new Hud();
+        _hud = new Hud { Gearbox = _gearbox };
         var layer = new CanvasLayer();
         layer.AddChild(_hud);
         AddChild(layer);
@@ -242,19 +245,18 @@ public sealed partial class Bootstrap : Node3D
         AddChild(_ghostView);
     }
 
-    private static int LoadCarChoice()
+    private static int LoadChoice(string key, int fallback)
     {
         var settings = new ConfigFile();
         settings.Load(SettingsFile);
-        var index = (int)settings.GetValue("game", "car", 0).AsInt64();
-        return Math.Clamp(index, 0, VehicleSpec.Catalogue.Length - 1);
+        return (int)settings.GetValue("game", key, fallback).AsInt64();
     }
 
-    private static void SaveCarChoice(int index)
+    private static void SaveChoice(string key, int value)
     {
         var settings = new ConfigFile();
         settings.Load(SettingsFile);
-        settings.SetValue("game", "car", index);
+        settings.SetValue("game", key, value);
         settings.Save(SettingsFile);
     }
 
@@ -300,7 +302,7 @@ public sealed partial class Bootstrap : Node3D
         HandleGlobalKeys();
 
         var input = _attract ? _scripted.Next(_session) : _keyboard.Sample(dt, MathF.Abs(_session.Car.Speed));
-        if (!_attract) HandleMenuKeys();
+        if (!_attract && HandleMenuKeys()) input.Ignition = true;
 
         if (_session.Phase == SessionPhase.Replay && Input.IsActionJustPressed(InputSetup.Abort)) _session.Abort();
         else if (_session.Phase == SessionPhase.Driving && _session.OffRoad && Input.IsActionJustPressed(InputSetup.Abort)) _session.Abort();
@@ -430,22 +432,42 @@ public sealed partial class Bootstrap : Node3D
         _ghostView.Visible = visible;
     }
 
-    private void HandleMenuKeys()
+    /// <summary>
+    /// The title screen: left/right change the car, 1-3 the gearbox, and Enter, Space or a click starts with
+    /// them. Returns true for a start, which the caller turns into a turn of the key on the same frame, so one
+    /// press goes from the title to a running engine (choosing and then turning the key lost players there).
+    /// </summary>
+    private bool HandleMenuKeys()
     {
-        if (_session.Phase == SessionPhase.SelectTransmission)
+        var click = _clicked;
+        _clicked = false;
+        if (_session.Phase != SessionPhase.SelectTransmission) return false;
+        // Left/right flips between the cars; the session is rebuilt around the new spec.
+        if (Input.IsActionJustPressed(InputSetup.SteerLeft) || Input.IsActionJustPressed(InputSetup.SteerRight))
         {
-            // Left/right flips between the cars; the session is rebuilt around the new spec.
-            if (Input.IsActionJustPressed(InputSetup.SteerLeft) || Input.IsActionJustPressed(InputSetup.SteerRight))
-            {
-                _carIndex = (_carIndex + 1) % VehicleSpec.Catalogue.Length;
-                SaveCarChoice(_carIndex);
-                NewSession();
-                return;
-            }
-            if (Input.IsActionJustPressed(InputSetup.SelectAuto)) _session.ChooseTransmission(TransmissionMode.Automatic);
-            else if (Input.IsActionJustPressed(InputSetup.SelectManual)) _session.ChooseTransmission(TransmissionMode.ManualAutoClutch);
-            else if (Input.IsActionJustPressed(InputSetup.SelectClutch)) _session.ChooseTransmission(TransmissionMode.ManualClutch);
+            _carIndex = (_carIndex + 1) % VehicleSpec.Catalogue.Length;
+            SaveChoice("car", _carIndex);
+            NewSession();
+            return false;
         }
+        if (Input.IsActionJustPressed(InputSetup.SelectAuto)) SetGearbox(TransmissionMode.Automatic);
+        else if (Input.IsActionJustPressed(InputSetup.SelectManual)) SetGearbox(TransmissionMode.ManualAutoClutch);
+        else if (Input.IsActionJustPressed(InputSetup.SelectClutch)) SetGearbox(TransmissionMode.ManualClutch);
+        if (!Input.IsActionJustPressed(InputSetup.Ignition) && !Input.IsActionJustPressed(InputSetup.Abort) && !click) return false;
+        _session.ChooseTransmission(_gearbox);
+        return true;
+    }
+
+    private void SetGearbox(TransmissionMode mode)
+    {
+        _gearbox = mode;
+        _hud.Gearbox = mode;
+        SaveChoice("transmission", (int)mode);
+    }
+
+    public override void _UnhandledInput(InputEvent @event)
+    {
+        if (@event is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left }) _clicked = true;
     }
 
     private void HandleGlobalKeys()

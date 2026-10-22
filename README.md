@@ -56,8 +56,9 @@ One copy runs per computer: starting it again brings the running game to the fro
 
 ## Play
 
-On the title screen choose the car with **left / right** and the transmission with **1 / 2 / 3**, then turn
-the key with **Enter**. A crash shows a replay and puts you back at the last return point; the key again.
+Press **Enter** (or Space, or click) on the title screen and you are off. Before that, **left / right**
+picks the car and **1 / 2 / 3** the gearbox (automatic at first; your last choice is remembered). A crash
+shows a replay and puts you back at the last return point; Enter turns the key again.
 
 | Key | Action |
 |---|---|
