@@ -13,11 +13,11 @@ namespace GrudgeLap.Game;
 /// </summary>
 internal sealed partial class Updater : Node
 {
-    public const string Owner = "korayorhun";
+    public const string RepoOwner = "korayorhun";
     public const string Repo = "GrudgeLap";
     /// <summary>Inno Setup AppId of the installer; its uninstall key tells an installed copy from a portable one.</summary>
     public const string InstallerAppId = "{871E561A-E89E-41ED-870A-A635D3E789C2}";
-    private const string ApiLatest = $"https://api.github.com/repos/{Owner}/{Repo}/releases/latest";
+    private const string ApiLatest = $"https://api.github.com/repos/{RepoOwner}/{Repo}/releases/latest";
     private const string UserAgent = "GrudgeLap-Updater";
     private const string SettingsFile = "user://settings.cfg";
     private static readonly TimeSpan CheckInterval = TimeSpan.FromHours(24);
@@ -275,7 +275,7 @@ internal sealed partial class Updater : Node
         var root = doc.RootElement;
         var tag = root.GetProperty("tag_name").GetString() ?? "";
         if (!Version.TryParse(tag.TrimStart('v', 'V'), out var version)) throw new FormatException("tag: " + tag);
-        var page = root.GetProperty("html_url").GetString() ?? $"https://github.com/{Owner}/{Repo}/releases/latest";
+        var page = root.GetProperty("html_url").GetString() ?? $"https://github.com/{RepoOwner}/{Repo}/releases/latest";
         var notes = root.TryGetProperty("body", out var b) ? b.GetString() ?? "" : "";
         string? setup = null, setupSha = null, zip = null, zipSha = null;
         if (root.TryGetProperty("assets", out var assets))
