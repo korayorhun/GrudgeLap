@@ -45,6 +45,7 @@ public sealed partial class Bootstrap : Node3D
     private bool _leaving;      // a second launch on its way out: nothing was built
     private bool _noGhost;
     private bool _noTraffic;
+    private bool _noHud;        // pictures of the 3D scene alone, e.g. to compare it with another engine's
     private Vector3? _orbit;
     private bool _showAll;      // debug: draw the whole car from the driver's seat too
     private bool _saveBest;
@@ -102,7 +103,7 @@ public sealed partial class Bootstrap : Node3D
         if (_orbit is { } orbit) _cameraRig.Orbit = orbit;
         AddChild(_cameraRig);
         _hud = new Hud { Gearbox = _gearbox };
-        var layer = new CanvasLayer();
+        var layer = new CanvasLayer { Visible = !_noHud };
         layer.AddChild(_hud);
         AddChild(layer);
         _audio = new EngineAudio();
@@ -162,6 +163,7 @@ public sealed partial class Bootstrap : Node3D
             else if (arg == "--invisible") _invisible = true;   // automated runs: no window on screen, no focus taken
             else if (arg == "--no-ghost") _noGhost = true;       // pictures of the car without the best lap's ghost over it
             else if (arg == "--no-traffic") _noTraffic = true;
+            else if (arg == "--no-hud") _noHud = true;
             else if (arg.StartsWith("--orbit=", System.StringComparison.Ordinal))
             {
                 // --orbit=yaw,pitch,distance: a fixed camera on the car for pictures of the car itself.
