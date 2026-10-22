@@ -28,6 +28,8 @@ public sealed class RaceSession
     private bool _lapOpened;
     private float _gracePeriod;
     private float _messageExpiry = float.PositiveInfinity;
+    private readonly HashSet<int> _knockedSigns = new();
+    private readonly Dictionary<int, float> _softHitTimes = new();
 
     public RaceSession(TrackGeometry track, VehicleSpec spec, RaceOptions? options = null)
     {
@@ -84,6 +86,10 @@ public sealed class RaceSession
     public float GhostSteer { get; private set; }
     /// <summary>True once the lap in progress has a ghost to race.</summary>
     public bool GrudgeMatch => BestLap is not null;
+    /// <summary>Indices into <c>Track.Props</c> of the signs the car has knocked over this credit.</summary>
+    public IReadOnlySet<int> KnockedSigns => _knockedSigns;
+    /// <summary>Index of the soft prop hit during the last step (cow or sign), or -1.</summary>
+    public int LastSoftHit { get; private set; } = -1;
 
     public void ChooseTransmission(TransmissionMode mode)
     {
@@ -123,6 +129,7 @@ public sealed class RaceSession
 
             case SessionPhase.StartEngine:
                 Traffic?.Step(dt);
+                Track.Train?.Step(dt);
                 if (input.Ignition)
                 {
                     var starting = new DriverInputs { Gear = DriverInputs.NoGearChange, Ignition = true, Clutch = 1f };
@@ -147,6 +154,8 @@ public sealed class RaceSession
     private void StepDriving(DriverInputs input, float dt)
     {
         Traffic?.Step(dt);
+        Track.Train?.Step(dt);
+        LastSoftHit = -1;
         var wasRunning = Car.Drivetrain.Engine.Running;
         Car.Step(input, dt);
         if (wasRunning && !Car.Drivetrain.Engine.Running)
@@ -169,6 +178,7 @@ public sealed class RaceSession
         UpdateGhost();
         UpdateOffRoad(dt);
         UpdateWrongWay(dt);
+        CheckSoftProps();
         DetectCrash();
         if (Phase != SessionPhase.Driving) return;
 
@@ -398,6 +408,7 @@ public sealed class RaceSession
         else if (Car.Position.Y < Track.Terrain.Height(Car.Position.X, Car.Position.Z) - 6f) reason = CrashReason.FellOffBridge;
         else if (HitBridgeEdge()) reason = CrashReason.FellOffBridge;
         else if (HitTraffic()) reason = CrashReason.HitTraffic;
+        else if (HitTrain()) reason = CrashReason.HitTrain;
         else if (HitSolidProp(out var propKind)) reason = propKind switch
         {
             PropKind.Tree => CrashReason.HitTree,
@@ -422,6 +433,43 @@ public sealed class RaceSession
         while (start > 0 && frames[start - 1].Kind == SegmentKind.RampDown) start--;
         var intoRamp = hit.Frame.Distance - frames[start].Distance;
         return intoRamp < 3f && hit.Height < RaceOptions.BridgeEdgeClearance;
+    }
+
+    private bool HitTrain()
+    {
+        var train = Track.Train;
+        if (train is null || !train.Running) return false;
+        var ground = Track.Terrain.Height(Car.Position.X, Car.Position.Z);
+        var forward = Car.Forward;
+        return train.Hits(Car.Position, ground) || train.Hits(Car.Position + forward * 2.2f, ground) || train.Hits(Car.Position - forward * 2.2f, ground);
+    }
+
+    /// <summary>Cows moo and signs tip over when the car runs into them; nothing else happens.</summary>
+    private void CheckSoftProps()
+    {
+        var p = Car.Position;
+        var props = Track.Props;
+        for (var i = 0; i < props.Count; i++)
+        {
+            var prop = props[i];
+            if (!prop.Soft) continue;
+            var dx = prop.Position.X - p.X;
+            var dz = prop.Position.Z - p.Z;
+            var reach = prop.Kind == PropKind.Cow ? 2.2f : 1.5f;
+            if (dx * dx + dz * dz > reach * reach || MathF.Abs(prop.Position.Y - p.Y) > 2.5f) continue;
+            if (prop.Kind == PropKind.Cow)
+            {
+                if (_softHitTimes.TryGetValue(i, out var last) && Elapsed - last < 2.5f) continue;
+                _softHitTimes[i] = Elapsed;
+                LastSoftHit = i;
+                _events.Add(RaceEvent.CowHit);
+            }
+            else if (_knockedSigns.Add(i))
+            {
+                LastSoftHit = i;
+                _events.Add(RaceEvent.SignHit);
+            }
+        }
     }
 
     /// <summary>Box overlap with a drone in the car's own frame; both are about 2 m by 4.5 m.</summary>
@@ -556,6 +604,10 @@ public enum RaceEvent
     WrongWay,
     Crashed,
     TimeOut,
+    /// <summary>The car ran into a cow (it moos; no crash).</summary>
+    CowHit,
+    /// <summary>The car knocked a road sign over (a clang; no crash).</summary>
+    SignHit,
 }
 
 /// <summary>Difficulty table from the cabinet's custom game options (seconds). Medium is the factory setting.</summary>

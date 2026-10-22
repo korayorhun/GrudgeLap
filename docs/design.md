@@ -18,8 +18,18 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
 - **Ground** — `TerrainField`: value-noise rolling ground pulled to the edge height of every road built on
   earth (straights, curves, hills, dips, banked curves, splines), so hills get embankments and dips get
   cuttings; bridges, ramps and the loop are structures and leave the ground alone. Skid pads are flat
-  discs blended in. The same field answers the physics probe off the road, places the props and builds
-  the terrain mesh.
+  discs blended in; beyond the outermost road a ring of hills rises over half a kilometre and fades before
+  the far plane. The same field answers the physics probe off the road, places the props and builds the
+  terrain mesh; `Height(x, z, out roadWeight)` also says how close to a road edge a point is.
+- **Decor** — `OriginalInspiredTrack` places the props the way the 1989 circuit had them: the start gantry,
+  crossbucks at the level crossing, the barn with "33" on its back door, cows, an orange and a white
+  farmhouse, the gas station with its pumps, the hut, flowers, sawhorse barriers before the stunts, fields
+  (plough, crop, hay) slid outward until they clear every road, hedgerow trees on their far side, the
+  skid-pad column and a hint sign. Props are *solid* (crash) or *soft*: a cow moos and a sign tips over,
+  once, with no penalty.
+- **Train** — `Train`: a kinematic locomotive and wagons that cross the speed route on a schedule (run,
+  pause, run), on no rails as in 1989. The session treats a car under it as a crash; the scripted driver
+  stops short of the crossing when a run is due.
 - **Surface probe** — the one question the car asks: what is under this point? Nearest frame search in a
   window around a cursor, interpolation to the neighbour, lateral/height from the frame; the skid pad and
   then the ground field for anything off the road. Branches overlap for their first metres, so the probe
@@ -52,11 +62,22 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
 
 ## View (`game/`)
 
-- World is generated from the track at start-up: terrain mesh sampled from the ground field (embankments,
-  cuttings, dips, rolling fields), road ribbons with alternating slab shades, orange shoulders, dashed
-  centre line, bridge decks with railings and pillars down to the ground, the skid pad, procedural sky, sun
-  with cascaded shadows, primitive props (barn, houses, hut, trees, cows, signs with text, the fork
-  signpost, the sign to the pad).
+- World is generated from the track at start-up (`WorldBuilder`): terrain mesh sampled from the ground
+  field (embankments, cuttings, dips, rolling fields, the hill ring) with vertex-colour variation and a
+  trodden tint along the road edges; photo-textured road ribbons (CC0 ambientCG) in six strips with the
+  alternating slab shades of the original and darker wheel tracks, gravel shoulders (orange on the stunt
+  structures, everywhere in 1989 mode), dashed centre line, bridge decks with steel guardrails and pillars
+  down to the ground, the skid pad; HDRI sky with the sun aimed where the picture has it, cascaded shadows,
+  SDFGI, SSAO, SSIL, screen-space reflections, a thin volumetric haze, AgX tone mapping and TAA.
+- Foliage (`FoliageBuilder`): grass tufts as crossed alpha-scissor cards in multimeshes, dense along the
+  roads and sparse over the ground, olive-tinted to the terrain and faded out beyond 150 m; trees as a
+  bark trunk with branches under a canopy of leaf-cluster cards; fields as terrain-hugging patches
+  (ploughed dirt, crop rows, hay with bales). Both atlases come from `tools/make-foliage.py`.
+- Props (`PropBuilder`): textured primitives for the barn (siding, tiled roof, the green "33" door at the
+  back), houses (orange or white siding, windows, chimney), the shop with canopy, pumps and a GAS sign,
+  the camouflaged rubble hut, cows with patches, yellow diamond and white number signs, arrow signs, the
+  crossbuck, the start gantry, striped sawhorses, the pad column and flower beds. A sign that is hit leans
+  over about its base, away from the car. `TrainView` rides the simulation's train on the terrain.
 - Keyboard driver with ramped pedals and speed-dependent steering rates; gears 1-7, left/right pick the car
   on the title screen.
 - Cars: a loft through cross-sections built from a `BodyStyle`'s profile curves keyed along the body,
@@ -74,10 +95,12 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   original's moving dashboard. Title screen: car, transmission, version and the F-keys.
 - Audio: engine from recordings (`SampledEngine`: loops at known speeds pitched to the rpm, cross-faded on
   a log scale, through a low-pass that opens with the throttle, an off-throttle loop for the V8), with the
-  synthesised pulse-train engine kept for 1989 mode; procedural squeal, crash burst, checkpoint bleep and a
-  four-bar synth tune on the title screen and in replays.
+  synthesised pulse-train engine kept for 1989 mode; procedural squeal, crash burst, checkpoint bleep, a
+  cow's moo (formants on a sagging pitch), the clang of a sign going over, the clack of the train's wheels
+  when it runs nearby, and a four-bar synth tune on the title screen and in replays.
 - "1989 mode" (F8): a third of the render resolution, 20 fps, textures and normal maps off, nearest
-  filtering, no global illumination / ambient occlusion / glow / fog, a flat sky, the synthesised engine.
+  filtering, no shadows, global illumination, ambient occlusion, reflections, glow, fog or TAA, a flat sky,
+  orange shoulders everywhere, the synthesised engine.
 - Updater: once a day the latest GitHub release is fetched; F10 downloads the matching package (installer
   for an installed copy, zip for a portable one), verifies the published SHA-256 and applies it (silent
   installer with `/UPDATE=1`, or a PowerShell script that waits for the game to exit, unpacks over the
@@ -85,7 +108,11 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
 - Command-line switches for automation: `--attract`, `--chase`, `--speed-route`, `--car=v8|flat12`,
   `--no-traffic`, `--retro`, `--screenshot=<file>`, `--at=<s>`, `--quit-after=<s>`,
   `--orbit=<yaw>,<pitch>,<distance>` (degrees and metres, 0 = from behind), `--show-all` (whole car from
-  the driver's seat, for checking the body), `--save-best` (an attract lap may become the saved best lap).
+  the driver's seat, for checking the body), `--save-best` (an attract lap may become the saved best lap),
+  `--invisible` (the window is parked off-screen, made unfocusable and hidden, so an automated run never
+  shows on the desktop or takes the keyboard; pair it with Godot's own `--position -32000,-32000` so the
+  window is created off-screen in the first place). Rendering continues for a hidden window, only a
+  minimised one stops it, so `--screenshot` still works.
 
 ## Conventions
 
@@ -107,3 +134,5 @@ pushes, creates the GitHub release, updates the Scoop bucket and submits the win
 2. A cleaner twelve-cylinder recording for the 1984 car if one with a usable licence turns up.
 3. Tyre and crash samples instead of the synthesised ones; a longer tune.
 4. More circuits built with the same turtle API; the hidden skid pad could grow cones and a timer.
+5. Scanned models instead of lofts and primitives: a car body with proper seams, lamps and wipers, and
+   buildings with real geometry, would be the next step past textured primitives.

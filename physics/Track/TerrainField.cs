@@ -25,6 +25,7 @@ public sealed class TerrainField
     private readonly List<SkidPad> _pads;
     private readonly int _seed;
     private readonly Vector3 _centre;
+    private float _minX = float.MaxValue, _maxX = float.MinValue, _minZ = float.MaxValue, _maxZ = float.MinValue;
 
     public TerrainField(IReadOnlyList<TrackPath> paths, IReadOnlyList<SkidPad> pads, int seed = 1989)
     {
@@ -38,6 +39,8 @@ public sealed class TerrainField
             {
                 sum += f.Origin;
                 count++;
+                _minX = MathF.Min(_minX, f.Origin.X); _maxX = MathF.Max(_maxX, f.Origin.X);
+                _minZ = MathF.Min(_minZ, f.Origin.Z); _maxZ = MathF.Max(_maxZ, f.Origin.Z);
                 if (!IsEarthwork(f)) continue;
                 var index = _frames.Count;
                 _frames.Add(f);
@@ -55,6 +58,8 @@ public sealed class TerrainField
     public IReadOnlyList<SkidPad> Pads => _pads;
     /// <summary>Amplitude of the rolling ground, metres. Zero makes the world flat (test tracks).</summary>
     public float RollingAmplitude { get; init; } = 2.2f;
+    /// <summary>Height of the hills that ring the circuit beyond the outermost road, metres.</summary>
+    public float HillAmplitude { get; init; } = 40f;
 
     /// <summary>Frames of roads built on earth; the ground is pulled to their edges.</summary>
     public static bool IsEarthwork(in RoadFrame f) =>
@@ -62,8 +67,12 @@ public sealed class TerrainField
         && f.Surface == SurfaceType.Road;
 
     /// <summary>Ground height at a point.</summary>
-    public float Height(float x, float z)
+    public float Height(float x, float z) => Height(x, z, out _);
+
+    /// <summary>Ground height at a point; <paramref name="roadWeight"/> is 1 at a road's edge and fades to 0 away from it.</summary>
+    public float Height(float x, float z, out float roadWeight)
     {
+        roadWeight = 0f;
         var baseHeight = Base(x, z);
 
         // Nearest earthwork frame of every path within reach; each pulls the ground toward its edge height.
@@ -130,6 +139,7 @@ public sealed class TerrainField
             offsetSum += w * (pad.Centre.Y - baseHeight);
         }
 
+        roadWeight = weightMax;
         if (weightSum <= 0f) return baseHeight;
         return baseHeight + weightMax * (offsetSum / weightSum);
     }
@@ -143,7 +153,10 @@ public sealed class TerrainField
         return Vector3.Normalize(new Vector3(-dx / (2f * h), 1f, -dz / (2f * h)));
     }
 
-    /// <summary>The rolling ground with no roads: three octaves of value noise, flattening out far from the circuit.</summary>
+    /// <summary>
+    /// The ground with no roads: three octaves of rolling value noise around the circuit, and beyond the
+    /// outermost road a ring of hills that rises over half a kilometre and fades again before the far plane.
+    /// </summary>
     public float Base(float x, float z)
     {
         if (RollingAmplitude <= 0f) return 0f;
@@ -151,11 +164,20 @@ public sealed class TerrainField
         var dz = z - _centre.Z;
         var distance = MathF.Sqrt(dx * dx + dz * dz);
         var envelope = 1f - MathUtil.SmoothStep((distance - 900f) / 600f);
-        if (envelope <= 0f) return 0f;
-        var n = ValueNoise(x / 230f, z / 230f, _seed) * 0.70f
-              + ValueNoise(x / 95f, z / 95f, _seed + 7) * 0.22f
-              + ValueNoise(x / 38f, z / 38f, _seed + 13) * 0.08f;
-        return n * RollingAmplitude * envelope;
+        var rolling = 0f;
+        if (envelope > 0f)
+        {
+            var n = ValueNoise(x / 230f, z / 230f, _seed) * 0.70f
+                  + ValueNoise(x / 95f, z / 95f, _seed + 7) * 0.22f
+                  + ValueNoise(x / 38f, z / 38f, _seed + 13) * 0.08f;
+            rolling = n * RollingAmplitude * envelope;
+        }
+        var outside = MathF.Max(MathF.Max(_minX - 140f - x, x - _maxX - 140f), MathF.Max(_minZ - 140f - z, z - _maxZ - 140f));
+        if (outside <= 0f || HillAmplitude <= 0f) return rolling;
+        var ramp = MathUtil.SmoothStep(outside / 550f);
+        var fade = 1f - MathUtil.SmoothStep((outside - 1500f) / 700f);
+        var h = ValueNoise(x / 520f, z / 520f, _seed + 31) * 0.6f + ValueNoise(x / 180f, z / 180f, _seed + 37) * 0.25f + 0.55f;
+        return rolling + MathF.Max(h, 0f) * HillAmplitude * ramp * fade;
     }
 
     private static (int, int) CellOf(float x, float z) => ((int)MathF.Floor(x / CellSize), (int)MathF.Floor(z / CellSize));

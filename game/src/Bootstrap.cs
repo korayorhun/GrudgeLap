@@ -12,7 +12,7 @@ namespace GrudgeLap.Game;
 /// camera, HUD, audio, traffic, the ghost of the best lap and the updater to it. Also understands a few
 /// command-line switches used for automated checks: <c>--attract</c> (scripted driver), <c>--screenshot=&lt;file&gt;</c>
 /// with <c>--at=&lt;seconds&gt;</c>, <c>--chase</c>, <c>--orbit=yaw,pitch,distance</c>, <c>--speed-route</c>,
-/// <c>--retro</c>, <c>--no-traffic</c>, <c>--show-all</c> and <c>--quit-after=&lt;seconds&gt;</c>.
+/// <c>--retro</c>, <c>--no-traffic</c>, <c>--show-all</c>, <c>--invisible</c> (no window on screen) and <c>--quit-after=&lt;seconds&gt;</c>.
 /// </summary>
 public sealed partial class Bootstrap : Node3D
 {
@@ -24,6 +24,9 @@ public sealed partial class Bootstrap : Node3D
     private CarView _carView = null!;
     private CarView? _ghostView;
     private readonly List<CarView> _droneViews = new();
+    private readonly Dictionary<int, Node3D> _propNodes = new();
+    private readonly List<(Node3D Node, float Start, float Yaw, Vector3 Axis)> _tipping = new();
+    private TrainView? _trainView;
     private CameraRig _cameraRig = null!;
     private Hud _hud = null!;
     private EngineAudio _audio = null!;
@@ -34,6 +37,7 @@ public sealed partial class Bootstrap : Node3D
     private bool _attract;
     private bool _startChase;
     private bool _retro;
+    private bool _invisible;
     private bool _noTraffic;
     private Vector3? _orbit;
     private bool _showAll;      // debug: draw the whole car from the driver's seat too
@@ -51,9 +55,22 @@ public sealed partial class Bootstrap : Node3D
         InputSetup.Register();
         _carIndex = LoadCarChoice();
         ParseArgs();   // may override the saved car with --car=
+        if (_invisible) HideWindow();
 
         _track = OriginalInspiredTrack.Build();
         WorldBuilder.Build(this, _track);
+        for (var i = 0; i < _track.Props.Count; i++)
+        {
+            var node = PropBuilder.Build(_track.Props[i], _track.Terrain);
+            _propNodes[i] = node;
+            AddChild(node);
+        }
+        if (_track.Train is { } train)
+        {
+            _trainView = TrainView.Create(train, _track.Terrain);
+            AddChild(_trainView);
+        }
+        GetViewport().UseTaa = true;
 
         _carView = CarView.Create(VehicleSpec.Catalogue[_carIndex]);
         AddChild(_carView);
@@ -77,6 +94,26 @@ public sealed partial class Bootstrap : Node3D
         if (!_attract && _screenshotPath is null && System.Environment.GetEnvironmentVariable("GRUDGELAP_NO_UPDATE") is null) _updater.CheckIfDue(manual: false);
     }
 
+    /// <summary>
+    /// Takes the window off the screen for automated runs (screenshots, checks): unfocusable, parked far
+    /// outside the desktop and hidden. The engine keeps rendering a hidden window (it only stops for a
+    /// minimised one), so the viewport readback still works.
+    /// </summary>
+    private void HideWindow()
+    {
+        var window = GetWindow();
+        window.Unfocusable = true;
+        window.Position = new Vector2I(-32000, -32000);
+        if (!OperatingSystem.IsWindows()) return;
+        var handle = (IntPtr)DisplayServer.WindowGetNativeHandle(DisplayServer.HandleType.WindowHandle);
+        if (handle != IntPtr.Zero) ShowWindow(handle, SwHide);
+    }
+
+    private const int SwHide = 0;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
     private void ParseArgs()
     {
         foreach (var arg in OS.GetCmdlineUserArgs())
@@ -84,6 +121,7 @@ public sealed partial class Bootstrap : Node3D
             if (arg == "--attract") _attract = true;
             else if (arg == "--chase") _startChase = true;
             else if (arg == "--retro") _retro = true;
+            else if (arg == "--invisible") _invisible = true;   // automated runs: no window on screen, no focus taken
             else if (arg == "--no-traffic") _noTraffic = true;
             else if (arg.StartsWith("--orbit=", System.StringComparison.Ordinal))
             {
@@ -231,6 +269,16 @@ public sealed partial class Bootstrap : Node3D
             if (_ghostView is null) BuildGhostView();
         }
         _audio.MusicOn = _session.Phase is SessionPhase.SelectTransmission or SessionPhase.Replay or SessionPhase.Finished;
+        if (_session.Events.Contains(RaceEvent.SignHit) && _propNodes.TryGetValue(_session.LastSoftHit, out var sign))
+        {
+            // Knock the sign over: it tips away from the car over the next third of a second.
+            var away = sign.GlobalPosition - _carView.GlobalPosition;
+            away.Y = 0f;
+            // Up x away: turning about this axis leans the sign away from the car.
+            var axis = Vector3.Up.Cross(away.Normalized());
+            if (axis.LengthSquared() > 1e-4f) _tipping.Add((sign, _elapsed, sign.Rotation.Y, axis.Normalized()));
+        }
+        UpdateTipping();
         _audio.Update(_session, dt);
         _hud.Notice = _updater.Status;
         SyncView();
@@ -268,6 +316,7 @@ public sealed partial class Bootstrap : Node3D
         _carView.SetViewpoint(insideCar: !_showAll && _cameraRig.Mode == CameraMode.Cockpit && _session.Phase != SessionPhase.Replay);
         SyncTraffic(dt);
         SyncGhost();
+        _trainView?.Sync();
         if (_session.Phase == SessionPhase.Replay && _session.Replay.Count > 1)
         {
             // Scrub through the recorded poses over the replay duration.
@@ -283,6 +332,19 @@ public sealed partial class Bootstrap : Node3D
         _carView.SetPose(car.Position, car.Orientation);
         _carView.SetWheels(car.Wheels, car.SteerAngle, car.Spec);
         _cameraRig.FollowCar(_carView.GlobalTransform, MathF.Abs(car.Speed), dt);
+    }
+
+    private void UpdateTipping()
+    {
+        for (var i = _tipping.Count - 1; i >= 0; i--)
+        {
+            var (node, start, yaw, axis) = _tipping[i];
+            var t = MathUtil.Clamp01((_elapsed - start) / 0.35f);
+            var angle = Mathf.Lerp(0f, 1.45f, 1f - (1f - t) * (1f - t));
+            // The sign keeps its yaw and leans over about its base; the lean is applied after the yaw (right-to-left).
+            node.Basis = new Basis(axis, angle) * new Basis(Vector3.Up, yaw);
+            if (t >= 1f) _tipping.RemoveAt(i);
+        }
     }
 
     private void SyncTraffic(float dt)
@@ -366,7 +428,8 @@ public sealed partial class Bootstrap : Node3D
         var viewport = GetViewport();
         viewport.Scaling3DScale = retro ? 0.32f : 1f;
         viewport.Msaa3D = retro ? Viewport.Msaa.Disabled : Viewport.Msaa.Msaa2X;
-        viewport.ScreenSpaceAA = retro ? Viewport.ScreenSpaceAAEnum.Disabled : Viewport.ScreenSpaceAAEnum.Fxaa;
+        viewport.ScreenSpaceAA = Viewport.ScreenSpaceAAEnum.Disabled;
+        viewport.UseTaa = !retro;
         Engine.MaxFps = retro ? 20 : 0;
         WorldBuilder.SetRetro(retro);
         _audio.Retro = retro;

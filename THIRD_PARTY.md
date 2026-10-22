@@ -6,14 +6,14 @@
 | .NET 8 runtime | shipped next to the exe (`data_GrudgeLap_windows_x86_64`) | MIT |
 | Godot.NET.Sdk | build integration | MIT |
 | "Car Engine Sounds" (Internet Archive item `car-engines`) | engine loops cut from the `3 Ferrari 458` and `15 Lamborghini Countach` tracks (see `game/assets/audio/SOURCES.md`) | CC0 1.0 Universal, as declared by the uploader — https://archive.org/details/car-engines |
-| ambientCG textures Grass004, Asphalt004, Concrete034 (1K) | ground, road and concrete surfaces (`game/assets/textures/SOURCES.md`) | CC0 1.0 — https://ambientcg.com |
+| ambientCG textures Grass004, Asphalt004, Concrete034, Ground037, Bark012, WoodSiding009, RoofingTiles003, Bricks078, MetalPlates006, LeafSet001 (1K) | ground, road, shoulders, fields, trees, buildings, the train; the leaf-cluster atlas is composited from LeafSet001 (`game/assets/textures/SOURCES.md`) | CC0 1.0 — https://ambientcg.com |
 | Poly Haven HDRI "kloofendal_48d_partly_cloudy_puresky" (2K) | sky, lighting and reflections | CC0 1.0 — https://polyhaven.com |
 | xunit, Microsoft.NET.Test.Sdk | tests only, not shipped | Apache-2.0 / MIT |
 | Inno Setup 6 | builds the installer, not shipped | Inno Setup License |
 | ffmpeg, numpy, Pillow | offline tools (loop cutting, icon), not shipped | LGPL/GPL, BSD, MIT-CMU |
 
 Every mesh, the track and all other sounds in the game are generated at run time by the code in this
-repository; the only files brought in are the CC0 textures, the CC0 sky and the engine loops. The loops are
+repository; the only files brought in are the CC0 textures, the CC0 sky and the engine loops (the grass-tuft atlas is drawn by a script in `tools/`). The loops are
 the only recorded sound material; they were cut and normalised from the
 CC0 tracks above and carry no other claim. If you own a cleaner recording of a flat-twelve and are willing
 to license it CC0 or CC-BY, an issue is welcome.

@@ -220,6 +220,58 @@ public sealed class RaceSessionTests
     }
 
     [Fact]
+    public void Train_at_the_crossing_is_a_crash_and_signs_and_cows_are_not()
+    {
+        var track = OriginalInspiredTrack.Build();
+        var session = new RaceSession(track, new VehicleSpec(), RaceOptions.MediumNoTraffic);
+        session.ChooseTransmission(TransmissionMode.Automatic);
+        session.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Ignition = true }, Dt);
+
+        // Park on the crossing and wait for the train.
+        var crossing = track.Speed.FrameAt(OriginalInspiredTrack.CrossingDistance);
+        session.Car.Reset(crossing, new PathCursor(track.Speed, track.Speed.FrameIndexAt(OriginalInspiredTrack.CrossingDistance)));
+        session.Car.Drivetrain.Engine.Start();
+        var crashed = false;
+        var waited = 0f;
+        var budget = track.Train!.Cycle + 5f;
+        for (var t = 0f; t < budget && !crashed; t += Dt)
+        {
+            session.Step(DriverInputs.Idle, Dt);
+            waited = t;
+            if (session.Events.Contains(RaceEvent.Crashed)) crashed = true;
+        }
+        Assert.True(crashed, "the train never hit the parked car");
+        Assert.Equal(CrashReason.HitTrain, session.LastCrash);
+        _out.WriteLine($"train arrived after {waited:F1} s");
+
+        // Soft props: drive through a sign and a cow, nothing but events.
+        var fresh = new RaceSession(track, new VehicleSpec(), RaceOptions.MediumNoTraffic);
+        fresh.ChooseTransmission(TransmissionMode.Automatic);
+        fresh.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Ignition = true }, Dt);
+        var events = new List<RaceEvent>();
+        foreach (var kind in new[] { PropKind.Sign, PropKind.Cow })
+        {
+            // A specimen with nothing solid within 25 m, so the run-through ends on open ground.
+            var prop = track.Props.First(p => p.Kind == kind && !track.Props.Any(o => o.Solid && Vector3.Distance(o.Position, p.Position) < 25f));
+            var frame = track.StartFrame;
+            var start = new RoadFrame(prop.Position - frame.Tangent * 12f, frame.Tangent, MathUtil.Up, Vector3.Cross(MathUtil.Up, frame.Tangent), 0f, 5.5f, SurfaceType.Road, SegmentKind.Straight, 0);
+            fresh.Car.Reset(start, track.StartCursor);
+            fresh.Car.LaunchAt(12f);
+            for (var i = 0; i < 60 * 3; i++)
+            {
+                fresh.Step(new DriverInputs { Throttle = 0.3f, Gear = DriverInputs.NoGearChange }, Dt);
+                events.AddRange(fresh.Events);
+                if (fresh.Phase != SessionPhase.Driving || fresh.Events.Contains(RaceEvent.SignHit) || fresh.Events.Contains(RaceEvent.CowHit)) break;
+            }
+            Assert.True(fresh.Phase == SessionPhase.Driving, $"driving through the {kind} '{prop.Label}' at ({prop.Position.X:F0}, {prop.Position.Z:F0}) ended in {fresh.Phase} ({fresh.LastCrash}); car at ({fresh.Car.Position.X:F0}, {fresh.Car.Position.Y:F1}, {fresh.Car.Position.Z:F0})");
+        }
+        Assert.Contains(RaceEvent.SignHit, events);
+        Assert.Contains(RaceEvent.CowHit, events);
+        Assert.DoesNotContain(RaceEvent.Crashed, events);
+        Assert.Single(fresh.KnockedSigns);
+    }
+
+    [Fact]
     public void Skid_pad_is_asphalt_with_no_off_road_clock_and_no_wrong_way()
     {
         var track = OriginalInspiredTrack.Build();
@@ -230,7 +282,8 @@ public sealed class RaceSessionTests
 
         // Drop the car onto the pad and drive a tight circle for a while.
         var frame = track.StartFrame;
-        var onPad = new RoadFrame(pad.Centre + new Vector3(10f, 0f, 0f), frame.Tangent, MathUtil.Up, Vector3.Cross(MathUtil.Up, frame.Tangent), 0f, 5.5f, SurfaceType.Pad, SegmentKind.Straight, 0);
+        // Start 22 m out so the tight circle never reaches the column in the middle.
+        var onPad = new RoadFrame(pad.Centre + new Vector3(22f, 0f, 0f), frame.Tangent, MathUtil.Up, Vector3.Cross(MathUtil.Up, frame.Tangent), 0f, 5.5f, SurfaceType.Pad, SegmentKind.Straight, 0);
         session.Car.Reset(onPad, track.StartCursor);
         session.Car.Drivetrain.Engine.Start();
         for (var i = 0; i < 60 * 25; i++)

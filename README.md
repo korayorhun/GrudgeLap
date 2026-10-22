@@ -5,19 +5,26 @@ seven-speed V8 of 2012 with a sports exhaust, both with real engine recordings �
 *speed* route and a short *stunt* route with an open drawbridge, a vertical loop and a banked 180, dips,
 traffic in both directions, checkpoints against the clock, an instant replay after every crash, a hidden
 skid pad, a "1989 mode" and the *grudge match*: the ghost of your best lap races you on every lap after.
-Keyboard-playable on Windows, windowed or full screen. Free, open source, no assets copied from anywhere.
+The scenery is the one you remember: a red barn with "33" on its door, cows in the fields, a farmhouse after
+the curve, a gas station, a camouflaged hut, yellow signs that tip over when you clip them, sawhorses before
+the stunts and a level crossing where a train really does come through. Keyboard-playable on Windows,
+windowed or full screen. Free, open source, no assets copied from anywhere.
 
 **TR** · 1989'un arcade sürüş simülatörlerine saygı duruşu. İki araba (1984 flat-12, 4 vites; 2012 V8, 7
 vites, spor egzoz; gerçek motor kayıtları), uzun *speed* ve kısa *stunt* (açık köprü, dikey loop, eğimli
 180°) rotaları, çukurlar, iki yönlü trafik, süreye karşı kontrol noktaları, her kazadan sonra anlık tekrar,
 gizli skid pad, "1989 modu" ve *grudge match*: en iyi turunuzun hayaleti sonraki her turda sizinle yarışır.
-Windows'ta klavyeyle oynanır; pencere veya tam ekran. Ücretsiz, açık kaynak.
+Manzara hatırladığınız gibi: kapısında "33" yazan kırmızı ahır, tarlalarda inekler, virajdan sonra çiftlik
+evi, benzin istasyonu, kamuflajlı kulübe, çarpınca devrilen sarı levhalar, stunt öncesi tahta bariyerler ve
+gerçekten tren geçen bir hemzemin geçit. Windows'ta klavyeyle oynanır; pencere veya tam ekran. Ücretsiz,
+açık kaynak.
 
 ![cockpit](docs/images/cockpit.jpg)
 
 | ![stunt chase](docs/images/chase.jpg) | ![V8](docs/images/v8.jpg) |
 |---|---|
 | ![flat-twelve](docs/images/flat12.jpg) | ![1989 mode](docs/images/retro.jpg) |
+| ![speed route](docs/images/farm.jpg) | |
 
 The name, track, cars and sounds are our own. The ideas come from a game we loved; nothing from it is
 copied. The car names are descriptions, not makes or models; the engine recordings are CC0 (see
@@ -71,7 +78,8 @@ the key with **Enter**. A crash shows a replay and puts you back at the last ret
 Rules, from the cabinet's own operator options: 90 s on the clock, +45 s at the checkpoint and at the lap,
 10 s off road and you are put back, wrong way does not count, traffic is solid. The stunt route wants about
 60-80 mph for the open drawbridge and at least 60 for the loop. Somewhere off the speed route a sign
-points to the skid pad; donuts there cost nothing.
+points to the skid pad; donuts there cost nothing. Cows and signs only complain when you hit them; a barn,
+a tree, a sawhorse or the train at the level crossing is a crash.
 
 **Grudge match.** Your best lap is recorded pose by pose and saved. From then on its ghost drives every lap
 with you; beat it and the new lap becomes the ghost.
@@ -101,10 +109,11 @@ Godot's editor opens the `game/` folder; the simulation lives in `physics/` with
 - `physics.tests/` — the feel checklist as numbers: 0-60, top speed, braking, stall, launch, the loop's
   minimum speed, the drawbridge window, the banked 180, the spin, grass, jumps in top gear, scripted laps on
   both routes with and without traffic, drone collisions, the ghost, the skid pad, the ground and the props.
-- `game/` — the Godot view: world generated from the track (terrain mesh from the ground field, slabbed
-  road, bridges, pad, props), lofted car bodies, cockpit and chase cameras, HUD with a scrolling cluster,
-  engine sound from recordings with a synthesised fallback, procedural squeal, crash and title tune,
-  updater. Design notes in [docs/design.md](docs/design.md), the checklist in
+- `game/` — the Godot view: world generated from the track (terrain mesh from the ground field with a ring
+  of hills, photo-textured road with worn wheel tracks, gravel shoulders, bridges with guardrails, pad,
+  grass tufts, trees from leaf cards, fields, textured buildings and signs, the train), lofted car bodies,
+  cockpit and chase cameras, HUD with a scrolling cluster, engine sound from recordings with a synthesised
+  fallback, procedural squeal, crash, moo, sign clang, train and title tune, updater. Design notes in [docs/design.md](docs/design.md), the checklist in
   [docs/feel-checklist.md](docs/feel-checklist.md), what the research found in
   [docs/research-notes.md](docs/research-notes.md).
 

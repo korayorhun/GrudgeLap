@@ -33,6 +33,8 @@ public sealed class TrackGeometry
     public IReadOnlyList<SkidPad> Pads { get; }
     public TerrainField Terrain { get; }
     public List<TrackProp> Props { get; } = new();
+    /// <summary>The train at the level crossing, if the circuit has one.</summary>
+    public Train? Train { get; set; }
     public string Name { get; init; } = "Track";
 
     public RoadFrame StartFrame => Common.First;
@@ -204,7 +206,9 @@ public readonly record struct SurfaceHit(
 /// <summary>A roadside object. Solid props crash the car; soft ones (signs, cows) just react.</summary>
 public sealed record TrackProp(PropKind Kind, Vector3 Position, float YawDeg, Vector3 Size, string Label = "")
 {
-    public bool Solid => Kind is PropKind.Barn or PropKind.House or PropKind.Shop or PropKind.Hut or PropKind.Tree or PropKind.Tower or PropKind.Barrier or PropKind.Train;
+    public bool Solid => Kind is PropKind.Barn or PropKind.House or PropKind.Shop or PropKind.Hut or PropKind.Tree or PropKind.Tower or PropKind.Barrier or PropKind.Train or PropKind.Pump;
+    /// <summary>Soft props the car drives through: they react (a sign tips, a cow moos) but never stop it.</summary>
+    public bool Soft => Kind is PropKind.Cow or PropKind.Sign or PropKind.Crossbuck;
 }
 
 public enum PropKind
@@ -221,4 +225,12 @@ public enum PropKind
     Barrier,
     Train,
     Flowers,
+    /// <summary>A crop, ploughed or hay field: a ground patch conforming to the terrain (Size.X by Size.Z).</summary>
+    Field,
+    /// <summary>Banner gantry across the road (the green start sign).</summary>
+    Gate,
+    /// <summary>Level-crossing sign.</summary>
+    Crossbuck,
+    /// <summary>Fuel pump at the shop.</summary>
+    Pump,
 }

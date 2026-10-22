@@ -28,6 +28,9 @@ tuning change that breaks one shows up before anyone sits in the car. Values are
 | Skid pad | asphalt, no off-road clock, no wrong-way | 25 s of donuts | `Skid_pad_is_asphalt_with_no_off_road_clock_and_no_wrong_way` |
 | Ground | meets the road edges, bridges float, dips cut in, rolls elsewhere | holds | `Ground_meets_the_road_edges_and_rolls_elsewhere` |
 | Roadside props and the pad | no solid prop within 2 m of any road; pad 15 m clear of roads | holds for every prop | `Solid_props_stay_clear_of_every_road`, `Skid_pad_sits_clear_of_roads_and_props` |
+| Fields | every field patch clear of every road by half a road width plus 6 m | holds | `Fields_stay_clear_of_every_road` |
+| Train | crosses the speed route on its schedule, pauses, comes back; the scripted driver still laps | holds | `Train_runs_across_the_speed_route_on_a_schedule` |
+| Soft props | a cow moos and a sign tips over, no crash; the train at the crossing is a crash | holds | `Train_at_the_crossing_is_a_crash_and_signs_and_cows_are_not` |
 
 Known gaps (next tuning passes): loop entry still spikes the suspension (a clothoid entry would soften it);
 the keyboard steering rates are a first guess; the scripted driver corners at 68 % of grip, a human will push harder.

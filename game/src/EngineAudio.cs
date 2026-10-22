@@ -2,6 +2,7 @@ using Godot;
 using GrudgeLap.Physics;
 using GrudgeLap.Physics.Race;
 using GrudgeLap.Physics.Vehicle;
+using SN = System.Numerics;
 
 namespace GrudgeLap.Game;
 
@@ -28,6 +29,9 @@ internal sealed partial class EngineAudio : Node
     private float _rumble;
     private bool _running;
     private float _musicLevel;
+    private float _moo, _mooPhase, _mooPitch;
+    private float _clang, _clangPhase, _clangPhase2;
+    private float _trainLevel, _trainClock;
     private double _musicTime;
     private float _musicPhaseLead, _musicPhaseBass;
 
@@ -88,8 +92,19 @@ internal sealed partial class EngineAudio : Node
                 case RaceEvent.CheckpointPassed:
                 case RaceEvent.LapCompleted: _bleep = 0.35f; break;
                 case RaceEvent.EngineStarted: _rumble = 0.6f; break;
+                case RaceEvent.CowHit: _moo = 1f; _mooPhase = 0f; _mooPitch = 0.9f + 0.2f * (float)_random.NextDouble(); break;
+                case RaceEvent.SignHit: _clang = 1f; break;
             }
         }
+        // The train is heard when it runs within a couple of hundred metres.
+        var trainTarget = 0f;
+        if (session.Track.Train is { Running: true } train)
+        {
+            var nearest = float.MaxValue;
+            foreach (var c in train.Cars) nearest = MathF.Min(nearest, SN.Vector3.Distance(c, car.Position));
+            trainTarget = MathUtil.Clamp01(1f - nearest / 260f);
+        }
+        _trainLevel += (trainTarget - _trainLevel) * MathUtil.Clamp01(dt * 3f);
         _sampled.Update(_rpm, _load, _running, muted: Retro);
         Fill();
     }
@@ -146,10 +161,50 @@ internal sealed partial class EngineAudio : Node
             }
 
             var music = Music();
-            var sample = MathF.Tanh((engine + squeal + crash + rumble + bleep + music) * Volume);
+            var extras = Moo() + Clang(noise) + TrainClack(noise);
+            var sample = MathF.Tanh((engine + squeal + crash + rumble + bleep + music + extras) * Volume);
             buffer[i] = new Vector2(sample, sample);
         }
         _playback.PushBuffer(buffer);
+    }
+
+    /// <summary>A cow: two formants on a pitch that sags, over about a second.</summary>
+    private float Moo()
+    {
+        if (_moo <= 0f) return 0f;
+        var t = 1f - _moo;
+        var pitch = (140f - 50f * t) * _mooPitch;
+        _mooPhase += pitch / MixRate;
+        if (_mooPhase >= 1f) _mooPhase -= 1f;
+        var p = _mooPhase;
+        var env = MathF.Min(t * 8f, 1f) * MathF.Min(_moo * 3f, 1f);
+        var tone = MathF.Sin(p * MathF.Tau) * 0.6f + MathF.Sin(p * MathF.Tau * 2f) * 0.35f + MathF.Sin(p * MathF.Tau * 3f) * 0.2f + MathF.Sin(p * MathF.Tau * 5f) * 0.1f;
+        _moo -= 1f / (MixRate * 1.1f);
+        return MathF.Tanh(tone * 1.4f) * 0.35f * env;
+    }
+
+    /// <summary>A road sign going over: a short bright ring from two detuned partials.</summary>
+    private float Clang(float noise)
+    {
+        if (_clang <= 0f) return 0f;
+        _clangPhase += 2350f / MixRate;
+        _clangPhase2 += 3170f / MixRate;
+        if (_clangPhase >= 1f) _clangPhase -= 1f;
+        if (_clangPhase2 >= 1f) _clangPhase2 -= 1f;
+        var ring = MathF.Sin(_clangPhase * MathF.Tau) * 0.6f + MathF.Sin(_clangPhase2 * MathF.Tau) * 0.4f + noise * 0.3f * _clang;
+        var env = _clang * _clang;
+        _clang -= 1f / (MixRate * 0.7f);
+        return ring * 0.35f * env;
+    }
+
+    /// <summary>Wheels over rail joints: noise bursts twice a second, as loud as the train is near.</summary>
+    private float TrainClack(float noise)
+    {
+        if (_trainLevel < 0.01f) return 0f;
+        _trainClock += 1f / MixRate;
+        var phase = _trainClock % 0.42f;
+        var burst = MathF.Exp(-phase * 60f) + 0.5f * MathF.Exp(-MathF.Max(phase - 0.11f, 0f) * 60f) * (phase > 0.11f ? 1f : 0f);
+        return noise * burst * 0.5f * _trainLevel + noise * 0.04f * _trainLevel;
     }
 
     /// <summary>One sample of the tune: a 16th-note arpeggio on a square wave over a sine bass, 118 bpm, four bars.</summary>

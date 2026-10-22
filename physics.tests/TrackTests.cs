@@ -81,6 +81,64 @@ public sealed class TrackTests
     }
 
     [Fact]
+    public void Fields_stay_clear_of_every_road()
+    {
+        var track = OriginalInspiredTrack.Build();
+        var fields = track.Props.Where(p => p.Kind == PropKind.Field).ToList();
+        Assert.True(fields.Count >= 5, $"only {fields.Count} fields");
+        var offenders = new List<string>();
+        foreach (var field in fields)
+        {
+            var yaw = field.YawDeg * MathUtil.Deg2Rad;
+            var axisX = new Vector3(MathF.Cos(yaw), 0f, -MathF.Sin(yaw));
+            var axisZ = new Vector3(MathF.Sin(yaw), 0f, MathF.Cos(yaw));
+            for (var u = -0.5f; u <= 0.5f; u += 0.1f)
+            {
+                for (var v = -0.5f; v <= 0.5f; v += 0.1f)
+                {
+                    var p = field.Position + axisX * (u * field.Size.X) + axisZ * (v * field.Size.Z);
+                    var clearance = track.ClearanceFromRoads(p);
+                    if (clearance < TrackBuilder.DefaultHalfWidth + 4f)
+                    {
+                        offenders.Add($"field '{field.Label}' at ({field.Position.X:F0}, {field.Position.Z:F0}) reaches within {clearance:F0} m of a road");
+                        u = 1f;
+                        break;
+                    }
+                }
+            }
+        }
+        foreach (var o in offenders) _out.WriteLine(o);
+        Assert.Empty(offenders);
+    }
+
+    [Fact]
+    public void Train_runs_across_the_speed_route_on_a_schedule()
+    {
+        var track = OriginalInspiredTrack.Build();
+        var train = Assert.IsType<Train>(track.Train);
+        var crossing = track.Speed.FrameAt(OriginalInspiredTrack.CrossingDistance);
+        Assert.True(Vector3.Distance(new Vector3(train.Crossing.X, 0f, train.Crossing.Z), new Vector3(crossing.Origin.X, 0f, crossing.Origin.Z)) < 1f);
+        Assert.InRange(MathF.Abs(Vector3.Dot(train.Direction, crossing.Tangent)), 0f, 0.05f);
+        // Over one cycle the locomotive passes the crossing once and the cars stay on the line.
+        var passes = 0;
+        var wasBefore = train.HeadOffset < 0f;
+        for (var t = 0f; t < train.Cycle; t += 1f / 60f)
+        {
+            train.Step(1f / 60f);
+            var before = train.HeadOffset < 0f;
+            if (wasBefore && !before && train.Running) passes++;
+            wasBefore = before;
+            foreach (var car in train.Cars)
+            {
+                var offLine = Vector3.Dot(car - train.Crossing, new Vector3(-train.Direction.Z, 0f, train.Direction.X));
+                Assert.InRange(offLine, -0.01f, 0.01f);
+            }
+        }
+        Assert.Equal(1, passes);
+        _out.WriteLine($"train cycle {train.Cycle:F0} s, next crossing in {train.SecondsToCrossing():F0} s");
+    }
+
+    [Fact]
     public void Probe_finds_road_under_start_and_grass_beside_it()
     {
         var track = OriginalInspiredTrack.Build();
@@ -116,11 +174,12 @@ public sealed class TrackTests
         var clearance = track.ClearanceFromRoads(pad.Centre);
         _out.WriteLine($"pad at ({pad.Centre.X:F0}, {pad.Centre.Y:F1}, {pad.Centre.Z:F0}) r={pad.Radius:F0}, nearest road {clearance:F0} m");
         Assert.True(clearance > pad.Radius + 15f, $"road within {clearance:F0} m of the pad centre");
-        foreach (var prop in track.Props.Where(p => p.Solid))
+        foreach (var prop in track.Props.Where(p => p.Solid && p.Label != "pad-column"))
         {
             var d = new Vector3(prop.Position.X - pad.Centre.X, 0f, prop.Position.Z - pad.Centre.Z).Length();
             Assert.True(d > pad.Radius + 4f, $"{prop.Kind} '{prop.Label}' is {d:F0} m from the pad centre");
         }
+        Assert.Contains(track.Props, p => p.Label == "pad-column" && Vector3.Distance(p.Position, pad.Centre) < 0.5f);
         // The pad is flat asphalt at its own height.
         var cursor = track.StartCursor;
         var hit = track.Probe(pad.Centre + Vector3.UnitY * 0.5f, ref cursor, false);
@@ -239,6 +298,30 @@ internal static class TrackMapRenderer
         {
             var (x, y) = ToPixel(pad.Centre);
             png.Disc(x, y, (int)(pad.Radius * scale), ((byte)70, (byte)70, (byte)75));
+        }
+
+        // Fields as their outlines, the railway as a thin grey line through the crossing.
+        foreach (var field in track.Props.Where(p => p.Kind == PropKind.Field))
+        {
+            var yaw = field.YawDeg * MathUtil.Deg2Rad;
+            var ax = new Vector3(MathF.Cos(yaw), 0f, -MathF.Sin(yaw)) * (field.Size.X * 0.5f);
+            var az = new Vector3(MathF.Sin(yaw), 0f, MathF.Cos(yaw)) * (field.Size.Z * 0.5f);
+            var corners = new[] { field.Position - ax - az, field.Position + ax - az, field.Position + ax + az, field.Position - ax + az };
+            var colour = field.Label == "plough" ? ((byte)120, (byte)80, (byte)40) : field.Label == "hay" ? ((byte)190, (byte)170, (byte)70) : ((byte)30, (byte)90, (byte)30);
+            for (var i = 0; i < 4; i++)
+            {
+                var (x1, y1) = ToPixel(corners[i]);
+                var (x2, y2) = ToPixel(corners[(i + 1) % 4]);
+                var n = Math.Max(Math.Abs(x2 - x1), Math.Abs(y2 - y1)) + 1;
+                for (var k = 0; k <= n; k++) png.Set(x1 + (x2 - x1) * k / n, y1 + (y2 - y1) * k / n, colour);
+            }
+        }
+        if (track.Train is { } train)
+        {
+            var (x1, y1) = ToPixel(train.Crossing - train.Direction * 320f);
+            var (x2, y2) = ToPixel(train.Crossing + train.Direction * 320f);
+            var n = Math.Max(Math.Abs(x2 - x1), Math.Abs(y2 - y1)) + 1;
+            for (var k = 0; k <= n; k++) png.Set(x1 + (x2 - x1) * k / n, y1 + (y2 - y1) * k / n, ((byte)200, (byte)200, (byte)210));
         }
 
         foreach (var prop in track.Props)

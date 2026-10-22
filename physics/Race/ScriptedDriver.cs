@@ -55,7 +55,7 @@ public sealed class ScriptedDriver
             }
         }
 
-        var trafficLimit = PlanTraffic(session, path, distance, out var laneTarget);
+        var trafficLimit = MathF.Min(PlanTraffic(session, path, distance, out var laneTarget), PlanCrossing(session, path, distance));
         const float dt = 1f / 60f;
         _lane = MathUtil.MoveToward(_lane, laneTarget, 1.6f * dt);
 
@@ -159,6 +159,28 @@ public sealed class ScriptedDriver
         var closing = session.Car.Speed - slower.Speed;
         if (slowerGap < FollowGap + MathF.Max(closing, 0f) * 2.5f) limit = MathF.Max(slower.Speed - 1f, 5f);
         return limit;
+    }
+
+    /// <summary>
+    /// The level crossing: when the train is on its run or due within the time it takes to get there, the
+    /// driver stops short of the crossing and waits for it to clear.
+    /// </summary>
+    private static float PlanCrossing(RaceSession session, TrackPath path, float distance)
+    {
+        var train = session.Track.Train;
+        if (train is null || path.Kind != PathKind.Speed) return float.MaxValue;
+        var ahead = OriginalInspiredTrack.CrossingDistance - distance;
+        if (ahead < -20f || ahead > 160f) return float.MaxValue;
+        var speed = MathF.Max(session.Car.Speed, 1f);
+        var arrival = ahead / speed;
+        // Close: approaching from within 250 m, or still crossing (the last wagon clears at about 70 m past).
+        var trainClose = train.Running && train.HeadOffset > -250f && train.HeadOffset < 72f;
+        var due = train.SecondsToCrossing() < arrival + 6f;
+        if (!trainClose && !due) return float.MaxValue;
+        if (ahead < 0f) return float.MaxValue;   // already on it: keep going
+        // Brake to a stop 14 m before the crossing.
+        var stopIn = MathF.Max(ahead - 14f, 0f);
+        return MathF.Sqrt(2f * BrakingDecel * stopIn);
     }
 
     /// <summary>Distance round the traffic loop (start straight, speed route, final stretch).</summary>
