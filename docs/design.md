@@ -85,28 +85,42 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   Quads are wound by the ring direction (tangent turned clockwise = outward), normals are smoothed below a
   60 degree crease angle. Two styles: the flat-twelve (blade nose, lamp lids, dipped bonnet, small cabin,
   strakes, louvres, slatted tail, A-pillar mirror) and the V8 (low wide nose, long screen, glass engine
-  cover, side scoops, round lamps, four tips, lip). From the driver's seat only the bonnet, the lamps and a
-  dashboard top are drawn. Drones reuse the loft in other paints; the ghost is the same loft in one
-  translucent glowing material without shadows.
-- Cockpit camera (driver's eye at the windscreen base, as the cabinet framed it; rolls with the car) and
-  chase camera; crane shot for the replay; `--orbit` fixes a camera on the car for pictures of it.
+  cover, side scoops, round lamps, four tips, lip). Panel shut lines are dark strips of the loft itself (a
+  pair of stations 14 mm apart at each seam); a plate, indicators, door handles, brake discs with red
+  calipers and a cellular tread grain on the tyres finish the outside. The cabin is furnished and seen
+  through tinted glass: floor, dashboard and binnacle, a steering wheel on a column leaning back 22 degrees
+  that turns twelve times the road wheels' angle, two seats, the A-pillars and the wipers. From the
+  driver's seat the shell and the glass are hidden, so the bonnet, its lamps and the cabin remain; the
+  A-pillars narrow towards the roof, because the eye is under 0.3 m from their tops and a pillar of even
+  section would read as a band across the view. Drones reuse the loft in other paints; the ghost is the
+  same loft in one translucent glowing material without shadows.
+- Cockpit camera at the driver's eye (left seat, 1.00 m above the road, 0.67 m behind the windscreen base,
+  62 degrees of vertical field of view opening to 68 at speed, a few millimetres of jitter that grow with
+  speed and on grass; rolls with the car) and chase camera; crane shot for the replay; `--orbit` fixes a
+  camera on the car for pictures of it.
 - HUD: speedometer and tachometer scaled to the car, gear, transmission mode, time, score, lap, route, best
   lap and ghost indicator, updater notice, messages; the cluster scrolls with lateral acceleration like the
   original's moving dashboard. Title screen: car, transmission, version and the F-keys.
 - Audio: engine from recordings (`SampledEngine`: loops at known speeds pitched to the rpm, cross-faded on
-  a log scale, through a low-pass that opens with the throttle, an off-throttle loop for the V8), with the
-  synthesised pulse-train engine kept for 1989 mode; procedural squeal, crash burst, checkpoint bleep, a
-  cow's moo (formants on a sagging pitch), the clang of a sign going over, the clack of the train's wheels
-  when it runs nearby, and a four-bar synth tune on the title screen and in replays.
+  a log scale, through a low-pass that opens with the throttle, an off-throttle loop for the V8); tyres
+  from recordings (`TyreAudio`: a cornering squeal from about four degrees of slip angle, a harder howl
+  that joins it at big angles, a screech for wheelspin and locked wheels beyond 15 % slip, gravel while a
+  wheel is off the asphalt, each faded and pitched from the slip of the four wheels); synthesised road
+  roar and wind that grow with speed, a thump when the suspension is jolted, and two to four exhaust pops
+  when the V8 lifts off above 4800 rpm; the pulse-train engine and a filtered-noise squeal kept for 1989
+  mode; crash burst, checkpoint bleep, a cow's moo (formants on a sagging pitch), the clang of a sign going
+  over, the clack of the train's wheels when it runs nearby, and a four-bar synth tune on the title screen
+  and in replays.
 - "1989 mode" (F8): a third of the render resolution, 20 fps, textures and normal maps off, nearest
   filtering, no shadows, global illumination, ambient occlusion, reflections, glow, fog or TAA, a flat sky,
-  orange shoulders everywhere, the synthesised engine.
+  orange shoulders everywhere, the synthesised engine and squeal instead of the recordings.
 - Updater: once a day the latest GitHub release is fetched; F10 downloads the matching package (installer
   for an installed copy, zip for a portable one), verifies the published SHA-256 and applies it (silent
   installer with `/UPDATE=1`, or a PowerShell script that waits for the game to exit, unpacks over the
   folder and relaunches).
 - Command-line switches for automation: `--attract`, `--chase`, `--speed-route`, `--car=v8|flat12`,
-  `--no-traffic`, `--retro`, `--screenshot=<file>`, `--at=<s>`, `--quit-after=<s>`,
+  `--no-traffic`, `--no-ghost` (the saved best lap is not raced, for pictures of the car), `--retro`,
+  `--screenshot=<file>`, `--at=<s>`, `--quit-after=<s>`,
   `--orbit=<yaw>,<pitch>,<distance>` (degrees and metres, 0 = from behind), `--show-all` (whole car from
   the driver's seat, for checking the body), `--save-best` (an attract lap may become the saved best lap),
   `--invisible` (the window is parked off-screen, made unfocusable and hidden, so an automated run never
@@ -132,7 +146,9 @@ pushes, creates the GitHub release, updates the Scoop bucket and submits the win
 1. Force-feedback wheel support through DirectInput (torque = model force + damping + friction + centring,
    the recipe of the expired 1991 patent); until then, keyboard only.
 2. A cleaner twelve-cylinder recording for the 1984 car if one with a usable licence turns up.
-3. Tyre and crash samples instead of the synthesised ones; a longer tune.
+3. Crash and exhaust-pop samples instead of the synthesised ones (the tyres are recorded since 0.4); a
+   longer tune.
 4. More circuits built with the same turtle API; the hidden skid pad could grow cones and a timer.
-5. Scanned models instead of lofts and primitives: a car body with proper seams, lamps and wipers, and
-   buildings with real geometry, would be the next step past textured primitives.
+5. Scanned models instead of lofts and primitives: a car body with real curvature (the loft has twenty
+   points per section) and buildings with real geometry would be the next step past textured primitives;
+   a reflection probe on the car is worth measuring for the paint.

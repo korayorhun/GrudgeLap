@@ -91,7 +91,7 @@ if ($NoPush) { Write-Host "NoPush: artefacts built, nothing committed or publish
 
 # ---- commit, tag, push, release ------------------------------------------------------------------
 git add -A
-git commit -q -m "release: v$Version" -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git commit -q -m "release: v$Version" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 if ($LASTEXITCODE -ne 0) { Write-Host "nothing new to commit for v$Version" }
 git tag "v$Version"
 git push -q
@@ -125,7 +125,7 @@ try {
     $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
     $previous = gh api repos/korayorhun/scoop-bucket/contents/bucket/grudgelap.json --jq .sha 2>$null
     $apiArgs = @('-X', 'PUT', 'repos/korayorhun/scoop-bucket/contents/bucket/grudgelap.json',
-        '-f', "message=grudgelap: Update to version $Version`n`nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>", '-f', "content=$b64")
+        '-f', "message=grudgelap: Update to version $Version`n`nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>", '-f', "content=$b64")
     if ($previous) { $apiArgs += @('-f', "sha=$previous") }
     gh api @apiArgs --jq .commit.sha | Out-Null
     Write-Host "scoop bucket updated to $Version"

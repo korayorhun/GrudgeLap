@@ -714,13 +714,18 @@ internal sealed partial class CarView : Node3D
             Box(body, new Vector3(0.26f, 0.12f, 0.10f), new Vector3(x, 0.99f, 0.54f), leather);
         }
 
-        // A-pillars from the cowl corners to the roof corners above the screen.
+        // A-pillars from the cowl corners to the roof corners above the screen. The driver's eye is 0.7 m from
+        // the foot of the left one but under 0.3 m from its top, so a bar of even section looks three times
+        // wider where it leaves the cockpit view than at its foot and reads as a black band across the top
+        // left. The pillar narrows towards the roof instead, which keeps it 2.5 to 4 degrees wide from the
+        // seat: a thin line that frames the screen. From outside it is seen through the tinted glass, where
+        // the taper does not show.
         var roofZ = style.Keys.First(k => k > style.CabinFrom);
         foreach (var side in new[] { -1f, 1f })
         {
             var a = new Vector3(side * style.Sample(style.CrestW, style.CowlZ), style.Sample(style.CrestH, style.CowlZ) - 0.015f, style.CowlZ);
             var b = new Vector3(side * style.Sample(style.CrestW, roofZ), style.Sample(style.CrestH, roofZ) - 0.015f, roofZ);
-            Strut(body, a, b, 0.045f, trim);
+            Pillar(body, a, b, 0.016f, 0.009f, trim);
         }
 
         // Wipers parked across the base of the screen.
@@ -731,12 +736,13 @@ internal sealed partial class CarView : Node3D
         }
     }
 
-    /// <summary>A square-section bar from <paramref name="a"/> to <paramref name="b"/>.</summary>
-    private static void Strut(Node3D parent, Vector3 a, Vector3 b, float thickness, Material material)
+    /// <summary>A round bar from <paramref name="a"/> to <paramref name="b"/> that narrows from <paramref name="radiusA"/> to <paramref name="radiusB"/>.</summary>
+    private static void Pillar(Node3D parent, Vector3 a, Vector3 b, float radiusA, float radiusB, Material material)
     {
-        var strut = new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(thickness, thickness, a.DistanceTo(b)), Material = material } };
-        parent.AddChild(strut);
-        strut.LookAtFromPosition((a + b) * 0.5f, b, Vector3.Up);
+        // A cylinder runs along local +Y with its top radius there: turned so +Y becomes -Z, then looking from a to b, its top lands on b.
+        var mesh = new CylinderMesh { BottomRadius = radiusA, TopRadius = radiusB, Height = a.DistanceTo(b), RadialSegments = 12, Rings = 1, Material = material };
+        var basis = Basis.LookingAt(b - a, Vector3.Up) * new Basis(Vector3.Right, -Mathf.Pi / 2f);
+        parent.AddChild(new MeshInstance3D { Mesh = mesh, Transform = new Transform3D(basis, (a + b) * 0.5f) });
     }
 
     // ---- wheels --------------------------------------------------------------------------------------
