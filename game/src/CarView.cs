@@ -18,9 +18,10 @@ namespace GrudgeLap.Game;
 internal sealed partial class CarView : Node3D
 {
     private const int HalfPoints = 11;                     // P0..P10 of the half profile, floor centre to roof centre
-    private const int RingSize = HalfPoints * 2 - 2;       // both halves share the floor and roof centre points
+    private const int RingSize = HalfPoints * 2 - 2;       // points and strips of the design outline; both halves share the floor and roof centre points
     private const int TopFirst = 5;                        // first strip of the top skin (bonnet edge / greenhouse base)
     private const int TopLast = RingSize - 6;              // last strip of the top skin, mirrored side
+    private const int FilletSteps = 4;                     // sub-strips across each rounded corner of the outline
     private const float ArchRadius = 0.44f;                // wheel radius plus the gap to the wing lip
     private const float SmoothingCos = 0.5f;               // faces meeting at more than 60 degrees keep a hard edge
     private const float SeamWidth = 0.014f;                // dark band of a panel shut line
@@ -233,6 +234,44 @@ internal sealed partial class CarView : Node3D
 
     private readonly record struct Station(float Z, float ArchLift, bool Cabin);
 
+    /// <summary>
+    /// Outline points that are rounded off like pressed sheet metal, both sides: the shoulder, the bonnet edge /
+    /// greenhouse base and the crest, with their radius in metres. Left sharp, these three character lines made
+    /// the body read as folded card; a fillet keeps the line but lets the highlight roll over it.
+    /// </summary>
+    private static readonly (int Point, float Radius)[] Fillets =
+        [(4, 0.05f), (5, 0.035f), (6, 0.05f), (RingSize - 6, 0.05f), (RingSize - 5, 0.035f), (RingSize - 4, 0.05f)];
+
+    /// <summary>
+    /// For each strip of a built ring (point j to j + 1), the strip of the design outline it belongs to. Glass,
+    /// trim, seams and louvres are decided on the outline strips (<see cref="TopFirst"/> and the like), so the
+    /// rounded corners do not move them; the first half of a fillet continues the strip before the corner.
+    /// </summary>
+    private static readonly int[] StripOrigin = BuildStripOrigin();
+
+    private static float FilletRadius(int point)
+    {
+        foreach (var (p, radius) in Fillets)
+        {
+            if (p == point) return radius;
+        }
+        return 0f;
+    }
+
+    private static int[] BuildStripOrigin()
+    {
+        var origin = new List<int>();
+        for (var k = 0; k < RingSize; k++)
+        {
+            if (FilletRadius(k) > 0f)
+            {
+                for (var s = 0; s < FilletSteps; s++) origin.Add(s < FilletSteps / 2 ? (k + RingSize - 1) % RingSize : k);
+            }
+            origin.Add(k);
+        }
+        return [.. origin];
+    }
+
     /// <summary>Design stations, a dense run along the bonnet (it is what the driver looks at) and samples through each wheel arch.</summary>
     private Station[] Stations(VehicleSpec spec)
     {
@@ -273,7 +312,10 @@ internal sealed partial class CarView : Node3D
         return [.. stations];
     }
 
-    /// <summary>Closed outline of a cross-section: floor centre, up the right side to the roof centre, down the left.</summary>
+    /// <summary>
+    /// Closed ring of a cross-section: floor centre, up the right side to the roof centre, down the left, with
+    /// the corners in <see cref="Fillets"/> rounded off; every ring has the same number of points.
+    /// </summary>
     private Vector3[] Ring(Station s)
     {
         var style = _style;
@@ -304,14 +346,38 @@ internal sealed partial class CarView : Node3D
             // becomes a dark slope into the well instead of a floor rising through the bonnet dip.
             for (var k = 1; k <= 3; k++) half[k].Y = MathF.Max(half[k].Y, s.ArchLift);
         }
-        var ring = new Vector3[RingSize];
-        for (var k = 0; k < HalfPoints; k++) ring[k] = new Vector3(half[k].X, half[k].Y, z);
+        var outline = new Vector2[RingSize];
+        for (var k = 0; k < HalfPoints; k++) outline[k] = half[k];
         for (var k = 1; k < HalfPoints - 1; k++)
         {
             var mirrored = half[HalfPoints - 1 - k];
-            ring[HalfPoints - 1 + k] = new Vector3(-mirrored.X, mirrored.Y, z);
+            outline[HalfPoints - 1 + k] = new Vector2(-mirrored.X, mirrored.Y);
         }
-        return ring;
+        var ring = new List<Vector3>(StripOrigin.Length);
+        for (var k = 0; k < RingSize; k++)
+        {
+            var p = outline[k];
+            var radius = FilletRadius(k);
+            if (radius <= 0f)
+            {
+                ring.Add(new Vector3(p.X, p.Y, z));
+                continue;
+            }
+            // A quadratic Bezier with the corner as its control point. The radius shrinks where a neighbouring
+            // strip is short (at the nose, over the arches) so that two fillets never overlap.
+            var prev = outline[(k + RingSize - 1) % RingSize];
+            var next = outline[(k + 1) % RingSize];
+            var r = MathF.Min(radius, 0.35f * MathF.Min(p.DistanceTo(prev), p.DistanceTo(next)));
+            var a = p + (prev - p).Normalized() * r;
+            var b = p + (next - p).Normalized() * r;
+            for (var step = 0; step <= FilletSteps; step++)
+            {
+                var t = (float)step / FilletSteps;
+                var q = (1f - t) * (1f - t) * a + 2f * t * (1f - t) * p + t * t * b;
+                ring.Add(new Vector3(q.X, q.Y, z));
+            }
+        }
+        return [.. ring];
     }
 
     private void BuildBody(VehicleSpec spec)
@@ -328,27 +394,28 @@ internal sealed partial class CarView : Node3D
         // counter-clockwise in the x-y plane (floor centre, up the right side, over the roof, down the left),
         // so the outward side of a strip is its tangent turned clockwise; a centroid test would misjudge the
         // strips that lean towards the centre line, such as the bonnet dip beside the wing crests.
+        var n = rings[0].Length;
         var faces = new Vector3[stations.Length - 1][];
         for (var i = 0; i < faces.Length; i++)
         {
-            faces[i] = new Vector3[RingSize];
+            faces[i] = new Vector3[n];
             var centroid = (Centroid(rings[i]) + Centroid(rings[i + 1])) * 0.5f;
-            for (var k = 0; k < RingSize; k++)
+            for (var j = 0; j < n; j++)
             {
-                var k2 = (k + 1) % RingSize;
-                var a = rings[i][k];
-                var b = rings[i][k2];
-                var c = rings[i + 1][k];
-                var d = rings[i + 1][k2];
-                var n = (d - a).Cross(b - c);
-                if (n.LengthSquared() < 1e-10f) n = Vector3.Up;
-                n = n.Normalized();
+                var j2 = (j + 1) % n;
+                var a = rings[i][j];
+                var b = rings[i][j2];
+                var c = rings[i + 1][j];
+                var d = rings[i + 1][j2];
+                var normal = (d - a).Cross(b - c);
+                if (normal.LengthSquared() < 1e-10f) normal = Vector3.Up;
+                normal = normal.Normalized();
                 var tangent = (b - a) + (d - c);
                 var hint = new Vector3(tangent.Y, -tangent.X, 0f);
-                var side = n.Dot(hint);
-                if (MathF.Abs(side) < 0.05f * hint.Length()) side = n.Dot((a + b + c + d) * 0.25f - centroid);
-                if (side < 0f) n = -n;
-                faces[i][k] = n;
+                var side = normal.Dot(hint);
+                if (MathF.Abs(side) < 0.05f * hint.Length()) side = normal.Dot((a + b + c + d) * 0.25f - centroid);
+                if (side < 0f) normal = -normal;
+                faces[i][j] = normal;
             }
         }
 
@@ -364,9 +431,10 @@ internal sealed partial class CarView : Node3D
             var front = stations[i];
             var back = stations[i + 1];
             var isBonnet = back.Z <= style.CowlZ + 0.001f;
-            for (var k = 0; k < RingSize; k++)
+            for (var j = 0; j < n; j++)
             {
-                var k2 = (k + 1) % RingSize;
+                var j2 = (j + 1) % n;
+                var k = StripOrigin[j];
                 // Windscreen and rear window span a cabin and a non-cabin station; between cabin stations only
                 // the flank strips are side windows, the roof stays painted. A glass engine cover is glass on top.
                 var top = k >= TopFirst && k <= TopLast;
@@ -374,15 +442,15 @@ internal sealed partial class CarView : Node3D
                 if (!isGlass && k > TopFirst && k < TopLast && front.Z >= style.GlassDeckFrom - 0.01f && back.Z <= style.GlassDeckTo + 0.01f) isGlass = true;
                 var target = isGlass ? glass : isBonnet ? bonnet : shell;
                 var colour = QuadColour(front, back, k);
-                var faceNormal = faces[i][k];
-                var a = rings[i][k];
-                var b = rings[i][k2];
-                var c = rings[i + 1][k];
-                var d = rings[i + 1][k2];
-                var na = VertexNormal(faces, i, k, faceNormal);
-                var nb = VertexNormal(faces, i, k2, faceNormal);
-                var nc = VertexNormal(faces, i + 1, k, faceNormal);
-                var nd = VertexNormal(faces, i + 1, k2, faceNormal);
+                var faceNormal = faces[i][j];
+                var a = rings[i][j];
+                var b = rings[i][j2];
+                var c = rings[i + 1][j];
+                var d = rings[i + 1][j2];
+                var na = VertexNormal(faces, i, j, faceNormal);
+                var nb = VertexNormal(faces, i, j2, faceNormal);
+                var nc = VertexNormal(faces, i + 1, j, faceNormal);
+                var nd = VertexNormal(faces, i + 1, j2, faceNormal);
                 Tri(target, a, na, c, nc, b, nb, colour, faceNormal);
                 Tri(target, b, nb, c, nc, d, nd, colour, faceNormal);
             }
@@ -447,20 +515,21 @@ internal sealed partial class CarView : Node3D
     }
 
     /// <summary>
-    /// Normal for a quad corner at ring point (i, k): the faces around the point that meet the quad at less
+    /// Normal for a quad corner at ring point (i, j): the faces around the point that meet the quad at less
     /// than the smoothing angle are averaged, so the skin shades smoothly while creases stay sharp.
     /// </summary>
-    private static Vector3 VertexNormal(Vector3[][] faces, int i, int k, Vector3 faceNormal)
+    private static Vector3 VertexNormal(Vector3[][] faces, int i, int j, Vector3 faceNormal)
     {
         var sum = Vector3.Zero;
         for (var di = -1; di <= 0; di++)
         {
             var fi = i + di;
             if (fi < 0 || fi >= faces.Length) continue;
-            for (var dk = -1; dk <= 0; dk++)
+            var size = faces[fi].Length;
+            for (var dj = -1; dj <= 0; dj++)
             {
-                var fk = (k + dk + RingSize) % RingSize;
-                var n = faces[fi][fk];
+                var fj = (j + dj + size) % size;
+                var n = faces[fi][fj];
                 if (n.Dot(faceNormal) >= SmoothingCos) sum += n;
             }
         }
@@ -494,11 +563,11 @@ internal sealed partial class CarView : Node3D
     private static void Cap(SurfaceTool st, Vector3[] ring, Vector3 normal, float trimBelow, Color paint)
     {
         var centre = Centroid(ring);
-        for (var k = 0; k < RingSize; k++)
+        for (var j = 0; j < ring.Length; j++)
         {
-            var k2 = (k + 1) % RingSize;
-            var colour = (ring[k].Y + ring[k2].Y) * 0.5f < trimBelow ? Trim : paint;
-            Tri(st, centre, normal, ring[k], normal, ring[k2], normal, colour, normal);
+            var j2 = (j + 1) % ring.Length;
+            var colour = (ring[j].Y + ring[j2].Y) * 0.5f < trimBelow ? Trim : paint;
+            Tri(st, centre, normal, ring[j], normal, ring[j2], normal, colour, normal);
         }
     }
 
