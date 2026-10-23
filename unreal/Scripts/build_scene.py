@@ -723,13 +723,21 @@ def car_materials():
     """The paint (paint_material), the glass and the mirror glass's stand-in, shared by every car."""
     mp = unreal.MaterialProperty
 
+    # Thin translucent glass: light passes through tinted (a windscreen lets about 80 % through) and the surface
+    # reflects at its full Fresnel strength. As a plain translucent surface at 14 % opacity its reflections were
+    # scaled down with it, and the windscreen never showed the sky or the dashboard the way a real one does.
     def glassy(material):
         material.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+        material.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_THIN_TRANSLUCENT)
         material.set_editor_property("translucency_lighting_mode", unreal.TranslucencyLightingMode.TLM_SURFACE_PER_PIXEL_LIGHTING)
         material.set_editor_property("two_sided", True)
+        transmittance = mel.create_material_expression(material, unreal.MaterialExpressionConstant3Vector, -500, 600)
+        transmittance.set_editor_property("constant", unreal.LinearColor(0.78, 0.83, 0.84, 1.0))
+        output = mel.create_material_expression(material, unreal.MaterialExpressionThinTranslucentMaterialOutput, -200, 600)
+        mel.connect_material_expressions(transmittance, "", output, "")
 
-    glass = constant_material("M_Glass", {mp.MP_BASE_COLOR: (0.02, 0.025, 0.03), mp.MP_OPACITY: 0.14,
-                                          mp.MP_ROUGHNESS: 0.02, mp.MP_SPECULAR: 0.5}, glassy)
+    glass = constant_material("M_Glass", {mp.MP_BASE_COLOR: (0.0, 0.0, 0.0), mp.MP_OPACITY: 0.03,
+                                          mp.MP_ROUGHNESS: 0.03, mp.MP_SPECULAR: 0.5, mp.MP_METALLIC: 0.0}, glassy)
     return {"paint": paint_material(), "paint_solid": paint_solid_material(), "glass": glass, "mirror": mirror_material(),
             "cabin": cabin_material(), "cabin_instances": {}}
 
@@ -1156,7 +1164,11 @@ def light_and_look():
                         # The default motion blur smeared the grass beside the road into streaks at 130 km/h; a
                         # trace of it keeps the sense of speed (the Godot version has none).
                         ("override_motion_blur_amount", True), ("motion_blur_amount", 0.15),
-                        ("override_motion_blur_max", True), ("motion_blur_max", 2.0)):
+                        ("override_motion_blur_max", True), ("motion_blur_max", 2.0),
+                        # Lumen's reflections on the front layer of glass: the windscreen and the windows reflect
+                        # the sky, the road and the dashboard instead of only the sky's cube map.
+                        ("override_lumen_front_layer_translucency_reflections", True),
+                        ("lumen_front_layer_translucency_reflections", True)):
         try:
             settings.set_editor_property(name, value)
         except Exception as error:  # a renamed setting must not stop the build
