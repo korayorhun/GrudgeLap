@@ -162,6 +162,24 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   4 s afterwards), and the bare exe changes only with the engine or the version stamp. Signing it is the
   real fix, planned for 1.0.
 
+## Unreal Engine version (`unreal/`)
+
+- Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and
+  sun as the game, Unreal 5.8 with CC0 scans was clearly closer to a photograph: Nanite grass and trees,
+  Lumen, a physical sky with volumetric clouds. It ran at 70 fps at 1920×1080 on the development laptop
+  (RTX 5060 Laptop, cockpit view).
+- **The simulation stays in C#.** `physics.native` publishes it with NativeAOT as
+  `GrudgeLap.Physics.Native.dll`, a C interface of `glp_*` functions (`include/grudgelap_physics.h`). The
+  `GrudgeLapUE` module loads it and steps a session every frame.
+- **Coordinates.** The game's glTF export brings the track and the car across; the simulation's (x, y, z)
+  in metres is Unreal's (x, −z, y) in centimetres.
+- **The level is generated, not hand-edited.** `Scripts/build_scene.py` builds it from the export and the
+  downloaded scans, so `Content/` is not versioned. What the export needed is recorded there and in
+  [unreal/README.md](../unreal/README.md): hidden nodes, rewound primitives, vertex colours, foliage
+  cut-outs and Nanite area preservation.
+- **Still missing:** the HUD, the sounds, the instruments and mirror in the cockpit, traffic and the ghost,
+  a manual gearbox on the keyboard, and a car model and cabin of photographic quality.
+
 ## Conventions
 
 Simulation space is right-handed, +Y up, forward +Z, right +X, heading positive to the right; Godot's
