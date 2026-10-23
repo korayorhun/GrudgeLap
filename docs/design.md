@@ -4,7 +4,9 @@
 
 The feel is the product: physics, the steering loop and the sound come first, graphics last. The simulation
 is a plain .NET library with no engine dependency, stepped at a fixed 240 Hz; Godot only renders the state
-and feeds it input. That split lets every behaviour be a headless test and keeps the door open for a
+and feeds it input. `physics.native/` publishes the same code as a native DLL with a C interface (NativeAOT)
+for engines that do not host .NET, the Unreal Engine version first; a test steps the published library and
+the managed side together and requires the same bytes, which also pins the C structs' layout. That split lets every behaviour be a headless test and keeps the door open for a
 force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the car model at 25 ms).
 
 ## Simulation (`physics/`)

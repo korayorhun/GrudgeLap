@@ -111,6 +111,10 @@ best lap's ghost out of the picture.
   of road frames built by a turtle API (loop, drawbridge, banked curve, overpass, dips), a ground field that
   gives the terrain its embankments and cuttings, traffic drones, the rules of a credit, the best-lap
   recording, and a scripted driver that threads the traffic.
+- `physics.native/` — the same simulation as a native library with a C interface (NativeAOT; the
+  `glp_*` functions in `include/grudgelap_physics.h`), for the Unreal Engine version: `dotnet publish
+  physics.native -c Release -r win-x64 -o artifacts/physics-native` builds `GrudgeLap.Physics.Native.dll`,
+  which needs no .NET where it runs.
 - `physics.tests/` — the feel checklist as numbers: 0-60, top speed, braking, stall, launch, the loop's
   minimum speed, the drawbridge window, the banked 180, the spin, grass, jumps in top gear, scripted laps on
   both routes with and without traffic, drone collisions, the ghost, the skid pad, the ground and the props.

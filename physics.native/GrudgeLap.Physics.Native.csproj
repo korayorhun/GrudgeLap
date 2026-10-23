@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The simulation core as a native library with a C interface (NativeAOT), for engines that do not host .NET:
+       the Unreal Engine version loads GrudgeLap.Physics.Native.dll and calls the glp_* functions declared in
+       include/grudgelap_physics.h. `dotnet publish -c Release -r win-x64` builds it (needs the MSVC linker);
+       nothing of .NET has to be installed where it runs. A plain `dotnet build` builds the managed side only,
+       which the tests use. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>GrudgeLap.Physics.Native</RootNamespace>
+    <AssemblyName>GrudgeLap.Physics.Native</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <PublishAot>true</PublishAot>
+    <NativeLib>Shared</NativeLib>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\physics\GrudgeLap.Physics.csproj" />
+    <InternalsVisibleTo Include="GrudgeLap.Physics.Tests" />
+  </ItemGroup>
+
+</Project>
