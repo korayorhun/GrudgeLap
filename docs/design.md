@@ -122,16 +122,24 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   time, score, lap, route, best lap and ghost indicator, updater notice, messages. Title screen on a dark
   panel: car, gearbox (the last choice is remembered, automatic at first), and one press of Enter, Space or
   a click both chooses and turns the key.
-- Audio: engine from recordings (`SampledEngine`: loops at known speeds pitched to the rpm, cross-faded on
-  a log scale, through a low-pass that opens with the throttle, an off-throttle loop for the V8); tyres
-  from recordings (`TyreAudio`: a cornering squeal from about four degrees of slip angle, a harder howl
-  that joins it at big angles, a screech for wheelspin and locked wheels beyond 15 % slip, gravel while a
-  wheel is off the asphalt, each faded and pitched from the slip of the four wheels); two to four exhaust
-  pops when the V8 lifts off above 4800 rpm, one-shots from a CC0 recording drawn at random with a spread
-  of pitch and level; synthesised road roar and wind that grow with speed and a thump when the suspension
-  is jolted; the pulse-train engine and a filtered-noise squeal kept for 1989 mode; crash burst, checkpoint bleep, a cow's moo (formants on a sagging pitch), the clang of a sign going
-  over, the clack of the train's wheels when it runs nearby, and a four-bar synth tune on the title screen
-  and in replays.
+- Audio: the engine rebuilt firing pulse by firing pulse from recordings (`audio/GranularEngine`, played by
+  `SampledEngine` and, through `physics.native`, by the Unreal version): per car an idle recording and a run
+  up through a gear are cut into their firing pulses (`tools/make-engine-bank.py`), and every firing period
+  of the simulated revs one pulse recorded at the nearest revs is laid down and overlap-added — the
+  recording's own sequence while the revs hold, nothing looped or pitch-shifted, so the exhaust keeps its
+  character across the rev range; the two banks cross-fade above idle, a low-pass opens with the throttle,
+  and from the cockpit the engine comes through the bulkhead (duller, with a cabin boom). Tyres and road
+  from recordings (`TyreAudio`: the tread's roar recorded in a cabin, pitched up with the speed; a cornering
+  squeal from about four degrees of slip angle, a harder howl that joins it at big angles, a screech for
+  wheelspin and locked wheels beyond 15 % slip, gravel while a wheel is off the asphalt, each faded and
+  pitched from the slip of the four wheels); two to four exhaust pops when the V8 lifts off above 4800 rpm,
+  one-shots from a CC0 recording drawn at random with a spread of pitch and level; synthesised wind that
+  grows with speed and a thump when the suspension is jolted; the pulse-train engine and a filtered-noise
+  squeal kept for 1989 mode; crash burst, checkpoint bleep, a cow's moo (formants on a sagging pitch), the
+  clang of a sign going over, the clack of the train's wheels when it runs nearby, and a four-bar synth tune
+  on the title screen and in replays; a limiter on the master bus. Loops imported compressed (QOA) must end
+  at `GetLength() × MixRate` frames, not at the data's byte count: that once cut every loop to its first
+  fifth, with a click at each turn.
 - "1989 mode" (F8): a third of the render resolution, 20 fps, textures and normal maps off, nearest
   filtering, no shadows, global illumination, ambient occlusion, reflections, glow, fog or TAA, a flat sky,
   orange shoulders everywhere, the synthesised engine and squeal instead of the recordings.

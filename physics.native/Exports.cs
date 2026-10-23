@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using GrudgeLap.Audio;
 
 namespace GrudgeLap.Physics.Native;
 
@@ -86,8 +87,56 @@ public static unsafe class Exports
     public static int LoadBestLap(nint session, byte* data, int length) =>
         Guarded(() => NativeApi.LoadBestLap(Resolve(session), new ReadOnlySpan<byte>(data, Math.Max(length, 0))));
 
+    [UnmanagedCallersOnly(EntryPoint = "glp_engine_create", CallConvs = [typeof(CallConvCdecl)])]
+    public static nint EngineCreate(byte* folder, int cylinders)
+    {
+        try
+        {
+            var path = Marshal.PtrToStringUTF8((nint)folder) ?? throw new ArgumentNullException(nameof(folder));
+            return GCHandle.ToIntPtr(GCHandle.Alloc(NativeApi.CreateEngine(path, cylinders)));
+        }
+        catch (Exception error)
+        {
+            _lastError = error.ToString();
+            return 0;
+        }
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "glp_engine_destroy", CallConvs = [typeof(CallConvCdecl)])]
+    public static void EngineDestroy(nint engine)
+    {
+        if (engine != 0) GCHandle.FromIntPtr(engine).Free();
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "glp_engine_sample_rate", CallConvs = [typeof(CallConvCdecl)])]
+    public static int EngineSampleRate(nint engine) => Guarded(() => ResolveEngine(engine).SampleRate);
+
+    [UnmanagedCallersOnly(EntryPoint = "glp_engine_render", CallConvs = [typeof(CallConvCdecl)])]
+    public static int EngineRender(nint engine, float* output, int frames, float rpm, float load, int running, int interior, float volume)
+    {
+        // Called from a host's audio thread every few milliseconds: no closure (Guarded allocates one), nothing allocated.
+        try
+        {
+            var voice = ResolveEngine(engine);
+            voice.Interior = interior != 0;
+            voice.Volume = volume;
+            voice.Render(new Span<float>(output, Math.Max(frames, 0)), rpm, load, running != 0);
+            return 0;
+        }
+        catch (Exception error)
+        {
+            _lastError = error.ToString();
+            return -1;
+        }
+    }
+
     [UnmanagedCallersOnly(EntryPoint = "glp_last_error", CallConvs = [typeof(CallConvCdecl)])]
     public static int LastError(byte* buffer, int capacity) => NativeApi.CopyText(_lastError ?? "", buffer, capacity);
+
+    private static GranularEngine ResolveEngine(nint engine) =>
+        engine != 0 && GCHandle.FromIntPtr(engine).Target is GranularEngine voice
+            ? voice
+            : throw new ArgumentException("not an engine handle", nameof(engine));
 
     private static NativeSession Resolve(nint session) =>
         session != 0 && GCHandle.FromIntPtr(session).Target is NativeSession native

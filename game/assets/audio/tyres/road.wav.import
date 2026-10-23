@@ -2,13 +2,13 @@
 
 importer="wav"
 type="AudioStreamWAV"
-uid="uid://cgwpjlh28sdd7"
-path="res://.godot/imported/low.wav-aefa03e2879dba71c0c74dfdf0fccb2e.sample"
+uid="uid://jxnykbtp8rvg"
+path="res://.godot/imported/road.wav-876d5bf8a18a946bc0455d186afd3fff.sample"
 
 [deps]
 
-source_file="res://assets/audio/flat12/low.wav"
-dest_files=["res://.godot/imported/low.wav-aefa03e2879dba71c0c74dfdf0fccb2e.sample"]
+source_file="res://assets/audio/tyres/road.wav"
+dest_files=["res://.godot/imported/road.wav-876d5bf8a18a946bc0455d186afd3fff.sample"]
 
 [params]
 

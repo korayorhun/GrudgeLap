@@ -507,7 +507,7 @@ void AGlpGame::Tick(float DeltaSeconds)
 	if (Audio)
 	{
 		const bool bMusic = Current.phase == GLP_PHASE_SELECT_TRANSMISSION || Current.phase == GLP_PHASE_REPLAY || Current.phase == GLP_PHASE_FINISHED;
-		Audio->Update(Current, TrainDistance, bMusic, DeltaSeconds);
+		Audio->Update(Current, TrainDistance, bMusic, InCockpit(), DeltaSeconds);
 	}
 	if (Instruments)
 	{

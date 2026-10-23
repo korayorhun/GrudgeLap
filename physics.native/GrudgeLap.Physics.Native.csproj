@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\physics\GrudgeLap.Physics.csproj" />
+    <ProjectReference Include="..\audio\GrudgeLap.Audio.csproj" />
     <InternalsVisibleTo Include="GrudgeLap.Physics.Tests" />
   </ItemGroup>
 

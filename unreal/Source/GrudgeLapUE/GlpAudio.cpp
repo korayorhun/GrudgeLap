@@ -1,5 +1,6 @@
 #include "GlpAudio.h"
 
+#include "GlpLibrary.h"
 #include "HAL/FileManager.h"
 #include "Misc/CommandLine.h"
 #include "Misc/FileHelper.h"
@@ -9,26 +10,25 @@ DEFINE_LOG_CATEGORY_STATIC(LogGlpAudio, Log, All);
 
 namespace
 {
-	constexpr int32 MixRate = 22050;
+	// The engine voice renders at its recordings' rate; the loops and the synthesis (22.05 kHz in Godot) follow.
+	constexpr int32 MixRate = 44100;
 
-	// SampledEngine.Sets: the loops of each body style and the rpm each was recorded at.
-	struct FLoopFile
-	{
-		const TCHAR* File;
-		float Rpm;
-	};
-	const FLoopFile FlatTwelveLoops[] = { { TEXT("flat12/low.wav"), 3000.f }, { TEXT("flat12/mid.wav"), 4750.f }, { TEXT("flat12/high.wav"), 6650.f } };
-	const FLoopFile V8Loops[] = { { TEXT("v8/low.wav"), 2700.f }, { TEXT("v8/mid.wav"), 5800.f }, { TEXT("v8/high.wav"), 8400.f } };
-	const FLoopFile V8Coast = { TEXT("v8/coast.wav"), 6300.f };
-	const TCHAR* TyreFiles[] = { TEXT("tyres/squeal.wav"), TEXT("tyres/squeal_hard.wav"), TEXT("tyres/skid.wav"), TEXT("tyres/gravel.wav") };
+	// TyreAudio's loops, in the order of FFrame.TyreGain.
+	const TCHAR* TyreFiles[] = { TEXT("tyres/road.wav"), TEXT("tyres/squeal.wav"), TEXT("tyres/squeal_hard.wav"), TEXT("tyres/skid.wav"), TEXT("tyres/gravel.wav") };
 	const TCHAR* PopFiles[] = { TEXT("v8/pop1.wav"), TEXT("v8/pop2.wav"), TEXT("v8/pop3.wav"), TEXT("v8/pop4.wav"), TEXT("v8/pop5.wav"), TEXT("v8/crackle.wav") };
 
-	// Levels of the Godot mix: loops at 0.9 (SampledEngine.Volume, TyreAudio.Volume), the pops' player at -8 dB,
-	// the synthesis at 0.8 into a player at -6 dB.
+	// Levels of the Godot mix: engine and loops at 0.9 (SampledEngine.Volume, TyreAudio.Volume), the pops' player
+	// at -8 dB, the synthesis at 0.8 into a player at -6 dB, and a limiter on the master bus at -0.5 dB.
 	constexpr float LoopVolume = 0.9f;
 	constexpr float PopLevel = 0.398f;
 	constexpr float SynthVolume = 0.8f;
 	constexpr float SynthLevel = 0.501f;
+	constexpr float Ceiling = 0.944f;
+
+	// The wind's one-pole low-pass at the 450 Hz of Godot's (0.12 per sample at 22.05 kHz). The noise spreads over
+	// twice Godot's band here, so the filtered wind comes out 3 dB quieter: its level makes up for that.
+	const float WindFollow = 1.f - FMath::Exp(-UE_TWO_PI * 450.f / MixRate);
+	const float WindLevel = 2.6f * UE_SQRT_2;
 
 	// The title tune (EngineAudio.Chords): A minor, F, C, G as MIDI notes, the bass root first.
 	const int32 Chords[4][5] = { { 45, 57, 60, 64, 69 }, { 41, 53, 57, 60, 65 }, { 48, 60, 64, 67, 72 }, { 43, 55, 59, 62, 67 } };
@@ -63,7 +63,7 @@ UGlpAudio::UGlpAudio(const FObjectInitializer& ObjectInitializer)
 
 bool UGlpAudio::Init(int32& SampleRate)
 {
-	// The recordings and the synthesis are all 22.05 kHz; the mixer resamples the result to the device's rate.
+	// The engine's recordings are 44.1 kHz; the mixer resamples the result to the device's rate.
 	SampleRate = MixRate;
 	NumChannels = 1;
 	FParse::Value(FCommandLine::Get(), TEXT("GlpAudioDump="), DumpFile);
@@ -175,6 +175,17 @@ bool UGlpAudio::LoadClip(const FString& File, FClip& Clip)
 	return false;
 }
 
+UGlpAudio::FClips::~FClips()
+{
+	if (Engine != 0)
+	{
+		if (const FGlpLibrary* Library = FGlpLibrary::Get())
+		{
+			Library->EngineDestroy(Engine);
+		}
+	}
+}
+
 void UGlpAudio::SetCar(int32 Style)
 {
 	if (Style == LoadedStyle && GameClips)
@@ -184,23 +195,20 @@ void UGlpAudio::SetCar(int32 Style)
 	LoadedStyle = Style;
 	const FString Directory = AudioDirectory();
 	TSharedPtr<FClips, ESPMode::ThreadSafe> Loaded = MakeShared<FClips, ESPMode::ThreadSafe>();
-	TArrayView<const FLoopFile> Loops = Style == 1 ? TArrayView<const FLoopFile>(V8Loops) : TArrayView<const FLoopFile>(FlatTwelveLoops);
-	for (const FLoopFile& Loop : Loops)
+	// SampledEngine.Load: the grain banks of the car, as the V8 or the twelve.
+	if (const FGlpLibrary* Library = FGlpLibrary::Get())
 	{
-		FClip Clip;
-		if (LoadClip(FPaths::Combine(Directory, Loop.File), Clip))
+		const FString Banks = FPaths::Combine(Directory, Style == 1 ? TEXT("v8") : TEXT("flat12"));
+		Loaded->Engine = Library->EngineCreate(TCHAR_TO_UTF8(*Banks), Style == 1 ? 8 : 12);
+		if (Loaded->Engine == 0)
 		{
-			Loaded->Engine.Add(MoveTemp(Clip));
-			Loaded->EngineRpm.Add(Loop.Rpm);
+			UE_LOG(LogGlpAudio, Warning, TEXT("engine sound unavailable: %s"), *Library->LastError());
 		}
-	}
-	if (Style == 1)
-	{
-		FClip Clip;
-		if (LoadClip(FPaths::Combine(Directory, V8Coast.File), Clip))
+		else if (Library->EngineSampleRate(Loaded->Engine) != MixRate)
 		{
-			Loaded->CoastLoop = Loaded->Engine.Add(MoveTemp(Clip));
-			Loaded->EngineRpm.Add(V8Coast.Rpm);
+			UE_LOG(LogGlpAudio, Warning, TEXT("engine recordings in %s are not at %d Hz; the engine stays silent"), *Banks, MixRate);
+			Library->EngineDestroy(Loaded->Engine);
+			Loaded->Engine = 0;
 		}
 	}
 	for (const TCHAR* File : TyreFiles)
@@ -218,7 +226,7 @@ void UGlpAudio::SetCar(int32 Style)
 			}
 		}
 	}
-	UE_LOG(LogGlpAudio, Log, TEXT("recordings from %s: %d engine loops, %d tyre loops, %d pops"), *Directory, Loaded->Engine.Num(), Loaded->Tyres.Num(), Loaded->Pops.Num());
+	UE_LOG(LogGlpAudio, Log, TEXT("recordings from %s: engine %s, %d tyre loops, %d pops"), *Directory, Loaded->Engine != 0 ? TEXT("loaded") : TEXT("missing"), Loaded->Tyres.Num(), Loaded->Pops.Num());
 	GameClips = Loaded;
 	PopsPending.Reset();
 	SynthCommand([this, Loaded]()
@@ -228,38 +236,7 @@ void UGlpAudio::SetCar(int32 Style)
 	});
 }
 
-float UGlpAudio::EngineWeight(const TArray<float>& Rpms, int32 Count, int32 Index, float EngineRpm)
-{
-	// Equal-power cross-fade between neighbouring loops on a logarithmic rpm scale (SampledEngine.Weight).
-	const float R = Rpms[Index];
-	if (Count == 1 || (Index == 0 && EngineRpm <= R) || (Index == Count - 1 && EngineRpm >= R))
-	{
-		return 1.f;
-	}
-	if (Index > 0 && EngineRpm < R)
-	{
-		const float Lower = Rpms[Index - 1];
-		if (EngineRpm <= Lower)
-		{
-			return 0.f;
-		}
-		const float T = FMath::Loge(EngineRpm / Lower) / FMath::Loge(R / Lower);
-		return FMath::Sin(T * UE_HALF_PI);
-	}
-	if (Index < Count - 1 && EngineRpm >= R)
-	{
-		const float Upper = Rpms[Index + 1];
-		if (EngineRpm >= Upper)
-		{
-			return 0.f;
-		}
-		const float T = FMath::Loge(EngineRpm / R) / FMath::Loge(Upper / R);
-		return FMath::Cos(T * UE_HALF_PI);
-	}
-	return 0.f;
-}
-
-void UGlpAudio::Update(const glp_state& State, float TrainDistance, bool bMusic, float DeltaSeconds)
+void UGlpAudio::Update(const glp_state& State, float TrainDistance, bool bMusic, bool bInterior, float DeltaSeconds)
 {
 	if (!GameClips || DeltaSeconds <= 0.f)
 	{
@@ -268,11 +245,15 @@ void UGlpAudio::Update(const glp_state& State, float TrainDistance, bool bMusic,
 	FFrame Frame;
 	Frame.bMusic = bMusic;
 
-	// EngineAudio.Update: the smoothed engine state the loops follow.
+	// EngineAudio.Update: the smoothed engine state the voice follows.
 	const bool bRunning = State.engine_running != 0;
 	Rpm += (FMath::Max(State.rpm, 0.f) - Rpm) * Clamp01(DeltaSeconds * 12.f);
 	const float NewLoad = Clamp01(State.engine_torque / 500.f);
 	Load += (NewLoad - Load) * Clamp01(DeltaSeconds * 8.f);
+	Frame.Rpm = Rpm;
+	Frame.Load = Load;
+	Frame.bRunning = bRunning;
+	Frame.bInterior = bInterior;
 
 	Frame.bCrash = Event(State, GLP_EVENT_CRASHED);
 	Frame.bBleep = Event(State, GLP_EVENT_CHECKPOINT_PASSED) || Event(State, GLP_EVENT_LAP_COMPLETED);
@@ -287,16 +268,9 @@ void UGlpAudio::Update(const glp_state& State, float TrainDistance, bool bMusic,
 	TrainLevel += (Clamp01(1.f - TrainDistance / 260.f) - TrainLevel) * Clamp01(DeltaSeconds * 3.f);
 	Frame.TrainLevel = TrainLevel;
 
-	// Road roar and wind grow with speed; the roar is duller on grass, the wind only matters above town speeds.
+	// Wind grows with speed and only matters above town speeds (the tyres' roar is a recording, below).
 	const float Speed = FMath::Abs(State.speed);
-	bool bOnRoad = false;
-	for (int32 i = 0; i < 4; i++)
-	{
-		bOnRoad |= State.wheel_contact[i] && State.wheel_surface[i] == GLP_SURFACE_ROAD;
-	}
-	RoadRoar += (FMath::Pow(Clamp01((Speed - 1.f) / 45.f), 1.3f) * (bOnRoad ? 1.f : 0.7f) - RoadRoar) * Clamp01(DeltaSeconds * 4.f);
 	Wind += (FMath::Pow(Clamp01((Speed - 12.f) / 70.f), 2.f) - Wind) * Clamp01(DeltaSeconds * 3.f);
-	Frame.RoadRoar = RoadRoar;
 	Frame.Wind = Wind;
 	// A sudden change of suspension travel is a bump: a low thump, louder for a harder hit.
 	float Jolt = 0.f;
@@ -345,27 +319,9 @@ void UGlpAudio::Update(const glp_state& State, float TrainDistance, bool bMusic,
 	}
 	LastLoad = NewLoad;
 
-	// SampledEngine.Update: each loop pitched by rpm over its own speed, faded in near it; the coast loop takes
-	// over off the throttle.
-	Frame.Cutoff = 900.f + 9000.f * Load;
-	const float Gain = bRunning ? LoopVolume * (0.5f + 0.5f * Load) : 0.f;
-	const int32 Power = Set.CoastLoop == INDEX_NONE ? Set.Engine.Num() : Set.CoastLoop;
-	float CoastWeight = 0.f;
-	if (Set.CoastLoop != INDEX_NONE && Set.CoastLoop < 4)
-	{
-		const float Band = 1.f - Clamp01(FMath::Abs(Rpm - Set.EngineRpm[Set.CoastLoop]) / 2600.f);
-		CoastWeight = (1.f - Load) * Band * (bRunning ? 1.f : 0.f);
-		Frame.EngineGain[Set.CoastLoop] = LoopVolume * CoastWeight * 0.9f;
-		Frame.EnginePitch[Set.CoastLoop] = FMath::Clamp(FMath::Max(Rpm, 300.f) / Set.EngineRpm[Set.CoastLoop], 0.25f, 4.f);
-	}
-	for (int32 i = 0; i < Power && i < 4; i++)
-	{
-		Frame.EngineGain[i] = Gain * EngineWeight(Set.EngineRpm, Power, i, Rpm) * (1.f - 0.55f * CoastWeight);
-		Frame.EnginePitch[i] = FMath::Clamp(FMath::Max(Rpm, 300.f) / Set.EngineRpm[i], 0.25f, 4.f);
-	}
-
 	// TyreAudio.Update: slip angles beyond about four degrees and slip ratios beyond fifteen percent are audible.
 	float Lateral = 0.f, Longitudinal = 0.f, OffRoad = 0.f;
+	int32 OnRoad = 0;
 	for (int32 i = 0; i < 4; i++)
 	{
 		if (!State.wheel_contact[i])
@@ -374,6 +330,7 @@ void UGlpAudio::Update(const glp_state& State, float TrainDistance, bool bMusic,
 		}
 		if (State.wheel_surface[i] == GLP_SURFACE_ROAD)
 		{
+			OnRoad++;
 			Lateral = FMath::Max(Lateral, Clamp01((FMath::Abs(State.wheel_slip_angle[i]) - 0.07f) / 0.22f));
 			Longitudinal = FMath::Max(Longitudinal, Clamp01((FMath::Abs(State.wheel_slip_ratio[i]) - 0.15f) / 0.6f));
 		}
@@ -386,16 +343,20 @@ void UGlpAudio::Update(const glp_state& State, float TrainDistance, bool bMusic,
 	Follow(TyreLateral, Lateral * SpeedFactor, DeltaSeconds, 14.f, 5.f);
 	Follow(TyreLongitudinal, Longitudinal * SpeedFactor, DeltaSeconds, 20.f, 6.f);
 	Follow(TyreGrass, OffRoad * Clamp01(Speed / 6.f), DeltaSeconds, 6.f, 4.f);
-	// The cornering loop, pitched up as the slide deepens; the howl joins at big angles; the screech follows the
-	// speed of the rubber over the road; gravel off the asphalt.
-	Frame.TyreGain[0] = LoopVolume * TyreLateral * (1.f - 0.5f * TyreLongitudinal);
-	Frame.TyrePitch[0] = 0.88f + 0.30f * TyreLateral;
-	Frame.TyreGain[1] = LoopVolume * Clamp01((TyreLateral - 0.45f) / 0.55f) * 0.9f;
-	Frame.TyrePitch[1] = 0.9f + 0.2f * TyreLateral;
-	Frame.TyreGain[2] = LoopVolume * TyreLongitudinal * 0.9f;
-	Frame.TyrePitch[2] = 0.8f + 0.5f * Clamp01(Speed / 40.f);
-	Frame.TyreGain[3] = LoopVolume * TyreGrass * (0.5f + 0.5f * Clamp01(Speed / 30.f));
-	Frame.TyrePitch[3] = 0.7f + 0.6f * Clamp01(Speed / 30.f);
+	Follow(TyreRolling, FMath::Pow(Clamp01((Speed - 1.f) / 45.f), 1.1f) * OnRoad / 4.f, DeltaSeconds, 4.f, 4.f);
+	// The tread's roar, its pitch rising with the speed (recorded at about motorway speed); the cornering loop,
+	// pitched up as the slide deepens; the howl joins at big angles; the screech follows the speed of the rubber
+	// over the road; gravel off the asphalt.
+	Frame.TyreGain[0] = LoopVolume * TyreRolling * 0.55f;
+	Frame.TyrePitch[0] = 0.75f + 0.5f * Clamp01(Speed / 50.f);
+	Frame.TyreGain[1] = LoopVolume * TyreLateral * (1.f - 0.5f * TyreLongitudinal);
+	Frame.TyrePitch[1] = 0.88f + 0.30f * TyreLateral;
+	Frame.TyreGain[2] = LoopVolume * Clamp01((TyreLateral - 0.45f) / 0.55f) * 0.9f;
+	Frame.TyrePitch[2] = 0.9f + 0.2f * TyreLateral;
+	Frame.TyreGain[3] = LoopVolume * TyreLongitudinal * 0.9f;
+	Frame.TyrePitch[3] = 0.8f + 0.5f * Clamp01(Speed / 40.f);
+	Frame.TyreGain[4] = LoopVolume * TyreGrass * (0.5f + 0.5f * Clamp01(Speed / 30.f));
+	Frame.TyrePitch[4] = 0.7f + 0.6f * Clamp01(Speed / 30.f);
 
 	// Without an audio device (-nosound) the synth never starts and queued commands would only pile up.
 	if (IsPlaying())
@@ -406,13 +367,13 @@ void UGlpAudio::Update(const glp_state& State, float TrainDistance, bool bMusic,
 
 void UGlpAudio::Apply(const FFrame& Frame)
 {
-	// Levels and pitches glide to the new frame over the next buffer (OnGenerateAudio); triggers fire once.
-	Current.Cutoff = Frame.Cutoff;
-	FMemory::Memcpy(Current.EngineGain, Frame.EngineGain, sizeof(Frame.EngineGain));
-	FMemory::Memcpy(Current.EnginePitch, Frame.EnginePitch, sizeof(Frame.EnginePitch));
+	// Levels, pitches and the revs glide to the new frame over the next buffer (OnGenerateAudio); triggers fire once.
+	Current.Rpm = Frame.Rpm;
+	Current.Load = Frame.Load;
+	Current.bRunning = Frame.bRunning;
+	Current.bInterior = Frame.bInterior;
 	FMemory::Memcpy(Current.TyreGain, Frame.TyreGain, sizeof(Frame.TyreGain));
 	FMemory::Memcpy(Current.TyrePitch, Frame.TyrePitch, sizeof(Frame.TyrePitch));
-	Current.RoadRoar = Frame.RoadRoar;
 	Current.Wind = Frame.Wind;
 	Current.TrainLevel = Frame.TrainLevel;
 	Current.bMusic = Frame.bMusic;
@@ -477,46 +438,26 @@ int32 UGlpAudio::OnGenerateAudio(float* OutAudio, int32 NumSamples)
 		return NumSamples;
 	}
 
-	// The engine's low-pass (Godot's AudioEffectLowPassFilter at resonance 0.4): a biquad, set once per buffer.
-	if (!FMath::IsNearlyEqual(CurrentCutoff, Current.Cutoff, 1.f))
+	// SampledEngine.Update: the DLL's voice renders the whole buffer, gliding from the previous buffer's revs.
+	EngineBuffer.SetNumUninitialized(NumSamples, EAllowShrinking::No);
+	const FGlpLibrary* Library = FGlpLibrary::Get();
+	if (Set->Engine == 0 || !Library || Library->EngineRender(Set->Engine, EngineBuffer.GetData(), NumSamples, Current.Rpm, Current.Load, Current.bRunning ? 1 : 0, Current.bInterior ? 1 : 0, LoopVolume) != 0)
 	{
-		CurrentCutoff = Current.Cutoff;
-		const float W0 = 2.f * UE_PI * FMath::Min(CurrentCutoff, MixRate * 0.45f) / MixRate;
-		const float Alpha = FMath::Sin(W0) / (2.f * 0.4f);
-		const float CosW = FMath::Cos(W0);
-		const float A0 = 1.f + Alpha;
-		FilterB0 = (1.f - CosW) * 0.5f / A0;
-		FilterB1 = (1.f - CosW) / A0;
-		FilterB2 = FilterB0;
-		FilterA1 = -2.f * CosW / A0;
-		FilterA2 = (1.f - Alpha) / A0;
+		FMemory::Memzero(EngineBuffer.GetData(), NumSamples * sizeof(float));
 	}
 
-	float EngineFrom[4], TyreFrom[4];
-	for (int32 v = 0; v < 4; v++)
+	float TyreFrom[TyreLoops];
+	for (int32 v = 0; v < TyreLoops; v++)
 	{
-		EngineFrom[v] = EngineVoices[v].Gain;
 		TyreFrom[v] = TyreVoices[v].Gain;
 	}
+	// The limiter's release: a peak above the ceiling is held down and let go over about 0.15 s.
+	const float Release = 1.f - FMath::Exp(-1.f / (0.15f * MixRate));
 	for (int32 i = 0; i < NumSamples; i++)
 	{
 		const float T = static_cast<float>(i + 1) / NumSamples;
-		float Engine = 0.f;
-		for (int32 v = 0; v < Set->Engine.Num() && v < 4; v++)
-		{
-			const float Gain = FMath::Lerp(EngineFrom[v], Current.EngineGain[v], T);
-			const FClip& Clip = Set->Engine[v];
-			const float Sample = Loop(Clip, EngineVoices[v].Position, Current.EnginePitch[v] * Clip.Rate / MixRate);
-			Engine += Sample * Gain;
-		}
-		const float Filtered = FilterB0 * Engine + FilterB1 * FilterX1 + FilterB2 * FilterX2 - FilterA1 * FilterY1 - FilterA2 * FilterY2;
-		FilterX2 = FilterX1;
-		FilterX1 = Engine;
-		FilterY2 = FilterY1;
-		FilterY1 = Filtered;
-
 		float Tyres = 0.f;
-		for (int32 v = 0; v < Set->Tyres.Num() && v < 4; v++)
+		for (int32 v = 0; v < Set->Tyres.Num() && v < TyreLoops; v++)
 		{
 			const float Gain = FMath::Lerp(TyreFrom[v], Current.TyreGain[v], T);
 			const FClip& Clip = Set->Tyres[v];
@@ -539,8 +480,11 @@ int32 UGlpAudio::OnGenerateAudio(float* OutAudio, int32 NumSamples)
 			Shot.Position += Shot.Pitch * Clip.Rate / MixRate;
 		}
 
-		const float Mix = FMath::Clamp(Filtered + Tyres + Pops * PopLevel + Synth() * SynthLevel, -1.f, 1.f);
-		OutAudio[i] = Mix;
+		// Godot's master-bus limiter: instant attack, so nothing passes the ceiling, instead of clipping.
+		const float Mix = EngineBuffer[i] + Tyres + Pops * PopLevel + Synth() * SynthLevel;
+		const float Peak = FMath::Abs(Mix);
+		Limiter = Peak > Limiter ? Peak : Limiter + (Peak - Limiter) * Release;
+		OutAudio[i] = Limiter > Ceiling ? Mix * Ceiling / Limiter : Mix;
 	}
 	if (!DumpFile.IsEmpty())
 	{
@@ -554,9 +498,8 @@ int32 UGlpAudio::OnGenerateAudio(float* OutAudio, int32 NumSamples)
 	{
 		FMemory::Memzero(OutAudio, NumSamples * sizeof(float));
 	}
-	for (int32 v = 0; v < 4; v++)
+	for (int32 v = 0; v < TyreLoops; v++)
 	{
-		EngineVoices[v].Gain = Current.EngineGain[v];
 		TyreVoices[v].Gain = Current.TyreGain[v];
 	}
 	return NumSamples;
@@ -589,12 +532,9 @@ float UGlpAudio::Synth()
 
 float UGlpAudio::Road(float Noise)
 {
-	// Road roar (two-pole low-passed noise), wind (one-pole) and the bump thump (a 48 Hz burst).
-	RoarLp += (Noise - RoarLp) * 0.045f;
-	RoarLp2 += (RoarLp - RoarLp2) * 0.045f;
-	const float Roar = RoarLp2 * 7.f * Current.RoadRoar * 0.26f;
-	WindLp += (Noise - WindLp) * 0.12f;
-	const float WindNoise = WindLp * 2.6f * Current.Wind * 0.22f;
+	// Wind (one-pole low-passed noise) and the bump thump (a 48 Hz burst).
+	WindLp += (Noise - WindLp) * WindFollow;
+	const float WindNoise = WindLp * WindLevel * Current.Wind * 0.22f;
 	float Bump = 0.f;
 	if (Thump > 0.f)
 	{
@@ -606,7 +546,7 @@ float UGlpAudio::Road(float Noise)
 		Bump = FMath::Sin(ThumpPhase * UE_TWO_PI) * Thump * 0.55f + Noise * Thump * 0.08f;
 		Thump -= 1.f / (MixRate * 0.16f);
 	}
-	return Roar + WindNoise + Bump;
+	return WindNoise + Bump;
 }
 
 float UGlpAudio::Moo()

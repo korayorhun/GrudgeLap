@@ -15,9 +15,10 @@
 extern "C" {
 #endif
 
-#define GLP_ABI_VERSION 3
+#define GLP_ABI_VERSION 4
 
 typedef intptr_t glp_session; /* 0 is no session */
+typedef intptr_t glp_engine;  /* 0 is no engine voice */
 
 /* glp_create flags */
 #define GLP_TRAFFIC 1 /* the drones of the original: five cars ahead, three oncoming */
@@ -173,6 +174,19 @@ int32_t glp_props(glp_session session, glp_prop* out, int32_t capacity);
 int32_t glp_best_lap(glp_session session, uint8_t* buffer, int32_t capacity);
 /* Installs a best lap from glp_best_lap's bytes before the start: its ghost races. */
 int32_t glp_load_best_lap(glp_session session, const uint8_t* data, int32_t length);
+/*
+ * The engine sound (the repository's audio/GranularEngine): an engine rebuilt firing pulse by firing pulse from
+ * recordings. folder (UTF-8) holds engine_drive.wav/.json and, optionally, engine_idle.wav/.json as
+ * tools/make-engine-bank.py writes them; cylinders: 8 or 12. Returns 0 on failure. An engine voice is used from
+ * one thread at a time (a host's audio thread) and is independent of sessions.
+ */
+glp_engine glp_engine_create(const char* folder, int32_t cylinders);
+void glp_engine_destroy(glp_engine engine);
+/* The rate the voice renders at, its recordings' (Hz). */
+int32_t glp_engine_sample_rate(glp_engine engine);
+/* Fills frames mono samples: the engine at rpm under load (0 closed throttle .. 1 full), gliding from the previous
+ * call's values across the block. running 0 fades it out; interior non-zero hears it from the cabin. */
+int32_t glp_engine_render(glp_engine engine, float* out, int32_t frames, float rpm, float load, int32_t running, int32_t interior, float volume);
 /* The last failure on this thread, like glp_message. */
 int32_t glp_last_error(char* buffer, int32_t capacity);
 

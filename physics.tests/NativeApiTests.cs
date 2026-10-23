@@ -195,12 +195,63 @@ public sealed unsafe class NativeApiTests
         }
     }
 
-    private static string? FindPublishedLibrary()
+    /// <summary>
+    /// The engine voice behind glp_engine_*: the managed side loads a car's grain banks from the game's assets and
+    /// sounds; the published library, where built, renders the very same samples through its C entry points.
+    /// </summary>
+    [Fact]
+    public void EngineVoiceRendersTheGameBanksLikeTheManagedSide()
+    {
+        var folder = FindInRepository(Path.Combine("game", "assets", "audio", "v8"));
+        Assert.NotNull(folder);
+        var expected = new float[2048];
+        NativeApi.CreateEngine(folder, 8).Render(expected, 5000f, 1f, true);
+        Assert.True(expected.Max(MathF.Abs) > 0.01f, "the engine voice is silent");
+        Assert.Throws<FileNotFoundException>(() => NativeApi.CreateEngine(Path.GetTempPath(), 8));
+
+        var path = FindPublishedLibrary();
+        if (path is null)
+        {
+            _out.WriteLine("published library not checked: artifacts/physics-native/GrudgeLap.Physics.Native.dll is not published");
+            return;
+        }
+        var library = NativeLibrary.Load(path);
+        try
+        {
+            var create = (delegate* unmanaged[Cdecl]<byte*, int, nint>)NativeLibrary.GetExport(library, "glp_engine_create");
+            var destroy = (delegate* unmanaged[Cdecl]<nint, void>)NativeLibrary.GetExport(library, "glp_engine_destroy");
+            var sampleRate = (delegate* unmanaged[Cdecl]<nint, int>)NativeLibrary.GetExport(library, "glp_engine_sample_rate");
+            var render = (delegate* unmanaged[Cdecl]<nint, float*, int, float, float, int, int, float, int>)NativeLibrary.GetExport(library, "glp_engine_render");
+            var name = Encoding.UTF8.GetBytes(folder + "\0");
+            nint engine;
+            fixed (byte* text = name) engine = create(text, 8);
+            Assert.NotEqual(0, engine);
+            try
+            {
+                Assert.Equal(44100, sampleRate(engine));
+                var output = new float[expected.Length];
+                fixed (float* samples = output) Assert.Equal(0, render(engine, samples, output.Length, 5000f, 1f, 1, 0, 1f));
+                Assert.Equal(expected, output);
+            }
+            finally
+            {
+                destroy(engine);
+            }
+        }
+        finally
+        {
+            NativeLibrary.Free(library);
+        }
+    }
+
+    private static string? FindPublishedLibrary() => FindInRepository(Path.Combine("artifacts", "physics-native", "GrudgeLap.Physics.Native.dll"));
+
+    private static string? FindInRepository(string relative)
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {
-            var candidate = Path.Combine(dir.FullName, "artifacts", "physics-native", "GrudgeLap.Physics.Native.dll");
-            if (File.Exists(candidate)) return candidate;
+            var candidate = Path.Combine(dir.FullName, relative);
+            if (File.Exists(candidate) || Directory.Exists(candidate)) return candidate;
         }
         return null;
     }

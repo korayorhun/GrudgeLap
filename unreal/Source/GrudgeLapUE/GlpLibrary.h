@@ -39,6 +39,10 @@ public:
 	decltype(&glp_props) Props = nullptr;
 	decltype(&glp_best_lap) BestLap = nullptr;
 	decltype(&glp_load_best_lap) LoadBestLap = nullptr;
+	decltype(&glp_engine_create) EngineCreate = nullptr;
+	decltype(&glp_engine_destroy) EngineDestroy = nullptr;
+	decltype(&glp_engine_sample_rate) EngineSampleRate = nullptr;
+	decltype(&glp_engine_render) EngineRender = nullptr;
 	decltype(&glp_last_error) LastErrorText = nullptr;
 
 private:

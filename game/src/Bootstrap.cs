@@ -384,6 +384,7 @@ public sealed partial class Bootstrap : Node3D
         var cockpit = _cameraRig.Mode == CameraMode.Cockpit && _session.Phase != SessionPhase.Replay;
         _carView.SetViewpoint(insideCar: cockpit && !_showAll);
         _hud.Cockpit = cockpit;
+        _audio.Interior = cockpit;
         _mirror?.SetActive(cockpit);
         SyncTraffic(dt);
         SyncGhost();

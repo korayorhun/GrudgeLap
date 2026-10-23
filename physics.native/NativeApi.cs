@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Text;
+using GrudgeLap.Audio;
 using GrudgeLap.Physics.Race;
 using GrudgeLap.Physics.Track;
 using GrudgeLap.Physics.Vehicle;
@@ -21,11 +22,27 @@ internal sealed class NativeSession(RaceSession session, int car)
 /// </summary>
 internal static class NativeApi
 {
-    public const int AbiVersion = 3;
+    public const int AbiVersion = 4;
     public const int TrafficFlag = 1;
     public const int SpeedRouteFlag = 2;
 
     public static int CarCount => VehicleSpec.Catalogue.Length;
+
+    /// <summary>
+    /// The engine voice of a car from the grain banks in <paramref name="folder"/>: engine_drive.wav/.json, and
+    /// engine_idle.wav/.json when the folder has them (tools/make-engine-bank.py writes both pairs).
+    /// </summary>
+    public static GranularEngine CreateEngine(string folder, int cylinders)
+    {
+        GrainBank? Bank(string name)
+        {
+            var wav = Path.Combine(folder, name + ".wav");
+            var marks = Path.Combine(folder, name + ".json");
+            return File.Exists(wav) && File.Exists(marks) ? GrainBank.FromFiles(wav, marks) : null;
+        }
+        var drive = Bank("engine_drive") ?? throw new FileNotFoundException($"no engine_drive.wav and .json in {folder}");
+        return new GranularEngine(Bank("engine_idle"), drive, cylinders);
+    }
 
     public static string CarName(int car) => Spec(car).Name;
 

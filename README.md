@@ -118,14 +118,18 @@ best lap's ghost out of the picture.
 - `physics.tests/` — the feel checklist as numbers: 0-60, top speed, braking, stall, launch, the loop's
   minimum speed, the drawbridge window, the banked 180, the spin, grass, jumps in top gear, scripted laps on
   both routes with and without traffic, drone collisions, the ghost, the skid pad, the ground and the props.
+- `audio/` — the engine voice both versions play: real recordings cut into their firing pulses
+  (`tools/make-engine-bank.py`) and laid down again one per firing period of the simulated revs;
+  `audio.tests/` checks its pitch, clicks and silence (set `GRUDGELAP_AUDIO_DEMO` to a folder for
+  listenable sweeps).
 - `game/` — the Godot view: world generated from the track (terrain mesh from the ground field with a ring
   of hills, photo-textured road with worn wheel tracks, gravel shoulders, bridges with guardrails, pad,
   grass tufts, trees from leaf cards, fields, textured buildings and signs, the train), lofted car bodies
   with rounded character lines, panel seams and a lined cabin behind tinted glass (leather dashboard,
   binnacle with live dials, a three-spoke wheel that turns with the steering, seats, slim A-pillars, a
   rear-view mirror with its own camera), a driver's-eye cockpit camera whose head sways with the car and
-  a chase camera, HUD, engine, tyre (squeal, howl, screech, gravel) and V8 overrun-pop sounds from
-  recordings over synthesised road roar, wind and bump thumps, a synthesised engine and squeal for 1989 mode,
+  a chase camera, HUD, engine, tyre (road roar, squeal, howl, screech, gravel) and V8 overrun-pop sounds
+  from recordings over synthesised wind and bump thumps, a synthesised engine and squeal for 1989 mode,
   crash, moo, sign clang, train and title tune, updater. Design notes in [docs/design.md](docs/design.md), the checklist in
   [docs/feel-checklist.md](docs/feel-checklist.md), what the research found in
   [docs/research-notes.md](docs/research-notes.md).

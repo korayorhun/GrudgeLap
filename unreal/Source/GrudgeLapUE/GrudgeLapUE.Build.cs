@@ -25,15 +25,19 @@ public class GrudgeLapUE : ModuleRules
 			RuntimeDependencies.Add("$(BinaryOutputDir)/GrudgeLap.Physics.Native.dll", library);
 		}
 
-		// The Godot version's recordings (game/assets/audio, CC0, see SOURCES.md there), read at run time by
-		// GlpAudio from beside the binaries so the packaged game carries them too.
+		// The Godot version's recordings (game/assets/audio, CC0, see SOURCES.md there) and the engine's grain marks
+		// beside them, read at run time by GlpAudio and the DLL from beside the binaries so the packaged game carries
+		// them too.
 		string audio = Path.Combine(repository, "game", "assets", "audio");
 		if (Directory.Exists(audio))
 		{
-			foreach (string file in Directory.EnumerateFiles(audio, "*.wav", SearchOption.AllDirectories))
+			foreach (string pattern in new[] { "*.wav", "*.json" })
 			{
-				string relative = Path.GetRelativePath(audio, file).Replace(Path.DirectorySeparatorChar, '/');
-				RuntimeDependencies.Add("$(BinaryOutputDir)/GrudgeLapAudio/" + relative, file);
+				foreach (string file in Directory.EnumerateFiles(audio, pattern, SearchOption.AllDirectories))
+				{
+					string relative = Path.GetRelativePath(audio, file).Replace(Path.DirectorySeparatorChar, '/');
+					RuntimeDependencies.Add("$(BinaryOutputDir)/GrudgeLapAudio/" + relative, file);
+				}
 			}
 		}
 	}

@@ -1,4 +1,4 @@
-"""Cuts a seamless engine loop out of a recording.
+"""Cuts a seamless loop (tyres, road) out of a recording.
 Usage: python -I makeloop.py <in> <start s> <duration s> <out.wav> [crossfade s] [peak]
 Decodes with ffmpeg to mono 22050 Hz, takes the slice, folds its tail into its head with an equal-power
 crossfade so the loop point is inaudible, normalises to the given peak and writes 16-bit PCM."""

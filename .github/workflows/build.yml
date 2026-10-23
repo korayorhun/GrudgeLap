@@ -26,6 +26,9 @@ jobs:
       - name: Physics tests
         run: dotnet test physics.tests/GrudgeLap.Physics.Tests.csproj --nologo -v q
 
+      - name: Audio tests
+        run: dotnet test audio.tests/GrudgeLap.Audio.Tests.csproj --nologo -v q
+
       - name: Godot .NET editor and export templates
         shell: pwsh
         run: |

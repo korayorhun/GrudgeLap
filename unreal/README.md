@@ -43,7 +43,7 @@ Run these from the repository root.
    ```
 
 4. Compile the C++ module. The build also copies the simulation core and the Godot version's recordings
-   (`game/assets/audio`) beside the binaries:
+   and grain marks (`game/assets/audio`) beside the binaries:
 
    ```
    %UE_ROOT%\Engine\Build\BatchFiles\Build.bat GrudgeLapUEEditor Win64 Development -Project=%CD%\unreal\GrudgeLapUE.uproject
@@ -101,7 +101,9 @@ the development laptop); later runs only cook what changed.
   placements (`GlpCamera`).
 - `GlpHud` draws the readouts and the title screen on the canvas; `GlpInstruments` draws the instrument panel
   into a texture shown on the binnacle and at the foot of the screen; a scene capture fills the rear-view
-  mirror. `GlpAudio` mixes the recordings and the synthesis the way the Godot version does.
+  mirror. `GlpAudio` mixes the recordings and the synthesis the way the Godot version does, at 44.1 kHz; the
+  engine voice is the simulation core's (`glp_engine_*`, the same `audio/GranularEngine` Godot plays),
+  rendered on the audio thread.
 - **Coordinates:** the simulation's (x, y, z) in metres is (x, −z, y) × 100 cm in Unreal. Godot shows it as
   (x, y, −z), and the glTF import maps Godot's (x, y, z) to Unreal's (x, z, y).
 - `Scripts/build_scene.py` writes the level and tags what the game moves. It holds the record of what the

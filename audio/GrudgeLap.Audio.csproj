@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Engine-independent sound: the granular engine voice that rebuilds a car's engine from recorded firing
+       pulses. The Godot game feeds it to an audio stream generator; the Unreal version calls it through
+       physics.native. No engine references, testable headless with `dotnet test`. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GrudgeLap.Audio</RootNamespace>
+    <AssemblyName>GrudgeLap.Audio</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="GrudgeLap.Audio.Tests" />
+  </ItemGroup>
+
+</Project>

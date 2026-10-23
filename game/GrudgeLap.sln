@@ -6,6 +6,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GrudgeLap", "GrudgeLap.cspr
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GrudgeLap.Physics", "..\physics\GrudgeLap.Physics.csproj", "{4C4B7B61-2B8E-4D1E-9F6C-0F3B2D7A1A01}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GrudgeLap.Audio", "..\audio\GrudgeLap.Audio.csproj", "{A2D5DF83-1A22-4163-8024-85AD34B60B3F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -25,5 +27,11 @@ Global
 		{4C4B7B61-2B8E-4D1E-9F6C-0F3B2D7A1A01}.ExportDebug|Any CPU.Build.0 = Debug|Any CPU
 		{4C4B7B61-2B8E-4D1E-9F6C-0F3B2D7A1A01}.ExportRelease|Any CPU.ActiveCfg = Release|Any CPU
 		{4C4B7B61-2B8E-4D1E-9F6C-0F3B2D7A1A01}.ExportRelease|Any CPU.Build.0 = Release|Any CPU
+		{A2D5DF83-1A22-4163-8024-85AD34B60B3F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A2D5DF83-1A22-4163-8024-85AD34B60B3F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A2D5DF83-1A22-4163-8024-85AD34B60B3F}.ExportDebug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A2D5DF83-1A22-4163-8024-85AD34B60B3F}.ExportDebug|Any CPU.Build.0 = Debug|Any CPU
+		{A2D5DF83-1A22-4163-8024-85AD34B60B3F}.ExportRelease|Any CPU.ActiveCfg = Release|Any CPU
+		{A2D5DF83-1A22-4163-8024-85AD34B60B3F}.ExportRelease|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
