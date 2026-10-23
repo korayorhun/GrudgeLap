@@ -76,11 +76,14 @@ void FGlpInput::Update(const APlayerController* Player, float Time)
 			Held.Add(Key);
 		}
 	}
-	for (const FScripted& Press : Script)
+	for (FScripted& Press : Script)
 	{
-		if (Time >= Press.From && Time < Press.To)
+		// Held for its span, and for at least one frame: a slow frame (the machine busy elsewhere) can step over
+		// a tap's tenth of a second, and the run then waits on the title screen for a key that never came.
+		if (Time >= Press.From && (Time < Press.To || !Press.bSeen))
 		{
 			Held.Add(Press.Key);
+			Press.bSeen = true;
 		}
 	}
 }

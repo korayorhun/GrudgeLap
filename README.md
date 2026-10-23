@@ -129,10 +129,11 @@ best lap's ghost out of the picture.
   crash, moo, sign clang, train and title tune, updater. Design notes in [docs/design.md](docs/design.md), the checklist in
   [docs/feel-checklist.md](docs/feel-checklist.md), what the research found in
   [docs/research-notes.md](docs/research-notes.md).
-- `unreal/` — the Unreal Engine 5 version in progress: the same track, exported from the game, dressed with
-  CC0 photoscans (Poly Haven) under Lumen, Nanite and a physical sky, with the car driven by the simulation
-  through `physics.native`. Scripts rebuild the level, render stills and measure the frame rate; see
-  [unreal/README.md](unreal/README.md).
+- `unreal/` — the Unreal Engine 5 version: the same track and both cars, exported from the game, dressed
+  with CC0 photoscans (Poly Haven) under Lumen, Nanite and a physical sky, and the whole game on the
+  simulation through `physics.native`: title screen, gearboxes, traffic, ghost, train, HUD, instruments,
+  mirrors and the same sound. Scripts rebuild the level, play it, drive it for tests, render stills and
+  measure the frame rate; see [unreal/README.md](unreal/README.md).
 
 ## Support
 

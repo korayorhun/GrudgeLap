@@ -80,6 +80,17 @@ kept in `Saved\GrudgeLap`.
 
 For automated checks, `-GlpAudioDump=<file.wav>` records the sound mix and `-GlpMute` keeps the speakers silent.
 
+## Packaging
+
+A stand-alone build (`GrudgeLapUE.exe` with the cooked level, the simulation core and the recordings beside it):
+
+```
+%UE_ROOT%\Engine\Build\BatchFiles\RunUAT.bat BuildCookRun -project=%CD%\unreal\GrudgeLapUE.uproject -noP4 -platform=Win64 -clientconfig=Development -build -cook -stage -pak -archive -archivedirectory=<folder> -unattended -nocompileeditor
+```
+
+With an engine built from source, the first run compiles the whole engine for the game target (over an hour on
+the development laptop); later runs only cook what changed.
+
 ## How the pieces fit
 
 - `Source/GrudgeLapUE/GlpLibrary.*` loads `GrudgeLap.Physics.Native.dll` and checks its ABI version.

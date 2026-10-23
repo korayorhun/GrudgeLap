@@ -39,6 +39,7 @@ private:
 		FKey Key;
 		float From = 0.f;
 		float To = 0.f;
+		bool bSeen = false;
 	};
 	TArray<FScripted> Script;
 	TSet<FKey> Held;
