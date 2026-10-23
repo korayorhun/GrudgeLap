@@ -21,6 +21,8 @@ if ($Godot -eq "") {
 if (-not $SkipTests) {
     dotnet test "$root/physics.tests/GrudgeLap.Physics.Tests.csproj" --nologo -v q
     if ($LASTEXITCODE -ne 0) { throw "tests failed" }
+    dotnet test "$root/audio.tests/GrudgeLap.Audio.Tests.csproj" --nologo -v q
+    if ($LASTEXITCODE -ne 0) { throw "audio tests failed" }
 }
 
 dotnet build "$root/game/GrudgeLap.csproj" -c Release --nologo -v q
