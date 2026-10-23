@@ -306,22 +306,34 @@ def tag(actor, name):
     actor.set_editor_property("tags", list(actor.get_editor_property("tags")) + [unreal.Name(name)])
 
 
-def rig_game(actors, materials):
-    """Tags what the GrudgeLapUE module's game (AGlpGame) moves and places it.
+def car_parts(car):
+    """The car's actors by label (the first of each name: "Wheel" also names the steering wheel's node)."""
+    parts = {}
+    for actor in descendants(car):
+        parts.setdefault(actor.get_actor_label(), actor)
+    return parts
 
-    The player's car: its root (GLP.Car), wheel pivots (GLP.Wheel0..3, the simulation's order: front left, front
-    right, rear left, rear right) and their rolling parts (GLP.Spin0..3), the steering wheel (GLP.Steering), the
-    exterior the traffic and ghost copies keep (GLP.Exterior), the binnacle face (GLP.Dials) and the mirror glass
-    (GLP.MirrorGlass). The train's cars (GLP.Train0..3), and the signs and crossbucks the car can knock over
-    (GLP.Prop). Everything that moves is made movable. Without the compiled module (Source/GrudgeLapUE) the level
-    still builds, only without the game.
-    """
-    car = actors.get("PlayerCar")
-    if car is None:
-        log("no PlayerCar actor; nothing to drive")
-        return
+
+def mirror_glass(car):
+    """RearMirror's glass: a stalk, the housing and the glass are made in that order, and the export names them
+    only by number."""
+    mirror = car_parts(car).get("RearMirror")
+    if mirror is None:
+        return None
+    meshes = [a for a in mirror.get_attached_actors() if a.get_components_by_class(unreal.StaticMeshComponent)]
+    number = lambda a: int(a.get_actor_label().rsplit("_", 1)[-1]) if a.get_actor_label().rsplit("_", 1)[-1].isdigit() else -1
+    return max(meshes, key=number) if meshes else None
+
+
+def rig_car(car, root_tag):
+    """Tags what the GrudgeLapUE module's game (AGlpGame, FGlpCarView) moves in one car and makes it movable: the
+    root (root_tag: GLP.Car for the first catalogue car, GLP.Car1 for the second), the wheel pivots (GLP.Wheel0..3,
+    the simulation's order: front left, front right, rear left, rear right) and their rolling parts
+    (GLP.Spin0..3), the steering wheel (GLP.Steering), the exterior the traffic and ghost copies keep
+    (GLP.Exterior), what only shows from outside (GLP.OutsideOnly), the binnacle face (GLP.Dials) and the mirror
+    glass (GLP.MirrorGlass)."""
     movable(car)
-    tag(car, "GLP.Car")
+    tag(car, root_tag)
     parts = list(descendants(car))
     wheels = 0
     for index in range(4):
@@ -347,16 +359,16 @@ def rig_game(actors, materials):
     dials = next((a for a in parts if a.get_actor_label() == "Dials"), None)
     if dials is not None:
         tag(dials, "GLP.Dials")
-    # RearMirror: a stalk, the housing and the glass, made in that order; the export names them only by number.
-    mirror = next((a for a in parts if a.get_actor_label() == "RearMirror"), None)
-    glass = None
-    if mirror is not None:
-        meshes = [a for a in mirror.get_attached_actors() if a.get_components_by_class(unreal.StaticMeshComponent)]
-        numbered = sorted(meshes, key=lambda a: int(a.get_actor_label().rsplit("_", 1)[-1]) if a.get_actor_label().rsplit("_", 1)[-1].isdigit() else -1)
-        glass = numbered[-1] if numbered else None
+    glass = mirror_glass(car)
     if glass is not None:
         tag(glass, "GLP.MirrorGlass")
+    log(f"{root_tag} tagged: {wheels} wheels, steering {'found' if steering else 'missing'}, {len(exterior)} exterior "
+        f"parts, dials {'found' if dials else 'missing'}, mirror glass {glass.get_actor_label() if glass else 'missing'}")
 
+
+def rig_world(actors):
+    """Tags the train's cars (GLP.Train0..3) and the signs and crossbucks the car can knock over (GLP.Prop), and
+    makes them movable."""
     train = actors.get("Train")
     cars = 0
     if train is not None:
@@ -372,10 +384,45 @@ def rig_game(actors, materials):
             movable(actor)
             tag(actor, "GLP.Prop")
             props += 1
-    log(f"tagged: {wheels} wheels, steering {'found' if steering else 'missing'}, {len(exterior)} exterior parts, "
-        f"dials {'found' if dials else 'missing'}, mirror glass {glass.get_actor_label() if glass else 'missing'}, "
-        f"{cars} train cars, {props} signs")
+    log(f"world tagged: {cars} train cars, {props} signs")
 
+
+def import_car(name):
+    """A further catalogue car from Import/car_<name>.glb (extract_car.py takes it out of the game's export with
+    --car=<name>), imported into /Game/Cars/<name> at the start beside the first car and hidden until the title
+    screen chooses it. Returns its root actor, or None without the file."""
+    path = os.path.join(IMPORT, f"car_{name}.glb")
+    if not os.path.exists(path):
+        log(f"no {path}: only the first car")
+        return None
+    before = set(a.get_path_name() for a in actor_sub.get_all_level_actors())
+    source = unreal.InterchangeManager.create_source_data(path)
+    params = unreal.ImportAssetParameters()
+    params.is_automated = True
+    params.override_pipelines = [
+        pipeline("/Interchange/Pipelines/DefaultGLTFSceneAssetsPipeline", "TrackAssets", {"collision": False}),
+        GLTF_MATERIALS,
+        unreal.SoftObjectPath("/Interchange/Pipelines/DefaultSceneLevelPipeline.DefaultSceneLevelPipeline"),
+    ]
+    manager = unreal.InterchangeManager.get_interchange_manager_scripted()
+    manager.import_scene(f"/Game/Cars/{name}/", source, params)
+    manager.wait_until_all_tasks_done(False)
+    added = [a for a in actor_sub.get_all_level_actors() if a.get_path_name() not in before]
+    # The import hangs the file's nodes under an actor named after the file; the car is the node below it.
+    root = next((a for a in added if a.get_actor_label().startswith("PlayerCar")), None)
+    if root is None:
+        log(f"car {name}: no PlayerCar among {len(added)} imported actors")
+        return None
+    root.set_actor_label(f"PlayerCar_{name}")
+    for actor in [root] + list(descendants(root)):
+        actor.set_actor_hidden_in_game(True)
+    log(f"car {name} imported: {len(added)} actors")
+    return root
+
+
+def place_game(car, materials):
+    """Places the game (AGlpGame) with the materials it sets at run time. Without the compiled module
+    (Source/GrudgeLapUE) the level still builds, only without the game."""
     game_class = unreal.load_class(None, "/Script/GrudgeLapUE.GlpGame")
     if game_class is None:
         log("GrudgeLapUE module not compiled: no game placed")
@@ -500,13 +547,9 @@ def game_materials(paint):
     return {"M_CarPaint": paint, "M_Ghost": ghost, "M_Instruments": instruments, "M_MirrorView": mirror}
 
 
-def dress_car(actors):
-    """Car paint and glass. The game's paint is flat red in the vertex colour (with darker panel seams); here it
-    is a clear-coated metallic paint over that colour (paint_material). The glass, which the cockpit view hid at
-    export, becomes a clear windscreen every view keeps; translucency cannot be drawn by Nanite, so its mesh is
-    built without. Returns the paint."""
+def car_materials():
+    """The paint (paint_material), the glass and the mirror glass's stand-in, shared by every car."""
     mp = unreal.MaterialProperty
-    paint = paint_material()
 
     def glassy(material):
         material.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
@@ -515,14 +558,23 @@ def dress_car(actors):
 
     glass = constant_material("M_Glass", {mp.MP_BASE_COLOR: (0.02, 0.025, 0.03), mp.MP_OPACITY: 0.14,
                                           mp.MP_ROUGHNESS: 0.02, mp.MP_SPECULAR: 0.5}, glassy)
+    return {"paint": paint_material(), "glass": glass, "mirror": mirror_material()}
+
+
+def dress_car(car, materials):
+    """Paint and glass on one car. The game's paint is flat red in the vertex colour (with darker panel seams);
+    here it is a clear-coated metallic paint over that colour (paint_material). The glass, which the cockpit view
+    hid at export, becomes a clear windscreen every view keeps; translucency cannot be drawn by Nanite, so its mesh
+    is built without. The rear-view mirror's glass gets dark glass for the stills (the game shows its camera)."""
+    parts = car_parts(car)
     painted = 0
     for label in ("Shell", "Bonnet"):
-        for component in mesh_components(actors[label]) if label in actors else []:
+        for component in mesh_components(parts[label]) if label in parts else []:
             for slot in range(component.get_num_materials()):
-                component.set_material(slot, paint)
+                component.set_material(slot, materials["paint"])
             painted += 1
     glazed = 0
-    for component in mesh_components(actors["Glass"]) if "Glass" in actors else []:
+    for component in mesh_components(parts["Glass"]) if "Glass" in parts else []:
         mesh = component.get_editor_property("static_mesh")
         settings = mesh.get_editor_property("nanite_settings")
         if settings.enabled:
@@ -531,10 +583,22 @@ def dress_car(actors):
             mesh.set_editor_property("nanite_settings", settings)
             eal.save_loaded_asset(mesh, False)
         for slot in range(component.get_num_materials()):
-            component.set_material(slot, glass)
+            component.set_material(slot, materials["glass"])
         glazed += 1
-    log(f"car dressed: {painted} painted part(s), {glazed} glass part(s)")
-    return paint
+    glass = mirror_glass(car)
+    for component in mesh_components(glass) if glass else []:
+        component.set_material(0, materials["mirror"])
+    # The body shell is single-sided and seen from inside in the cockpit view (the game draws it as shadows only
+    # there). Lumen's surface cache does not know it is one-sided and bounced its red paint all over the cabin;
+    # the shell keeps its direct shadows and leaves the bounce light to the cabin lining.
+    shell = 0
+    for label in ("Shell", "Bonnet", "Outside"):
+        for component in mesh_components(parts[label]) if label in parts else []:
+            component.set_editor_property("affect_dynamic_indirect_lighting", False)
+            component.set_editor_property("affect_distance_field_lighting", False)
+            shell += 1
+    log(f"{car.get_actor_label()} dressed: {painted} painted, {glazed} glass, {shell} shell part(s) out of Lumen, "
+        f"mirror glass {'found' if glass else 'missing'}")
 
 
 def dress_track(actors):
@@ -557,23 +621,7 @@ def dress_track(actors):
                 # Lumen's software tracing then saw the 1.4 m roadside ditches as inside the ground and left them
                 # black. The sun's shadows come from virtual shadow maps either way.
                 component.set_editor_property("affect_distance_field_lighting", False)
-    # The rear-view mirror's glass showed the game's mirror camera, a viewport texture the export cannot carry.
-    glass = actors.get("_MeshInstance3D_1395")
-    if glass is not None:
-        mirror = mirror_material()
-        for component in mesh_components(glass):
-            component.set_material(0, mirror)
-    # The body shell is single-sided and seen from inside in the cockpit view (the game draws it as shadows only
-    # there). Lumen's surface cache does not know it is one-sided and bounced its red paint all over the cabin;
-    # the shell keeps its direct shadows and leaves the bounce light to the cabin lining.
-    shell = 0
-    for label in ("Shell", "Bonnet", "Outside"):
-        if label in actors:
-            for component in mesh_components(actors[label]):
-                component.set_editor_property("affect_dynamic_indirect_lighting", False)
-                component.set_editor_property("affect_distance_field_lighting", False)
-                shell += 1
-    log(f"track dressed (mirror glass {'found' if glass else 'not found'}, {shell} shell part(s) out of Lumen)")
+    log("track dressed")
 
 
 # ---- photoscanned plants and rocks -----------------------------------------------------------------------
@@ -775,7 +823,7 @@ def prepare_materials():
     """
     copies = {}
     counts = {"materials": 0, "track instances": 0, "scan instances": 0}
-    for root in ("/Game/GrudgeLap/Materials", "/Game/Track", "/Game/GrudgeLap/PolyHaven"):
+    for root in ("/Game/GrudgeLap/Materials", "/Game/Track", "/Game/Cars", "/Game/GrudgeLap/PolyHaven"):
         for path in eal.list_assets(root, recursive=True):
             kind = str(eal.find_asset_data(path).asset_class_path.asset_name)
             if kind == "Material" and root == "/Game/GrudgeLap/Materials":
@@ -786,7 +834,7 @@ def prepare_materials():
                 mel.recompile_material(material)
                 eal.save_loaded_asset(material)
                 counts["materials"] += 1
-            elif kind == "MaterialInstanceConstant" and root == "/Game/Track":
+            elif kind == "MaterialInstanceConstant" and root in ("/Game/Track", "/Game/Cars"):
                 instance = eal.load_asset(path)
                 mel.set_material_instance_parent(instance, vertex_colour_parent(instance.get_editor_property("parent"), copies))
                 mel.update_material_instance(instance)
@@ -988,8 +1036,18 @@ def main():
     actors = label_map()
     calibrate(placements, actors)
     dress_track(actors)
-    paint = dress_car(actors)
-    rig_game(actors, game_materials(paint))
+    materials = car_materials()
+    car = actors.get("PlayerCar")
+    if car is None:
+        raise RuntimeError("the export has no PlayerCar")
+    dress_car(car, materials)
+    rig_car(car, "GLP.Car")
+    v8 = import_car("v8")
+    if v8 is not None:
+        dress_car(v8, materials)
+        rig_car(v8, "GLP.Car1")
+    rig_world(actors)
+    place_game(car, game_materials(materials["paint"]))
     scatter(placements, extra, actors)
     prepare_materials()
     shots = cameras(placements, extra)

@@ -21,6 +21,7 @@ typedef intptr_t glp_session; /* 0 is no session */
 
 /* glp_create flags */
 #define GLP_TRAFFIC 1 /* the drones of the original: five cars ahead, three oncoming */
+#define GLP_SPEED_ROUTE 2 /* the attract-mode driver takes the speed route (past the level crossing), not the stunt route */
 
 /* DriverInputs. gear: -1 reverse, 0 neutral, 1..7, or GLP_NO_GEAR_CHANGE to keep the current one. */
 #define GLP_NO_GEAR_CHANGE 99
@@ -151,7 +152,7 @@ int32_t glp_car_count(void);
 /* The car's name as UTF-8, like glp_message. */
 int32_t glp_car_name(int32_t car, char* buffer, int32_t capacity);
 int32_t glp_get_car_spec(int32_t car, glp_car_spec* out);
-/* car: catalogue index; flags: GLP_TRAFFIC or 0. Returns 0 on failure. */
+/* car: catalogue index; flags: GLP_TRAFFIC | GLP_SPEED_ROUTE or 0. Returns 0 on failure. */
 glp_session glp_create(int32_t car, int32_t flags);
 void glp_destroy(glp_session session);
 int32_t glp_choose_transmission(glp_session session, int32_t mode);

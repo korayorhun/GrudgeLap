@@ -23,7 +23,10 @@ class USceneCaptureComponent2D;
  * Scripts/build_scene.py places one in the level and tags what it moves (see FGlpCarView). Command line for
  * automated runs: -GlpAttract (the scripted driver drives), -GlpView=chase, -GlpNoTraffic, -GlpKeys=... (see
  * FGlpInput), -GlpShots=3+8+15 (screenshots that many seconds into the drive, in Saved/Screenshots/Glp),
- * -GlpQuitAfter=12, and -GlpTitleShots (both clocks run from the start instead, to photograph the title screen).
+ * -GlpQuitAfter=12, -GlpTitleShots (both clocks run from the start instead, to photograph the title screen) and
+ * -GlpSaveBest (an attract-mode lap may become the saved best lap, for a ghost to test against); -GlpAuto gives
+ * the attract-mode driver the automatic gearbox and -GlpSpeedRoute the speed route (past the level crossing); with
+ * -GlpKeys its steering is nudged by the scripted keys.
  */
 UCLASS()
 class GRUDGELAPUE_API AGlpGame : public AActor
@@ -138,6 +141,7 @@ private:
 	bool bKmh = false;
 	bool bAttract = false;
 	bool bTraffic = true;
+	bool bSpeedRoute = false;
 	float Time = 0.f;
 	float DrivingTime = 0.f;
 	float Dash = 0.f;
@@ -149,6 +153,8 @@ private:
 	int32 NextShot = 0;
 	float QuitAfter = 0.f;
 	bool bClockFromStart = false;
+	bool bSaveBest = false;
+	int32 AttractGearbox = GLP_MANUAL_AUTO_CLUTCH;
 	float LogTimer = 0.f;
 	float DriveTime = 0.f;
 };

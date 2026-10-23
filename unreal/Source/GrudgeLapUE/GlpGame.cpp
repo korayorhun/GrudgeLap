@@ -68,9 +68,6 @@ namespace
 	{
 		return (State.events & (1u << Event)) != 0;
 	}
-
-	// The attract-mode driver changes gear itself, as in the Godot version (Bootstrap._attractMode).
-	constexpr int32 AttractGearbox = GLP_MANUAL_AUTO_CLUTCH;
 }
 
 AGlpGame::AGlpGame()
@@ -101,6 +98,7 @@ void AGlpGame::BeginPlay()
 
 	bAttract = FParse::Param(FCommandLine::Get(), TEXT("GlpAttract"));
 	bTraffic = !FParse::Param(FCommandLine::Get(), TEXT("GlpNoTraffic"));
+	bSpeedRoute = FParse::Param(FCommandLine::Get(), TEXT("GlpSpeedRoute"));
 	FString View;
 	if (FParse::Value(FCommandLine::Get(), TEXT("GlpView="), View))
 	{
@@ -121,6 +119,9 @@ void AGlpGame::BeginPlay()
 	}
 	FParse::Value(FCommandLine::Get(), TEXT("GlpQuitAfter="), QuitAfter);
 	bClockFromStart = FParse::Param(FCommandLine::Get(), TEXT("GlpTitleShots"));
+	bSaveBest = FParse::Param(FCommandLine::Get(), TEXT("GlpSaveBest"));
+	// The attract-mode driver changes gear itself, as in the Godot version (Bootstrap._attractMode, --auto).
+	AttractGearbox = FParse::Param(FCommandLine::Get(), TEXT("GlpAuto")) ? GLP_AUTOMATIC : GLP_MANUAL_AUTO_CLUTCH;
 
 	// The imported car of each catalogue entry: GLP.Car for the first, GLP.Car1 and so on for the others.
 	const int32 CarCount = Library->CarCount();
@@ -196,7 +197,7 @@ void AGlpGame::CloseSession(bool bDestroyCopies)
 void AGlpGame::NewSession()
 {
 	CloseSession(true);
-	Session = Library->Create(CarIndex, bTraffic ? GLP_TRAFFIC : 0);
+	Session = Library->Create(CarIndex, (bTraffic ? GLP_TRAFFIC : 0) | (bSpeedRoute ? GLP_SPEED_ROUTE : 0));
 	if (!Session)
 	{
 		UE_LOG(LogGlpGame, Error, TEXT("no session: %s"), *Library->LastError());
@@ -399,6 +400,11 @@ void AGlpGame::Tick(float DeltaSeconds)
 	if (bAttract)
 	{
 		Library->ScriptedInputs(Session, &Controls);
+		// Automated runs may nudge the attract-mode driver with scripted steering, to put it into a sign.
+		if (Input.HasScript())
+		{
+			Controls.steer = FMath::Clamp(Controls.steer + Input.Drive(DeltaSeconds, FMath::Abs(Current.speed)).steer, -1.f, 1.f);
+		}
 	}
 	else
 	{
@@ -420,10 +426,16 @@ void AGlpGame::Tick(float DeltaSeconds)
 	Library->GetState(Session, &Current);
 	MessageText = Library->Message(Session);
 
-	if (Event(Current, GLP_EVENT_NEW_BEST_LAP) && !bAttract)
+	if (Event(Current, GLP_EVENT_NEW_BEST_LAP) && (!bAttract || bSaveBest))
 	{
 		SaveBestLap();
 		BuildGhost();
+	}
+	if (Current.events & ((1u << GLP_EVENT_SIGN_HIT) | (1u << GLP_EVENT_COW_HIT) | (1u << GLP_EVENT_CRASHED)))
+	{
+		UE_LOG(LogGlpGame, Log, TEXT("%s%s%s (prop %d, crash reason %d)"), Event(Current, GLP_EVENT_SIGN_HIT) ? TEXT("sign hit ") : TEXT(""),
+			Event(Current, GLP_EVENT_COW_HIT) ? TEXT("cow hit ") : TEXT(""), Event(Current, GLP_EVENT_CRASHED) ? TEXT("crashed ") : TEXT(""),
+			Current.last_soft_hit, Current.last_crash);
 	}
 	if (Event(Current, GLP_EVENT_SIGN_HIT) && Signs.Contains(Current.last_soft_hit))
 	{
@@ -712,9 +724,10 @@ void AGlpGame::Automate(float DeltaSeconds)
 	if (LogTimer >= 1.f)
 	{
 		LogTimer = 0.f;
-		UE_LOG(LogGlpGame, Log, TEXT("t %.1f s, phase %d, %.0f km/h, gear %d, %.0f rpm, at (%.1f, %.1f, %.1f), lap %d, score %lld, %s%s"),
-			DriveTime, Current.phase, Current.speed * 3.6f, Current.gear, Current.rpm, Current.position[0], Current.position[1], Current.position[2],
+		UE_LOG(LogGlpGame, Log, TEXT("t %.1f s (clock %.1f), phase %d, %.0f km/h, gear %d, %.0f rpm, at (%.1f, %.1f, %.1f), lap %d, score %lld, %s%s%s"),
+			DriveTime, Time, Current.phase, Current.speed * 3.6f, Current.gear, Current.rpm, Current.position[0], Current.position[1], Current.position[2],
 			Current.lap, static_cast<long long>(Current.score), Current.on_road ? TEXT("on road") : TEXT("off road"),
+			Current.train_running ? *FString::Printf(TEXT(", train %.0f m away"), TrainDistance) : TEXT(""),
 			MessageText.IsEmpty() ? TEXT("") : *(TEXT(", \"") + MessageText + TEXT("\"")));
 	}
 	if (NextShot < ShotTimes.Num() && DriveTime >= ShotTimes[NextShot])

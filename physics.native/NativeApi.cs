@@ -23,6 +23,7 @@ internal static class NativeApi
 {
     public const int AbiVersion = 3;
     public const int TrafficFlag = 1;
+    public const int SpeedRouteFlag = 2;
 
     public static int CarCount => VehicleSpec.Catalogue.Length;
 
@@ -50,11 +51,14 @@ internal static class NativeApi
         };
     }
 
-    /// <param name="flags">TrafficFlag for the drones of the original; without it the road is the player's.</param>
+    /// <param name="flags">TrafficFlag for the drones of the original; without it the road is the player's.
+    /// SpeedRouteFlag sends the attract-mode driver down the speed route (past the level crossing) instead of the stunt route.</param>
     public static NativeSession Create(int car, int flags)
     {
         var options = (flags & TrafficFlag) != 0 ? RaceOptions.Medium : RaceOptions.MediumNoTraffic;
-        return new NativeSession(new RaceSession(OriginalInspiredTrack.Build(), Spec(car), options), car);
+        var native = new NativeSession(new RaceSession(OriginalInspiredTrack.Build(), Spec(car), options), car);
+        native.Driver.PreferStunt = (flags & SpeedRouteFlag) == 0;
+        return native;
     }
 
     public static void ChooseTransmission(NativeSession native, int mode)

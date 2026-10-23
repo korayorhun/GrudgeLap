@@ -30,6 +30,9 @@ public:
 
 	void Reset();
 
+	/** The command line plays keys (-GlpKeys). */
+	bool HasScript() const { return !Script.IsEmpty(); }
+
 private:
 	struct FScripted
 	{
