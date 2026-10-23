@@ -38,6 +38,7 @@ bool FGlpLibrary::Load()
 	Resolve(AbiVersion, TEXT("glp_abi_version"));
 	Resolve(CarCount, TEXT("glp_car_count"));
 	Resolve(CarNameText, TEXT("glp_car_name"));
+	Resolve(CarSpec, TEXT("glp_get_car_spec"));
 	Resolve(Create, TEXT("glp_create"));
 	Resolve(Destroy, TEXT("glp_destroy"));
 	Resolve(ChooseTransmission, TEXT("glp_choose_transmission"));

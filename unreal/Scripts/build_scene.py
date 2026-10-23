@@ -249,10 +249,21 @@ def mirror_material():
     return constant_material("M_Mirror", {mp.MP_BASE_COLOR: (0.02, 0.02, 0.022), mp.MP_METALLIC: 0.0, mp.MP_ROUGHNESS: 0.35})
 
 
+def linear_vertex_colour(material, x, y):
+    """The mesh's vertex colour as the linear value the glTF holds. Unreal stores vertex colours as sRGB-encoded
+    bytes (StaticMeshBuilder: ToFColor(true)) and its Vertex Color node returns those bytes undecoded, which paled
+    the car's red to pink and every prop colour with it; a 2.2 power undoes the encoding closely enough."""
+    colour = mel.create_material_expression(material, unreal.MaterialExpressionVertexColor, x - 200, y)
+    power = mel.create_material_expression(material, unreal.MaterialExpressionPower, x, y)
+    power.set_editor_property("const_exponent", 2.2)
+    mel.connect_material_expressions(colour, "", power, "Base")
+    return power
+
+
 def constant_material(name, inputs, setup=None):
     """A material of constants (and the vertex colour): inputs maps a material property, or an input name of a
     Make Material Attributes node ("ClearCoat": the clear-coat pins are hidden from scripting as properties), to a
-    float, an RGB tuple, or "vertex" for the mesh's vertex colour."""
+    float, an RGB tuple, or "vertex" for the mesh's (linear) vertex colour."""
     material = asset_tools.create_asset(name, f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
     if setup:
         setup(material)
@@ -263,7 +274,7 @@ def constant_material(name, inputs, setup=None):
         mel.connect_material_property(attributes, "", unreal.MaterialProperty.MP_MATERIAL_ATTRIBUTES)
     for y, (prop, value) in enumerate(inputs.items()):
         if value == "vertex":
-            node = mel.create_material_expression(material, unreal.MaterialExpressionVertexColor, -300, y * 150)
+            node = linear_vertex_colour(material, -300, y * 150)
         elif isinstance(value, tuple):
             node = mel.create_material_expression(material, unreal.MaterialExpressionConstant3Vector, -300, y * 150)
             node.set_editor_property("constant", unreal.LinearColor(*value, 1.0))
@@ -279,60 +290,223 @@ def constant_material(name, inputs, setup=None):
     return material
 
 
-def rig_car(actors):
-    """Makes the imported player car drivable by the GrudgeLapUE module's GlpCarDriver: tags the car's root
-    (GLP.Car), its wheel pivots (GLP.Wheel0..3, the simulation's order: front left, front right, rear left, rear
-    right) and their rolling parts (GLP.Spin0..3), makes the whole car movable, and places the driver actor.
-    Without the compiled module (Source/GrudgeLapUE) the level still builds, only without a driver."""
+def descendants(actor):
+    for child in actor.get_attached_actors():
+        yield child
+        yield from descendants(child)
+
+
+def movable(actor):
+    actor.root_component.set_mobility(unreal.ComponentMobility.MOVABLE)
+    for child in actor.get_attached_actors():
+        movable(child)
+
+
+def tag(actor, name):
+    actor.set_editor_property("tags", list(actor.get_editor_property("tags")) + [unreal.Name(name)])
+
+
+def rig_game(actors, materials):
+    """Tags what the GrudgeLapUE module's game (AGlpGame) moves and places it.
+
+    The player's car: its root (GLP.Car), wheel pivots (GLP.Wheel0..3, the simulation's order: front left, front
+    right, rear left, rear right) and their rolling parts (GLP.Spin0..3), the steering wheel (GLP.Steering), the
+    exterior the traffic and ghost copies keep (GLP.Exterior), the binnacle face (GLP.Dials) and the mirror glass
+    (GLP.MirrorGlass). The train's cars (GLP.Train0..3), and the signs and crossbucks the car can knock over
+    (GLP.Prop). Everything that moves is made movable. Without the compiled module (Source/GrudgeLapUE) the level
+    still builds, only without the game.
+    """
     car = actors.get("PlayerCar")
     if car is None:
-        log("no PlayerCar actor; the car stays parked")
+        log("no PlayerCar actor; nothing to drive")
         return
-
-    def movable(actor):
-        actor.root_component.set_mobility(unreal.ComponentMobility.MOVABLE)
-        for child in actor.get_attached_actors():
-            movable(child)
-
-    def tag(actor, name):
-        actor.set_editor_property("tags", list(actor.get_editor_property("tags")) + [unreal.Name(name)])
-
     movable(car)
     tag(car, "GLP.Car")
-    found = 0
-
-    def descendants(actor):
-        for child in actor.get_attached_actors():
-            yield child
-            yield from descendants(child)
-
+    parts = list(descendants(car))
+    wheels = 0
     for index in range(4):
-        wheel = next((a for a in descendants(car) if a.get_actor_label() == f"Wheel{index}"), None)
+        wheel = next((a for a in parts if a.get_actor_label() == f"Wheel{index}"), None)
         if wheel is None:
             continue
         tag(wheel, f"GLP.Wheel{index}")
         spinner = next((a for a in wheel.get_attached_actors() if a.get_actor_label().startswith("Spin")), None)
         if spinner is not None:
             tag(spinner, f"GLP.Spin{index}")
-            found += 1
-    driver_class = unreal.load_class(None, "/Script/GrudgeLapUE.GlpCarDriver")
-    if driver_class is None:
-        log(f"car tagged ({found} wheels); GlpCarDriver not compiled, no driver placed")
+            wheels += 1
+    # CarView.BuildInterior: the steering wheel turns in a node "Wheel" on the "Column".
+    steering = next((a for a in parts if a.get_actor_label() == "Wheel" and a.get_attach_parent_actor() is not None
+                     and a.get_attach_parent_actor().get_actor_label() == "Column"), None)
+    if steering is not None:
+        tag(steering, "GLP.Steering")
+    exterior = [a for a in parts if a.get_actor_label() in ("Shell", "Bonnet", "Glass", "Outside")]
+    for actor in exterior:
+        tag(actor, "GLP.Exterior")
+        # CarView._outsideOnly: from the driver's seat only their shadows are drawn (the wheels are found by tag).
+        if actor.get_actor_label() in ("Shell", "Outside"):
+            tag(actor, "GLP.OutsideOnly")
+    dials = next((a for a in parts if a.get_actor_label() == "Dials"), None)
+    if dials is not None:
+        tag(dials, "GLP.Dials")
+    # RearMirror: a stalk, the housing and the glass, made in that order; the export names them only by number.
+    mirror = next((a for a in parts if a.get_actor_label() == "RearMirror"), None)
+    glass = None
+    if mirror is not None:
+        meshes = [a for a in mirror.get_attached_actors() if a.get_components_by_class(unreal.StaticMeshComponent)]
+        numbered = sorted(meshes, key=lambda a: int(a.get_actor_label().rsplit("_", 1)[-1]) if a.get_actor_label().rsplit("_", 1)[-1].isdigit() else -1)
+        glass = numbered[-1] if numbered else None
+    if glass is not None:
+        tag(glass, "GLP.MirrorGlass")
+
+    train = actors.get("Train")
+    cars = 0
+    if train is not None:
+        movable(train)
+        for index, label in enumerate(("Locomotive", "Wagon1", "Wagon2", "Wagon3")):
+            wagon = next((a for a in descendants(train) if a.get_actor_label() == label), None)
+            if wagon is not None:
+                tag(wagon, f"GLP.Train{index}")
+                cars += 1
+    props = 0
+    for label, actor in actors.items():
+        if label.startswith("Sign-") or label.startswith("Crossbuck-"):
+            movable(actor)
+            tag(actor, "GLP.Prop")
+            props += 1
+    log(f"tagged: {wheels} wheels, steering {'found' if steering else 'missing'}, {len(exterior)} exterior parts, "
+        f"dials {'found' if dials else 'missing'}, mirror glass {glass.get_actor_label() if glass else 'missing'}, "
+        f"{cars} train cars, {props} signs")
+
+    game_class = unreal.load_class(None, "/Script/GrudgeLapUE.GlpGame")
+    if game_class is None:
+        log("GrudgeLapUE module not compiled: no game placed")
         return
-    driver = actor_sub.spawn_actor_from_class(driver_class, car.get_actor_location())
-    driver.set_actor_label("CarDriver")
-    driver.set_folder_path("GrudgeLap")
-    log(f"car rigged: {found} wheels tagged, driver placed")
+    game = actor_sub.spawn_actor_from_class(game_class, car.get_actor_location())
+    game.set_actor_label("GrudgeLapGame")
+    game.set_folder_path("GrudgeLap")
+    for prop, name in (("paint_material", "M_CarPaint"), ("ghost_material", "M_Ghost"),
+                       ("instruments_material", "M_Instruments"), ("mirror_material", "M_MirrorView")):
+        game.set_editor_property(prop, materials[name])
+    log("game placed")
+
+
+def paint_material():
+    """The car paint: a clear-coated metallic over the colour Godot wrote into the vertex colours, (0.757, 0.027,
+    0.047) on the paint and a dark grey on the seams and trim. The vector parameter Paint replaces the red and
+    leaves the trim, so the traffic copies (FGlpCarView::Clone) wear the original drones' colours on the same
+    material; its default is the red itself, so the player's car is unchanged."""
+    material = asset_tools.create_asset("M_CarPaint", f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    material.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_CLEAR_COAT)
+    material.set_editor_property("use_material_attributes", True)
+    attributes = mel.create_material_expression(material, unreal.MaterialExpressionMakeMaterialAttributes, 0, 0)
+    mel.connect_material_property(attributes, "", unreal.MaterialProperty.MP_MATERIAL_ATTRIBUTES)
+    vertex = linear_vertex_colour(material, -1000, 0)
+
+    def channel(name, y):
+        mask = mel.create_material_expression(material, unreal.MaterialExpressionComponentMask, -800, y)
+        for c in "rgba":
+            mask.set_editor_property(c, c == name)
+        mel.connect_material_expressions(vertex, "", mask, "")
+        return mask
+
+    # Red minus green: 0.73 on the paint, 0 on the grey trim; scaled and clamped, the share of paint.
+    difference = mel.create_material_expression(material, unreal.MaterialExpressionSubtract, -650, 0)
+    mel.connect_material_expressions(channel("r", -80), "", difference, "A")
+    mel.connect_material_expressions(channel("g", 80), "", difference, "B")
+    scaled = mel.create_material_expression(material, unreal.MaterialExpressionMultiply, -500, 0)
+    scaled.set_editor_property("const_b", 1.0 / 0.7)
+    mel.connect_material_expressions(difference, "", scaled, "A")
+    share = mel.create_material_expression(material, unreal.MaterialExpressionSaturate, -380, 0)
+    mel.connect_material_expressions(scaled, "", share, "")
+    paint = mel.create_material_expression(material, unreal.MaterialExpressionVectorParameter, -500, 200)
+    paint.set_editor_property("parameter_name", "Paint")
+    paint.set_editor_property("default_value", unreal.LinearColor(0.757, 0.027, 0.047, 1.0))
+    colour = mel.create_material_expression(material, unreal.MaterialExpressionLinearInterpolate, -250, 0)
+    mel.connect_material_expressions(vertex, "", colour, "A")
+    mel.connect_material_expressions(paint, "", colour, "B")
+    mel.connect_material_expressions(share, "", colour, "Alpha")
+    mel.connect_material_expressions(colour, "", attributes, "BaseColor")
+    for y, (pin, value) in enumerate((("Metallic", 0.35), ("Roughness", 0.38), ("ClearCoat", 1.0), ("ClearCoatRoughness", 0.04))):
+        constant = mel.create_material_expression(material, unreal.MaterialExpressionConstant, -250, 200 + y * 100)
+        constant.set_editor_property("r", value)
+        mel.connect_material_expressions(constant, "", attributes, pin)
+    mel.recompile_material(material)
+    eal.save_loaded_asset(material)
+    return material
+
+
+def screen_material(name, parameter, lit, emissive_scale, flip_u=False, screen_units=True):
+    """A surface that shows a render target the game draws (the instrument panel, the mirror's view). With
+    screen_units its glow is given in the light units of the screen rather than the scene's (Eye Adaptation
+    Inverse): the level's fixed exposure is set for sunlight and would leave a plain emissive black. Without, the
+    texture already holds the scene's light (the mirror's capture before exposure) and goes through as it is."""
+    material = asset_tools.create_asset(name, f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    if not lit:
+        material.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    sample = mel.create_material_expression(material, unreal.MaterialExpressionTextureSampleParameter2D, -700, 0)
+    sample.set_editor_property("parameter_name", parameter)
+    sample.set_editor_property("texture", eal.load_asset("/Engine/EngineResources/DefaultTexture"))
+    if flip_u:
+        # A mirror shows the scene left-right reversed: u becomes 1 - u.
+        coordinates = mel.create_material_expression(material, unreal.MaterialExpressionTextureCoordinate, -1100, 0)
+        coordinates.set_editor_property("u_tiling", -1.0)
+        offset = mel.create_material_expression(material, unreal.MaterialExpressionConstant2Vector, -1100, 150)
+        offset.set_editor_property("r", 1.0)
+        offset.set_editor_property("g", 0.0)
+        shifted = mel.create_material_expression(material, unreal.MaterialExpressionAdd, -900, 0)
+        mel.connect_material_expressions(coordinates, "", shifted, "A")
+        mel.connect_material_expressions(offset, "", shifted, "B")
+        mel.connect_material_expressions(shifted, "", sample, "UVs")
+    glow = mel.create_material_expression(material, unreal.MaterialExpressionMultiply, -450, 100)
+    glow.set_editor_property("const_b", emissive_scale)
+    mel.connect_material_expressions(sample, "RGB", glow, "A")
+    if screen_units:
+        screen = mel.create_material_expression(material, unreal.MaterialExpressionEyeAdaptationInverse, -250, 100)
+        mel.connect_material_expressions(glow, "", screen, "")
+        mel.connect_material_property(screen, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    else:
+        mel.connect_material_property(glow, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    if lit:
+        mel.connect_material_property(sample, "RGB", unreal.MaterialProperty.MP_BASE_COLOR)
+        roughness = mel.create_material_expression(material, unreal.MaterialExpressionConstant, -250, 250)
+        roughness.set_editor_property("r", 0.3)
+        mel.connect_material_property(roughness, "", unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.recompile_material(material)
+    eal.save_loaded_asset(material)
+    return material
+
+
+def game_materials(paint):
+    """The materials the game sets at run time: the paint (whose Paint parameter colours the traffic), the ghost,
+    the binnacle's instrument face and the mirror's glass."""
+    mp = unreal.MaterialProperty
+
+    def ghostly(material):
+        material.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+        material.set_editor_property("translucency_lighting_mode", unreal.TranslucencyLightingMode.TLM_SURFACE_PER_PIXEL_LIGHTING)
+
+    # CarView.MakeGhost: pale blue at 30 % opacity with a blue glow, in the screen's light units like the panels.
+    ghost = constant_material("M_Ghost", {mp.MP_BASE_COLOR: (0.55, 0.85, 1.0), mp.MP_OPACITY: 0.30, mp.MP_ROUGHNESS: 0.4}, ghostly)
+    glow = mel.create_material_expression(ghost, unreal.MaterialExpressionConstant3Vector, -500, 500)
+    glow.set_editor_property("constant", unreal.LinearColor(0.25 * 0.9, 0.55 * 0.9, 0.85 * 0.9, 1.0))
+    screen = mel.create_material_expression(ghost, unreal.MaterialExpressionEyeAdaptationInverse, -250, 500)
+    mel.connect_material_expressions(glow, "", screen, "")
+    mel.connect_material_property(screen, "", mp.MP_EMISSIVE_COLOR)
+    mel.recompile_material(ghost)
+    eal.save_loaded_asset(ghost)
+    # CarView.MountInstruments: the panel as albedo with an emission of 0.45. The mirror: unshaded, u flipped, the
+    # light behind at the 85 % a silvered glass gives back.
+    instruments = screen_material("M_Instruments", "Panel", lit=True, emissive_scale=0.45)
+    mirror = screen_material("M_MirrorView", "View", lit=False, emissive_scale=0.85, flip_u=True, screen_units=False)
+    return {"M_CarPaint": paint, "M_Ghost": ghost, "M_Instruments": instruments, "M_MirrorView": mirror}
 
 
 def dress_car(actors):
     """Car paint and glass. The game's paint is flat red in the vertex colour (with darker panel seams); here it
-    is a clear-coated metallic paint over that colour. The glass, which the cockpit view hid at export, becomes a
-    clear windscreen every view keeps; translucency cannot be drawn by Nanite, so its mesh is built without."""
+    is a clear-coated metallic paint over that colour (paint_material). The glass, which the cockpit view hid at
+    export, becomes a clear windscreen every view keeps; translucency cannot be drawn by Nanite, so its mesh is
+    built without. Returns the paint."""
     mp = unreal.MaterialProperty
-    paint = constant_material("M_CarPaint", {"BaseColor": "vertex", "Metallic": 0.35, "Roughness": 0.38,
-                                             "ClearCoat": 1.0, "ClearCoatRoughness": 0.04},
-                              lambda m: m.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_CLEAR_COAT))
+    paint = paint_material()
 
     def glassy(material):
         material.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
@@ -360,6 +534,7 @@ def dress_car(actors):
             component.set_material(slot, glass)
         glazed += 1
     log(f"car dressed: {painted} painted part(s), {glazed} glass part(s)")
+    return paint
 
 
 def dress_track(actors):
@@ -543,7 +718,7 @@ USAGES = (unreal.MaterialUsage.MATUSAGE_NANITE, unreal.MaterialUsage.MATUSAGE_IN
 def multiply_vertex_colour(material, prop):
     """The colour feeding prop (base colour, or emissive for an unlit material) times the vertex colour."""
     source = mel.get_material_property_input_node(material, prop)
-    colour = mel.create_material_expression(material, unreal.MaterialExpressionVertexColor, -500, -200)
+    colour = linear_vertex_colour(material, -500, -200)
     if source is None:
         mel.connect_material_property(colour, "", prop)
         return
@@ -715,7 +890,11 @@ def light_and_look():
                         ("override_lumen_reflection_quality", True), ("lumen_reflection_quality", 2.0),
                         ("override_vignette_intensity", True), ("vignette_intensity", 0.25),
                         ("override_auto_exposure_min_brightness", True), ("auto_exposure_min_brightness", EXPOSURE_EV100),
-                        ("override_auto_exposure_max_brightness", True), ("auto_exposure_max_brightness", EXPOSURE_EV100)):
+                        ("override_auto_exposure_max_brightness", True), ("auto_exposure_max_brightness", EXPOSURE_EV100),
+                        # The default motion blur smeared the grass beside the road into streaks at 130 km/h; a
+                        # trace of it keeps the sense of speed (the Godot version has none).
+                        ("override_motion_blur_amount", True), ("motion_blur_amount", 0.15),
+                        ("override_motion_blur_max", True), ("motion_blur_max", 2.0)):
         try:
             settings.set_editor_property(name, value)
         except Exception as error:  # a renamed setting must not stop the build
@@ -809,8 +988,8 @@ def main():
     actors = label_map()
     calibrate(placements, actors)
     dress_track(actors)
-    dress_car(actors)
-    rig_car(actors)
+    paint = dress_car(actors)
+    rig_game(actors, game_materials(paint))
     scatter(placements, extra, actors)
     prepare_materials()
     shots = cameras(placements, extra)

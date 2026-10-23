@@ -18,6 +18,12 @@ public sealed class TerrainField
     /// <summary>Metres of falloff per metre of height difference (an embankment slope of about 1 in 2.5).</summary>
     private const float FalloffPerMetre = 2.5f;
     private const float Shoulder = 1.3f;
+    /// <summary>
+    /// Metres of verge past the shoulder, on the road's cross slope, before an embankment or cutting starts. A mesh
+    /// of the ground (2 m triangles along the roads) then meets its first change of slope away from the gravel:
+    /// where a cutting began right at the shoulder edge, the triangles across that crease bulged through it.
+    /// </summary>
+    private const float Verge = 2f;
 
     private readonly Dictionary<(int, int), List<int>> _cells = new();
     private readonly List<RoadFrame> _frames = new();
@@ -108,16 +114,30 @@ public sealed class TerrainField
         var weightSum = 0f;
         var weightMax = 0f;
         var offsetSum = 0f;
+        // The ground never rises through a road it runs beside: under a road, its shoulders and verges it stays at or
+        // below the road, and beyond them it climbs no steeper than 1 in 1. Blending alone let a second road nearby pull
+        // it up through the first (where the routes part at the crest at different heights: up to 2.6 m over the
+        // asphalt); a single road's own embankments and cuttings are gentler than the limit and keep their shape.
+        var ceiling = float.MaxValue;
         for (var p = 0; p < PathCount; p++)
         {
             if (bestFrame[p] < 0) continue;
             var f = _frames[bestFrame[p]];
             var delta = new Vector3(x - f.Origin.X, 0f, z - f.Origin.Z);
-            var flatLateral = MathUtil.SafeNormalize(new Vector3(f.Lateral.X, 0f, f.Lateral.Z), Vector3.UnitX);
+            // The road, its shoulders (built along the same tilted lateral axis) and the verge form one plane across
+            // the ground; the ground follows it out to the verge's edge. On a banked road the axis is tilted: the
+            // road spans less ground than its width and climbs Lateral.Y per metre along the axis, more per metre of
+            // ground. Measured along the axis and kept level past the road edge, the field put the ground 0.4 m over
+            // the inner edge of the banked curve and over the shoulder that continues the bank downward.
+            var flat = new Vector3(f.Lateral.X, 0f, f.Lateral.Z);
+            var flatLength = MathF.Max(flat.Length(), 1e-4f);
+            var flatLateral = flatLength > 1e-3f ? flat / flatLength : Vector3.UnitX;
             var lateral = Vector3.Dot(delta, flatLateral);
-            var clamped = MathUtil.Clamp(lateral, -f.HalfWidth, f.HalfWidth);
-            var edgeHeight = f.Origin.Y + clamped * f.Lateral.Y;
-            var beyond = MathF.Max(MathF.Abs(lateral) - f.HalfWidth - Shoulder, 0f);
+            var halfExtent = (f.HalfWidth + Shoulder) * flatLength + Verge;
+            var clamped = MathUtil.Clamp(lateral, -halfExtent, halfExtent);
+            var edgeHeight = f.Origin.Y + clamped * f.Lateral.Y / flatLength;
+            var beyond = MathF.Max(MathF.Abs(lateral) - halfExtent, 0f);
+            ceiling = MathF.Min(ceiling, edgeHeight + beyond);
             var falloff = MathF.Max(MinFalloff, FalloffPerMetre * MathF.Abs(edgeHeight - baseHeight));
             var w = 1f - MathUtil.SmoothStep(beyond / falloff);
             if (w <= 0f) continue;
@@ -140,8 +160,8 @@ public sealed class TerrainField
         }
 
         roadWeight = weightMax;
-        if (weightSum <= 0f) return baseHeight;
-        return baseHeight + weightMax * (offsetSum / weightSum);
+        if (weightSum <= 0f) return MathF.Min(baseHeight, ceiling);
+        return MathF.Min(baseHeight + weightMax * (offsetSum / weightSum), ceiling);
     }
 
     /// <summary>Unit normal of the ground at a point, from central differences.</summary>

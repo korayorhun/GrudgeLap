@@ -25,6 +25,7 @@ public:
 	decltype(&glp_abi_version) AbiVersion = nullptr;
 	decltype(&glp_car_count) CarCount = nullptr;
 	decltype(&glp_car_name) CarNameText = nullptr;
+	decltype(&glp_get_car_spec) CarSpec = nullptr;
 	decltype(&glp_create) Create = nullptr;
 	decltype(&glp_destroy) Destroy = nullptr;
 	decltype(&glp_choose_transmission) ChooseTransmission = nullptr;

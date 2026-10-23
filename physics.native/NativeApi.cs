@@ -21,12 +21,34 @@ internal sealed class NativeSession(RaceSession session, int car)
 /// </summary>
 internal static class NativeApi
 {
-    public const int AbiVersion = 2;
+    public const int AbiVersion = 3;
     public const int TrafficFlag = 1;
 
     public static int CarCount => VehicleSpec.Catalogue.Length;
 
     public static string CarName(int car) => Spec(car).Name;
+
+    /// <remarks>cg_height is where the game puts the body: the springs' rest length less the static sag (the
+    /// car's weight on four springs), the wheel radius, and the hub's height under the centre of gravity.</remarks>
+    public static NativeCarSpec CarSpec(int car)
+    {
+        var spec = Spec(car);
+        var sag = spec.MassKg * MathUtil.Gravity / 4f / spec.SuspensionStiffness;
+        return new NativeCarSpec
+        {
+            Style = (int)spec.Style,
+            ForwardGears = spec.ForwardGearCount,
+            SpeedoMaxMph = spec.SpeedoMaxMph,
+            RedlineRpm = spec.Engine.RedlineRpm,
+            WheelRadius = spec.WheelRadius,
+            HalfTrack = spec.HalfTrack,
+            FrontAxle = spec.FrontAxle,
+            RearAxle = spec.RearAxle,
+            HubHeight = spec.HubHeight,
+            SuspensionRest = spec.SuspensionRest,
+            CgHeight = spec.SuspensionRest + spec.WheelRadius - sag - spec.HubHeight,
+        };
+    }
 
     /// <param name="flags">TrafficFlag for the drones of the original; without it the road is the player's.</param>
     public static NativeSession Create(int car, int flags)

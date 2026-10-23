@@ -95,6 +95,11 @@ public sealed unsafe class NativeApiTests
     {
         Assert.Equal(VehicleSpec.Catalogue.Length, NativeApi.CarCount);
         Assert.Equal(VehicleSpec.Catalogue[1].Name, NativeApi.CarName(1));
+        var v8 = NativeApi.CarSpec(1);
+        Assert.Equal((int)CarStyle.V8, v8.Style);
+        Assert.Equal(VehicleSpec.Catalogue[1].Engine.RedlineRpm, v8.RedlineRpm);
+        // The flat-12 rests with its centre of gravity about 0.61 m over the road, as the game's camera rig assumes.
+        Assert.InRange(NativeApi.CarSpec(0).CgHeight, 0.58f, 0.64f);
         Assert.Throws<ArgumentOutOfRangeException>(() => NativeApi.Create(VehicleSpec.Catalogue.Length, 0));
         Assert.Throws<ArgumentOutOfRangeException>(() => NativeApi.ChooseTransmission(NativeApi.Create(0, 0), 7));
     }

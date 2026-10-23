@@ -8,6 +8,7 @@ public class GrudgeLapUE : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		PublicDependencyModuleNames.AddRange(new[] { "Core", "CoreUObject", "Engine", "InputCore" });
+		PrivateDependencyModuleNames.AddRange(new[] { "AudioMixer", "RenderCore", "Slate", "SlateCore" });
 
 		// The simulation core: the repository's physics.native, the C# physics built with NativeAOT. Only its C
 		// header is compiled against; the DLL is loaded at run time (GlpLibrary) and staged beside the binaries
@@ -22,6 +23,18 @@ public class GrudgeLapUE : ModuleRules
 				Console.WriteLine($"warning: {library} is missing; publish physics.native first (see unreal/README.md)");
 			}
 			RuntimeDependencies.Add("$(BinaryOutputDir)/GrudgeLap.Physics.Native.dll", library);
+		}
+
+		// The Godot version's recordings (game/assets/audio, CC0, see SOURCES.md there), read at run time by
+		// GlpAudio from beside the binaries so the packaged game carries them too.
+		string audio = Path.Combine(repository, "game", "assets", "audio");
+		if (Directory.Exists(audio))
+		{
+			foreach (string file in Directory.EnumerateFiles(audio, "*.wav", SearchOption.AllDirectories))
+			{
+				string relative = Path.GetRelativePath(audio, file).Replace(Path.DirectorySeparatorChar, '/');
+				RuntimeDependencies.Add("$(BinaryOutputDir)/GrudgeLapAudio/" + relative, file);
+			}
 		}
 	}
 }

@@ -15,7 +15,7 @@
 extern "C" {
 #endif
 
-#define GLP_ABI_VERSION 2
+#define GLP_ABI_VERSION 3
 
 typedef intptr_t glp_session; /* 0 is no session */
 
@@ -112,6 +112,22 @@ typedef struct glp_state
     int32_t train_running;
 } glp_state;
 
+/* The catalogue's static facts about a car: what instruments and a car body need. */
+typedef struct glp_car_spec
+{
+    int32_t style;            /* 0 flat-12, 1 V8 (CarStyle) */
+    int32_t forward_gears;
+    float speedo_max_mph;
+    float redline_rpm;
+    float wheel_radius;       /* m */
+    float half_track;         /* m, hub to centre line */
+    float front_axle;         /* m, centre of gravity to the front hubs */
+    float rear_axle;          /* m, centre of gravity to the rear hubs */
+    float hub_height;         /* m, the hubs' rest plane below the centre of gravity */
+    float suspension_rest;    /* m of travel at full droop */
+    float cg_height;          /* m, the centre of gravity over the road at rest, with the static sag */
+} glp_car_spec;
+
 /* A moving body: a traffic car (colour: paint index) or a car of the train (colour: 0 locomotive, 1 wagon). */
 typedef struct glp_body
 {
@@ -134,6 +150,7 @@ int32_t glp_abi_version(void);
 int32_t glp_car_count(void);
 /* The car's name as UTF-8, like glp_message. */
 int32_t glp_car_name(int32_t car, char* buffer, int32_t capacity);
+int32_t glp_get_car_spec(int32_t car, glp_car_spec* out);
 /* car: catalogue index; flags: GLP_TRAFFIC or 0. Returns 0 on failure. */
 glp_session glp_create(int32_t car, int32_t flags);
 void glp_destroy(glp_session session);

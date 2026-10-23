@@ -19,7 +19,10 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   the road unit of the original.
 - **Ground** — `TerrainField`: value-noise rolling ground pulled to the edge height of every road built on
   earth (straights, curves, hills, dips, banked curves, splines), so hills get embankments and dips get
-  cuttings; bridges, ramps and the loop are structures and leave the ground alone. Skid pads are flat
+  cuttings; bridges, ramps and the loop are structures and leave the ground alone. The road, its shoulders
+  and a 2 m verge form one plane across the ground (tilted on a banked curve), and the ground never rises
+  over a road it runs beside, then climbs no steeper than 1 in 1: where two routes run close at different
+  heights, blending alone had lifted it 2.6 m through the lower road. Skid pads are flat
   discs blended in; beyond the outermost road a ring of hills rises over half a kilometre and fades before
   the far plane. The same field answers the physics probe off the road, places the props and builds the
   terrain mesh; `Height(x, z, out roadWeight)` also says how close to a road edge a point is.
@@ -65,8 +68,9 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
 ## View (`game/`)
 
 - World is generated from the track at start-up (`WorldBuilder`): terrain mesh sampled from the ground
-  field (embankments, cuttings, dips, rolling fields, the hill ring) with vertex-colour variation and a
-  trodden tint along the road edges; photo-textured road ribbons (CC0 ambientCG) in six strips with the
+  field (embankments, cuttings, dips, rolling fields, the hill ring) every 14 m and every 2 m in the cells a
+  road's earthwork reaches, 4 cm under the asphalt, with vertex-colour variation and a trodden tint along
+  the road edges (the 14 m grid alone floated the road over dips and buried it where it levels out); photo-textured road ribbons (CC0 ambientCG) in six strips with the
   alternating slab shades of the original and darker wheel tracks, gravel shoulders (orange on the stunt
   structures, everywhere in 1989 mode), dashed centre line, bridge decks with steel guardrails and pillars
   down to the ground, the skid pad; HDRI sky with the sun aimed where the picture has it, cascaded shadows,
@@ -177,8 +181,11 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   downloaded scans, so `Content/` is not versioned. What the export needed is recorded there and in
   [unreal/README.md](../unreal/README.md): hidden nodes, rewound primitives, vertex colours, foliage
   cut-outs and Nanite area preservation.
-- **Still missing:** the HUD, the sounds, the instruments and mirror in the cockpit, traffic and the ghost,
-  a manual gearbox on the keyboard, and a car model and cabin of photographic quality.
+- **The game runs in Unreal** (`AGlpGame`): the title screen with the car and gearbox choice, the keyboard
+  with the manual gearbox, traffic, the ghost of the best lap, the train, signs that tip over, the HUD and
+  the instrument panel (drawn on the binnacle and at the foot of the screen), a rear-view mirror, and the
+  Godot version's sound mixed from the same recordings. Settings and the best lap live in
+  `unreal/Saved/GrudgeLap`.
 
 ## Conventions
 

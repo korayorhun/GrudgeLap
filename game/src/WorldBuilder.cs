@@ -18,6 +18,10 @@ namespace GrudgeLap.Game;
 internal static class WorldBuilder
 {
     private const float TerrainCell = 14f;
+    /// <summary>Terrain cells along the roads are split this many times each way (2 m; see <see cref="BuildTerrain"/>).</summary>
+    private const int TerrainSplit = 7;
+    /// <summary>Metres the terrain mesh keeps below the asphalt under a road.</summary>
+    private const float RoadClearance = 0.04f;
     private const float TerrainMargin = 2400f;
 
     private static StandardMaterial3D? _grass;
@@ -330,9 +334,13 @@ internal static class WorldBuilder
     }
 
     /// <summary>
-    /// Grid mesh of the ground field over the circuit and the hills around it. The vertex colour carries
-    /// the shading: darker on slopes and in cuttings, a sandy trodden tint along the road edges, and patches
-    /// of paler and deeper green from two octaves of noise so the texture repeat does not read.
+    /// Grid mesh of the ground field over the circuit and the hills around it: the field sampled every 14 m, and
+    /// every 2 m in the cells a road's earthwork reaches. The coarse grid alone cut straight across the embankments
+    /// and cuttings the field shapes along the roads, so road slabs floated over dips and, where a road levels out
+    /// after a slope, the ground rose a few centimetres over the asphalt and hid it (plainly in the Unreal version,
+    /// which imports this mesh). The vertex colour carries the shading: darker on slopes and in cuttings, a sandy
+    /// trodden tint along the road edges, and patches of paler and deeper green from two octaves of noise so the
+    /// texture repeat does not read.
     /// </summary>
     private static MeshInstance3D BuildTerrain(TrackGeometry track)
     {
@@ -356,53 +364,141 @@ internal static class WorldBuilder
         {
             for (var i = 0; i < nx; i++) heights[j * nx + i] = terrain.Height(minX + i * TerrainCell, minZ + j * TerrainCell, out roadWeights[j * nx + i]);
         });
-        var variation = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth, Frequency = 1f / 140f, FractalOctaves = 2, Seed = 77 };
 
-        var st = new MeshBuilder();
-        for (var j = 0; j < nz; j++)
+        // A cell is refined when the field pulls any of its corners toward a road (or a skid pad): the earthwork
+        // reaches at least 9 m past the shoulder, so every cell a road crosses has such a corner.
+        const int split = TerrainSplit;
+        const float step = TerrainCell / split;
+        var cellsX = nx - 1;
+        var cellsZ = nz - 1;
+        var fine = new bool[cellsX * cellsZ];
+        for (var j = 0; j < cellsZ; j++)
         {
-            for (var i = 0; i < nx; i++)
+            for (var i = 0; i < cellsX; i++)
             {
-                var x = minX + i * TerrainCell;
-                var z = minZ + j * TerrainCell;
-                var h = heights[j * nx + i];
+                var c = j * nx + i;
+                fine[j * cellsX + i] = roadWeights[c] > 0f || roadWeights[c + 1] > 0f || roadWeights[c + nx] > 0f || roadWeights[c + nx + 1] > 0f;
+            }
+        }
+        bool IsFine(int i, int j) => i >= 0 && j >= 0 && i < cellsX && j < cellsZ && fine[j * cellsX + i];
+
+        // Vertices on a lattice of 2 m steps; the coarse corners are every split-th point of it.
+        var lookup = new Dictionary<long, int>();
+        var points = new List<(int I, int J)>();
+        var indices = new List<int>();
+        int Point(int pi, int pj)
+        {
+            var key = ((long)pi << 32) | (uint)pj;
+            if (!lookup.TryGetValue(key, out var v))
+            {
+                v = points.Count;
+                lookup[key] = v;
+                points.Add((pi, pj));
+            }
+            return v;
+        }
+        void Cell(int pi, int pj, int size)
+        {
+            var a = Point(pi, pj);
+            var b = Point(pi + size, pj);
+            var c = Point(pi, pj + size);
+            var d = Point(pi + size, pj + size);
+            // Godot front faces wind clockwise; the Z flip of the view makes the simulation's counter-clockwise order clockwise.
+            indices.Add(a); indices.Add(b); indices.Add(c);
+            indices.Add(b); indices.Add(d); indices.Add(c);
+        }
+        var refined = 0;
+        for (var j = 0; j < cellsZ; j++)
+        {
+            for (var i = 0; i < cellsX; i++)
+            {
+                if (!IsFine(i, j))
+                {
+                    Cell(i * split, j * split, split);
+                    continue;
+                }
+                refined++;
+                for (var t = 0; t < split; t++)
+                {
+                    for (var s = 0; s < split; s++) Cell(i * split + s, j * split + t, 1);
+                }
+            }
+        }
+
+        // Heights and normals: the coarse corners keep their grid values; the finer points sample the field, except
+        // on an edge shared with a coarse cell, where they lie on that edge's straight line so the two cells meet
+        // without a crack.
+        var count = points.Count;
+        var vertexHeight = new float[count];
+        var vertexWeight = new float[count];
+        var vertexNormal = new SN.Vector3[count];
+        Parallel.For(0, count, v =>
+        {
+            var (pi, pj) = points[v];
+            var x = minX + pi * step;
+            var z = minZ + pj * step;
+            if (pi % split == 0 && pj % split == 0)
+            {
+                var i = pi / split;
+                var j = pj / split;
                 var hx0 = heights[j * nx + Math.Max(i - 1, 0)];
                 var hx1 = heights[j * nx + Math.Min(i + 1, nx - 1)];
                 var hz0 = heights[Math.Max(j - 1, 0) * nx + i];
                 var hz1 = heights[Math.Min(j + 1, nz - 1) * nx + i];
-                var normal = SN.Vector3.Normalize(new SN.Vector3(-(hx1 - hx0) / (2f * TerrainCell), 1f, -(hz1 - hz0) / (2f * TerrainCell)));
-                var shade = 0.80f + 0.20f * normal.Y - 0.012f * MathF.Max(-h, 0f);
-                var n = variation.GetNoise2D(x, z);                      // -1..1
-                var r = shade * (1f + 0.10f * n);
-                var g = shade * (1f + 0.05f * n);
-                var b = shade * (1f - 0.08f * n);
-                // Sandy, trodden ground right at the road edge.
-                var edge = MathUtil.Clamp01((roadWeights[j * nx + i] - 0.55f) / 0.45f);
-                r = MathUtil.Lerp(r, shade * 1.05f, edge * 0.6f);
-                g = MathUtil.Lerp(g, shade * 0.95f, edge * 0.6f);
-                b = MathUtil.Lerp(b, shade * 0.72f, edge * 0.6f);
-                st.SetColor(new Color(r, g, b));
-                var gNormal = Convert.ToGodot(normal);
-                // u follows x on this grid: the tangent is +x laid onto the slope, the bitangent then runs along v.
-                st.SetTangent((Vector3.Right - gNormal * gNormal.X).Normalized(), 1f);
-                st.SetNormal(gNormal);
-                st.SetUV(new Vector2(x / 5000f + 0.5f, z / 5000f + 0.5f));
-                st.AddVertex(Convert.ToGodot(new SN.Vector3(x, h, z)));
+                vertexHeight[v] = heights[j * nx + i] - (roadWeights[j * nx + i] >= 0.999f ? RoadClearance : 0f);
+                vertexWeight[v] = roadWeights[j * nx + i];
+                vertexNormal[v] = SN.Vector3.Normalize(new SN.Vector3(-(hx1 - hx0) / (2f * TerrainCell), 1f, -(hz1 - hz0) / (2f * TerrainCell)));
+                return;
             }
-        }
-        for (var j = 0; j < nz - 1; j++)
-        {
-            for (var i = 0; i < nx - 1; i++)
+            vertexHeight[v] = terrain.Height(x, z, out vertexWeight[v]);
+            var dx = terrain.Height(x + step, z) - terrain.Height(x - step, z);
+            var dz = terrain.Height(x, z + step) - terrain.Height(x, z - step);
+            vertexNormal[v] = SN.Vector3.Normalize(new SN.Vector3(-dx / (2f * step), 1f, -dz / (2f * step)));
+            // Under a road the ground sits a few centimetres below the asphalt rather than on it: flat triangles 2 m
+            // across still bulge through a road that curves between them.
+            if (vertexWeight[v] >= 0.999f) vertexHeight[v] -= RoadClearance;
+            if (pi % split == 0 && !(IsFine(pi / split - 1, pj / split) && IsFine(pi / split, pj / split)))
             {
-                var a = j * nx + i;
-                var b = a + 1;
-                var c = a + nx;
-                var d = c + 1;
-                // Godot front faces wind clockwise; the Z flip of the view makes the simulation's counter-clockwise order clockwise.
-                st.AddIndex(a); st.AddIndex(b); st.AddIndex(c);
-                st.AddIndex(b); st.AddIndex(d); st.AddIndex(c);
+                var i = pi / split;
+                var j = pj / split;
+                vertexHeight[v] = MathUtil.Lerp(heights[j * nx + i], heights[(j + 1) * nx + i], (float)(pj % split) / split);
             }
+            else if (pj % split == 0 && !(IsFine(pi / split, pj / split - 1) && IsFine(pi / split, pj / split)))
+            {
+                var i = pi / split;
+                var j = pj / split;
+                vertexHeight[v] = MathUtil.Lerp(heights[j * nx + i], heights[j * nx + i + 1], (float)(pi % split) / split);
+            }
+        });
+
+        var variation = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth, Frequency = 1f / 140f, FractalOctaves = 2, Seed = 77 };
+        var st = new MeshBuilder();
+        for (var v = 0; v < count; v++)
+        {
+            var x = minX + points[v].I * step;
+            var z = minZ + points[v].J * step;
+            var h = vertexHeight[v];
+            var normal = vertexNormal[v];
+            var shade = 0.80f + 0.20f * normal.Y - 0.012f * MathF.Max(-h, 0f);
+            var n = variation.GetNoise2D(x, z);                      // -1..1
+            var r = shade * (1f + 0.10f * n);
+            var g = shade * (1f + 0.05f * n);
+            var b = shade * (1f - 0.08f * n);
+            // Sandy, trodden ground right at the road edge.
+            var edge = MathUtil.Clamp01((vertexWeight[v] - 0.55f) / 0.45f);
+            r = MathUtil.Lerp(r, shade * 1.05f, edge * 0.6f);
+            g = MathUtil.Lerp(g, shade * 0.95f, edge * 0.6f);
+            b = MathUtil.Lerp(b, shade * 0.72f, edge * 0.6f);
+            st.SetColor(new Color(r, g, b));
+            var gNormal = Convert.ToGodot(normal);
+            // u follows x on this grid: the tangent is +x laid onto the slope, the bitangent then runs along v.
+            st.SetTangent((Vector3.Right - gNormal * gNormal.X).Normalized(), 1f);
+            st.SetNormal(gNormal);
+            st.SetUV(new Vector2(x / 5000f + 0.5f, z / 5000f + 0.5f));
+            st.AddVertex(Convert.ToGodot(new SN.Vector3(x, h, z)));
         }
+        foreach (var index in indices) st.AddIndex(index);
+        GD.Print($"terrain: {count} vertices, {indices.Count / 3} triangles, {refined} of {cellsX * cellsZ} cells refined along the roads");
         return new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = Grass, Name = "Terrain" };
     }
 

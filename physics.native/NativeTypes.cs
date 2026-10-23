@@ -77,6 +77,23 @@ public unsafe struct NativeState
     public int TrainRunning;
 }
 
+/// <summary>glp_car_spec: the catalogue's static facts about a car.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NativeCarSpec
+{
+    public int Style;
+    public int ForwardGears;
+    public float SpeedoMaxMph;
+    public float RedlineRpm;
+    public float WheelRadius;
+    public float HalfTrack;
+    public float FrontAxle;
+    public float RearAxle;
+    public float HubHeight;
+    public float SuspensionRest;
+    public float CgHeight;
+}
+
 /// <summary>glp_body: a traffic car or a car of the train.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct NativeBody

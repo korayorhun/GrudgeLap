@@ -31,7 +31,7 @@ def view(doc, blob, index):
                                            shape=(accessor["count"], width), strides=(stride, dtype.itemsize))
 
 
-KEEP_HIDDEN = {"Glass"}
+KEEP_HIDDEN = {"Glass", "Train"}
 
 
 def unhide(doc):

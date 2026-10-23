@@ -21,6 +21,9 @@ public static unsafe class Exports
     [UnmanagedCallersOnly(EntryPoint = "glp_car_name", CallConvs = [typeof(CallConvCdecl)])]
     public static int CarName(int car, byte* buffer, int capacity) => Guarded(() => NativeApi.CopyText(NativeApi.CarName(car), buffer, capacity));
 
+    [UnmanagedCallersOnly(EntryPoint = "glp_get_car_spec", CallConvs = [typeof(CallConvCdecl)])]
+    public static int CarSpec(int car, NativeCarSpec* output) => Guarded(() => *output = NativeApi.CarSpec(car));
+
     [UnmanagedCallersOnly(EntryPoint = "glp_create", CallConvs = [typeof(CallConvCdecl)])]
     public static nint Create(int car, int flags)
     {
