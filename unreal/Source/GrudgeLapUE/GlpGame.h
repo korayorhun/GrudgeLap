@@ -28,7 +28,7 @@ class UMaterialInstanceDynamic;
  * -GlpQuitAfter=12, -GlpTitleShots (both clocks run from the start instead, to photograph the title screen) and
  * -GlpSaveBest (an attract-mode lap may become the saved best lap, for a ghost to test against); -GlpAuto gives
  * the attract-mode driver the automatic gearbox and -GlpSpeedRoute the speed route (past the level crossing); with
- * -GlpKeys its steering is nudged by the scripted keys.
+ * -GlpKeys the scripted keys nudge its steering and hold its brake.
  */
 UCLASS()
 class GRUDGELAPUE_API AGlpGame : public AActor
@@ -38,10 +38,6 @@ class GRUDGELAPUE_API AGlpGame : public AActor
 public:
 	AGlpGame();
 	virtual void Tick(float DeltaSeconds) override;
-
-	/** M_CarPaint: the painted parts of the traffic copies get their own colour from it. */
-	UPROPERTY(EditAnywhere, Category = "GrudgeLap")
-	TSoftObjectPtr<UMaterialInterface> PaintMaterial;
 
 	/** M_Ghost: the see-through material of the best lap's ghost. */
 	UPROPERTY(EditAnywhere, Category = "GrudgeLap")

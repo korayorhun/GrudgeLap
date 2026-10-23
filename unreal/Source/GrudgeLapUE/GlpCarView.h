@@ -23,10 +23,11 @@ public:
 	static TUniquePtr<FGlpCarView> FromLevel(UWorld* World, FName RootTag);
 
 	/**
-	 * A copy of this car's exterior and wheels as a single new actor. Paint replaces the paint colour (the
-	 * M_CarPaint parameter "Paint") on the painted parts; Override, when given, replaces every material.
+	 * A copy of this car's exterior and wheels as a single new actor. Paint replaces the colour of every material
+	 * with a "Paint" parameter (the body's M_CarPaint, the strakes' and trims' M_CarPaintSolid); Override, when
+	 * given, replaces every material.
 	 */
-	TUniquePtr<FGlpCarView> Clone(UWorld* World, const FString& Name, UMaterialInterface* PaintMaterial, const FLinearColor* Paint, UMaterialInterface* Override) const;
+	TUniquePtr<FGlpCarView> Clone(UWorld* World, const FString& Name, const FLinearColor* Paint, UMaterialInterface* Override) const;
 
 	/** Places the body: the simulation pose of its centre of gravity. */
 	void SetPose(const float Position[3], const float Orientation[4]);

@@ -110,7 +110,7 @@ TUniquePtr<FGlpCarView> FGlpCarView::FromLevel(UWorld* World, FName RootTag)
 	return View;
 }
 
-TUniquePtr<FGlpCarView> FGlpCarView::Clone(UWorld* World, const FString& Name, UMaterialInterface* PaintMaterial, const FLinearColor* Paint, UMaterialInterface* Override) const
+TUniquePtr<FGlpCarView> FGlpCarView::Clone(UWorld* World, const FString& Name, const FLinearColor* Paint, UMaterialInterface* Override) const
 {
 	const AActor* Source = RootActor.Get();
 	if (!Source)
@@ -194,9 +194,9 @@ TUniquePtr<FGlpCarView> FGlpCarView::Clone(UWorld* World, const FString& Name, U
 				{
 					Material = Override;
 				}
-				else if (Paint && PaintMaterial && Material && Material->GetBaseMaterial() == PaintMaterial->GetBaseMaterial())
+				else if (FLinearColor Current; Paint && Material && Material->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("Paint")), Current))
 				{
-					UMaterialInstanceDynamic* Painted = UMaterialInstanceDynamic::Create(PaintMaterial, CopyMesh);
+					UMaterialInstanceDynamic* Painted = UMaterialInstanceDynamic::Create(Material, CopyMesh);
 					Painted->SetVectorParameterValue(TEXT("Paint"), *Paint);
 					Material = Painted;
 				}

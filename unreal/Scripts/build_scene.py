@@ -446,8 +446,7 @@ def place_game(car, materials):
     game = actor_sub.spawn_actor_from_class(game_class, car.get_actor_location())
     game.set_actor_label("GrudgeLapGame")
     game.set_folder_path("GrudgeLap")
-    for prop, name in (("paint_material", "M_CarPaint"), ("ghost_material", "M_Ghost"),
-                       ("instruments_material", "M_Instruments"), ("mirror_material", "M_MirrorView")):
+    for prop, name in (("ghost_material", "M_Ghost"), ("instruments_material", "M_Instruments"), ("mirror_material", "M_MirrorView")):
         game.set_editor_property(prop, materials[name])
     log("game placed")
 
@@ -495,6 +494,163 @@ def paint_material():
     mel.recompile_material(material)
     eal.save_loaded_asset(material)
     return material
+
+
+def paint_solid_material():
+    """The paint of the parts Godot paints with a plain material instead of the vertex colour: the strakes, the
+    intakes, the mirror housings (CarView's solidPaint, (0.54, 0.002, 0.004) linear). The same clear coat as
+    M_CarPaint and the same Paint parameter, so the traffic copies are painted all over in their own colour."""
+    material = asset_tools.create_asset("M_CarPaintSolid", f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    material.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_CLEAR_COAT)
+    material.set_editor_property("use_material_attributes", True)
+    attributes = mel.create_material_expression(material, unreal.MaterialExpressionMakeMaterialAttributes, 0, 0)
+    mel.connect_material_property(attributes, "", unreal.MaterialProperty.MP_MATERIAL_ATTRIBUTES)
+    paint = mel.create_material_expression(material, unreal.MaterialExpressionVectorParameter, -400, 0)
+    paint.set_editor_property("parameter_name", "Paint")
+    paint.set_editor_property("default_value", unreal.LinearColor(0.54, 0.0023, 0.0039, 1.0))
+    mel.connect_material_expressions(paint, "", attributes, "BaseColor")
+    for y, (pin, value) in enumerate((("Metallic", 0.35), ("Roughness", 0.38), ("ClearCoat", 1.0), ("ClearCoatRoughness", 0.04))):
+        constant = mel.create_material_expression(material, unreal.MaterialExpressionConstant, -250, 200 + y * 100)
+        constant.set_editor_property("r", value)
+        mel.connect_material_expressions(constant, "", attributes, pin)
+    mel.recompile_material(material)
+    eal.save_loaded_asset(material)
+    return material
+
+
+def cabin_material():
+    """The cabin's leather, fabric and carpet. Godot lays their photos on with triplanar mapping and the export
+    leaves those meshes without texture coordinates, so the imported materials showed one flat colour. This
+    projects the photo (Texture, Normal) along the three axes of the part's own space, blended by its normal, so
+    the grain stays put as the car moves; Scale is in repeats per metre (Godot's uv1_scale), Tint multiplies the
+    colour (the export's base colour factor). The normal is assembled in local space and handed over in world
+    space, as the meshes have no tangents either."""
+    m = asset_tools.create_asset("M_CabinTriplanar", f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    m.set_editor_property("tangent_space_normal", False)
+    row = [0]
+
+    def node(cls, **props):
+        row[0] += 1
+        n = mel.create_material_expression(m, cls, -1800 + 120 * (row[0] % 12), -600 + 90 * (row[0] // 12))
+        for key, value in props.items():
+            n.set_editor_property(key, value)
+        return n
+
+    def link(a, b, pin="", out=""):
+        mel.connect_material_expressions(a, out, b, pin)
+
+    def mask(source, channels):
+        n = node(unreal.MaterialExpressionComponentMask, **{c: c in channels for c in "rgba"})
+        link(source, n)
+        return n
+
+    def binary(cls, a, b):
+        n = node(cls)
+        link(a, n, "A")
+        link(b, n, "B")
+        return n
+
+    def append(*parts):
+        result = parts[0]
+        for part in parts[1:]:
+            result = binary(unreal.MaterialExpressionAppendVector, result, part)
+        return result
+
+    scale = node(unreal.MaterialExpressionScalarParameter, parameter_name="Scale", default_value=4.0)
+    per_cm = node(unreal.MaterialExpressionMultiply, const_b=0.01)
+    link(scale, per_cm, "A")
+    position = binary(unreal.MaterialExpressionMultiply, node(unreal.MaterialExpressionLocalPosition), per_cm)
+    uvs = (mask(position, "gb"), mask(position, "rb"), mask(position, "rg"))   # projected along x, y, z
+
+    local_normal = node(unreal.MaterialExpressionTransform,
+                        transform_source_type=unreal.MaterialVectorCoordTransformSource.TRANSFORMSOURCE_WORLD,
+                        transform_type=unreal.MaterialVectorCoordTransform.TRANSFORM_LOCAL)
+    link(node(unreal.MaterialExpressionVertexNormalWS), local_normal)
+    sharp = node(unreal.MaterialExpressionPower, const_exponent=4.0)
+    link(binary(unreal.MaterialExpressionMultiply, local_normal, local_normal), sharp, "Base")
+    total = binary(unreal.MaterialExpressionDotProduct, sharp, node(unreal.MaterialExpressionConstant3Vector, constant=unreal.LinearColor(1, 1, 1, 1)))
+    weights = binary(unreal.MaterialExpressionDivide, sharp, total)
+    w = (mask(weights, "r"), mask(weights, "g"), mask(weights, "b"))
+
+    def blend(samples):
+        return binary(unreal.MaterialExpressionAdd, binary(unreal.MaterialExpressionAdd,
+                      binary(unreal.MaterialExpressionMultiply, samples[0], w[0]),
+                      binary(unreal.MaterialExpressionMultiply, samples[1], w[1])),
+                      binary(unreal.MaterialExpressionMultiply, samples[2], w[2]))
+
+    def sample(parameter, default, sampler, uv):
+        n = node(unreal.MaterialExpressionTextureSampleParameter2D, parameter_name=parameter,
+                 texture=eal.load_asset(default), sampler_type=sampler)
+        link(uv, n, "UVs")
+        return n
+
+    colour = blend([mask(sample("Texture", "/Engine/EngineResources/DefaultTexture", unreal.MaterialSamplerType.SAMPLERTYPE_COLOR, uv), "rgb") for uv in uvs])
+    tint = node(unreal.MaterialExpressionVectorParameter, parameter_name="Tint", default_value=unreal.LinearColor(1, 1, 1, 1))
+    mel.connect_material_property(binary(unreal.MaterialExpressionMultiply, colour, tint), "", unreal.MaterialProperty.MP_BASE_COLOR)
+
+    # Each projection's tangent-space normal turned onto its axis (the photo's z along the axis, on the side the
+    # surface faces), softened to Godot's normal scale of 0.6, blended like the colour.
+    side = node(unreal.MaterialExpressionSign)
+    link(local_normal, side)
+    soft = node(unreal.MaterialExpressionConstant3Vector, constant=unreal.LinearColor(0.6, 0.6, 1.0, 1.0))
+    normals = [binary(unreal.MaterialExpressionMultiply, mask(sample("Normal", "/Engine/EngineMaterials/DefaultNormal", unreal.MaterialSamplerType.SAMPLERTYPE_NORMAL, uv), "rgb"), soft) for uv in uvs]
+    facing = lambda i, axis: binary(unreal.MaterialExpressionMultiply, mask(normals[i], "b"), mask(side, axis))
+    projected = [append(facing(0, "r"), mask(normals[0], "rg")),
+                 append(mask(normals[1], "r"), facing(1, "g"), mask(normals[1], "g")),
+                 append(mask(normals[2], "rg"), facing(2, "b"))]
+    local = node(unreal.MaterialExpressionNormalize)
+    link(blend(projected), local)
+    world = node(unreal.MaterialExpressionTransform,
+                 transform_source_type=unreal.MaterialVectorCoordTransformSource.TRANSFORMSOURCE_LOCAL,
+                 transform_type=unreal.MaterialVectorCoordTransform.TRANSFORM_WORLD)
+    link(local, world)
+    unit = node(unreal.MaterialExpressionNormalize)
+    link(world, unit)
+    mel.connect_material_property(unit, "", unreal.MaterialProperty.MP_NORMAL)
+
+    roughness = node(unreal.MaterialExpressionScalarParameter, parameter_name="Roughness", default_value=0.9)
+    mel.connect_material_property(roughness, "", unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.recompile_material(m)
+    eal.save_loaded_asset(m)
+    return m
+
+
+def cabin_instance(source, parent, cache):
+    """The cabin material for an imported leather, fabric or carpet instance, or None for anything else. The
+    photo decides the repeat (Godot: leather 4 per metre, the matte dashboard leather 5, fabric and carpet 3)."""
+    if source is None:
+        return None
+    if source.get_name() in cache:
+        return cache[source.get_name()]
+    try:
+        texture = mel.get_material_instance_texture_parameter_value(source, "BaseColorTexture")
+        normal = mel.get_material_instance_texture_parameter_value(source, "NormalTexture")
+        tint = mel.get_material_instance_vector_parameter_value(source, "BaseColorFactor")
+        roughness = mel.get_material_instance_scalar_parameter_value(source, "RoughnessFactor")
+        grain = mel.get_material_instance_texture_parameter_value(source, "MetallicRoughnessTexture")
+    except Exception:
+        return None
+    photo = texture.get_name() if texture else ""
+    if not photo.startswith(("leather_color", "fabric_color", "carpet_color")):
+        return None
+    matte = roughness < 0.95
+    scale = 5.0 if photo.startswith("leather") and matte else 4.0 if photo.startswith("leather") else 3.0
+    # Leather with its roughness photo has a soft sheen in Godot; the rest keeps the export's roughness.
+    if grain is not None and grain.get_name().startswith("leather_roughness"):
+        roughness = 0.6
+    instance = asset_tools.create_asset(f"MI_Cabin_{source.get_name()}", f"{GAME}/Materials", unreal.MaterialInstanceConstant,
+                                        unreal.MaterialInstanceConstantFactoryNew())
+    mel.set_material_instance_parent(instance, parent)
+    mel.set_material_instance_texture_parameter_value(instance, "Texture", texture)
+    if normal is not None:
+        mel.set_material_instance_texture_parameter_value(instance, "Normal", normal)
+    mel.set_material_instance_vector_parameter_value(instance, "Tint", tint)
+    mel.set_material_instance_scalar_parameter_value(instance, "Scale", scale)
+    mel.set_material_instance_scalar_parameter_value(instance, "Roughness", roughness)
+    mel.update_material_instance(instance)
+    eal.save_loaded_asset(instance)
+    cache[source.get_name()] = instance
+    return instance
 
 
 def screen_material(name, parameter, lit, emissive_scale, flip_u=False, screen_units=True):
@@ -574,7 +730,8 @@ def car_materials():
 
     glass = constant_material("M_Glass", {mp.MP_BASE_COLOR: (0.02, 0.025, 0.03), mp.MP_OPACITY: 0.14,
                                           mp.MP_ROUGHNESS: 0.02, mp.MP_SPECULAR: 0.5}, glassy)
-    return {"paint": paint_material(), "glass": glass, "mirror": mirror_material()}
+    return {"paint": paint_material(), "paint_solid": paint_solid_material(), "glass": glass, "mirror": mirror_material(),
+            "cabin": cabin_material(), "cabin_instances": {}}
 
 
 def dress_car(car, materials):
@@ -604,6 +761,26 @@ def dress_car(car, materials):
     glass = mirror_glass(car)
     for component in mesh_components(glass) if glass else []:
         component.set_material(0, materials["mirror"])
+    # The plain-painted parts (CarView's solidPaint: metallic 0.18, roughness 0.26) and the cabin's photo materials.
+    solid = cabin = 0
+    for component in mesh_components(car):
+        for slot in range(component.get_num_materials()):
+            material = component.get_material(slot)
+            if not isinstance(material, unreal.MaterialInstance):
+                continue
+            try:
+                metallic = mel.get_material_instance_scalar_parameter_value(material, "MetallicFactor")
+                rough = mel.get_material_instance_scalar_parameter_value(material, "RoughnessFactor")
+            except Exception:
+                continue
+            if abs(metallic - 0.18) < 0.01 and abs(rough - 0.26) < 0.01:
+                component.set_material(slot, materials["paint_solid"])
+                solid += 1
+                continue
+            instance = cabin_instance(material, materials["cabin"], materials["cabin_instances"])
+            if instance is not None:
+                component.set_material(slot, instance)
+                cabin += 1
     # The body shell is single-sided and seen from inside in the cockpit view (the game draws it as shadows only
     # there). Lumen's surface cache does not know it is one-sided and bounced its red paint all over the cabin;
     # the shell keeps its direct shadows and leaves the bounce light to the cabin lining.
@@ -613,8 +790,8 @@ def dress_car(car, materials):
             component.set_editor_property("affect_dynamic_indirect_lighting", False)
             component.set_editor_property("affect_distance_field_lighting", False)
             shell += 1
-    log(f"{car.get_actor_label()} dressed: {painted} painted, {glazed} glass, {shell} shell part(s) out of Lumen, "
-        f"mirror glass {'found' if glass else 'missing'}")
+    log(f"{car.get_actor_label()} dressed: {painted} painted, {solid} plain-painted, {cabin} cabin, {glazed} glass, "
+        f"{shell} shell part(s) out of Lumen, mirror glass {'found' if glass else 'missing'}")
 
 
 def dress_track(actors):

@@ -239,14 +239,13 @@ void AGlpGame::NewSession()
 	}
 
 	// The drones: copies of the period car's exterior in the original's paints.
-	UMaterialInterface* Paint = PaintMaterial.LoadSynchronous();
 	const int32 Drones = Library->Traffic(Session, nullptr, 0);
 	Bodies.SetNum(FMath::Max(Drones, 1));
 	Library->Traffic(Session, Bodies.GetData(), Bodies.Num());
 	for (int32 i = 0; i < Drones; i++)
 	{
 		const FLinearColor Colour(DronePaints[Bodies[i].colour % UE_ARRAY_COUNT(DronePaints)]);
-		if (TUniquePtr<FGlpCarView> Copy = Cars[0]->Clone(GetWorld(), FString::Printf(TEXT("Drone%d"), i), Paint, &Colour, nullptr))
+		if (TUniquePtr<FGlpCarView> Copy = Cars[0]->Clone(GetWorld(), FString::Printf(TEXT("Drone%d"), i), &Colour, nullptr))
 		{
 			Copy->Root()->Tags.Add(TEXT("GLP.Copy"));
 			TrafficCars.Add(MoveTemp(Copy));
@@ -283,7 +282,7 @@ void AGlpGame::BuildGhost()
 	{
 		return;
 	}
-	Ghost = PlayerCar()->Clone(GetWorld(), TEXT("Ghost"), PaintMaterial.LoadSynchronous(), nullptr, GhostMaterial.LoadSynchronous());
+	Ghost = PlayerCar()->Clone(GetWorld(), TEXT("Ghost"), nullptr, GhostMaterial.LoadSynchronous());
 	if (Ghost)
 	{
 		Ghost->Root()->Tags.Add(TEXT("GLP.Copy"));
@@ -438,10 +437,16 @@ void AGlpGame::Tick(float DeltaSeconds)
 	if (bAttract)
 	{
 		Library->ScriptedInputs(Session, &Controls);
-		// Automated runs may nudge the attract-mode driver with scripted steering, to put it into a sign.
+		// Automated runs may nudge the attract-mode driver with scripted keys: steering to put it into a sign, the
+		// brake to hold it back until the train comes.
 		if (Input.HasScript())
 		{
 			Controls.steer = FMath::Clamp(Controls.steer + Input.Drive(DeltaSeconds, FMath::Abs(Current.speed)).steer, -1.f, 1.f);
+			if (Input.Down(EKeys::Down))
+			{
+				Controls.throttle = 0.f;
+				Controls.brake = 1.f;
+			}
 		}
 	}
 	else

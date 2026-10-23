@@ -114,3 +114,6 @@ the development laptop); later runs only cook what changed.
   - **Leaf thinning:** Nanite thinned the leaves until the trees went bare.
   - **Screens:** the instrument panel and the ghost glow in the screen's light units (the level's exposure is
     fixed for sunlight); the mirror shows the scene's light before exposure, so it matches the view ahead.
+  - **Cabin photos:** Godot lays the leather, fabric and carpet on with triplanar mapping, so those meshes come
+    without texture coordinates; a material projects the photos in each part's own space instead.
+  - **Plain paint:** the strakes and trims carry their own paint material; it takes the traffic's colours too.
