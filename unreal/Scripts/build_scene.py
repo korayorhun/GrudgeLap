@@ -362,8 +362,24 @@ def rig_car(car, root_tag):
     glass = mirror_glass(car)
     if glass is not None:
         tag(glass, "GLP.MirrorGlass")
+    # The outside mirrors' glass (CarView: on the A-pillar of the early car, on the doors of the later one) is
+    # named only by number; its polished-metal material gives it away. From the seat it shows the mirror's view.
+    side = 0
+    for actor in parts:
+        for component in actor.get_components_by_class(unreal.StaticMeshComponent):
+            material = component.get_material(0)
+            try:
+                metallic = mel.get_material_instance_scalar_parameter_value(material, "MetallicFactor")
+                roughness = mel.get_material_instance_scalar_parameter_value(material, "RoughnessFactor")
+            except Exception:
+                continue
+            if actor != glass and metallic > 0.99 and roughness < 0.06:
+                tag(actor, "GLP.SideMirror")
+                side += 1
+                break
     log(f"{root_tag} tagged: {wheels} wheels, steering {'found' if steering else 'missing'}, {len(exterior)} exterior "
-        f"parts, dials {'found' if dials else 'missing'}, mirror glass {glass.get_actor_label() if glass else 'missing'}")
+        f"parts, dials {'found' if dials else 'missing'}, mirror glass {glass.get_actor_label() if glass else 'missing'}, "
+        f"{side} side mirror(s)")
 
 
 def rig_world(actors):
@@ -656,8 +672,9 @@ def poly_haven_meshes(name, foliage_pipeline):
     return meshes
 
 
-def instanced(label, mesh, transforms, shadows=True):
-    """One actor holding every instance of a mesh (an instanced static mesh component)."""
+def instanced(label, mesh, transforms, shadows=True, cull=0):
+    """One actor holding every instance of a mesh (an instanced static mesh component); instances past cull
+    centimetres are not drawn (0: always drawn)."""
     actor = actor_sub.spawn_actor_from_class(unreal.Actor, unreal.Vector(0, 0, 0))
     actor.set_actor_label(label)
     actor.set_folder_path("GrudgeLap/Foliage")
@@ -671,6 +688,8 @@ def instanced(label, mesh, transforms, shadows=True):
     component.set_collision_enabled(unreal.CollisionEnabled.NO_COLLISION)
     component.set_editor_property("cast_shadow", shadows)
     component.add_instances(transforms, False, True)
+    if cull:
+        component.set_cull_distances(0, cull)
     log(f"{label}: {len(transforms)} instances of {mesh.get_name()}")
     return actor
 
@@ -718,7 +737,7 @@ def scatter(placements, extra, actors):
 
     log(f"Nanite area preservation set on {preserved} foliage mesh(es)")
 
-    def place(label, choices, spots):
+    def place(label, choices, spots, cull=0):
         """choices: (mesh, scale, weight); spots: (position, yaw degrees, scale, sink cm). One component per mesh."""
         sets = {}
         weights = [w for _, _, w in choices]
@@ -726,12 +745,14 @@ def scatter(placements, extra, actors):
             mesh, base, _ = rng.choices(choices, weights)[0]
             sets.setdefault(mesh.get_path_name(), (mesh, []))[1].append(transform(position, yaw, base * scale, sink))
         for i, (mesh, transforms) in enumerate(sets.values()):
-            instanced(f"{label}{i}", mesh, transforms)
+            instanced(f"{label}{i}", mesh, transforms, cull=cull)
 
     # 22 scanned tufts of 10 to 40 cm; the meadow takes them at 1 to 2.8 times (prepare_scatter.py).
     grass = [(m, 1.0, 1.0) for m in meshes["grass_medium_01"] + meshes["grass_medium_02"]]
+    # The grass now lines every road (a quarter of a million tufts); a tuft under a metre tall is gone to the eye
+    # long before 300 m, so it is not drawn beyond.
     if grass:
-        place("Grass", grass, [((x, y, z), math.degrees(yaw), scale, 2.0) for x, y, z, yaw, scale in extra["grass"]])
+        place("Grass", grass, [((x, y, z), math.degrees(yaw), scale, 2.0) for x, y, z, yaw, scale in extra["grass"]], cull=30000)
 
     for kind in ("rock_07", "rock_09", "boulder_01"):
         if meshes[kind]:
@@ -749,7 +770,7 @@ def scatter(placements, extra, actors):
 
     bushes = [(m, s, 1.0) for ms, s in ((meshes["shrub_02"], 1.0), (meshes["shrub_03"], 2.5), (meshes["shrub_04"], 2.0)) for m in ms]
     if bushes:
-        place("Bushes", bushes, [(b["position"], b["yaw"], b["scale"], 3.0) for b in extra["bushes"]])
+        place("Bushes", bushes, [(b["position"], b["yaw"], b["scale"], 3.0) for b in extra["bushes"]], cull=80000)
 
     # The scanned trees stand where the game's leaf-card trees stood; those go.
     removed = [label for label in actors if label.startswith("Tree-")]
@@ -777,6 +798,20 @@ def multiply_vertex_colour(material, prop):
     mel.connect_material_property(product, "", prop)
 
 
+def screen_units_emissive(material):
+    """The emissive in the screen's light units (Eye Adaptation Inverse). The level's exposure is fixed for
+    sunlight, under which the glow the game gives its lamps and the colour of its unshaded surfaces came out
+    black; the screen's units give them the brightness they have in the Godot version."""
+    prop = unreal.MaterialProperty.MP_EMISSIVE_COLOR
+    source = mel.get_material_property_input_node(material, prop)
+    if source is None:
+        return
+    output = mel.get_material_property_input_node_output_name(material, prop)
+    screen = mel.create_material_expression(material, unreal.MaterialExpressionEyeAdaptationInverse, -150, -350)
+    mel.connect_material_expressions(source, output, screen, "")
+    mel.connect_material_property(screen, "", prop)
+
+
 def vertex_colour_parent(parent, copies):
     """A /Game copy of an Interchange glTF parent (an MI_* instance and its M_* base) that multiplies in the
     vertex colour and carries the usage flags this scene needs.
@@ -784,7 +819,8 @@ def vertex_colour_parent(parent, copies):
     Godot writes the car's paint, the road lines and the signs as vertex colours. Interchange imports them onto the
     meshes but leaves them out of the materials (InterchangeGltfTranslator works out bUseVertexColor and never
     passes it on), which turns the red car white and the yellow centre line white. glTF defines the base colour
-    as the factor times the texture times the vertex colour, so the copies do exactly that.
+    as the factor times the texture times the vertex colour, so the copies do exactly that. Their glow is given in
+    the screen's units (screen_units_emissive).
     """
     name = parent.get_name()
     if name in copies:
@@ -796,6 +832,7 @@ def vertex_colour_parent(parent, copies):
         material = eal.duplicate_asset(base.get_path_name().split(".")[0], path)
         lit = material.get_editor_property("shading_model") != unreal.MaterialShadingModel.MSM_UNLIT
         multiply_vertex_colour(material, unreal.MaterialProperty.MP_BASE_COLOR if lit else unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+        screen_units_emissive(material)
         for usage in USAGES:
             mel.set_material_usage(material, usage)
         mel.recompile_material(material)

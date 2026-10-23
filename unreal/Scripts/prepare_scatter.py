@@ -16,6 +16,9 @@ import numpy as np
 
 CELL = 0.5          # grid resolution, metres
 HALF = 700.0        # the grid covers the car's position +- HALF on X and Z
+BAND = 40.0          # metres either side of every road that get grass beyond the start
+BAND_DENSITY = 0.35  # tufts per square metre there, as the meadow's outer ring
+BAND_LIMIT = 260000
 NO_GRASS = ("Road-", "Shoulder-", "Lines-", "Field-", "SkidPad", "Pillars-", "Railings-", "House-", "Barn-",
             "Shop-", "Hut-", "Gate-", "Barrier-", "Pump-")
 rng = np.random.default_rng(11)
@@ -80,25 +83,26 @@ def triangles_by_node(doc, blob):
 
 
 class Grid:
-    def __init__(self, centre):
-        self.origin = np.array([centre[0] - HALF, centre[2] - HALF])
-        self.n = int(2 * HALF / CELL)
+    def __init__(self, centre, half=HALF, cell=CELL):
+        self.cell = cell
+        self.origin = np.array([centre[0] - half, centre[2] - half])
+        self.n = int(2 * half / cell)
         self.height = np.full((self.n, self.n), np.nan, dtype=np.float32)
         self.blocked = np.zeros((self.n, self.n), dtype=bool)
 
     def rasterise(self, tris, height):
         """Writes every cell whose centre lies in a triangle (XZ projection): its height, or the block flag."""
         xz = tris[:, :, [0, 2]]
-        lo = np.floor((xz.min(1) - self.origin) / CELL).astype(int)
-        hi = np.ceil((xz.max(1) - self.origin) / CELL).astype(int)
+        lo = np.floor((xz.min(1) - self.origin) / self.cell).astype(int)
+        hi = np.ceil((xz.max(1) - self.origin) / self.cell).astype(int)
         keep = (hi[:, 0] >= 0) & (hi[:, 1] >= 0) & (lo[:, 0] < self.n) & (lo[:, 1] < self.n)
         for tri, (i0, j0), (i1, j1) in zip(tris[keep], lo[keep], hi[keep]):
             i0, j0 = max(i0, 0), max(j0, 0)
             i1, j1 = min(i1, self.n), min(j1, self.n)
             if i1 <= i0 or j1 <= j0:
                 continue
-            gx, gz = np.meshgrid(self.origin[0] + (np.arange(i0, i1) + 0.5) * CELL,
-                                 self.origin[1] + (np.arange(j0, j1) + 0.5) * CELL, indexing="ij")
+            gx, gz = np.meshgrid(self.origin[0] + (np.arange(i0, i1) + 0.5) * self.cell,
+                                 self.origin[1] + (np.arange(j0, j1) + 0.5) * self.cell, indexing="ij")
             (ax, ay, az), (bx, by, bz), (cx, cy, cz) = tri
             det = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz)
             if abs(det) < 1e-9:
@@ -122,8 +126,8 @@ class Grid:
         self.blocked = blocked
 
     def lookup(self, x, z):
-        i = np.floor((x - self.origin[0]) / CELL).astype(int)
-        j = np.floor((z - self.origin[1]) / CELL).astype(int)
+        i = np.floor((x - self.origin[0]) / self.cell).astype(int)
+        j = np.floor((z - self.origin[1]) / self.cell).astype(int)
         ok = (i >= 0) & (j >= 0) & (i < self.n) & (j < self.n)
         h = np.full(len(x), np.nan)
         b = np.ones(len(x), dtype=bool)
@@ -147,6 +151,58 @@ def sample(grid, centre, forward, count, r0, r1, half_angle, avoid=None):
     return x[keep], h[keep], z[keep]
 
 
+def roadside_grass(meshes, car, forward):
+    """Grass along the rest of the circuit: on the verges and the ground beside every road out to BAND metres, at
+    the density of the meadow's outer ring, over a 1 m grid of the whole track. The meadow at the start keeps its
+    own denser rings (skipped here)."""
+    roads = np.concatenate([t for name, t in meshes if name.startswith(("Road-", "Shoulder-"))])
+    lo = roads[:, :, [0, 2]].reshape(-1, 2).min(0) - BAND - 20.0
+    hi = roads[:, :, [0, 2]].reshape(-1, 2).max(0) + BAND + 20.0
+    centre = np.array([(lo[0] + hi[0]) / 2, 0.0, (lo[1] + hi[1]) / 2])
+    track = Grid(centre, half=float((hi - lo).max() / 2), cell=1.0)
+    near = Grid(centre, half=float((hi - lo).max() / 2), cell=1.0)
+    for name, tris in meshes:
+        if name == "Terrain":
+            track.rasterise(tris, True)
+        elif name.startswith(NO_GRASS) or name == "PlayerCar":
+            track.rasterise(tris, False)
+        if name.startswith(("Road-", "Shoulder-")):
+            near.rasterise(tris, False)
+    track.dilate(1)
+    # Within BAND of a road: the road mask grown one 2 m cell at a time on a halved grid.
+    n = near.n // 2 * 2
+    coarse = near.blocked[:n, :n].reshape(n // 2, 2, n // 2, 2).any(axis=(1, 3))
+    grown = coarse.copy()
+    for _ in range(int(BAND / 2)):
+        step = grown.copy()
+        for di, dj in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            step |= np.roll(np.roll(grown, di, 0), dj, 1)
+        grown = step
+    band = np.zeros_like(near.blocked)
+    band[:n, :n] = np.repeat(np.repeat(grown, 2, 0), 2, 1)
+
+    # Uniform over the band: a cell drawn for every tuft, a point drawn inside the cell.
+    cells = np.flatnonzero(band)
+    i, j = np.unravel_index(rng.choice(cells, size=int(len(cells) * BAND_DENSITY)), band.shape)
+    x = track.origin[0] + (i + rng.random(len(i))) * track.cell
+    z = track.origin[1] + (j + rng.random(len(j))) * track.cell
+    h, blocked = track.lookup(x, z)
+    keep = ~blocked & ~np.isnan(h)
+    # The meadow's rings (main): r < 30, 30..100 within 70 degrees of forward, 100..400 within 60 degrees.
+    dx, dz = x - car[0], z - car[2]
+    r = np.hypot(dx, dz)
+    off = np.abs((np.arctan2(dz, dx) - math.atan2(forward[2], forward[0]) + math.pi) % (2 * math.pi) - math.pi)
+    meadow = (r < 30) | ((r < 100) & (off < math.radians(70))) | ((r < 400) & (off < math.radians(60)))
+    keep &= ~meadow
+    x, h, z = x[keep], h[keep], z[keep]
+    out = []
+    for xi, yi, zi in zip(x[:BAND_LIMIT], h[:BAND_LIMIT], z[:BAND_LIMIT]):
+        out.append([round(float(xi), 3), round(float(yi), 3), round(float(zi), 3),
+                    round(float(rng.random() * 2 * math.pi), 3), round(float(rng.uniform(1.6, 2.8)), 3)])
+    print(f"roadside grass: {len(out)} tufts within {BAND:.0f} m of the roads")
+    return out
+
+
 def main():
     glb, placements_path, out = sys.argv[1:4]
     doc, blob = load_glb(glb)
@@ -155,8 +211,9 @@ def main():
     basis_z = np.array(placements["car"]["basis"][2])
     forward = -basis_z / np.linalg.norm(basis_z)
 
+    meshes = list(triangles_by_node(doc, blob))
     grid = Grid(car)
-    for name, tris in triangles_by_node(doc, blob):
+    for name, tris in meshes:
         if name == "Terrain":
             grid.rasterise(tris, True)
         elif name.startswith(NO_GRASS) or name == "PlayerCar":
@@ -176,6 +233,8 @@ def main():
         for xi, yi, zi in zip(x, y, z):
             grass.append([round(float(xi), 3), round(float(yi), 3), round(float(zi), 3),
                           round(float(rng.random() * 2 * math.pi), 3), round(float(rng.uniform(s0, s1)), 3)])
+
+    grass += roadside_grass(meshes, car, forward)
 
     rocks = []
     for count, r0, r1, kind, (s0, s1) in ((400, 0, 60, "rock_07", (1.0, 3.0)), (250, 0, 60, "rock_09", (2.0, 5.0)),

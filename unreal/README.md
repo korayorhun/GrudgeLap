@@ -28,10 +28,12 @@ Run these from the repository root.
    dotnet publish physics.native -c Release -r win-x64 -o artifacts/physics-native
    ```
 
-2. Export the track from the game. This writes `track.glb` and `track.json`:
+2. Export the track from the game, once with each car. The first export gives the track and the first car
+   (`track.glb`, `track.json`); the level takes only the car from the second:
 
    ```
    <godot> --path game -- --invisible --export-world=../unreal/Import/track.glb
+   <godot> --path game -- --invisible --car=v8 --export-world=../unreal/Import/track_v8.glb
    ```
 
 3. Fetch the Poly Haven scans (models, ground textures, leaf and grass cut-outs):
@@ -54,9 +56,10 @@ Run these from the repository root.
    ```
 
    It runs the editor without a window and first clears the previous level, track and materials. It then
-   cleans the export (`clean_glb.py`), scatters grass, rocks and trees around the start and places the meadow
-   camera (`prepare_scatter.py`), and prepares the foliage (`prepare_foliage.py`) before `build_scene.py`
-   assembles the level and places the game in it. The first run of freshly built engine binaries can take half
+   cleans the export (`clean_glb.py`) and takes the V8 out of its own (`extract_car.py`), scatters grass,
+   rocks and trees around the start and grass along every road and places the meadow camera
+   (`prepare_scatter.py`), and prepares the foliage (`prepare_foliage.py`) before `build_scene.py` assembles
+   the level and places the game in it. The first run of freshly built engine binaries can take half
    an hour while antivirus software scans every new DLL.
 
 ## Running it

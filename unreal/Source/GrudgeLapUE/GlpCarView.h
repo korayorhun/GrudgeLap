@@ -53,6 +53,9 @@ public:
 	/** The actor of this car tagged Tag (the binnacle's dials, the mirror glass), or null. */
 	AActor* Find(const TCHAR* Tag) const;
 
+	/** Every actor of this car tagged Tag (the outside mirrors). */
+	TArray<AActor*> FindAll(const TCHAR* Tag) const;
+
 private:
 	TWeakObjectPtr<AActor> RootActor;
 	TArray<TWeakObjectPtr<USceneComponent>> Wheels;

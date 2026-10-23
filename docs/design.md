@@ -181,11 +181,14 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   downloaded scans, so `Content/` is not versioned. What the export needed is recorded there and in
   [unreal/README.md](../unreal/README.md): hidden nodes, rewound primitives, vertex colours, foliage
   cut-outs and Nanite area preservation.
-- **The game runs in Unreal** (`AGlpGame`): the title screen with the car and gearbox choice, the keyboard
-  with the manual gearbox, traffic, the ghost of the best lap, the train, signs that tip over, the HUD and
-  the instrument panel (drawn on the binnacle and at the foot of the screen), a rear-view mirror, and the
-  Godot version's sound mixed from the same recordings. Settings and the best lap live in
-  `unreal/Saved/GrudgeLap`.
+- **The game runs in Unreal** (`AGlpGame`): the title screen with the car and gearbox choice (both cars:
+  the V8 is taken from a second export with `--car=v8`), the keyboard with the manual gearbox, traffic, the
+  ghost of the best lap, the train, signs that tip over, the HUD and the instrument panel (drawn on the
+  binnacle and at the foot of the screen), the rear-view and outside mirrors, and the Godot version's sound
+  mixed from the same recordings. Settings and the best lap live in `unreal/Saved/GrudgeLap`; the best-lap
+  file is the simulation's own format, the same as the Godot version's.
+- **Scenery.** Scanned trees stand where the game's trees stand all round the circuit; scanned grass fills
+  the meadow at the start and the 40 m beside every road (about 250 000 tufts, drawn to 300 m).
 
 ## Conventions
 

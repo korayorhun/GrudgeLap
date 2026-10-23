@@ -14,6 +14,8 @@ class UGlpAudio;
 class UGlpInstruments;
 class UMaterialInterface;
 class USceneCaptureComponent2D;
+class UStaticMeshComponent;
+class UMaterialInstanceDynamic;
 
 /**
  * The game, as Bootstrap.cs runs it in Godot: a race session of the simulation core stepped every frame with
@@ -89,6 +91,7 @@ private:
 	FString SavedFile(const TCHAR* Name) const;
 	FGlpCarView* PlayerCar() const;
 	void FitOutCockpit();
+	void ShowSideMirrors(bool bInside);
 
 	UPROPERTY(VisibleAnywhere, Category = "GrudgeLap")
 	TObjectPtr<UCameraComponent> Camera;
@@ -101,6 +104,13 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<USceneCaptureComponent2D> Mirror;
+
+	/** The outside mirrors of the player's car: their own polished glass from outside, the mirror's view from the seat. */
+	TArray<TWeakObjectPtr<UStaticMeshComponent>> SideMirrors;
+	UPROPERTY()
+	TArray<TObjectPtr<UMaterialInterface>> SideMirrorGlass;
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> SideMirrorView;
 
 	const FGlpLibrary* Library = nullptr;
 	glp_session Session = 0;
@@ -147,6 +157,7 @@ private:
 	float Dash = 0.f;
 	FVector GhostLast = FVector::ZeroVector;
 	bool bInsideShown = false;   // the player's car is drawn for the driver's seat (FGlpCarView::SetInside)
+	uint32 MirrorFrame = 0;
 
 	// Automated runs (see the class comment).
 	TArray<float> ShotTimes;

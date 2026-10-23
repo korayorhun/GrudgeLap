@@ -302,3 +302,16 @@ AActor* FGlpCarView::Find(const TCHAR* Tag) const
 	}
 	return nullptr;
 }
+
+TArray<AActor*> FGlpCarView::FindAll(const TCHAR* Tag) const
+{
+	TArray<AActor*> Found;
+	for (const TWeakObjectPtr<AActor>& Actor : Owned)
+	{
+		if (AActor* A = Actor.Get(); A && HasTag(A, Tag))
+		{
+			Found.Add(A);
+		}
+	}
+	return Found;
+}

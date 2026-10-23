@@ -348,6 +348,15 @@ void AGlpGame::FitOutCockpit()
 		Mirror->PostProcessSettings.bOverride_ReflectionMethod = true;
 		Mirror->PostProcessSettings.ReflectionMethod = EReflectionMethod::None;
 		Mirror->ShowFlags.SetMotionBlur(false);
+		// A second view of the world is paid for in GPU time (the profile of a lap: 53 fps with it drawn in full
+		// every frame). The small picture leaves out shadows, clouds and the screen-space effects and is drawn
+		// every other frame (SyncViews), as the Godot version gives its mirror a lighter environment.
+		Mirror->ShowFlags.SetDynamicShadows(false);
+		Mirror->ShowFlags.SetCloud(false);
+		Mirror->ShowFlags.SetDistanceFieldAO(false);
+		Mirror->ShowFlags.SetVolumetricFog(false);
+		Mirror->ShowFlags.SetAmbientOcclusion(false);
+		Mirror->ShowFlags.SetScreenSpaceReflections(false);
 	}
 	const AActor* Root = Car->Root();
 	const FVector Back = Root->GetActorRightVector();   // the car's local +Y: its nose is -Y
@@ -362,6 +371,35 @@ void AGlpGame::FitOutCockpit()
 		UMaterialInstanceDynamic* View = UMaterialInstanceDynamic::Create(GlassBase, Mesh);
 		View->SetTextureParameterValue(TEXT("View"), Mirror->TextureTarget);
 		Mesh->SetMaterial(0, View);
+	}
+
+	// The outside mirrors borrow the same picture of the road behind: in Lumen's reflections their polished glass
+	// showed a dark, noisy smear from the seat. Outside, where the picture is not kept current, they keep their glass.
+	ShowSideMirrors(false);
+	SideMirrors.Reset();
+	SideMirrorGlass.Reset();
+	SideMirrorView = UMaterialInstanceDynamic::Create(GlassBase, this);
+	SideMirrorView->SetTextureParameterValue(TEXT("View"), Mirror->TextureTarget);
+	for (AActor* Side : Car->FindAll(TEXT("GLP.SideMirror")))
+	{
+		TArray<UStaticMeshComponent*> SideMeshes;
+		Side->GetComponents<UStaticMeshComponent>(SideMeshes);
+		for (UStaticMeshComponent* Mesh : SideMeshes)
+		{
+			SideMirrors.Add(Mesh);
+			SideMirrorGlass.Add(Mesh->GetMaterial(0));
+		}
+	}
+}
+
+void AGlpGame::ShowSideMirrors(bool bInside)
+{
+	for (int32 i = 0; i < SideMirrors.Num(); i++)
+	{
+		if (UStaticMeshComponent* Mesh = SideMirrors[i].Get())
+		{
+			Mesh->SetMaterial(0, bInside && SideMirrorView ? static_cast<UMaterialInterface*>(SideMirrorView) : SideMirrorGlass[i].Get());
+		}
 	}
 }
 
@@ -566,12 +604,13 @@ void AGlpGame::SyncViews(float DeltaSeconds)
 	if (bInside != bInsideShown)
 	{
 		Car->SetInside(bInside);
+		ShowSideMirrors(bInside);
 		bInsideShown = bInside;
 	}
-	if (Mirror)
+	if (Mirror && bInside && (++MirrorFrame & 1) == 0)
 	{
 		// From outside the glass keeps its last picture.
-		Mirror->bCaptureEveryFrame = bInside;
+		Mirror->CaptureSceneDeferred();
 	}
 	FGlpShot Shot;
 	if (Current.phase == GLP_PHASE_REPLAY)
