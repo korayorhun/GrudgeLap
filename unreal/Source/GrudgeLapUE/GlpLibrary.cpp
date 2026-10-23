@@ -36,13 +36,21 @@ bool FGlpLibrary::Load()
 		}
 	};
 	Resolve(AbiVersion, TEXT("glp_abi_version"));
+	Resolve(CarCount, TEXT("glp_car_count"));
+	Resolve(CarNameText, TEXT("glp_car_name"));
 	Resolve(Create, TEXT("glp_create"));
 	Resolve(Destroy, TEXT("glp_destroy"));
 	Resolve(ChooseTransmission, TEXT("glp_choose_transmission"));
+	Resolve(Abort, TEXT("glp_abort"));
 	Resolve(ScriptedInputs, TEXT("glp_scripted_inputs"));
 	Resolve(Step, TEXT("glp_step"));
 	Resolve(GetState, TEXT("glp_get_state"));
-	Resolve(Message, TEXT("glp_message"));
+	Resolve(MessageText, TEXT("glp_message"));
+	Resolve(Traffic, TEXT("glp_traffic"));
+	Resolve(Train, TEXT("glp_train"));
+	Resolve(Props, TEXT("glp_props"));
+	Resolve(BestLap, TEXT("glp_best_lap"));
+	Resolve(LoadBestLap, TEXT("glp_load_best_lap"));
 	Resolve(LastErrorText, TEXT("glp_last_error"));
 	if (!bComplete)
 	{
@@ -62,4 +70,16 @@ FString FGlpLibrary::LastError() const
 	ANSICHAR Buffer[1024];
 	LastErrorText(Buffer, UE_ARRAY_COUNT(Buffer));
 	return UTF8_TO_TCHAR(Buffer);
+}
+
+FString FGlpLibrary::CarName(int32 Car) const
+{
+	ANSICHAR Buffer[128];
+	return CarNameText(Car, Buffer, UE_ARRAY_COUNT(Buffer)) >= 0 ? FString(UTF8_TO_TCHAR(Buffer)) : FString();
+}
+
+FString FGlpLibrary::Message(glp_session Session) const
+{
+	ANSICHAR Buffer[256];
+	return MessageText(Session, Buffer, UE_ARRAY_COUNT(Buffer)) >= 0 ? FString(UTF8_TO_TCHAR(Buffer)) : FString();
 }

@@ -15,12 +15,18 @@ public static unsafe class Exports
     [UnmanagedCallersOnly(EntryPoint = "glp_abi_version", CallConvs = [typeof(CallConvCdecl)])]
     public static int AbiVersion() => NativeApi.AbiVersion;
 
+    [UnmanagedCallersOnly(EntryPoint = "glp_car_count", CallConvs = [typeof(CallConvCdecl)])]
+    public static int CarCount() => NativeApi.CarCount;
+
+    [UnmanagedCallersOnly(EntryPoint = "glp_car_name", CallConvs = [typeof(CallConvCdecl)])]
+    public static int CarName(int car, byte* buffer, int capacity) => Guarded(() => NativeApi.CopyText(NativeApi.CarName(car), buffer, capacity));
+
     [UnmanagedCallersOnly(EntryPoint = "glp_create", CallConvs = [typeof(CallConvCdecl)])]
-    public static nint Create(int car)
+    public static nint Create(int car, int flags)
     {
         try
         {
-            return GCHandle.ToIntPtr(GCHandle.Alloc(NativeApi.Create(car)));
+            return GCHandle.ToIntPtr(GCHandle.Alloc(NativeApi.Create(car, flags)));
         }
         catch (Exception error)
         {
@@ -36,66 +42,46 @@ public static unsafe class Exports
     }
 
     [UnmanagedCallersOnly(EntryPoint = "glp_choose_transmission", CallConvs = [typeof(CallConvCdecl)])]
-    public static int ChooseTransmission(nint session, int mode) => Guard(() => NativeApi.ChooseTransmission(Resolve(session), mode));
+    public static int ChooseTransmission(nint session, int mode) => Guarded(() => NativeApi.ChooseTransmission(Resolve(session), mode));
+
+    [UnmanagedCallersOnly(EntryPoint = "glp_abort", CallConvs = [typeof(CallConvCdecl)])]
+    public static int Abort(nint session) => Guarded(() => NativeApi.Abort(Resolve(session)));
 
     [UnmanagedCallersOnly(EntryPoint = "glp_scripted_inputs", CallConvs = [typeof(CallConvCdecl)])]
-    public static int ScriptedInputs(nint session, NativeInputs* output)
-    {
-        try
-        {
-            *output = NativeApi.ScriptedInputs(Resolve(session));
-            return 0;
-        }
-        catch (Exception error)
-        {
-            _lastError = error.ToString();
-            return -1;
-        }
-    }
+    public static int ScriptedInputs(nint session, NativeInputs* output) => Guarded(() => *output = NativeApi.ScriptedInputs(Resolve(session)));
 
     [UnmanagedCallersOnly(EntryPoint = "glp_step", CallConvs = [typeof(CallConvCdecl)])]
-    public static int Step(nint session, NativeInputs* inputs, float dt)
-    {
-        try
-        {
-            NativeApi.Step(Resolve(session), *inputs, dt);
-            return 0;
-        }
-        catch (Exception error)
-        {
-            _lastError = error.ToString();
-            return -1;
-        }
-    }
+    public static int Step(nint session, NativeInputs* inputs, float dt) => Guarded(() => NativeApi.Step(Resolve(session), *inputs, dt));
 
     [UnmanagedCallersOnly(EntryPoint = "glp_get_state", CallConvs = [typeof(CallConvCdecl)])]
-    public static int GetState(nint session, NativeState* output)
-    {
-        try
-        {
-            *output = NativeApi.State(Resolve(session));
-            return 0;
-        }
-        catch (Exception error)
-        {
-            _lastError = error.ToString();
-            return -1;
-        }
-    }
+    public static int GetState(nint session, NativeState* output) => Guarded(() => *output = NativeApi.State(Resolve(session)));
 
     [UnmanagedCallersOnly(EntryPoint = "glp_message", CallConvs = [typeof(CallConvCdecl)])]
-    public static int Message(nint session, byte* buffer, int capacity)
+    public static int Message(nint session, byte* buffer, int capacity) => Guarded(() => NativeApi.CopyText(Resolve(session).Session.Message, buffer, capacity));
+
+    [UnmanagedCallersOnly(EntryPoint = "glp_traffic", CallConvs = [typeof(CallConvCdecl)])]
+    public static int Traffic(nint session, NativeBody* output, int capacity) =>
+        Guarded(() => NativeApi.Traffic(Resolve(session), new Span<NativeBody>(output, Math.Max(capacity, 0))));
+
+    [UnmanagedCallersOnly(EntryPoint = "glp_train", CallConvs = [typeof(CallConvCdecl)])]
+    public static int Train(nint session, NativeBody* output, int capacity) =>
+        Guarded(() => NativeApi.Train(Resolve(session), new Span<NativeBody>(output, Math.Max(capacity, 0))));
+
+    [UnmanagedCallersOnly(EntryPoint = "glp_props", CallConvs = [typeof(CallConvCdecl)])]
+    public static int Props(nint session, NativeProp* output, int capacity) =>
+        Guarded(() => NativeApi.Props(Resolve(session), new Span<NativeProp>(output, Math.Max(capacity, 0))));
+
+    [UnmanagedCallersOnly(EntryPoint = "glp_best_lap", CallConvs = [typeof(CallConvCdecl)])]
+    public static int BestLap(nint session, byte* buffer, int capacity) => Guarded(() =>
     {
-        try
-        {
-            return NativeApi.CopyText(Resolve(session).Session.Message, buffer, capacity);
-        }
-        catch (Exception error)
-        {
-            _lastError = error.ToString();
-            return -1;
-        }
-    }
+        var bytes = NativeApi.BestLap(Resolve(session));
+        if (buffer != null && capacity >= bytes.Length) bytes.CopyTo(new Span<byte>(buffer, capacity));
+        return bytes.Length;
+    });
+
+    [UnmanagedCallersOnly(EntryPoint = "glp_load_best_lap", CallConvs = [typeof(CallConvCdecl)])]
+    public static int LoadBestLap(nint session, byte* data, int length) =>
+        Guarded(() => NativeApi.LoadBestLap(Resolve(session), new ReadOnlySpan<byte>(data, Math.Max(length, 0))));
 
     [UnmanagedCallersOnly(EntryPoint = "glp_last_error", CallConvs = [typeof(CallConvCdecl)])]
     public static int LastError(byte* buffer, int capacity) => NativeApi.CopyText(_lastError ?? "", buffer, capacity);
@@ -105,12 +91,18 @@ public static unsafe class Exports
             ? native
             : throw new ArgumentException("not a session handle", nameof(session));
 
-    private static int Guard(Action action)
+    /// <summary>Runs an entry point's work: 0 when it returns nothing, its count or length otherwise, -1 on failure.</summary>
+    private static int Guarded(Action action) => Guarded(() =>
+    {
+        action();
+        return 0;
+    });
+
+    private static int Guarded(Func<int> action)
     {
         try
         {
-            action();
-            return 0;
+            return action();
         }
         catch (Exception error)
         {

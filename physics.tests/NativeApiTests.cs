@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using GrudgeLap.Physics.Native;
 using GrudgeLap.Physics.Race;
+using GrudgeLap.Physics.Track;
 using GrudgeLap.Physics.Vehicle;
 using Xunit;
 using Xunit.Abstractions;
@@ -19,12 +20,14 @@ public sealed unsafe class NativeApiTests
     [Fact]
     public void ScriptedDriverStartsTheEngineAndDrivesOff()
     {
-        var native = NativeApi.Create(0);
+        var native = NativeApi.Create(0, 0);
         NativeApi.ChooseTransmission(native, (int)TransmissionMode.Automatic);
         var start = NativeApi.State(native);
+        var events = 0u;
         for (var i = 0; i < 60 * 12; i++)
         {
             NativeApi.Step(native, NativeApi.ScriptedInputs(native), Dt);
+            events |= NativeApi.State(native).Events;
         }
         var state = NativeApi.State(native);
         var dx = state.Position[0] - start.Position[0];
@@ -35,14 +38,65 @@ public sealed unsafe class NativeApiTests
         Assert.True(travelled > 100f, $"travelled only {travelled} m");
         Assert.True(state.Gear >= 2);
         Assert.Equal(1, state.OnRoad);
+        Assert.Equal(1, state.EngineRunning);
+        Assert.Equal((int)TransmissionMode.Automatic, state.Transmission);
+        Assert.Equal(VehicleSpec.Catalogue[0].ForwardGearCount, state.ForwardGears);
         Assert.Equal(VehicleSpec.Catalogue[0].HubHeight, state.HubHeight);
+        Assert.Equal((int)SurfaceType.Road, state.WheelSurface[0]);
+        Assert.NotEqual(0u, events & (1u << (int)RaceEvent.EngineStarted));
+        Assert.True(state.Elapsed > 11f);
+    }
+
+    [Fact]
+    public void TrafficAndTrainAndPropsAreReported()
+    {
+        var quiet = NativeApi.Create(0, 0);
+        Assert.Equal(0, NativeApi.Traffic(quiet, []));
+        var busy = NativeApi.Create(1, NativeApi.TrafficFlag);
+        var count = NativeApi.Traffic(busy, []);
+        Assert.Equal(new RaceOptions().TrafficSameDirection + new RaceOptions().TrafficOncoming, count);
+        var cars = new NativeBody[count];
+        Assert.Equal(count, NativeApi.Traffic(busy, cars));
+        Assert.Contains(cars, c => c.Position[0] != 0f || c.Position[2] != 0f);
+
+        var train = new NativeBody[8];
+        var wagons = NativeApi.Train(busy, train);
+        Assert.True(wagons > 0);
+        Assert.Equal(0, train[0].Colour);
+        Assert.Equal(1, train[wagons - 1].Colour);
+
+        var track = OriginalInspiredTrack.Build();
+        var props = new NativeProp[NativeApi.Props(busy, [])];
+        Assert.Equal(track.Props.Count, NativeApi.Props(busy, props));
+        Assert.Equal((int)track.Props[0].Kind, props[0].Kind);
+        Assert.Equal(track.Props[0].Position.X, props[0].Position[0]);
+        Assert.All(props, p => Assert.Equal(0, p.Knocked));
+    }
+
+    [Fact]
+    public void BestLapRoundTripsAsBytes()
+    {
+        var native = NativeApi.Create(0, 0);
+        Assert.Empty(NativeApi.BestLap(native));
+        var samples = Enumerable.Range(0, 10)
+            .Select(i => new PoseSample(i * 0.5f, new System.Numerics.Vector3(i, 0.6f, i * 2f), System.Numerics.Quaternion.Identity, 0f))
+            .ToList();
+        var recording = new LapRecording(RouteKind.Stunt, 61.5f, samples);
+        var other = NativeApi.Create(0, 0);
+        NativeApi.LoadBestLap(other, recording.Serialize());
+        Assert.Equal(1, NativeApi.State(other).GrudgeMatch);
+        Assert.Equal(61.5f, NativeApi.State(other).BestLapTime);
+        Assert.Equal(recording.Serialize(), NativeApi.BestLap(other));
+        Assert.Throws<ArgumentException>(() => NativeApi.LoadBestLap(other, [1, 2, 3]));
     }
 
     [Fact]
     public void RejectsAnUnknownCarAndTransmission()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => NativeApi.Create(VehicleSpec.Catalogue.Length));
-        Assert.Throws<ArgumentOutOfRangeException>(() => NativeApi.ChooseTransmission(NativeApi.Create(0), 7));
+        Assert.Equal(VehicleSpec.Catalogue.Length, NativeApi.CarCount);
+        Assert.Equal(VehicleSpec.Catalogue[1].Name, NativeApi.CarName(1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => NativeApi.Create(VehicleSpec.Catalogue.Length, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => NativeApi.ChooseTransmission(NativeApi.Create(0, 0), 7));
     }
 
     [Fact]
@@ -59,8 +113,8 @@ public sealed unsafe class NativeApiTests
     /// <summary>
     /// The published library (artifacts/physics-native, `dotnet publish physics.native -c Release -r win-x64
     /// -o artifacts/physics-native`) driven through its C entry points must step exactly like the managed side:
-    /// same inputs, same floats. That also proves glp_state's layout matches NativeState. Skipped (with a note)
-    /// where the library has not been published, as on the CI runner.
+    /// same inputs, same bytes of state and traffic. That also proves the C structs' layouts. Skipped (with a
+    /// note) where the library has not been published, as on the CI runner.
     /// </summary>
     [Fact]
     public void PublishedLibraryStepsLikeTheManagedSide()
@@ -75,19 +129,24 @@ public sealed unsafe class NativeApiTests
         try
         {
             var abi = (delegate* unmanaged[Cdecl]<int>)NativeLibrary.GetExport(library, "glp_abi_version");
-            var create = (delegate* unmanaged[Cdecl]<int, nint>)NativeLibrary.GetExport(library, "glp_create");
+            Assert.Equal(NativeApi.AbiVersion, abi());
+            var create = (delegate* unmanaged[Cdecl]<int, int, nint>)NativeLibrary.GetExport(library, "glp_create");
             var destroy = (delegate* unmanaged[Cdecl]<nint, void>)NativeLibrary.GetExport(library, "glp_destroy");
             var choose = (delegate* unmanaged[Cdecl]<nint, int, int>)NativeLibrary.GetExport(library, "glp_choose_transmission");
             var scripted = (delegate* unmanaged[Cdecl]<nint, NativeInputs*, int>)NativeLibrary.GetExport(library, "glp_scripted_inputs");
             var step = (delegate* unmanaged[Cdecl]<nint, NativeInputs*, float, int>)NativeLibrary.GetExport(library, "glp_step");
             var getState = (delegate* unmanaged[Cdecl]<nint, NativeState*, int>)NativeLibrary.GetExport(library, "glp_get_state");
             var message = (delegate* unmanaged[Cdecl]<nint, byte*, int, int>)NativeLibrary.GetExport(library, "glp_message");
+            var traffic = (delegate* unmanaged[Cdecl]<nint, NativeBody*, int, int>)NativeLibrary.GetExport(library, "glp_traffic");
+            var carName = (delegate* unmanaged[Cdecl]<int, byte*, int, int>)NativeLibrary.GetExport(library, "glp_car_name");
 
-            Assert.Equal(NativeApi.AbiVersion, abi());
-            Assert.Equal(0, create(99));
-            var session = create(0);
+            Assert.Equal(0, create(99, 0));
+            var name = stackalloc byte[64];
+            carName(1, name, 64);
+            Assert.Equal(VehicleSpec.Catalogue[1].Name, Marshal.PtrToStringUTF8((nint)name));
+            var session = create(0, NativeApi.TrafficFlag);
             Assert.NotEqual(0, session);
-            var managed = NativeApi.Create(0);
+            var managed = NativeApi.Create(0, NativeApi.TrafficFlag);
             try
             {
                 Assert.Equal(0, choose(session, (int)TransmissionMode.Automatic));
@@ -105,10 +164,20 @@ public sealed unsafe class NativeApiTests
                 NativeState state;
                 Assert.Equal(0, getState(session, &state));
                 var expected = NativeApi.State(managed);
-                Assert.Equal(sizeof(NativeState), 152);
+                Assert.Equal(352, sizeof(NativeState));
+                Assert.Equal(36, sizeof(NativeBody));
+                Assert.Equal(36, sizeof(NativeProp));
                 Assert.True(new ReadOnlySpan<byte>(&state, sizeof(NativeState)).SequenceEqual(new ReadOnlySpan<byte>(&expected, sizeof(NativeState))),
                     $"native at ({state.Position[0]}, {state.Position[2]}), managed at ({expected.Position[0]}, {expected.Position[2]})");
-                _out.WriteLine($"native and managed agree after 6 s: {state.Speed * 3.6f:F0} km/h, score {state.Score}");
+                var cars = stackalloc NativeBody[16];
+                var count = traffic(session, cars, 16);
+                var expectedCars = new NativeBody[16];
+                Assert.Equal(NativeApi.Traffic(managed, expectedCars), count);
+                fixed (NativeBody* e = expectedCars)
+                {
+                    Assert.True(new ReadOnlySpan<byte>(cars, count * sizeof(NativeBody)).SequenceEqual(new ReadOnlySpan<byte>(e, count * sizeof(NativeBody))));
+                }
+                _out.WriteLine($"native and managed agree after 6 s: {state.Speed * 3.6f:F0} km/h, score {state.Score}, {count} traffic cars");
             }
             finally
             {

@@ -15,11 +15,14 @@
 extern "C" {
 #endif
 
-#define GLP_ABI_VERSION 1
+#define GLP_ABI_VERSION 2
 
 typedef intptr_t glp_session; /* 0 is no session */
 
-/* DriverInputs. gear: -1 reverse, 0 neutral, 1..4, or GLP_NO_GEAR_CHANGE to keep the current one. */
+/* glp_create flags */
+#define GLP_TRAFFIC 1 /* the drones of the original: five cars ahead, three oncoming */
+
+/* DriverInputs. gear: -1 reverse, 0 neutral, 1..7, or GLP_NO_GEAR_CHANGE to keep the current one. */
 #define GLP_NO_GEAR_CHANGE 99
 typedef struct glp_inputs
 {
@@ -37,11 +40,27 @@ typedef struct glp_inputs
 enum { GLP_PHASE_SELECT_TRANSMISSION, GLP_PHASE_START_ENGINE, GLP_PHASE_DRIVING, GLP_PHASE_REPLAY, GLP_PHASE_FINISHED };
 /* TransmissionMode */
 enum { GLP_AUTOMATIC, GLP_MANUAL_AUTO_CLUTCH, GLP_MANUAL_CLUTCH };
+/* RouteKind */
+enum { GLP_ROUTE_UNDECIDED, GLP_ROUTE_SPEED, GLP_ROUTE_STUNT };
+/* SurfaceType */
+enum { GLP_SURFACE_NONE, GLP_SURFACE_ROAD, GLP_SURFACE_GRASS, GLP_SURFACE_CHASM, GLP_SURFACE_PAD };
+/* CrashReason */
+enum { GLP_CRASH_NONE, GLP_CRASH_HARD_LANDING, GLP_CRASH_ROLLED_OVER, GLP_CRASH_FELL_OFF_BRIDGE, GLP_CRASH_HIT_TREE,
+       GLP_CRASH_HIT_BUILDING, GLP_CRASH_HIT_TRAIN, GLP_CRASH_HIT_TRAFFIC };
+/* RaceEvent: glp_state.events has bit (1 << event) set for each event of the last step. */
+enum { GLP_EVENT_ENGINE_STARTED, GLP_EVENT_ENGINE_STALLED, GLP_EVENT_ROUTE_CHOSEN, GLP_EVENT_CHECKPOINT_PASSED,
+       GLP_EVENT_LAP_COMPLETED, GLP_EVENT_NEW_BEST_LAP, GLP_EVENT_LEFT_ROAD, GLP_EVENT_OFF_ROAD_TIMEOUT,
+       GLP_EVENT_WRONG_WAY, GLP_EVENT_CRASHED, GLP_EVENT_TIME_OUT, GLP_EVENT_COW_HIT, GLP_EVENT_SIGN_HIT };
+/* PropKind */
+enum { GLP_PROP_BARN, GLP_PROP_HOUSE, GLP_PROP_SHOP, GLP_PROP_HUT, GLP_PROP_TREE, GLP_PROP_COW, GLP_PROP_SIGN,
+       GLP_PROP_SIGNPOST, GLP_PROP_TOWER, GLP_PROP_BARRIER, GLP_PROP_TRAIN, GLP_PROP_FLOWERS, GLP_PROP_FIELD,
+       GLP_PROP_GATE, GLP_PROP_CROSSBUCK, GLP_PROP_PUMP };
 
+/* A quaternion is x, y, z, w in simulation space throughout. */
 typedef struct glp_state
 {
     float position[3];        /* car's centre of gravity */
-    float orientation[4];     /* quaternion x, y, z, w */
+    float orientation[4];
     float velocity[3];
     float speed;              /* m/s along the car's forward axis */
     float steer_angle;        /* rad of the front wheels, positive to the right */
@@ -60,13 +79,67 @@ typedef struct glp_state
     int32_t wheel_contact[4];
     float hub_height;         /* m, the wheel hubs' rest plane below the centre of gravity (VehicleSpec.HubHeight) */
     float suspension_rest;    /* m of travel at full droop (VehicleSpec.SuspensionRest) */
+    /* ABI 2 */
+    int32_t car;              /* catalogue index */
+    int32_t forward_gears;
+    int32_t transmission;     /* GLP_AUTOMATIC.. */
+    int32_t engine_running;
+    float engine_torque;      /* N m at the crank, negative on the overrun */
+    float lateral_acceleration;      /* m/s2, positive to the right */
+    float longitudinal_acceleration; /* m/s2, positive forward */
+    int32_t wheel_surface[4]; /* GLP_SURFACE_* */
+    float wheel_slip_angle[4];       /* rad */
+    float wheel_slip_ratio[4];
+    int32_t route;            /* GLP_ROUTE_* */
+    int32_t off_road;
+    float off_road_timer;     /* s left before the car is put back */
+    int32_t wrong_way;
+    int32_t crash_count;
+    int32_t last_crash;       /* GLP_CRASH_* */
+    uint32_t events;          /* bit (1 << GLP_EVENT_*) per event of the last step */
+    int32_t last_soft_hit;    /* prop index of the sign or cow hit in the last step, or -1 */
+    int32_t grudge_match;     /* a best lap is loaded: its ghost races */
+    int32_t ghost_visible;
+    float ghost_position[3];
+    float ghost_orientation[4];
+    float ghost_steer;
+    float replay_time;        /* s into the instant replay */
+    float replay_seconds;     /* its length */
+    float replay_position[3]; /* the recorded pose at replay_time */
+    float replay_orientation[4];
+    float replay_steer;
+    float elapsed;            /* s since the session started */
+    int32_t train_running;
 } glp_state;
 
+/* A moving body: a traffic car (colour: paint index) or a car of the train (colour: 0 locomotive, 1 wagon). */
+typedef struct glp_body
+{
+    float position[3];        /* traffic: centre of gravity; train: on the ground, mid-car */
+    float orientation[4];
+    float speed;              /* m/s */
+    int32_t colour;
+} glp_body;
+
+typedef struct glp_prop
+{
+    int32_t kind;             /* GLP_PROP_* */
+    float position[3];
+    float yaw_degrees;
+    float size[3];
+    int32_t knocked;          /* a sign the car has tipped over */
+} glp_prop;
+
 int32_t glp_abi_version(void);
-/* car: 0 flat-12, 1 V8. Traffic is left out: the caller has no cars to show for it yet. Returns 0 on failure. */
-glp_session glp_create(int32_t car);
+int32_t glp_car_count(void);
+/* The car's name as UTF-8, like glp_message. */
+int32_t glp_car_name(int32_t car, char* buffer, int32_t capacity);
+/* car: catalogue index; flags: GLP_TRAFFIC or 0. Returns 0 on failure. */
+glp_session glp_create(int32_t car, int32_t flags);
 void glp_destroy(glp_session session);
 int32_t glp_choose_transmission(glp_session session, int32_t mode);
+/* Skips the instant replay, or puts the car back on the road while the off-road clock runs. */
+int32_t glp_abort(glp_session session);
 /* The attract-mode driver: the inputs it would give now (it turns the key, then drives the lap). */
 int32_t glp_scripted_inputs(glp_session session, glp_inputs* out);
 /* Advances the session by dt seconds (the vehicle integrates at 240 Hz inside). */
@@ -74,6 +147,14 @@ int32_t glp_step(glp_session session, const glp_inputs* inputs, float dt);
 int32_t glp_get_state(glp_session session, glp_state* out);
 /* The HUD message as UTF-8, cut to capacity - 1 bytes and terminated; returns its full length in bytes. */
 int32_t glp_message(glp_session session, char* buffer, int32_t capacity);
+/* These fill up to capacity entries and return how many there are (call with 0 to count). */
+int32_t glp_traffic(glp_session session, glp_body* out, int32_t capacity);
+int32_t glp_train(glp_session session, glp_body* out, int32_t capacity);
+int32_t glp_props(glp_session session, glp_prop* out, int32_t capacity);
+/* The best lap (the ghost's recording) serialized; returns its size, 0 when there is none. */
+int32_t glp_best_lap(glp_session session, uint8_t* buffer, int32_t capacity);
+/* Installs a best lap from glp_best_lap's bytes before the start: its ghost races. */
+int32_t glp_load_best_lap(glp_session session, const uint8_t* data, int32_t length);
 /* The last failure on this thread, like glp_message. */
 int32_t glp_last_error(char* buffer, int32_t capacity);
 

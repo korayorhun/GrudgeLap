@@ -114,7 +114,7 @@ void AGlpCarDriver::BeginPlay()
 	{
 		return;
 	}
-	Session = Library->Create(Car);
+	Session = Library->Create(Car, 0);
 	if (!Session)
 	{
 		UE_LOG(LogGlpCar, Error, TEXT("no session: %s"), *Library->LastError());
