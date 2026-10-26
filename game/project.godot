@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="GrudgeLap"
-config/version="0.6.0"
+config/version="0.6.1"
 config/description="A homage to the 1989 arcade driving simulators: a four-speed sports car, a fork between a speed route and a stunt route with an open drawbridge, a vertical loop and a banked 180."
 run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.7", "C#", "Forward Plus")
