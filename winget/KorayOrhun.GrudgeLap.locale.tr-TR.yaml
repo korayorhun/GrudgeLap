@@ -1,10 +1,10 @@
-# yaml-language-server: $schema=https://aka.ms/winget-manifest.locale.1.12.0.schema.json
+﻿# yaml-language-server: $schema=https://aka.ms/winget-manifest.locale.1.12.0.schema.json
 PackageIdentifier: KorayOrhun.GrudgeLap
-PackageVersion: 0.5.0
+PackageVersion: 0.6.0
 PackageLocale: tr-TR
 Publisher: Koray Orhun
 PackageName: GrudgeLap
-ShortDescription: 1989 arcade sürüş simülatörlerine saygı duruşu - klavyeyle oynanır; stunt pisti, trafik, hayalet tur, iki araba.
-Description: GrudgeLap ücretsiz, açık kaynaklı bir sürüş oyunudur. Dört vitesli flat-12 ya da yedi vitesli V8 (gerçek motor kayıtlarıyla), uzun speed ve kısa stunt rotası (açık köprü, dikey loop, eğimli 180), çukurlar, iki yönlü trafik, süreye karşı kontrol noktaları, her kazadan sonra anlık tekrar, gizli skid pad, "1989 modu" ve en iyi turunuzun hayaletiyle grudge match. Pencere ya da tam ekran, yalnız klavye.
+ShortDescription: 1989 arcade sÃ¼rÃ¼ÅŸ simÃ¼latÃ¶rlerine saygÄ± duruÅŸu - klavyeyle oynanÄ±r; stunt pisti, trafik, hayalet tur, iki araba.
+Description: GrudgeLap Ã¼cretsiz, aÃ§Ä±k kaynaklÄ± bir sÃ¼rÃ¼ÅŸ oyunudur. DÃ¶rt vitesli flat-12 ya da yedi vitesli V8 (gerÃ§ek motor kayÄ±tlarÄ±yla), uzun speed ve kÄ±sa stunt rotasÄ± (aÃ§Ä±k kÃ¶prÃ¼, dikey loop, eÄŸimli 180), Ã§ukurlar, iki yÃ¶nlÃ¼ trafik, sÃ¼reye karÅŸÄ± kontrol noktalarÄ±, her kazadan sonra anlÄ±k tekrar, gizli skid pad, "1989 modu" ve en iyi turunuzun hayaletiyle grudge match. Pencere ya da tam ekran, yalnÄ±z klavye.
 ManifestType: locale
 ManifestVersion: 1.12.0

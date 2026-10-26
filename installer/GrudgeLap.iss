@@ -1,7 +1,7 @@
-; Inno Setup script for GrudgeLap (per-user install, no admin rights needed).
+﻿; Inno Setup script for GrudgeLap (per-user install, no admin rights needed).
 ; The exe and its data folder come from tools/build.ps1 (Godot export into ..\build).
 #define MyAppName "GrudgeLap"
-#define MyAppVersion "0.5.0"
+#define MyAppVersion "0.6.0"
 #define MyAppPublisher "Koray Orhun"
 #define MyAppURL "https://github.com/korayorhun/GrudgeLap"
 #define MyAppExeName "GrudgeLap.exe"
@@ -43,9 +43,9 @@ Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl"
 english.DesktopTask=Create a desktop shortcut
 english.RunNow=Start GrudgeLap now
 english.Uninstall=Uninstall
-turkish.DesktopTask=Masaüstü kısayolu oluştur
-turkish.RunNow=GrudgeLap'i şimdi başlat
-turkish.Uninstall=Kaldır
+turkish.DesktopTask=MasaÃ¼stÃ¼ kÄ±sayolu oluÅŸtur
+turkish.RunNow=GrudgeLap'i ÅŸimdi baÅŸlat
+turkish.Uninstall=KaldÄ±r
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:DesktopTask}"
