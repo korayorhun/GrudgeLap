@@ -30,9 +30,8 @@ namespace
 	const float WindFollow = 1.f - FMath::Exp(-UE_TWO_PI * 450.f / MixRate);
 	const float WindLevel = 2.6f * UE_SQRT_2;
 
-	// The title tune (EngineAudio.Chords): A minor, F, C, G as MIDI notes, the bass root first.
-	const int32 Chords[4][5] = { { 45, 57, 60, 64, 69 }, { 41, 53, 57, 60, 65 }, { 48, 60, 64, 67, 72 }, { 43, 55, 59, 62, 67 } };
-	constexpr float Bpm = 118.f;
+	// The voices of the jingles (EngineAudio.Brass and the rest).
+	constexpr int32 Brass = 0, Lead = 1, Bass = 2, Hat = 3, Snare = 4;
 
 	float Clamp01(float Value)
 	{
@@ -236,14 +235,30 @@ void UGlpAudio::SetCar(int32 Style)
 	});
 }
 
-void UGlpAudio::Update(const glp_state& State, float TrainDistance, bool bMusic, bool bInterior, float DeltaSeconds)
+void UGlpAudio::Chime()
+{
+	bChimePending = true;
+}
+
+void UGlpAudio::Update(const glp_state& State, float TrainDistance, bool bInterior, float DeltaSeconds)
 {
 	if (!GameClips || DeltaSeconds <= 0.f)
 	{
 		return;
 	}
 	FFrame Frame;
-	Frame.bMusic = bMusic;
+	Frame.bChime = bChimePending;
+	bChimePending = false;
+	// A record lap sings the fanfare; the end of the credit the tune of the original's high-score screen, once.
+	if (Event(State, GLP_EVENT_NEW_BEST_LAP))
+	{
+		Frame.Jingle = EJingle::Fanfare;
+	}
+	else if (State.phase == GLP_PHASE_FINISHED && LastPhase != GLP_PHASE_FINISHED)
+	{
+		Frame.Jingle = EJingle::GameOver;
+	}
+	LastPhase = State.phase;
 
 	// EngineAudio.Update: the smoothed engine state the voice follows.
 	const bool bRunning = State.engine_running != 0;
@@ -257,7 +272,7 @@ void UGlpAudio::Update(const glp_state& State, float TrainDistance, bool bMusic,
 
 	Frame.bCrash = Event(State, GLP_EVENT_CRASHED);
 	Frame.bBleep = Event(State, GLP_EVENT_CHECKPOINT_PASSED) || Event(State, GLP_EVENT_LAP_COMPLETED);
-	Frame.bRumble = Event(State, GLP_EVENT_ENGINE_STARTED);
+	Frame.bStarter = Event(State, GLP_EVENT_ENGINE_STARTED);
 	Frame.bClang = Event(State, GLP_EVENT_SIGN_HIT);
 	if (Event(State, GLP_EVENT_COW_HIT))
 	{
@@ -376,7 +391,18 @@ void UGlpAudio::Apply(const FFrame& Frame)
 	FMemory::Memcpy(Current.TyrePitch, Frame.TyrePitch, sizeof(Frame.TyrePitch));
 	Current.Wind = Frame.Wind;
 	Current.TrainLevel = Frame.TrainLevel;
-	Current.bMusic = Frame.bMusic;
+	if (Frame.Jingle != EJingle::None)
+	{
+		SongNotes = Frame.Jingle == EJingle::Fanfare ? &FanfareSong() : &GameOverSong();
+		SongTime = 0.0;
+		SongNext = 0;
+		SongVoices.Reset();
+	}
+	if (Frame.bChime)
+	{
+		ChimeLevel = 1.f;
+		ChimePhase = 0.f;
+	}
 	Thump = FMath::Max(Thump, Frame.Thump);
 	if (Frame.bCrash)
 	{
@@ -386,9 +412,10 @@ void UGlpAudio::Apply(const FFrame& Frame)
 	{
 		Bleep = 0.35f;
 	}
-	if (Frame.bRumble)
+	if (Frame.bStarter)
 	{
-		Rumble = 0.6f;
+		Starter = 1.f;
+		StarterPhase = 0.f;
 	}
 	if (Frame.bClang)
 	{
@@ -515,18 +542,13 @@ float UGlpAudio::Synth()
 		Sum += Noise * Crash * 0.9f;
 		Crash -= 1.4f / MixRate;
 	}
-	if (Rumble > 0.f)
-	{
-		Sum += Noise * Rumble * 0.25f;
-		Rumble -= 1.2f / MixRate;
-	}
 	if (Bleep > 0.f)
 	{
 		BleepPhase += 880.f / MixRate;
 		Sum += FMath::Sin(BleepPhase * UE_TWO_PI) * 0.25f * FMath::Min(1.f, Bleep * 6.f);
 		Bleep -= 1.f / MixRate;
 	}
-	Sum += Music() + Moo() + Clang(Noise) + TrainClack(Noise) + Road(Noise);
+	Sum += Song() + ChimeSample() + StarterSample(Noise) + Moo() + Clang(Noise) + TrainClack(Noise) + Road(Noise);
 	return FMath::Tanh(Sum * SynthVolume);
 }
 
@@ -605,36 +627,209 @@ float UGlpAudio::TrainClack(float Noise)
 	return Noise * Burst * 0.5f * Current.TrainLevel + Noise * 0.04f * Current.TrainLevel;
 }
 
-float UGlpAudio::Music()
+UGlpAudio::FJingleNote UGlpAudio::JingleNote(float Beat, float Beats, int32 Midi, int32 Voice, float Level, float Bpm)
 {
-	// A 16th-note arpeggio on a square wave over a sine bass, 118 bpm, four bars, faded in and out.
-	MusicLevel += ((Current.bMusic ? 1.f : 0.f) - MusicLevel) * (2.5f / MixRate);
-	if (MusicLevel < 0.002f)
+	// EngineAudio.N: a note at a beat, lasting beats, of a voice at a level, in a song of bpm.
+	return { Beat * 60.f / Bpm, Beats * 60.f / Bpm, Midi, Voice, Level };
+}
+
+const TArray<UGlpAudio::FJingleNote>& UGlpAudio::FanfareSong()
+{
+	// Six seconds of fanfare in B flat (EngineAudio.BuildFanfare): the call, its answer up the triad and the held
+	// chord, over a bass that marks the bars.
+	static const TArray<FJingleNote> Notes = []()
+	{
+		constexpr float Bpm = 132.f;
+		TArray<FJingleNote> List;
+		const int32 Call[] = { 65, 65, 65, 70 };
+		const float CallBeats[] = { 0.f, 0.5f, 1.f, 1.5f };
+		const float CallLength[] = { 0.45f, 0.45f, 0.45f, 2.4f };
+		for (int32 i = 0; i < 4; i++)
+		{
+			List.Add(JingleNote(CallBeats[i], CallLength[i], Call[i], Brass, 0.55f, Bpm));
+		}
+		const int32 Answer[] = { 74, 72, 70, 74, 77 };
+		const float AnswerBeats[] = { 4.f, 4.5f, 5.f, 5.5f, 6.f };
+		const float AnswerLength[] = { 0.45f, 0.45f, 0.45f, 0.45f, 2.f };
+		for (int32 i = 0; i < 5; i++)
+		{
+			List.Add(JingleNote(AnswerBeats[i], AnswerLength[i], Answer[i], Brass, 0.55f, Bpm));
+		}
+		for (const int32 Midi : { 70, 74, 77, 82 })
+		{
+			List.Add(JingleNote(8.f, 4.f, Midi, Brass, 0.42f, Bpm));
+		}
+		for (const float Beat : { 0.f, 2.f, 4.f, 6.f, 8.f, 10.f })
+		{
+			List.Add(JingleNote(Beat, 1.5f, 46, Bass, 0.5f, Bpm));
+		}
+		return List;
+	}();
+	return Notes;
+}
+
+const TArray<UGlpAudio::FJingleNote>& UGlpAudio::GameOverSong()
+{
+	// Fourteen seconds for the end of a credit (EngineAudio.BuildGameOver): an FM lead over a walking bass in
+	// A minor, hats on the eighths and a snare on two and four.
+	static const TArray<FJingleNote> Notes = []()
+	{
+		constexpr float Bpm = 124.f;
+		TArray<FJingleNote> List;
+		struct FMelodyNote { float Beat; float Length; int32 Midi; };
+		const FMelodyNote Melody[] =
+		{
+			{ 0.f, 0.5f, 69 }, { 0.5f, 0.5f, 72 }, { 1.f, 1.f, 76 }, { 2.f, 0.5f, 74 }, { 2.5f, 0.5f, 72 }, { 3.f, 1.f, 74 },
+			{ 4.f, 0.5f, 72 }, { 4.5f, 0.5f, 69 }, { 5.f, 1.f, 67 }, { 6.f, 2.f, 69 },
+			{ 8.f, 0.5f, 69 }, { 8.5f, 0.5f, 72 }, { 9.f, 1.f, 76 }, { 10.f, 0.5f, 77 }, { 10.5f, 0.5f, 76 }, { 11.f, 1.f, 74 },
+			{ 12.f, 0.5f, 72 }, { 12.5f, 0.5f, 74 }, { 13.f, 0.5f, 72 }, { 13.5f, 0.5f, 71 }, { 14.f, 2.f, 69 },
+			{ 16.f, 0.5f, 76 }, { 16.5f, 0.5f, 77 }, { 17.f, 1.f, 79 }, { 18.f, 0.5f, 77 }, { 18.5f, 0.5f, 76 }, { 19.f, 1.f, 74 },
+			{ 20.f, 0.5f, 72 }, { 20.5f, 0.5f, 74 }, { 21.f, 1.f, 76 }, { 22.f, 2.f, 71 },
+			{ 24.f, 0.5f, 72 }, { 24.5f, 0.5f, 74 }, { 25.f, 1.f, 76 }, { 26.f, 0.5f, 74 }, { 26.5f, 0.5f, 72 }, { 27.f, 1.f, 71 },
+			{ 28.f, 1.f, 72 }, { 29.f, 1.f, 71 }, { 30.f, 2.f, 69 },
+		};
+		for (const FMelodyNote& Note : Melody)
+		{
+			List.Add(JingleNote(Note.Beat, Note.Length, Note.Midi, Lead, 0.5f, Bpm));
+		}
+		const int32 Roots[] = { 45, 41, 48, 43, 45, 41, 48, 43 };
+		for (int32 Bar = 0; Bar < 8; Bar++)
+		{
+			const int32 Root = Bar == 7 ? 43 : Roots[Bar];
+			List.Add(JingleNote(Bar * 4.f, 0.9f, Root, Bass, 0.6f, Bpm));
+			List.Add(JingleNote(Bar * 4.f + 1.5f, 0.4f, Root + 7, Bass, 0.45f, Bpm));
+			List.Add(JingleNote(Bar * 4.f + 2.f, 0.9f, Root, Bass, 0.6f, Bpm));
+			List.Add(JingleNote(Bar * 4.f + 3.f, 0.4f, Root + 12, Bass, 0.4f, Bpm));
+		}
+		List.Add(JingleNote(32.f, 2.f, 45, Bass, 0.6f, Bpm));
+		for (int32 Eighth = 0; Eighth < 64; Eighth++)
+		{
+			List.Add(JingleNote(Eighth * 0.5f, 0.1f, 0, Hat, Eighth % 2 == 0 ? 0.18f : 0.12f, Bpm));
+		}
+		for (int32 Bar = 0; Bar < 8; Bar++)
+		{
+			List.Add(JingleNote(Bar * 4.f + 1.f, 0.2f, 0, Snare, 0.35f, Bpm));
+			List.Add(JingleNote(Bar * 4.f + 3.f, 0.2f, 0, Snare, 0.35f, Bpm));
+		}
+		return List;
+	}();
+	return Notes;
+}
+
+float UGlpAudio::Song()
+{
+	// EngineAudio.Song: notes start on their beat and sound through their voice's envelope.
+	if (!SongNotes)
 	{
 		return 0.f;
 	}
-	static const int32 Pattern[16] = { 1, 2, 3, 4, 3, 2, 1, 2, 3, 4, 3, 4, 3, 2, 1, 0 };
-	const double Beat = MusicTime * Bpm / 60.0;
-	const int32* Chord = Chords[static_cast<int32>(Beat / 4.0) % 4];
-	const int32 Sixteenth = static_cast<int32>(Beat * 4.0);
-	const int32 Step = Pattern[Sixteenth % 16];
-	const float LeadFrequency = Step == 0 ? 0.f : 440.f * FMath::Pow(2.f, (Chord[Step] - 69) / 12.f);
-	const float BassFrequency = 440.f * FMath::Pow(2.f, (Chord[0] - 69) / 12.f);
-	MusicPhaseLead += LeadFrequency / MixRate;
-	MusicPhaseBass += BassFrequency / MixRate;
-	if (MusicPhaseLead >= 1.f)
+	const TArray<FJingleNote>& Notes = *SongNotes;
+	SongTime += 1.0 / MixRate;
+	while (SongNext < Notes.Num() && Notes[SongNext].Start <= SongTime)
 	{
-		MusicPhaseLead -= 1.f;
+		FJingleVoice& Voice = SongVoices.AddDefaulted_GetRef();
+		Voice.Note = Notes[SongNext];
+		SongNext++;
 	}
-	if (MusicPhaseBass >= 1.f)
+	float Sum = 0.f;
+	for (int32 i = SongVoices.Num() - 1; i >= 0; i--)
 	{
-		MusicPhaseBass -= 1.f;
+		FJingleVoice& V = SongVoices[i];
+		const FJingleNote& Note = V.Note;
+		V.Age += 1.f / MixRate;
+		if (V.Age > Note.Length + 0.4f)
+		{
+			SongVoices.RemoveAtSwap(i);
+			continue;
+		}
+		const float Frequency = 440.f * FMath::Pow(2.f, (Note.Midi - 69) / 12.f);
+		const float Release = V.Age > Note.Length ? FMath::Exp(-(V.Age - Note.Length) * 14.f) : 1.f;
+		float Value;
+		switch (Note.Voice)
+		{
+		case Brass:
+		{
+			// A sawtooth through a low-pass that opens with a quick attack: the brass patch of the FM chips.
+			V.Phase += Frequency / MixRate;
+			if (V.Phase >= 1.0)
+			{
+				V.Phase -= 1.0;
+			}
+			const float Saw = static_cast<float>(V.Phase * 2.0 - 1.0);
+			const float Open = FMath::Min(V.Age / 0.05f, 1.f) * (0.55f + 0.45f * FMath::Exp(-V.Age * 2.5f));
+			V.Lowpass += (Saw - V.Lowpass) * (0.12f + 0.55f * Open);
+			Value = V.Lowpass * FMath::Min(V.Age / 0.02f, 1.f) * Release;
+			break;
+		}
+		case Lead:
+		{
+			// Two-operator FM, modulator at three times the pitch, its index falling away: a bright electric piano.
+			V.ModPhase += Frequency * 3.f / MixRate;
+			V.Phase += Frequency / MixRate;
+			const float Index = 2.2f * FMath::Exp(-V.Age * 5.f) + 0.2f;
+			Value = FMath::Sin(static_cast<float>(V.Phase * UE_TWO_PI) + Index * FMath::Sin(static_cast<float>(V.ModPhase * UE_TWO_PI)));
+			Value *= FMath::Min(V.Age / 0.006f, 1.f) * FMath::Exp(-V.Age * 1.6f) * Release;
+			break;
+		}
+		case Bass:
+		{
+			V.ModPhase += Frequency / MixRate;
+			V.Phase += Frequency / MixRate;
+			const float Index = 1.4f * FMath::Exp(-V.Age * 7.f) + 0.3f;
+			Value = FMath::Sin(static_cast<float>(V.Phase * UE_TWO_PI) + Index * FMath::Sin(static_cast<float>(V.ModPhase * UE_TWO_PI)));
+			Value *= FMath::Min(V.Age / 0.005f, 1.f) * FMath::Exp(-V.Age * 2.2f) * Release;
+			break;
+		}
+		case Hat:
+			Value = Random.FRandRange(-1.f, 1.f) * FMath::Exp(-V.Age * 60.f);
+			break;
+		default:
+		{
+			V.Phase += 185.f / MixRate;
+			Value = Random.FRandRange(-1.f, 1.f) * FMath::Exp(-V.Age * 18.f) + FMath::Sin(static_cast<float>(V.Phase * UE_TWO_PI)) * FMath::Exp(-V.Age * 30.f) * 0.8f;
+			break;
+		}
+		}
+		Sum += Value * Note.Level;
 	}
-	// Short percussive envelope per sixteenth for the lead; the bass holds for the bar.
-	const float Within = static_cast<float>(Beat * 4.0 - Sixteenth);
-	const float LeadEnvelope = LeadFrequency > 0.f ? FMath::Exp(-Within * 5.f) : 0.f;
-	const float Lead = (MusicPhaseLead < 0.5f ? 1.f : -1.f) * 0.08f * LeadEnvelope;
-	const float Bass = FMath::Sin(MusicPhaseBass * UE_TWO_PI) * 0.10f;
-	MusicTime += 1.0 / MixRate;
-	return (Lead + Bass) * MusicLevel;
+	if (SongNext >= Notes.Num() && SongVoices.Num() == 0)
+	{
+		SongNotes = nullptr;
+	}
+	return Sum * 0.35f;
+}
+
+float UGlpAudio::ChimeSample()
+{
+	// The title screen's chime: a bell of two partials that rings for half a second.
+	if (ChimeLevel <= 0.f)
+	{
+		return 0.f;
+	}
+	ChimePhase += 1046.5f / MixRate;
+	const float T = 1.f - ChimeLevel;
+	const float Bell = FMath::Sin(ChimePhase * UE_TWO_PI) * 0.6f + FMath::Sin(ChimePhase * UE_TWO_PI * 2.76f) * 0.3f * FMath::Exp(-T * 9.f);
+	ChimeLevel -= 1.f / (MixRate * 0.55f);
+	return Bell * 0.3f * FMath::Exp(-T * 5.f);
+}
+
+float UGlpAudio::StarterSample(float Noise)
+{
+	// The starter motor at the turn of the key: a chugging pulse of low-passed noise with a whine on it for most of
+	// a second, the engine catching under it as the voice comes in.
+	if (Starter <= 0.f)
+	{
+		return 0.f;
+	}
+	const float T = 1.f - Starter;
+	StarterPhase += (11.f + 4.f * T) / MixRate;
+	if (StarterPhase >= 1.f)
+	{
+		StarterPhase -= 1.f;
+	}
+	const float Chug = 0.35f + 0.65f * FMath::Square(FMath::Max(FMath::Sin(StarterPhase * UE_TWO_PI), 0.f));
+	StarterLp += (Noise - StarterLp) * 0.09f;
+	const float Whine = FMath::Sin(StarterPhase * UE_TWO_PI * 18.f) * 0.25f;
+	Starter -= 1.f / (MixRate * 0.85f);
+	return (StarterLp * 1.8f + Whine) * Chug * 0.35f * FMath::Min(Starter * 4.f, 1.f);
 }

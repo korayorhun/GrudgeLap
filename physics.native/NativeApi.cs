@@ -30,7 +30,7 @@ internal static class NativeApi
 
     /// <summary>
     /// The engine voice of a car from the grain banks in <paramref name="folder"/>: engine_drive.wav/.json, and
-    /// engine_idle.wav/.json when the folder has them (tools/make-engine-bank.py writes both pairs).
+    /// engine_idle and engine_overrun .wav/.json when the folder has them (tools/make-engine-bank.py writes the pairs).
     /// </summary>
     public static GranularEngine CreateEngine(string folder, int cylinders)
     {
@@ -41,7 +41,7 @@ internal static class NativeApi
             return File.Exists(wav) && File.Exists(marks) ? GrainBank.FromFiles(wav, marks) : null;
         }
         var drive = Bank("engine_drive") ?? throw new FileNotFoundException($"no engine_drive.wav and .json in {folder}");
-        return new GranularEngine(Bank("engine_idle"), drive, cylinders);
+        return new GranularEngine(Bank("engine_idle"), drive, cylinders, overrun: Bank("engine_overrun"));
     }
 
     public static string CarName(int car) => Spec(car).Name;

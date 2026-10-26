@@ -25,13 +25,17 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   heights, blending alone had lifted it 2.6 m through the lower road. Skid pads are flat
   discs blended in; beyond the outermost road a ring of hills rises over half a kilometre and fades before
   the far plane. The same field answers the physics probe off the road, places the props and builds the
-  terrain mesh; `Height(x, z, out roadWeight)` also says how close to a road edge a point is.
-- **Decor** — `OriginalInspiredTrack` places the props the way the 1989 circuit had them: the start gantry,
-  crossbucks at the level crossing, the barn with "33" on its back door, cows, an orange and a white
-  farmhouse, the gas station with its pumps, the hut, flowers, sawhorse barriers before the stunts, fields
-  (plough, crop, hay) slid outward until they clear every road, hedgerow trees on their far side, the
-  skid-pad column and a hint sign. Props are *solid* (crash) or *soft*: a cow moos and a sign tips over,
-  once, with no penalty.
+  terrain mesh; `Height(x, z, out roadWeight)` also says how close to a road edge a point is. The mountain
+  range on the horizon is the view's alone (`WorldBuilder.BuildMountains`, 3.2 to 6.4 km out, 240 to 560 m
+  high): nothing drives there.
+- **Decor** — `OriginalInspiredTrack` places the props the way the 1989 circuit had them, and in its order
+  along the stunt route (read off the arcade's attract lap): the start gantry, the green fork gantry with its
+  traffic light on the crest, the barn with "33" on its back door and its cows before the drawbridge, the
+  gas station with its pumps between the bridge and the loop, the red checkpoint banner just after the loop,
+  crossbucks at the level crossing, an orange and a white farmhouse, the hut, flowers, sawhorse barriers
+  before the stunts, fields (plough, crop, hay) slid outward until they clear every road, hedgerow trees on
+  their far side, the skid-pad column and a hint sign. Props are *solid* (crash) or *soft*: a cow moos and a
+  sign tips over, once, with no penalty.
 - **Train** — `Train`: a kinematic locomotive and wagons that cross the speed route on a schedule (run,
   pause, run), on no rails as in 1989. The session treats a car under it as a crash; the scripted driver
   stops short of the crossing when a run is due.
@@ -71,10 +75,15 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   field (embankments, cuttings, dips, rolling fields, the hill ring) every 14 m and every 2 m in the cells a
   road's earthwork reaches, 4 cm under the asphalt, with vertex-colour variation and a trodden tint along
   the road edges (the 14 m grid alone floated the road over dips and buried it where it levels out); photo-textured road ribbons (CC0 ambientCG) in six strips with the
-  alternating slab shades of the original and darker wheel tracks, gravel shoulders (orange on the stunt
+  alternating slab shades of the original and darker wheel tracks, 2.2 m dirt shoulders (orange on the stunt
   structures, everywhere in 1989 mode), dashed centre line, bridge decks with steel guardrails and pillars
-  down to the ground, the skid pad; HDRI sky with the sun aimed where the picture has it, cascaded shadows,
-  SDFGI, SSAO, SSIL, screen-space reflections, a thin volumetric haze, AgX tone mapping and TAA.
+  down to the ground, the skid pad; where the two branches share the road at the fork and at the merge only
+  the outer edges keep their line and shoulder and the stunt ribbon sits a centimetre lower (`SiblingSide`:
+  the lines crossed and the ribbons flickered); a ring of mountains round the horizon (ridged noise, forest,
+  rock and snow by height and slope) and the hills beyond the roads tinted as woods; clear-sky HDRI with the
+  sun aimed where the picture has it (the partly cloudy sky before it washed the plain to grey), cascaded
+  shadows, SDFGI, SSAO, SSIL, screen-space reflections, a trace of volumetric haze, light fog with little
+  aerial perspective so the range stays crisp, AgX tone mapping and TAA.
 - Foliage (`FoliageBuilder`): grass tufts as crossed alpha-scissor cards in multimeshes, dense along the
   roads and sparse over the ground, olive-tinted to the terrain and faded out beyond 150 m; trees as a
   bark trunk with branches under a canopy of leaf-cluster cards; fields as terrain-hugging patches
@@ -91,9 +100,11 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   Quads are wound by the ring direction (tangent turned clockwise = outward), normals are smoothed below a
   60 degree crease angle. The three character lines of each section (shoulder, bonnet edge / greenhouse
   base, crest) are rounded with 35-50 mm fillets in four sub-strips, so highlights roll over them like
-  pressed steel; glass, trim and seams are still decided on the twenty-point design outline. Two styles: the flat-twelve (blade nose, lamp lids, dipped bonnet, small cabin,
-  strakes, louvres, slatted tail, A-pillar mirror) and the V8 (low wide nose, long screen, glass engine
-  cover, side scoops, round lamps, four tips, lip). Panel shut lines are dark strips of the loft itself (a
+  pressed steel; glass, trim and seams are still decided on the twenty-point design outline. Two styles: the flat-twelve (wedge nose with the lamp lids flush in the
+  wing crests and outlined by their shut line, dipped bonnet, small cabin, door-length strakes that fan out
+  into the mouth ahead of the rear arch, louvres, slatted tail, the single mirror up the A-pillar at roof
+  height) and the V8 (low wide nose, long screen, glass engine cover, side scoops, round lamps, four tips,
+  lip). Panel shut lines are dark strips of the loft itself (a
   pair of stations 14 mm apart at each seam); a plate, indicators, door handles, brake discs with red
   calipers and a cellular tread grain on the tyres finish the outside. The cabin is lined and furnished,
   in CC0 leather, carpet and fabric: door trim and roof lining are the loft's opaque upper strips again,
@@ -136,8 +147,11 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   one-shots from a CC0 recording drawn at random with a spread of pitch and level; synthesised wind that
   grows with speed and a thump when the suspension is jolted; the pulse-train engine and a filtered-noise
   squeal kept for 1989 mode; crash burst, checkpoint bleep, a cow's moo (formants on a sagging pitch), the
-  clang of a sign going over, the clack of the train's wheels when it runs nearby, and a four-bar synth tune
-  on the title screen and in replays; a limiter on the master bus. Loops imported compressed (QOA) must end
+  clang of a sign going over, the clack of the train's wheels when it runs nearby, and the cabinet's own
+  moments: a chime at every choice on the title screen, the starter at the turn of the key, a brass fanfare
+  when a lap beats the record and an FM tune when the credit is over (our notes in the timbres of the FM
+  chips; the arcade had no music while driving, so neither does this). The overrun recordings take the
+  run-up's place as the throttle closes. A limiter on the master bus. Loops imported compressed (QOA) must end
   at `GetLength() × MixRate` frames, not at the data's byte count: that once cut every loop to its first
   fifth, with a click at each turn.
 - "1989 mode" (F8): a third of the render resolution, 20 fps, textures and normal maps off, nearest
@@ -219,7 +233,7 @@ submission, the earlier new-package requests were withdrawn.
    the recipe of the expired 1991 patent); until then, keyboard only.
 2. A cleaner twelve-cylinder recording for the 1984 car if one with a usable licence turns up.
 3. A crash sample instead of the synthesised burst (the tyres and the V8's pops are recorded); a longer
-   tune.
+   overrun recording for the twelve (its bank is one second long).
 4. More circuits built with the same turtle API; the hidden skid pad could grow cones and a timer.
 5. Scanned models instead of lofts and primitives: a car body with real curvature (the loft has twenty
    design points per section, three of them filleted) and buildings with real geometry would be the next

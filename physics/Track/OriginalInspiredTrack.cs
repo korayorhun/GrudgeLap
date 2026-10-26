@@ -6,12 +6,13 @@ namespace GrudgeLap.Physics.Track;
 /// The default circuit, laid out in the spirit of the 1989 course: a start straight under a green gantry that
 /// bridges over the speed route's return leg, a long hill with the fork on its crest, a speed route that
 /// swings round the east side past a barn and its cows, crosses a railway, dives back diagonally under the
-/// start through two dips and circles the farm to the north-west, a stunt route that drops off the hill to
-/// the open drawbridge, bridges over the speed route, runs the loop on its bottom straight, swings through
-/// the banked 180 and climbs back north to the merge, and a hidden skid pad round a column in the open
-/// ground off the speed route. Farm fields, houses, the shop with its pumps, the camouflaged hut, flowers,
-/// yellow signs that tip over, sawhorse barriers and the rail-less train are the decor of the original;
-/// geometry is ours, only the rhythm is borrowed.
+/// start through two dips and circles the farm to the north-west, a stunt route that drops off the hill past
+/// a barn to the open drawbridge, bridges over the speed route, passes the shop with its pumps, runs the loop
+/// on its bottom straight with the checkpoint gate just after it, swings through the banked 180 and climbs
+/// back north to the merge, and a hidden skid pad round a column in the open ground off the speed route.
+/// Farm fields, houses, the shop, the camouflaged hut, flowers, yellow signs that tip over, sawhorse barriers
+/// and the rail-less train are the decor of the original, met in its order; geometry is ours, only the rhythm
+/// is borrowed.
 /// </summary>
 public static class OriginalInspiredTrack
 {
@@ -94,13 +95,13 @@ public static class OriginalInspiredTrack
             .Straight(90f)
             .Curve(45f, 80f)
             .Mark(MarkerKind.ReturnPoint, "stunt-3")
-            .Straight(160f)
-            .Mark(MarkerKind.Checkpoint, "stunt")
-            .Straight(100f)
+            .Straight(260f)                       // past the shop with its pumps, the loop ahead
             .Mark(MarkerKind.Sign, "60")
             .Loop(15f, 11f)
             .Mark(MarkerKind.ReturnPoint, "stunt-4")
-            .Straight(120f)
+            .Straight(60f)
+            .Mark(MarkerKind.Checkpoint, "stunt")   // after the loop, as the original's checkpoint gate came
+            .Straight(60f)
             .Mark(MarkerKind.Sign, "DIP")
             .Hill(100f, -2.5f)
             .Straight(150f)
@@ -291,10 +292,7 @@ public static class OriginalInspiredTrack
         Field(speed, speed.Length * 0.165f, 118f, 70f, 60f, "crop");
         Beside(speed, speed.Length * 0.08f, -60f, PropKind.Flowers, new Vector3(8f, 0.5f, 8f));
 
-        // ---- The diagonal: the level crossing, the shop with its pumps, flowers -----------------------------
-        Beside(speed, speed.Length * 0.46f, -46f, PropKind.Shop, new Vector3(14f, 5f, 10f), "GAS", 90f);
-        Beside(speed, speed.Length * 0.46f - 9f, -34f, PropKind.Pump, new Vector3(1.0f, 1.8f, 0.6f), "", 90f);
-        Beside(speed, speed.Length * 0.46f - 4f, -34f, PropKind.Pump, new Vector3(1.0f, 1.8f, 0.6f), "", 90f);
+        // ---- The diagonal: the level crossing, flowers -------------------------------------------------------
         Beside(speed, speed.Length * 0.41f, 40f, PropKind.Flowers, new Vector3(8f, 0.5f, 8f));
         Beside(speed, speed.Length * 0.52f, 36f, PropKind.Flowers, new Vector3(7f, 0.5f, 7f));
 
@@ -308,7 +306,14 @@ public static class OriginalInspiredTrack
         Field(speed, speed.Length * 0.74f, -130f, 120f, 90f, "hay");
         Field(speed, speed.Length * 0.66f, -110f, 90f, 70f, "crop");
 
-        // ---- Stunt side: a house past the bridge, a cow by the bottom straight, barriers at the fork ---------
+        // ---- Stunt side, in the original's order: the barn before the drawbridge, the shop with its pumps between the
+        // bridge and the loop, a house past the banked curve, a cow by the bottom straight, barriers at the fork -------
+        Beside(stunt, 120f, -48f, PropKind.Barn, new Vector3(16f, 8f, 11f), "33", 20f);
+        Beside(stunt, 138f, -40f, PropKind.Cow, new Vector3(2.2f, 1.5f, 0.8f), "", -60f);
+        Beside(stunt, 112f, -62f, PropKind.Cow, new Vector3(2.2f, 1.5f, 0.8f), "", 30f);
+        Beside(stunt, stunt.Length * 0.34f, 46f, PropKind.Shop, new Vector3(14f, 5f, 10f), "GAS", -90f);
+        Beside(stunt, stunt.Length * 0.34f + 9f, 34f, PropKind.Pump, new Vector3(1.0f, 1.8f, 0.6f), "", -90f);
+        Beside(stunt, stunt.Length * 0.34f + 4f, 34f, PropKind.Pump, new Vector3(1.0f, 1.8f, 0.6f), "", -90f);
         Beside(stunt, stunt.Length * 0.52f, 40f, PropKind.House, new Vector3(10f, 7f, 9f), "white", 25f);
         Beside(stunt, stunt.Length * 0.72f, -36f, PropKind.Cow, new Vector3(2.2f, 1.5f, 0.8f));
         Field(stunt, stunt.Length * 0.44f, 85f, 130f, 80f, "plough");

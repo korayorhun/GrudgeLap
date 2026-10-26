@@ -133,13 +133,35 @@ internal static class PropBuilder
                 break;
 
             case PropKind.Signpost:
+                // The gantries of the original: a red checkpoint banner on timber posts, and the green fork sign on
+                // the crest with the traffic light hanging under it (speed carries straight on, stunt drops off to the right).
                 var span = MathF.Max(size.X, 13f);
-                var post = Plain(new Color(0.22f, 0.45f, 0.22f));
+                var checkpoint = prop.Label == "CHECKPOINT";
+                var post = Plain(checkpoint ? new Color(0.42f, 0.28f, 0.16f) : new Color(0.22f, 0.45f, 0.22f));
+                var banner = Plain(checkpoint ? new Color(0.70f, 0.09f, 0.07f) : new Color(0.22f, 0.45f, 0.22f));
                 Cylinder(node, 0.18f, 5.5f, post, y: 2.75f, x: -span * 0.5f);
                 Cylinder(node, 0.18f, 5.5f, post, y: 2.75f, x: span * 0.5f);
-                Box(node, new SN.Vector3(span, 1.1f, 0.2f), post, y: 5.2f);
-                // On the crest of the hill: speed carries straight on, stunt drops off to the right.
-                Label(node, prop.Label == "SPEED/STUNT" ? "SPEED  ^     |     STUNT  >" : prop.Label, new Vector3(0f, 5.2f, 0.12f), 64);
+                Box(node, new SN.Vector3(span, 1.1f, 0.2f), banner, y: 5.2f);
+                if (checkpoint)
+                {
+                    Label(node, prop.Label, new Vector3(0f, 5.2f, 0.12f), 64);
+                }
+                else
+                {
+                    Label(node, "SPEED TRACK  ^", new Vector3(-span * 0.22f, 5.2f, 0.12f), 44);
+                    Label(node, "STUNT TRACK  >", new Vector3(span * 0.22f, 5.2f, 0.12f), 44);
+                    Box(node, new SN.Vector3(0.42f, 1.15f, 0.36f), Plain(new Color(0.08f, 0.08f, 0.09f)), y: 4.05f);
+                    foreach (var (dy, colour, lit) in new[] { (0.36f, new Color(0.35f, 0.04f, 0.03f), false), (0f, new Color(0.35f, 0.25f, 0.03f), false), (-0.36f, new Color(0.10f, 0.95f, 0.25f), true) })
+                    {
+                        var lampMaterial = new StandardMaterial3D { AlbedoColor = colour, EmissionEnabled = lit, Emission = colour, EmissionEnergyMultiplier = 1.5f };
+                        node.AddChild(new MeshInstance3D
+                        {
+                            Mesh = new CylinderMesh { TopRadius = 0.13f, BottomRadius = 0.13f, Height = 0.05f, Material = lampMaterial, RadialSegments = 16 },
+                            Position = new Vector3(0f, 4.05f + dy, 0.19f),
+                            RotationDegrees = new Vector3(90f, 0f, 0f),
+                        });
+                    }
+                }
                 break;
 
             case PropKind.Gate:

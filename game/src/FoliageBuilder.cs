@@ -100,9 +100,9 @@ internal static class FoliageBuilder
             var yaw = (float)(rng.NextDouble() * Mathf.Tau);
             var basis = new Basis(Vector3.Up, yaw).Scaled(new Vector3(scale, scale * (0.85f + 0.3f * (float)rng.NextDouble()), scale));
             transforms[v].Add(new Transform3D(basis, Convert.ToGodot(new SN.Vector3(x, y, z))));
-            // Olive, close to the ground texture's tint, so the tufts read as part of the grass rather than as sprites.
-            var tone = 0.42f + 0.22f * (float)rng.NextDouble();
-            colours[v].Add(new Color(tone * (0.85f + 0.2f * (float)rng.NextDouble()), tone, tone * 0.62f));
+            // Close to the ground texture's tint, so the tufts read as part of the grass rather than as dark specks.
+            var tone = 0.58f + 0.24f * (float)rng.NextDouble();
+            colours[v].Add(new Color(tone * (0.78f + 0.2f * (float)rng.NextDouble()), tone, tone * 0.58f));
         }
 
         // Dense along every road, thinning out with distance from the shoulder.
@@ -139,7 +139,7 @@ internal static class FoliageBuilder
         {
             for (var z = minZ - 300f; z <= maxZ + 300f; z += 9f)
             {
-                if (rng.NextDouble() > 0.4) continue;
+                if (rng.NextDouble() > 0.22) continue;
                 Place(x + (float)rng.NextDouble() * 8f, z + (float)rng.NextDouble() * 8f, 0.7f + 0.6f * (float)rng.NextDouble());
             }
         }

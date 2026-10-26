@@ -29,7 +29,7 @@ MAP = "/Game/Maps/Feasibility"
 TEMPLATE = "/Engine/Maps/Templates/Template_Default"
 GAME = "/Game/GrudgeLap"
 # Godot's sun (WorldBuilder.SunDirection, towards the sun), so both engines light the scene from the same place.
-SUN_DIRECTION = (-0.377, 0.742, -0.554)
+SUN_DIRECTION = (-0.431, 0.682, -0.591)   # WorldBuilder.SunDirection: the sun of the clear-sky HDRI the Godot version shows
 
 eal = unreal.EditorAssetLibrary
 mel = unreal.MaterialEditingLibrary
@@ -804,12 +804,13 @@ def dress_car(car, materials):
 
 def dress_track(actors):
     # Terrain UVs span the 5 km ground (world * 0.0002 + 0.5); road UVs run 0..1 across 11 m and in metres along;
-    # shoulder strips run 0..1 across 1.3 m. Tile sizes are the scans' real ones (Poly Haven "dimensions").
+    # shoulder strips run 0..1 across 2.2 m. Tile sizes are the scans' real ones (Poly Haven "dimensions").
     # Mean linear albedos measured from the scans: asphalt 0.10 (kept), the aerial grass (0.17, 0.12, 0.03) is a
     # dry yellow; the tint turns it to a meadow's (0.09, 0.12, 0.03).
     ground = surface_material("M_Ground", "aerial_grass_rock", 5000 / 15.0, 5000 / 15.0, tint=(0.5, 1.0, 1.3), macro=23.0)
     asphalt = surface_material("M_Asphalt", "asphalt_02", 11.0 / 3.0, 1 / 3.0, tint=(0.9, 0.9, 0.9))
-    verge = surface_material("M_Verge", "grass_path_2", 1.3, 1.0)
+    # Dry earth, as the Godot version's shoulders and the orange dirt of the original; the grass path read as lawn.
+    verge = surface_material("M_Verge", "brown_mud_dry", 2.2, 1.0, tint=(1.15, 0.95, 0.75))
     for label, actor in actors.items():
         material = ground if label == "Terrain" else asphalt if label.startswith("Road-") else verge if label.startswith("Shoulder-") else None
         if material is None:
@@ -1127,7 +1128,7 @@ def cameras(placements, extra):
     return shots
 
 
-SUN_LUX = 75000.0   # clear-sky sun at about 48 degrees
+SUN_LUX = 75000.0   # clear-sky sun at about 43 degrees
 EXPOSURE_EV100 = 14.0
 
 
@@ -1150,6 +1151,15 @@ def light_and_look():
         elif isinstance(actor, unreal.SkyLight):
             actor.root_component.set_mobility(unreal.ComponentMobility.MOVABLE)
             actor.light_component.set_editor_property("real_time_capture", True)
+        elif isinstance(actor, unreal.ExponentialHeightFog):
+            # The template's fog hides anything a few kilometres out; the Godot version's mountain range stands
+            # 3 to 6 km from the circuit and should only pick up a little of the air's blue, as it does there.
+            fog = actor.get_component_by_class(unreal.ExponentialHeightFogComponent)
+            for name, value in (("fog_density", 0.004), ("fog_height_falloff", 0.3), ("start_distance", 2000.0)):
+                try:
+                    fog.set_editor_property(name, value)
+                except Exception as error:  # a renamed setting must not stop the build
+                    log(f"fog {name}: {error}")
     volume = actor_sub.spawn_actor_from_class(unreal.PostProcessVolume, unreal.Vector(0, 0, 0))
     volume.set_actor_label("Look")
     volume.set_folder_path("GrudgeLap")

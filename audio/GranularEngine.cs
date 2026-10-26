@@ -10,10 +10,12 @@ namespace GrudgeLap.Audio;
 /// rate changes (where a slowed-down loop turned to mud).
 /// </summary>
 /// <remarks>
-/// Two banks: one recorded at idle and one recorded running up through a gear. Between the top of the idle
-/// recording and the bottom of the run-up both play, crossfaded. Load shapes the sound like an open or closed
-/// throttle (a low-pass that opens and a level that rises); <see cref="Interior"/> hears it through the cabin's
-/// bulkhead. The voice renders at its banks' rate, allocates nothing per call and is used from one thread.
+/// Two banks, three where a car has one: one recorded at idle, one recorded running up through a gear, and an
+/// optional one recorded on the overrun (throttle shut, the revs falling), which takes over from the run-up as
+/// the load comes off. Between the top of the idle recording and the bottom of the run-up both play, crossfaded.
+/// Load shapes the sound like an open or closed throttle (a low-pass that opens and a level that rises);
+/// <see cref="Interior"/> hears it through the cabin's bulkhead. The voice renders at its banks' rate,
+/// allocates nothing per call and is used from one thread.
 /// </remarks>
 public sealed class GranularEngine
 {
@@ -24,6 +26,7 @@ public sealed class GranularEngine
 
     private readonly GrainBank? _idle;
     private readonly GrainBank _drive;
+    private readonly GrainBank? _overrun;
     private readonly int _cylinders;
     private readonly Random _random;
     private readonly float[] _sum = new float[RingSize];
@@ -35,6 +38,7 @@ public sealed class GranularEngine
     private double _nextPulse;
     private int _idlePulse = 1;
     private int _drivePulse = 1;
+    private int _overrunPulse = 1;
     private bool _started;
     private float _rpm;
     private float _load;
@@ -45,17 +49,22 @@ public sealed class GranularEngine
     private Biquad _cabinHigh;
     private Biquad _cabinBody;
 
-    public GranularEngine(GrainBank? idle, GrainBank drive, int cylinders, int seed = 7)
+    public GranularEngine(GrainBank? idle, GrainBank drive, int cylinders, int seed = 7, GrainBank? overrun = null)
     {
-        if (idle is not null && idle.SampleRate != drive.SampleRate) throw new ArgumentException("the banks are at different rates");
+        if (idle is not null && idle.SampleRate != drive.SampleRate || overrun is not null && overrun.SampleRate != drive.SampleRate)
+        {
+            throw new ArgumentException("the banks are at different rates");
+        }
         _idle = idle;
         _drive = drive;
+        _overrun = overrun;
         _cylinders = cylinders;
         _random = new Random(seed);
         // A grain reaches back over the period before its pulse: pulses are laid that far ahead of the output, which
         // is also how late the voice follows the revs (about 18 ms at idle).
-        _latency = Math.Max(idle?.LongestLead ?? 0, drive.LongestLead) + 1;
-        if (_latency + Math.Max(idle?.LongestGrain ?? 0, drive.LongestGrain) > RingSize) throw new ArgumentException("a grain is too long for the ring");
+        _latency = Math.Max(Math.Max(idle?.LongestLead ?? 0, overrun?.LongestLead ?? 0), drive.LongestLead) + 1;
+        var longest = Math.Max(Math.Max(idle?.LongestGrain ?? 0, overrun?.LongestGrain ?? 0), drive.LongestGrain);
+        if (_latency + longest > RingSize) throw new ArgumentException("a grain is too long for the ring");
         _idleTopRpm = idle is null ? 0f : idle.MaxFiring * 120f / cylinders * 1.12f;
         _driveBottomRpm = MathF.Max(drive.MinFiring * 120f / cylinders, _idleTopRpm + 200f);
         _nextPulse = _latency;
@@ -126,8 +135,12 @@ public sealed class GranularEngine
     {
         var firing = MathF.Max(rpm, 300f) * _cylinders / 120f;
         var drive = _idle is null ? 1f : SmoothStep((rpm - _idleTopRpm) / (_driveBottomRpm - _idleTopRpm));
+        // Off the throttle the overrun recording takes the run-up's place: no combustion pulses, the exhaust's rasp.
+        var overrun = _overrun is null ? 0f : drive * SmoothStep((0.40f - _smoothLoad) / 0.30f);
+        drive -= overrun;
         if (drive > 0.002f) Add(_drive, Pick(_drive, ref _drivePulse, firing), centre, drive);
-        if (drive < 0.998f && _idle is not null) Add(_idle, Pick(_idle, ref _idlePulse, firing), centre, 1f - drive);
+        if (overrun > 0.002f) Add(_overrun!, Pick(_overrun!, ref _overrunPulse, firing), centre, overrun);
+        if (drive + overrun < 0.998f && _idle is not null) Add(_idle, Pick(_idle, ref _idlePulse, firing), centre, 1f - drive - overrun);
     }
 
     /// <summary>The recording's next pulse while it still fits the revs (its natural sequence), otherwise one of the nearest.</summary>
@@ -157,8 +170,10 @@ public sealed class GranularEngine
 
     private void UpdateFilters(float rpm, float rate)
     {
-        // A closed throttle muffles the exhaust; open, it is bright. The cutoff follows the smoothed load.
-        _throttle.SetLowPass(1100f + 11000f * MathF.Pow(_smoothLoad, 1.5f), 0.6f, rate);
+        // A closed throttle muffles the exhaust; open, it is bright. The cutoff follows the smoothed load. With an
+        // overrun recording the closed-throttle sound is its own and keeps its rasp, so the filter shuts less.
+        var shut = _overrun is null ? 1100f : 2600f;
+        _throttle.SetLowPass(shut + (12100f - shut) * MathF.Pow(_smoothLoad, 1.5f), 0.6f, rate);
         _cabinHigh.SetLowPass(2600f, 0.7f, rate);
         _cabinBody.SetPeak(130f, 0.9f, 5f, rate);
     }

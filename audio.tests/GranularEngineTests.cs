@@ -12,10 +12,28 @@ public class GranularEngineTests
 {
     private static readonly string Audio = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "game", "assets", "audio"));
 
-    private static GranularEngine Load(string car, int cylinders) => new(
-        GrainBank.FromFiles(Path.Combine(Audio, car, "engine_idle.wav"), Path.Combine(Audio, car, "engine_idle.json")),
-        GrainBank.FromFiles(Path.Combine(Audio, car, "engine_drive.wav"), Path.Combine(Audio, car, "engine_drive.json")),
-        cylinders);
+    private static GrainBank Bank(string car, string name) => GrainBank.FromFiles(Path.Combine(Audio, car, name + ".wav"), Path.Combine(Audio, car, name + ".json"));
+
+    private static GranularEngine Load(string car, int cylinders, bool overrun = false) =>
+        new(Bank(car, "engine_idle"), Bank(car, "engine_drive"), cylinders, overrun: overrun ? Bank(car, "engine_overrun") : null);
+
+    /// <summary>The overrun recording takes over off the throttle: still at the firing frequency, but another sound than the run-up gives there.</summary>
+    [Theory]
+    [InlineData("v8", 8, 5600f)]
+    [InlineData("flat12", 12, 4800f)]
+    public void Overrun_bank_sounds_off_the_throttle_at_the_firing_frequency(string car, int cylinders, float rpm)
+    {
+        var with = Load(car, cylinders, overrun: true);
+        var without = Load(car, cylinders);
+        var closed = Hold(with, rpm, 0f, 2f);
+        var plain = Hold(without, rpm, 0f, 2f);
+        var firing = rpm * cylinders / 120f;
+        Assert.InRange(Peak(closed, with.SampleRate, firing * 0.8f, firing * 1.2f), firing * 0.97f, firing * 1.03f);
+        Assert.True(closed.Max(MathF.Abs) > 0.01f, "the overrun is silent");
+        Assert.NotEqual(plain.Skip(plain.Length - 4410).ToArray(), closed.Skip(closed.Length - 4410).ToArray());
+        // Full throttle is the run-up alone, with or without the overrun bank.
+        Assert.Equal(Hold(Load(car, cylinders), rpm, 1f, 1f), Hold(Load(car, cylinders, overrun: true), rpm, 1f, 1f));
+    }
 
     private static float[] Hold(GranularEngine engine, float rpm, float load, float seconds)
     {

@@ -47,18 +47,19 @@ internal sealed partial class SampledEngine : Node
         if (_loaded == style) return;
         _loaded = style;
         var folder = style == CarStyle.V8 ? "v8" : "flat12";
-        var drive = Bank(folder, "engine_drive");
-        _engine = drive is null ? null : new GranularEngine(Bank(folder, "engine_idle"), drive, style == CarStyle.V8 ? 8 : 12);
+        var drive = Bank(folder, "engine_drive", required: true);
+        _engine = drive is null ? null : new GranularEngine(Bank(folder, "engine_idle"), drive, style == CarStyle.V8 ? 8 : 12, overrun: Bank(folder, "engine_overrun"));
     }
 
-    private static GrainBank? Bank(string folder, string name)
+    /// <summary>A grain bank of the car's folder; only the run-up is required, a car may have no idle or overrun recording.</summary>
+    private static GrainBank? Bank(string folder, string name, bool required = false)
     {
         var wav = $"res://assets/audio/{folder}/{name}.wav";
         var marks = $"res://assets/audio/{folder}/{name}.json";
         var stream = ResourceLoader.Exists(wav) ? GD.Load<AudioStreamWav>(wav) : null;
         if (stream is null || !Godot.FileAccess.FileExists(marks))
         {
-            GD.PrintErr($"engine grain bank missing: {folder}/{name}");
+            if (required) GD.PrintErr($"engine grain bank missing: {folder}/{name}");
             return null;
         }
         if (stream.Format != AudioStreamWav.FormatEnum.Format16Bits || stream.Stereo)

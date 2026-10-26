@@ -506,8 +506,7 @@ void AGlpGame::Tick(float DeltaSeconds)
 	UpdateTipping();
 	if (Audio)
 	{
-		const bool bMusic = Current.phase == GLP_PHASE_SELECT_TRANSMISSION || Current.phase == GLP_PHASE_REPLAY || Current.phase == GLP_PHASE_FINISHED;
-		Audio->Update(Current, TrainDistance, bMusic, InCockpit(), DeltaSeconds);
+		Audio->Update(Current, TrainDistance, InCockpit(), DeltaSeconds);
 	}
 	if (Instruments)
 	{
@@ -537,22 +536,39 @@ bool AGlpGame::HandleMenu()
 		}
 		SaveSettings();
 		NewSession();
+		if (Audio)
+		{
+			Audio->Chime();
+		}
 		return false;
 	}
+	// The cabinet chimed at every choice.
 	if (Input.Pressed(EKeys::One))
 	{
 		Transmission = GLP_AUTOMATIC;
 		SaveSettings();
+		if (Audio)
+		{
+			Audio->Chime();
+		}
 	}
 	else if (Input.Pressed(EKeys::Two))
 	{
 		Transmission = GLP_MANUAL_AUTO_CLUTCH;
 		SaveSettings();
+		if (Audio)
+		{
+			Audio->Chime();
+		}
 	}
 	else if (Input.Pressed(EKeys::Three))
 	{
 		Transmission = GLP_MANUAL_CLUTCH;
 		SaveSettings();
+		if (Audio)
+		{
+			Audio->Chime();
+		}
 	}
 	// One press goes from the title to a running engine: the choice and the key on the same frame.
 	if (!Input.Pressed(EKeys::Enter) && !Input.Pressed(EKeys::SpaceBar))

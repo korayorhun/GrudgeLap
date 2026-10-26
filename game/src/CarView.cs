@@ -203,19 +203,23 @@ internal sealed partial class CarView : Node3D
         public Color CarpetTint = new(0.29f, 0.23f, 0.22f);       // multiplies the beige carpet photo
         public Color HeadlinerTint = new(0.66f, 0.62f, 0.56f);    // multiplies the grey fabric photo of the roof lining
 
-        /// <summary>The 1984 flat-twelve: blade nose, lamp lids, dipped bonnet, small cabin, widening rear, strakes, louvres, slatted tail.</summary>
+        /// <summary>
+        /// The 1984 flat-twelve: blade nose, lamp lids, dipped bonnet, small cabin, widening rear, strakes, louvres,
+        /// slatted tail. The bonnet rises little from the nose (a wedge, not a shovel): its first stations sit higher
+        /// than the loft once did, the way the period car's long flat bonnet does.
+        /// </summary>
         public static readonly BodyStyle FlatTwelve = new()
         {
             Keys = [-2.26f, -2.05f, -1.71f, -1.27f, -0.83f, -0.72f, -0.20f, 0.40f, 0.84f, 1.28f, 1.72f, 2.20f],
             FloorH = [0.22f, 0.17f, 0.15f, 0.15f, 0.15f, 0.15f, 0.15f, 0.15f, 0.15f, 0.15f, 0.17f, 0.21f],
             HalfWidth = [0.86f, 0.90f, 0.93f, 0.94f, 0.95f, 0.95f, 0.955f, 0.965f, 0.975f, 0.99f, 0.985f, 0.95f],
             WaistH = [0.40f, 0.43f, 0.46f, 0.46f, 0.46f, 0.46f, 0.46f, 0.47f, 0.48f, 0.50f, 0.49f, 0.48f],
-            ShoulderH = [0.50f, 0.56f, 0.63f, 0.71f, 0.75f, 0.78f, 0.82f, 0.84f, 0.86f, 0.87f, 0.86f, 0.84f],
+            ShoulderH = [0.52f, 0.575f, 0.635f, 0.71f, 0.75f, 0.78f, 0.82f, 0.84f, 0.86f, 0.87f, 0.86f, 0.84f],
             EdgeW = [0.80f, 0.84f, 0.86f, 0.88f, 0.88f, 0.74f, 0.71f, 0.73f, 0.80f, 0.84f, 0.86f, 0.86f],
-            EdgeH = [0.52f, 0.585f, 0.65f, 0.73f, 0.77f, 0.80f, 0.86f, 0.87f, 0.92f, 0.93f, 0.925f, 0.89f],
+            EdgeH = [0.55f, 0.605f, 0.66f, 0.73f, 0.77f, 0.80f, 0.86f, 0.87f, 0.92f, 0.93f, 0.925f, 0.89f],
             CrestW = [0.62f, 0.62f, 0.62f, 0.62f, 0.62f, 0.62f, 0.60f, 0.61f, 0.64f, 0.64f, 0.65f, 0.66f],
-            CrestH = [0.53f, 0.60f, 0.665f, 0.745f, 0.785f, 0.81f, 1.10f, 1.10f, 0.94f, 0.95f, 0.94f, 0.905f],
-            CentreH = [0.50f, 0.545f, 0.59f, 0.67f, 0.735f, 0.80f, 1.13f, 1.13f, 0.95f, 0.955f, 0.945f, 0.905f],
+            CrestH = [0.585f, 0.635f, 0.68f, 0.745f, 0.785f, 0.81f, 1.10f, 1.10f, 0.94f, 0.95f, 0.94f, 0.905f],
+            CentreH = [0.555f, 0.595f, 0.635f, 0.685f, 0.735f, 0.80f, 1.13f, 1.13f, 0.95f, 0.955f, 0.945f, 0.905f],
             LampLids = true,
             Strakes = true,
             Louvres = true,
@@ -693,11 +697,18 @@ internal sealed partial class CarView : Node3D
 
         if (style.LampLids)
         {
-            // Pop-up lamp lids on the wing crests, visible from the driver's seat too.
+            // Pop-up lamp lids flush in the wing crests, outlined by their shut line; visible from the driver's seat
+            // too. Standing proud they read as two blocks on the bonnet.
             var lidZ = style.Keys[0] + 0.42f;
-            var lidY = style.Sample(style.CrestH, lidZ) - 0.02f;
-            Box(body, new Vector3(0.44f, 0.06f, 0.36f), new Vector3(-0.58f, lidY, lidZ), solidPaint);
-            Box(body, new Vector3(0.44f, 0.06f, 0.36f), new Vector3(0.58f, lidY, lidZ), solidPaint);
+            var lidY = style.Sample(style.CrestH, lidZ) - 0.012f;
+            foreach (var side in new[] { -1f, 1f })
+            {
+                Box(body, new Vector3(0.44f, 0.025f, 0.36f), new Vector3(side * 0.58f, lidY, lidZ), solidPaint);
+                Box(body, new Vector3(0.456f, 0.004f, 0.008f), new Vector3(side * 0.58f, lidY + 0.0105f, lidZ - 0.184f), trim);
+                Box(body, new Vector3(0.456f, 0.004f, 0.008f), new Vector3(side * 0.58f, lidY + 0.0105f, lidZ + 0.184f), trim);
+                Box(body, new Vector3(0.008f, 0.004f, 0.376f), new Vector3(side * 0.58f - 0.224f, lidY + 0.0105f, lidZ), trim);
+                Box(body, new Vector3(0.008f, 0.004f, 0.376f), new Vector3(side * 0.58f + 0.224f, lidY + 0.0105f, lidZ), trim);
+            }
         }
         else
         {
@@ -728,15 +739,30 @@ internal sealed partial class CarView : Node3D
 
         if (style.Strakes)
         {
-            // Flank intakes: a dark recess with five horizontal strakes, running into the rear arches.
+            // Flank intakes: a dark recess the length of the door with five strakes that fan out as the slot opens
+            // into the mouth ahead of the rear arch, the signature of the 1984 car. The node's yaw follows the flank,
+            // which widens toward the rear haunch.
+            const float strakeFront = -0.80f, strakeBack = 0.80f;
             foreach (var side in new[] { -1f, 1f })
             {
-                var strakes = new Node3D { Position = new Vector3(side * 0.95f, 0.63f, 0.30f), Rotation = new Vector3(0f, side * 0.019f, 0f) };
+                var strakes = new Node3D { Position = new Vector3(side * 0.965f, 0.63f, 0.25f), Rotation = new Vector3(0f, side * 0.019f, 0f) };
                 outside.AddChild(strakes);
-                Box(strakes, new Vector3(0.05f, 0.34f, 1.20f), Vector3.Zero, trim);
+                var recess = new MeshBuilder();
+                var outward = Vector3.Right * side;
+                var fa = new Vector3(0f, -0.10f, strakeFront);
+                var fb = new Vector3(0f, 0.14f, strakeFront);
+                var ba = new Vector3(0f, -0.18f, strakeBack);
+                var bb = new Vector3(0f, 0.22f, strakeBack);
+                Tri(recess, fa, outward, fb, outward, ba, outward, Trim, outward);
+                Tri(recess, fb, outward, bb, outward, ba, outward, Trim, outward);
+                strakes.AddChild(new MeshInstance3D { Mesh = recess.Commit(), MaterialOverride = trim });
                 for (var i = 0; i < 5; i++)
                 {
-                    Box(strakes, new Vector3(0.07f, 0.022f, 1.18f), new Vector3(side * 0.035f, -0.13f + i * 0.065f, 0f), solidPaint);
+                    var front = -0.10f + 0.048f * (i + 0.5f);
+                    var back = -0.18f + 0.080f * (i + 0.5f);
+                    var slat = Box(strakes, new Vector3(0.06f, 0.024f, strakeBack - strakeFront), new Vector3(side * 0.03f, (front + back) * 0.5f, 0f), solidPaint);
+                    // Rotation about x tips the +z (rear) end down for a positive angle; the rear ends spread.
+                    slat.Rotation = new Vector3(-MathF.Atan2(back - front, strakeBack - strakeFront), 0f, 0f);
                 }
             }
         }
@@ -832,10 +858,12 @@ internal sealed partial class CarView : Node3D
         var mirrorGlass = new StandardMaterial3D { AlbedoColor = new Color(0.75f, 0.77f, 0.8f), Metallic = 1f, Roughness = 0.04f };
         if (style.LampLids)
         {
-            // Single high-mounted mirror on the driver's A-pillar, as on the early cars.
-            Box(body, new Vector3(0.22f, 0.025f, 0.025f), new Vector3(-0.83f, 0.965f, -0.47f), trim);
-            Box(body, new Vector3(0.16f, 0.10f, 0.06f), new Vector3(-1.00f, 0.975f, -0.47f), trim);
-            Box(body, new Vector3(0.14f, 0.08f, 0.004f), new Vector3(-1.00f, 0.975f, -0.438f), mirrorGlass);
+            // The single mirror of the early cars: on a stalk up the driver's A-pillar, its head at roof height and
+            // well outboard, where the driver sees over the wing's shoulder.
+            var stalk = Box(body, new Vector3(0.26f, 0.028f, 0.028f), new Vector3(-0.89f, 1.05f, -0.50f), trim);
+            stalk.Rotation = new Vector3(0f, 0f, -MathF.Atan2(0.10f, 0.22f));
+            Box(body, new Vector3(0.17f, 0.11f, 0.07f), new Vector3(-1.02f, 1.11f, -0.50f), trim);
+            Box(body, new Vector3(0.15f, 0.09f, 0.004f), new Vector3(-1.02f, 1.11f, -0.463f), mirrorGlass);
         }
         else
         {
@@ -1083,7 +1111,7 @@ internal sealed partial class CarView : Node3D
             new(0.225f, -0.13f), new(0.30f, -0.135f), new(radius - 0.006f, -0.11f), new(radius, 0f),
             new(radius - 0.006f, 0.11f), new(0.30f, 0.135f), new(0.225f, 0.13f),
         };
-        const int segments = 28;
+        const int segments = 44;
         var st = new MeshBuilder();
         for (var p = 0; p < profile.Length; p++)
         {

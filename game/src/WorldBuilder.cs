@@ -33,8 +33,12 @@ internal static class WorldBuilder
     private static DirectionalLight3D? _sun;
     private static readonly List<(StandardMaterial3D Material, Texture2D? Albedo, Texture2D? Normal, Texture2D? Roughness)> _textured = new();
     private static readonly Dictionary<string, StandardMaterial3D> _propMaterials = new();
-    /// <summary>Sun direction measured from the brightest patch of the sky HDRI (see assets/textures/SOURCES.md): elevation 47.9, panorama u 0.595.</summary>
-    private static readonly Vector3 SunDirection = new(-0.377f, 0.742f, -0.554f);
+    /// <summary>Sun direction measured from the brightest patch of the sky HDRI (see assets/textures/SOURCES.md): elevation 43.0, panorama u 0.600.</summary>
+    private static readonly Vector3 SunDirection = new(-0.431f, 0.682f, -0.591f);
+    /// <summary>The mountain range on the horizon (<see cref="BuildMountains"/>): where its foot, its ridge and its far side lie, metres from the circuit's centre.</summary>
+    private const float MountainFoot = 3200f;
+    private const float MountainRidge = 4400f;
+    private const float MountainBack = 6400f;
 
     /// <summary>
     /// Drops the shared materials. Called when the game quits: a Godot resource still held by a static field
@@ -61,12 +65,13 @@ internal static class WorldBuilder
         root.AddChild(BuildEnvironment());
         root.AddChild(BuildSun());
         root.AddChild(BuildFarGround());
+        root.AddChild(BuildMountains(track));
         root.AddChild(BuildTerrain(track));
         foreach (var path in track.Paths)
         {
-            root.AddChild(BuildRoad(path));
-            root.AddChild(BuildShoulders(path));
-            root.AddChild(BuildCentreLine(path));
+            root.AddChild(BuildRoad(track, path));
+            root.AddChild(BuildShoulders(track, path));
+            root.AddChild(BuildCentreLine(track, path));
             foreach (var node in BuildBridges(path, track.Terrain)) root.AddChild(node);
         }
         foreach (var pad in track.Pads) root.AddChild(BuildPad(pad));
@@ -88,8 +93,8 @@ internal static class WorldBuilder
             material.TextureFilter = retro ? BaseMaterial3D.TextureFilterEnum.Nearest : BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic;
         }
         if (_sun is not null) _sun.ShadowEnabled = !retro;
-        // 1989 shoulders were orange everywhere; today's are gravel except on the structures.
-        if (_gravel is not null) _gravel.AlbedoColor = retro ? new Color(0.9f, 0.45f, 0.1f) : new Color(0.9f, 0.86f, 0.78f);
+        // 1989 shoulders were orange everywhere; today's are dry earth except on the structures.
+        if (_gravel is not null) _gravel.AlbedoColor = retro ? new Color(0.9f, 0.45f, 0.1f) : new Color(0.88f, 0.68f, 0.46f);
         if (_environment is null) return;
         _environment.SdfgiEnabled = !retro;
         _environment.SsaoEnabled = !retro;
@@ -139,7 +144,8 @@ internal static class WorldBuilder
     // Photo textures (CC0, see assets/textures/SOURCES.md); the procedural noise stays as the fallback if a file is missing.
     private static StandardMaterial3D Grass => _grass ??= Textured(new StandardMaterial3D
     {
-        AlbedoColor = new Color(0.60f, 0.68f, 0.48f),
+        // A deeper green than the photo's own: the pale tint read as hay, and the plain of the 1989 game is a saturated green.
+        AlbedoColor = new Color(0.50f, 0.66f, 0.36f),
         Roughness = 1f,
         Uv1Scale = new Vector3(1150f, 1150f, 1f),    // the terrain's UV spans 5000 m: a 4.3 m tile
         VertexColorUseAsAlbedo = true,
@@ -166,10 +172,11 @@ internal static class WorldBuilder
     }, Photo("concrete_color") ?? Noise(1.5f, 3, new[] { (0f, new Color(0.8f, 0.8f, 0.8f)), (1f, new Color(1f, 1f, 1f)) }, seed: 23),
        Photo("concrete_normal"), 0.5f, Photo("concrete_roughness"));
 
-    /// <summary>Shoulders: gravel along the road (u across, v in metres along); the vertex colour tints the structures orange.</summary>
+    /// <summary>Shoulders: dry earth along the road (u across, v in metres along); the vertex colour tints the structures orange.</summary>
     private static StandardMaterial3D Gravel => _gravel ??= Textured(new StandardMaterial3D
     {
-        AlbedoColor = new Color(0.9f, 0.86f, 0.78f),
+        // Warm tan: the dirt photo tinted toward the orange shoulders of the original without going to paint.
+        AlbedoColor = new Color(0.88f, 0.68f, 0.46f),
         VertexColorUseAsAlbedo = true,
         Roughness = 1f,
         Uv1Scale = new Vector3(1f, 0.45f, 1f),
@@ -246,7 +253,7 @@ internal static class WorldBuilder
         Material sky;
         if (ResourceLoader.Exists("res://assets/textures/sky.hdr"))
         {
-            sky = new PanoramaSkyMaterial { Panorama = GD.Load<Texture2D>("res://assets/textures/sky.hdr"), EnergyMultiplier = 0.85f };
+            sky = new PanoramaSkyMaterial { Panorama = GD.Load<Texture2D>("res://assets/textures/sky.hdr"), EnergyMultiplier = 1.0f };
         }
         else
         {
@@ -287,20 +294,22 @@ internal static class WorldBuilder
             GlowEnabled = true,
             GlowIntensity = 0.2f,
             GlowBloom = 0.02f,
+            // Clear, dry air: the mountains three kilometres out stay crisp and only pick up a little blue, as on the
+            // plain of the 1989 game, where nothing faded. Denser fog washed everything past the next bend to grey.
             FogEnabled = true,
-            FogLightColor = new Color(0.78f, 0.84f, 0.92f),
-            FogDensity = 0.00022f,
-            FogAerialPerspective = 0.65f,
-            FogSkyAffect = 0.1f,
-            // A thin haze near the ground: it softens the far hills and gives the sun something to light.
+            FogLightColor = new Color(0.72f, 0.80f, 0.94f),
+            FogDensity = 0.00004f,
+            FogAerialPerspective = 0.35f,
+            FogSkyAffect = 0.05f,
+            // A trace of haze near the ground, so the sun still has something to light in the dips.
             VolumetricFogEnabled = true,
-            VolumetricFogDensity = 0.0007f,
+            VolumetricFogDensity = 0.00012f,
             VolumetricFogAlbedo = new Color(0.9f, 0.93f, 1f),
-            VolumetricFogLength = 180f,
-            VolumetricFogSkyAffect = 0.2f,
+            VolumetricFogLength = 300f,
+            VolumetricFogSkyAffect = 0.1f,
             AdjustmentEnabled = true,
-            AdjustmentContrast = 1.04f,
-            AdjustmentSaturation = 1.06f,
+            AdjustmentContrast = 1.05f,
+            AdjustmentSaturation = 1.12f,
         };
         return new WorldEnvironment { Environment = _environment };
     }
@@ -309,7 +318,7 @@ internal static class WorldBuilder
     {
         _sun = new DirectionalLight3D
         {
-            LightEnergy = 1.2f,
+            LightEnergy = 1.45f,
             LightColor = new Color(1f, 0.96f, 0.90f),
             LightAngularDistance = 0.5f,
             ShadowEnabled = true,
@@ -326,11 +335,118 @@ internal static class WorldBuilder
         return _sun;
     }
 
-    /// <summary>Flat ground to the horizon, just under the terrain mesh, where the ground field has flattened out.</summary>
+    /// <summary>Flat ground to the horizon, just under the terrain mesh, where the ground field has flattened out; it reaches past the mountains.</summary>
     private static MeshInstance3D BuildFarGround()
     {
-        var mesh = new PlaneMesh { Size = new Vector2(9000f, 9000f), SubdivideWidth = 12, SubdivideDepth = 12, Material = Grass };
+        var mesh = new PlaneMesh { Size = new Vector2(16000f, 16000f), SubdivideWidth = 12, SubdivideDepth = 12, Material = Grass };
         return new MeshInstance3D { Mesh = mesh, Position = new Vector3(0f, -0.06f, 0f), Name = "FarGround" };
+    }
+
+    /// <summary>
+    /// The mountain range round the horizon, as the snow-capped ridge that rings the plain of the 1989 game: a
+    /// ring of ground between <see cref="MountainFoot"/> and <see cref="MountainBack"/> from the circuit's centre
+    /// rising to a ridge whose height wanders with the bearing, forest at its foot, bare rock above and snow on the
+    /// peaks. Too far for shadows, lit by the sun and the sky and tinted by the air's blue through the fog.
+    /// </summary>
+    private static MeshInstance3D BuildMountains(TrackGeometry track)
+    {
+        float minX = float.MaxValue, maxX = float.MinValue, minZ = float.MaxValue, maxZ = float.MinValue;
+        foreach (var path in track.Paths)
+        {
+            foreach (var f in path.Frames)
+            {
+                minX = MathF.Min(minX, f.Origin.X); maxX = MathF.Max(maxX, f.Origin.X);
+                minZ = MathF.Min(minZ, f.Origin.Z); maxZ = MathF.Max(maxZ, f.Origin.Z);
+            }
+        }
+        var centreX = (minX + maxX) * 0.5f;
+        var centreZ = (minZ + maxZ) * 0.5f;
+        const int around = 720;
+        const int across = 36;
+        var ridge = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth, Frequency = 1f, FractalOctaves = 4, Seed = 1989 };
+        var relief = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth, Frequency = 1f / 420f, FractalOctaves = 5, FractalLacunarity = 2.3f, Seed = 7 };
+
+        // The ridge's height at a bearing: a ring of peaks between 240 and 560 m, ridged noise so the summits are sharp
+        // and the saddles rounded, continuous round the horizon. Its crest also wanders in and out by 500 m. Taller
+        // and nearer, the range stood over the plain like a fence of teeth; the original's is a low distant chain.
+        float RidgeHeight(float bearing) => 240f + 320f * (1f - MathF.Abs(ridge.GetNoise2D(MathF.Cos(bearing) * 3.5f, MathF.Sin(bearing) * 3.5f)));
+        float RidgeRadius(float bearing) => MountainRidge + 500f * ridge.GetNoise2D(MathF.Cos(bearing) * 3f + 9f, MathF.Sin(bearing) * 3f);
+
+        float Height(float bearing, float r)
+        {
+            var peak = RidgeHeight(bearing);
+            var crest = RidgeRadius(bearing);
+            float profile;
+            if (r < MountainFoot) profile = 0f;
+            else if (r < crest) profile = MathF.Pow(MathUtil.SmoothStep((r - MountainFoot) / (crest - MountainFoot)), 1.3f);
+            else profile = 1f - MathUtil.SmoothStep((r - crest) / (MountainBack - crest));
+            var x = centreX + MathF.Cos(bearing) * r;
+            var z = centreZ + MathF.Sin(bearing) * r;
+            // Spurs and gullies down the flanks, growing with the height so the summits break up.
+            var bumps = relief.GetNoise2D(x, z) * (30f + 70f * profile) * MathF.Min(profile * 3f, 1f);
+            return peak * profile + bumps;
+        }
+
+        var st = new MeshBuilder();
+        // Seen from the circuit only the upper slopes clear the plain's own hills, so those carry the colour: dark rock
+        // with snow on the tips alone, or the whole range read as a bank of cloud.
+        var forest = new Color(0.12f, 0.21f, 0.10f);
+        var rock = new Color(0.22f, 0.19f, 0.17f);
+        var scree = new Color(0.33f, 0.29f, 0.25f);
+        var snow = new Color(0.93f, 0.94f, 0.97f);
+        var plain = new Color(0.50f, 0.66f, 0.36f);
+        for (var j = 0; j <= across; j++)
+        {
+            var r = MountainFoot + (MountainBack - MountainFoot) * j / across;
+            for (var i = 0; i < around; i++)
+            {
+                var bearing = MathF.Tau * i / around;
+                var h = Height(bearing, r);
+                var x = centreX + MathF.Cos(bearing) * r;
+                var z = centreZ + MathF.Sin(bearing) * r;
+                // Normal from central differences along and across the ring.
+                var db = MathF.Tau / around;
+                var hb0 = Height(bearing - db, r);
+                var hb1 = Height(bearing + db, r);
+                var hr0 = Height(bearing, r - 30f);
+                var hr1 = Height(bearing, r + 30f);
+                var tangentB = new SN.Vector3(-MathF.Sin(bearing) * r * db * 2f, hb1 - hb0, MathF.Cos(bearing) * r * db * 2f);
+                var tangentR = new SN.Vector3(MathF.Cos(bearing) * 60f, hr1 - hr0, MathF.Sin(bearing) * 60f);
+                var normal = SN.Vector3.Normalize(SN.Vector3.Cross(tangentR, tangentB));
+                if (normal.Y < 0f) normal = -normal;
+                // Forest up to half the ridge, dark rock above with lighter scree on the gentler ground, and snow only
+                // on the summits from a wandering snow line, lying on the shelves rather than the steep faces.
+                var fraction = MathUtil.Clamp01(h / MathF.Max(RidgeHeight(bearing), 1f));
+                var snowLine = 0.90f + 0.04f * ridge.GetNoise2D(MathF.Cos(bearing) * 5f + 3f, MathF.Sin(bearing) * 5f);
+                var ground = normal.Y > 0.84f ? rock.Lerp(scree, (normal.Y - 0.84f) / 0.16f) : rock;
+                var colour = fraction < 0.05f ? plain.Lerp(forest, fraction / 0.05f)
+                    : fraction < 0.58f ? forest
+                    : fraction < 0.68f ? forest.Lerp(ground, (fraction - 0.58f) / 0.10f)
+                    : ground;
+                var snowCover = MathUtil.Clamp01((fraction - snowLine) / 0.05f) * MathUtil.Clamp01((normal.Y - 0.5f) / 0.3f);
+                colour = colour.Lerp(snow, snowCover);
+                var shade = 0.88f + 0.12f * normal.Y;
+                st.SetColor(new Color(colour.R * shade, colour.G * shade, colour.B * shade));
+                st.SetNormal(Convert.ToGodot(normal));
+                st.SetUV(new Vector2(i / (float)around, j / (float)across));
+                st.AddVertex(Convert.ToGodot(new SN.Vector3(x, h, z)));
+            }
+        }
+        for (var j = 0; j < across; j++)
+        {
+            for (var i = 0; i < around; i++)
+            {
+                var a = j * around + i;
+                var b = j * around + (i + 1) % around;
+                var c = a + around;
+                var d = b + around;
+                // Bearings run counter-clockwise seen from above in the simulation's frame; the Z flip of the view makes that clockwise, Godot's front face.
+                st.AddIndex(a); st.AddIndex(b); st.AddIndex(c);
+                st.AddIndex(b); st.AddIndex(d); st.AddIndex(c);
+            }
+        }
+        var material = new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 1f, CullMode = BaseMaterial3D.CullModeEnum.Disabled };
+        return new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = material, Name = "Mountains", CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
     }
 
     /// <summary>
@@ -473,6 +589,10 @@ internal static class WorldBuilder
 
         var variation = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth, Frequency = 1f / 140f, FractalOctaves = 2, Seed = 77 };
         var st = new MeshBuilder();
+        // The ring of hills beyond the roads (TerrainField.Base) is wooded: from the circuit it reads as the dark band
+        // of trees under the mountains, as in the 1989 game, without a tree being placed there.
+        var roadMinX = minX + TerrainMargin; var roadMaxX = maxX - TerrainMargin;
+        var roadMinZ = minZ + TerrainMargin; var roadMaxZ = maxZ - TerrainMargin;
         for (var v = 0; v < count; v++)
         {
             var x = minX + points[v].I * step;
@@ -484,11 +604,16 @@ internal static class WorldBuilder
             var r = shade * (1f + 0.10f * n);
             var g = shade * (1f + 0.05f * n);
             var b = shade * (1f - 0.08f * n);
-            // Sandy, trodden ground right at the road edge.
+            // Trodden, dusty ground right at the road edge: a touch browner than the grass, not a pale band.
             var edge = MathUtil.Clamp01((vertexWeight[v] - 0.55f) / 0.45f);
-            r = MathUtil.Lerp(r, shade * 1.05f, edge * 0.6f);
-            g = MathUtil.Lerp(g, shade * 0.95f, edge * 0.6f);
-            b = MathUtil.Lerp(b, shade * 0.72f, edge * 0.6f);
+            r = MathUtil.Lerp(r, shade * 0.98f, edge * 0.5f);
+            g = MathUtil.Lerp(g, shade * 0.88f, edge * 0.5f);
+            b = MathUtil.Lerp(b, shade * 0.66f, edge * 0.5f);
+            var outside = MathF.Max(MathF.Max(roadMinX - 140f - x, x - roadMaxX - 140f), MathF.Max(roadMinZ - 140f - z, z - roadMaxZ - 140f));
+            var wooded = MathUtil.SmoothStep((outside - 250f) / 300f) * MathUtil.Clamp01((h - 6f) / 10f);
+            r = MathUtil.Lerp(r, shade * 0.36f, wooded);
+            g = MathUtil.Lerp(g, shade * 0.50f, wooded);
+            b = MathUtil.Lerp(b, shade * 0.34f, wooded);
             st.SetColor(new Color(r, g, b));
             var gNormal = Convert.ToGodot(normal);
             // u follows x on this grid: the tangent is +x laid onto the slope, the bitangent then runs along v.
@@ -538,15 +663,23 @@ internal static class WorldBuilder
         (-1f, 1f), (-0.62f, 0.84f), (-0.38f, 0.84f), (0f, 1f), (0.38f, 0.84f), (0.62f, 0.84f), (1f, 1f),
     ];
 
-    private static MeshInstance3D BuildRoad(TrackPath path)
+    private static MeshInstance3D BuildRoad(TrackGeometry track, TrackPath path)
     {
         var st = new MeshBuilder();
         var frames = path.Frames;
+        // Where the stunt branch shares the road with the speed branch its asphalt sits a centimetre lower, under the
+        // other's: two ribbons on one plane flickered against each other.
+        var sink = path.Kind == PathKind.Stunt ? 0.012f : 0f;
         for (var i = 0; i < frames.Count - 1; i++)
         {
             var a = frames[i];
             var b = frames[i + 1];
             if (a.Surface == SurfaceType.Chasm || b.Surface == SurfaceType.Chasm) continue;
+            if (sink > 0f && SiblingSide(track, path, a) != 0)
+            {
+                a = a with { Origin = a.Origin - a.Normal * sink };
+                b = b with { Origin = b.Origin - b.Normal * sink };
+            }
             // Alternate the shade every original slab length: the stripey look of the 1989 road.
             var slab = (int)MathF.Floor(a.Distance / TrackBuilder.Slab);
             var slabShade = slab % 2 == 0 ? 1f : 0.76f;
@@ -569,21 +702,66 @@ internal static class WorldBuilder
 
     private static bool IsStructure(in RoadFrame f) => f.Kind is SegmentKind.Loop or SegmentKind.RampUp or SegmentKind.RampDown or SegmentKind.Overpass or SegmentKind.BankedCurve;
 
-    private static MeshInstance3D BuildShoulders(TrackPath path)
+    /// <summary>Metres from a fork or a merge over which the two branches still overlap and share one road.</summary>
+    private const float BranchOverlap = 55f;
+
+    /// <summary>
+    /// The side (+1 right, -1 left) of a frame on which its sibling branch runs, where the branches part at the
+    /// fork or meet at the merge, or 0 away from both. The branches leave one frame and arrive at one frame, so
+    /// over their first and last metres two ribbons lie on the same ground: each keeps its own outer edge, and the
+    /// shoulder and the white line on the inner side are left to the other, or the lines crossed and the shoulders
+    /// cut through the asphalt. Compared against the sibling's own overlap so the test is cheap.
+    /// </summary>
+    private static int SiblingSide(TrackGeometry track, TrackPath path, in RoadFrame f)
+    {
+        TrackPath? sibling = path.Kind switch
+        {
+            PathKind.Speed => track.Stunt,
+            PathKind.Stunt => track.Speed,
+            _ => null,
+        };
+        if (sibling is null) return 0;
+        var atFork = f.Distance < BranchOverlap;
+        var atMerge = path.Length - f.Distance < BranchOverlap;
+        if (!atFork && !atMerge) return 0;
+        var frames = sibling.Frames;
+        var nearest = Vector3.Zero;
+        var best = float.MaxValue;
+        var from = atFork ? 0 : Math.Max(frames.Count - 1 - (int)(BranchOverlap * 2f), 0);
+        var to = atFork ? Math.Min((int)(BranchOverlap * 2f), frames.Count - 1) : frames.Count - 1;
+        for (var i = from; i <= to; i++)
+        {
+            var d = SN.Vector3.DistanceSquared(frames[i].Origin, f.Origin);
+            if (d < best)
+            {
+                best = d;
+                nearest = Convert.ToGodot(frames[i].Origin);
+            }
+        }
+        // Past two road widths apart the branches have parted and both edges are their own again.
+        if (best > 4f * f.HalfWidth * f.HalfWidth) return 0;
+        var toSibling = nearest - Convert.ToGodot(f.Origin);
+        return toSibling.Dot(Convert.ToGodot(f.Lateral)) >= 0f ? 1 : -1;
+    }
+
+    private static MeshInstance3D BuildShoulders(TrackGeometry track, TrackPath path)
     {
         var st = new MeshBuilder();
         var frames = path.Frames;
-        var gravel = new Color(0.95f, 0.92f, 0.85f);
+        var gravel = new Color(0.96f, 0.92f, 0.84f);
         var orange = new Color(0.95f, 0.46f, 0.12f);
-        const float width = 1.3f;
+        // As wide as the original's dirt shoulders; the ground field keeps its plane out past this (TerrainField.Verge).
+        const float width = 2.2f;
         for (var i = 0; i < frames.Count - 1; i++)
         {
             var a = frames[i];
             var b = frames[i + 1];
             if (a.Surface == SurfaceType.Chasm || b.Surface == SurfaceType.Chasm) continue;
             var colour = IsStructure(a) ? orange : gravel;
+            var shared = SiblingSide(track, path, a);
             foreach (var side in new[] { -1f, 1f })
             {
+                if ((int)side == shared) continue;
                 var ao = a.Origin + a.Lateral * (side * a.HalfWidth);
                 var bo = b.Origin + b.Lateral * (side * b.HalfWidth);
                 var ai = ao + a.Lateral * (side * width) - a.Normal * 0.02f;
@@ -596,7 +774,7 @@ internal static class WorldBuilder
         return new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = Gravel, Name = $"Shoulder-{path.Kind}" };
     }
 
-    private static MeshInstance3D BuildCentreLine(TrackPath path)
+    private static MeshInstance3D BuildCentreLine(TrackGeometry track, TrackPath path)
     {
         var st = new MeshBuilder();
         var frames = path.Frames;
@@ -607,7 +785,9 @@ internal static class WorldBuilder
             var a = frames[i];
             var b = frames[i + 1];
             if (a.Surface == SurfaceType.Chasm || b.Surface == SurfaceType.Chasm) continue;
-            if (a.Distance % 9f < 3f)
+            var shared = SiblingSide(track, path, a);
+            // Where the branches share the road, only the branch on the right paints the centre line.
+            if (a.Distance % 9f < 3f && shared != 1)
             {
                 Quad(st, a.Origin - a.Lateral * 0.08f + a.Normal * 0.012f, a.Origin + a.Lateral * 0.08f + a.Normal * 0.012f,
                     b.Origin - b.Lateral * 0.08f + b.Normal * 0.012f, b.Origin + b.Lateral * 0.08f + b.Normal * 0.012f,
@@ -615,6 +795,7 @@ internal static class WorldBuilder
             }
             foreach (var side in new[] { -1f, 1f })
             {
+                if ((int)side == shared) continue;
                 var o = side * (a.HalfWidth - 0.25f);
                 Quad(st, a.Origin + a.Lateral * (o - 0.07f) + a.Normal * 0.012f, a.Origin + a.Lateral * (o + 0.07f) + a.Normal * 0.012f,
                     b.Origin + b.Lateral * (o - 0.07f) + b.Normal * 0.012f, b.Origin + b.Lateral * (o + 0.07f) + b.Normal * 0.012f,

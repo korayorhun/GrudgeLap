@@ -325,7 +325,6 @@ public sealed partial class Bootstrap : Node3D
             SaveBestLap(_session.BestLap);
             if (_ghostView is null) BuildGhostView();
         }
-        _audio.MusicOn = _session.Phase is SessionPhase.SelectTransmission or SessionPhase.Replay or SessionPhase.Finished;
         if (_session.Events.Contains(RaceEvent.SignHit) && _propNodes.TryGetValue(_session.LastSoftHit, out var sign))
         {
             // Knock the sign over: it tips away from the car over the next third of a second.
@@ -461,6 +460,7 @@ public sealed partial class Bootstrap : Node3D
             _carIndex = (_carIndex + 1) % VehicleSpec.Catalogue.Length;
             SaveChoice("car", _carIndex);
             NewSession();
+            _audio.Chime();
             return false;
         }
         if (Input.IsActionJustPressed(InputSetup.SelectAuto)) SetGearbox(TransmissionMode.Automatic);
@@ -476,6 +476,7 @@ public sealed partial class Bootstrap : Node3D
         _gearbox = mode;
         _hud.Gearbox = mode;
         SaveChoice("transmission", (int)mode);
+        _audio.Chime();
     }
 
     public override void _UnhandledInput(InputEvent @event)

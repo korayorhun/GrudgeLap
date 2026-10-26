@@ -123,14 +123,17 @@ best lap's ghost out of the picture.
   `audio.tests/` checks its pitch, clicks and silence (set `GRUDGELAP_AUDIO_DEMO` to a folder for
   listenable sweeps).
 - `game/` — the Godot view: world generated from the track (terrain mesh from the ground field with a ring
-  of hills, photo-textured road with worn wheel tracks, gravel shoulders, bridges with guardrails, pad,
-  grass tufts, trees from leaf cards, fields, textured buildings and signs, the train), lofted car bodies
+  of wooded hills and a snow-capped mountain range round the horizon under a clear sky, photo-textured road
+  with worn wheel tracks, dirt shoulders, bridges with guardrails, pad, grass tufts, trees from leaf cards,
+  fields, textured buildings, the green fork gantry with its traffic light, the red checkpoint banner, signs,
+  the train), lofted car bodies
   with rounded character lines, panel seams and a lined cabin behind tinted glass (leather dashboard,
   binnacle with live dials, a three-spoke wheel that turns with the steering, seats, slim A-pillars, a
   rear-view mirror with its own camera), a driver's-eye cockpit camera whose head sways with the car and
   a chase camera, HUD, engine, tyre (road roar, squeal, howl, screech, gravel) and V8 overrun-pop sounds
   from recordings over synthesised wind and bump thumps, a synthesised engine and squeal for 1989 mode,
-  crash, moo, sign clang, train and title tune, updater. Design notes in [docs/design.md](docs/design.md), the checklist in
+  crash, moo, sign clang, train, and the cabinet's chime, starter and jingles (a fanfare for a record lap, a
+  tune at the end of the credit; no music while driving, as in the arcade), updater. Design notes in [docs/design.md](docs/design.md), the checklist in
   [docs/feel-checklist.md](docs/feel-checklist.md), what the research found in
   [docs/research-notes.md](docs/research-notes.md).
 - `unreal/` — the Unreal Engine 5 version: the same track and both cars, exported from the game, dressed
