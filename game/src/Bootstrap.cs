@@ -345,6 +345,8 @@ public sealed partial class Bootstrap : Node3D
             CallDeferred(nameof(TakeScreenshot), _screenshotPath);
         }
         if (_quitAfter > 0f && _elapsed >= _quitAfter) Shutdown();
+        // A downloaded update restarts the game only between credits: on the title screen or once the time is up.
+        _updater.ApplyWhenIdle(_session.Phase is SessionPhase.SelectTransmission or SessionPhase.Finished);
     }
 
     public override void _Notification(int what)
@@ -501,7 +503,8 @@ public sealed partial class Bootstrap : Node3D
         if (Input.IsActionJustPressed(InputSetup.Retro)) SetRetro(!_retro);
         if (Input.IsActionJustPressed(InputSetup.Update))
         {
-            if (_updater.Available is not null) _updater.DownloadAndInstall();
+            if (_updater.ReadyToApply) _updater.ApplyNow();
+            else if (_updater.Available is not null) _updater.DownloadAndInstall();
             else _updater.CheckIfDue(manual: true);
         }
         if (Input.IsActionJustPressed(InputSetup.Attract))

@@ -1,10 +1,13 @@
 # Release helper: bumps the version, runs the tests, exports the game, builds the installer and the portable
 # zip, commits, tags, pushes and publishes the GitHub release; then keeps the Scoop bucket and winget current.
-# Usage: .\tools\release.ps1 -Version 0.2.0 [-Notes "..."] [-NoPush]
+# Usage: .\tools\release.ps1 -Version 0.2.0 [-Notes "..."] [-NoPush] [-NoStores]
+# -NoStores publishes the GitHub release only (the game's updater reads that) and leaves Scoop and winget alone:
+# until 1.0 the stores stay at the last version they were given.
 param(
     [Parameter(Mandatory = $true)][string]$Version,
     [string]$Notes = "",
-    [switch]$NoPush
+    [switch]$NoPush,
+    [switch]$NoStores
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -91,7 +94,7 @@ if ($NoPush) { Write-Host "NoPush: artefacts built, nothing committed or publish
 
 # ---- commit, tag, push, release ------------------------------------------------------------------
 git add -A
-git commit -q -m "release: v$Version" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -q -m "release: v$Version" -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 if ($LASTEXITCODE -ne 0) { Write-Host "nothing new to commit for v$Version" }
 git tag "v$Version"
 git push -q
@@ -99,6 +102,7 @@ git push -q --tags
 if (-not $Notes) { $Notes = "GrudgeLap $Version" }
 gh release create "v$Version" $setup "$setup.sha256" $portable "$portable.sha256" --title "GrudgeLap $Version" --notes $Notes
 Write-Host "Released v$Version"
+if ($NoStores) { Write-Host "NoStores: Scoop and winget left as they were."; exit 0 }
 
 # ---- scoop: personal bucket (korayorhun/scoop-bucket) ---------------------------------------------
 try {
@@ -125,7 +129,7 @@ try {
     $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
     $previous = gh api repos/korayorhun/scoop-bucket/contents/bucket/grudgelap.json --jq .sha 2>$null
     $apiArgs = @('-X', 'PUT', 'repos/korayorhun/scoop-bucket/contents/bucket/grudgelap.json',
-        '-f', "message=grudgelap: Update to version $Version`n`nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>", '-f', "content=$b64")
+        '-f', "message=grudgelap: Update to version $Version`n`nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>", '-f', "content=$b64")
     if ($previous) { $apiArgs += @('-f', "sha=$previous") }
     gh api @apiArgs --jq .commit.sha | Out-Null
     Write-Host "scoop bucket updated to $Version"

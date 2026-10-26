@@ -5,11 +5,13 @@ using Godot;
 namespace GrudgeLap.Game;
 
 /// <summary>
-/// Keeps the game current from GitHub Releases: at most once a day it asks for the latest release, and on
-/// request downloads it, checks the published SHA-256 and applies it. An installed copy (put there by the
-/// installer, which records its location in the registry) runs the new installer silently and is restarted
-/// by it; a portable copy unpacks the new zip over itself through a small PowerShell script once the game
-/// has exited. Never automatic beyond the check: the player presses the key.
+/// Keeps the game current from GitHub Releases: at every start it asks for the latest release and, when that is
+/// newer, downloads it at once, checks the published SHA-256 and applies it as soon as the player is on the
+/// title screen (or at the end of a credit), so that a copy that is opened always runs the newest version. An
+/// installed copy (put there by the installer, which records its location in the registry) runs the new
+/// installer silently and is restarted by it; a portable copy unpacks the new zip over itself through a small
+/// PowerShell script once the game has exited. F10 applies a ready update while driving, or asks again.
+/// <c>auto=false</c> under <c>[update]</c> in settings.cfg goes back to offering the update instead of taking it.
 /// </summary>
 internal sealed partial class Updater : Node
 {
@@ -20,22 +22,28 @@ internal sealed partial class Updater : Node
     private const string ApiLatest = $"https://api.github.com/repos/{RepoOwner}/{Repo}/releases/latest";
     private const string UserAgent = "GrudgeLap-Updater";
     private const string SettingsFile = "user://settings.cfg";
-    private static readonly TimeSpan CheckInterval = TimeSpan.FromHours(24);
+    /// <summary>Starts within this many seconds of the last check share it: a crash loop must not hammer the API (60 calls an hour unauthenticated).</summary>
+    private static readonly TimeSpan CheckInterval = TimeSpan.FromMinutes(2);
 
     private HttpRequest? _request;
     private string _downloadPath = "";
     private string _shaPath = "";
     private UpdateStage _stage = UpdateStage.Idle;
+    private bool _installedCopy;
 
     public sealed record UpdateInfo(Version Version, string Tag, string PageUrl, string? SetupUrl, string? SetupShaUrl, string? ZipUrl, string? ZipShaUrl, string Notes);
 
-    private enum UpdateStage { Idle, Checking, DownloadingPackage, DownloadingHash, Applying, Failed }
+    private enum UpdateStage { Idle, Checking, DownloadingPackage, DownloadingHash, Ready, Applying, Failed }
 
     /// <summary>A newer release, once the check has found one.</summary>
     public UpdateInfo? Available { get; private set; }
     /// <summary>One line for the HUD: what the updater is doing or offering; empty when there is nothing to say.</summary>
     public string Status { get; private set; } = "";
     public bool Busy => _stage is UpdateStage.Checking or UpdateStage.DownloadingPackage or UpdateStage.DownloadingHash or UpdateStage.Applying;
+    /// <summary>Downloaded and verified: <see cref="ApplyNow"/> restarts the game on the new version.</summary>
+    public bool ReadyToApply => _stage == UpdateStage.Ready;
+    /// <summary>Whether a newer release is taken without being asked (the settings' update/auto, true by default).</summary>
+    public bool AutoInstall { get; private set; } = true;
 
     public static Version CurrentVersion
     {
@@ -71,12 +79,13 @@ internal sealed partial class Updater : Node
         }
     }
 
-    /// <summary>Starts a check unless one ran within the last day (or <paramref name="manual"/> is set).</summary>
+    /// <summary>Starts a check unless one ran moments ago (or <paramref name="manual"/> is set); a newer release is then downloaded when <see cref="AutoInstall"/> allows.</summary>
     public void CheckIfDue(bool manual)
     {
-        if (Busy) return;
+        if (Busy || ReadyToApply) return;
         var settings = new ConfigFile();
         settings.Load(SettingsFile);
+        AutoInstall = settings.GetValue("update", "auto", true).AsBool();
         if (!manual)
         {
             if (!settings.GetValue("update", "enabled", true).AsBool()) return;
@@ -109,6 +118,7 @@ internal sealed partial class Updater : Node
                     Available = info;
                     Status = $"v{info.Version.ToString(3)} available - F10 to update";
                     GD.Print($"update available: {info.Tag}");
+                    if (AutoInstall) DownloadAndInstall();
                 }
                 else
                 {
@@ -131,10 +141,13 @@ internal sealed partial class Updater : Node
         }
     }
 
-    /// <summary>Downloads the right package for this copy, verifies it and hands over to the installer or the unpack script.</summary>
+    /// <summary>
+    /// Downloads the right package for this copy and verifies it; <see cref="ApplyNow"/> then hands over to the
+    /// installer or the unpack script, at once when the player is not driving (<see cref="ApplyWhenIdle"/>).
+    /// </summary>
     public void DownloadAndInstall()
     {
-        if (Busy || Available is null) return;
+        if (Busy || ReadyToApply || Available is null) return;
         var installed = IsInstalledCopy;
         var url = installed ? Available.SetupUrl : Available.ZipUrl;
         var shaUrl = installed ? Available.SetupShaUrl : Available.ZipShaUrl;
@@ -184,7 +197,10 @@ internal sealed partial class Updater : Node
             try
             {
                 Verify(_downloadPath, System.Text.Encoding.ASCII.GetString(body));
-                Apply(installed);
+                _installedCopy = installed;
+                _stage = UpdateStage.Ready;
+                Status = $"v{Available!.Version.ToString(3)} ready - restarts at the title screen (F10 now)";
+                GD.Print($"update verified: {_downloadPath}");
             }
             catch (Exception ex)
             {
@@ -193,6 +209,19 @@ internal sealed partial class Updater : Node
             }
         };
         if (request.Request(shaUrl, [$"User-Agent: {UserAgent}"]) != Error.Ok) Fail("checksum download could not start");
+    }
+
+    /// <summary>Applies a verified update while the player is between credits, so a drive is never cut short. Called every frame by the game.</summary>
+    public void ApplyWhenIdle(bool idle)
+    {
+        if (idle && ReadyToApply && AutoInstall) ApplyNow();
+    }
+
+    /// <summary>Hands a verified update to the installer or the unpack script and quits; the game comes back on the new version.</summary>
+    public void ApplyNow()
+    {
+        if (!ReadyToApply) return;
+        Apply(_installedCopy);
     }
 
     private static void Verify(string file, string shaText)
