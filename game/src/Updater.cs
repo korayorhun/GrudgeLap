@@ -240,39 +240,82 @@ internal sealed partial class Updater : Node
         _stage = UpdateStage.Applying;
         Status = "installing update...";
         GD.Print($"update verified, applying {_downloadPath} ({(installed ? "installed copy" : "portable copy")})");
-        if (installed)
-        {
-            // Inno Setup: silent, no restart prompt; /UPDATE=1 makes the installer relaunch the game afterwards.
-            OS.CreateProcess(_downloadPath, ["/SILENT", "/NORESTART", "/SP-", "/UPDATE=1"]);
-        }
-        else
-        {
-            var exe = OS.GetExecutablePath();
-            var dir = System.IO.Path.GetDirectoryName(exe) ?? ".";
-            var script = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(_downloadPath)!, "apply.ps1");
-            System.IO.File.WriteAllText(script, UnpackScript);
-            var pid = System.Environment.ProcessId;
-            OS.CreateProcess("powershell.exe",
-            [
-                "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", script,
-                "-ProcessId", pid.ToString(), "-Zip", _downloadPath, "-Dir", dir, "-Exe", exe,
-            ]);
-        }
+        // Either way a script waits for this process to be gone: for about two seconds after the game has quit its
+        // executable is still held (the runtime unloading, the antivirus looking), and an installer or a copy that
+        // starts at once fails on it, leaving the old version to come back and fetch the update again at every start.
+        var exe = OS.GetExecutablePath();
+        var dir = System.IO.Path.GetDirectoryName(exe) ?? ".";
+        var script = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(_downloadPath)!, installed ? "apply-setup.ps1" : "apply.ps1");
+        System.IO.File.WriteAllText(script, installed ? SetupScript : UnpackScript);
+        var pid = System.Environment.ProcessId;
+        OS.CreateProcess("powershell.exe",
+        [
+            "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", script,
+            "-ProcessId", pid.ToString(), "-Zip", _downloadPath, "-Dir", dir, "-Exe", exe,
+        ]);
         GetTree().Quit();
     }
 
-    /// <summary>Waits for the game to exit, unpacks the portable zip over the install folder and starts the game again.</summary>
+    /// <summary>
+    /// Waits for the game to exit and its executable to be released, then runs the new installer: silent, no
+    /// restart prompt; /UPDATE=1 makes the installer relaunch the game afterwards. Logs beside the download.
+    /// </summary>
+    private const string SetupScript = """
+        param([int]$ProcessId, [string]$Zip, [string]$Dir, [string]$Exe)
+        $log = Join-Path (Split-Path -Parent $Zip) 'apply.log'
+        function Note($text) { Add-Content -LiteralPath $log -Value ("{0:HH:mm:ss} {1}" -f (Get-Date), $text) }
+        Note "setup $Zip for $Dir (waiting for process $ProcessId)"
+        try { Wait-Process -Id $ProcessId -Timeout 120 -ErrorAction SilentlyContinue } catch {}
+        for ($attempt = 1; $attempt -le 30; $attempt++) {
+            try {
+                $handle = [System.IO.File]::Open($Exe, 'Open', 'ReadWrite', 'None')
+                $handle.Close()
+                Note "executable released after $attempt tries"
+                break
+            } catch { Start-Sleep -Seconds 1 }
+        }
+        Note "running the installer"
+        Start-Process -FilePath $Zip -ArgumentList '/SILENT', '/NORESTART', '/SP-', '/UPDATE=1'
+        """;
+
+    /// <summary>
+    /// Waits for the game to exit, unpacks the portable zip over the install folder and starts the game again. It
+    /// keeps a log beside the zip (apply.log) and stops at the first failure with the old files in place: the game
+    /// is only restarted on what was unpacked whole, and a locked file (an antivirus scan, a slow exit) gets retried.
+    /// </summary>
     private const string UnpackScript = """
         param([int]$ProcessId, [string]$Zip, [string]$Dir, [string]$Exe)
+        $ErrorActionPreference = 'Stop'
+        $log = Join-Path (Split-Path -Parent $Zip) 'apply.log'
+        function Note($text) { Add-Content -LiteralPath $log -Value ("{0:HH:mm:ss} {1}" -f (Get-Date), $text) }
+        Note "apply $Zip over $Dir (waiting for process $ProcessId)"
         try { Wait-Process -Id $ProcessId -Timeout 120 -ErrorAction SilentlyContinue } catch {}
         Start-Sleep -Milliseconds 800
-        $tmp = Join-Path $env:TEMP ("GrudgeLap-Unpack-" + [guid]::NewGuid().ToString("N"))
-        Expand-Archive -LiteralPath $Zip -DestinationPath $tmp -Force
-        $entries = @(Get-ChildItem -LiteralPath $tmp)
-        $src = if ($entries.Count -eq 1 -and $entries[0].PSIsContainer) { $entries[0].FullName } else { $tmp }
-        Copy-Item -Path (Join-Path $src '*') -Destination $Dir -Recurse -Force
-        Remove-Item -LiteralPath $tmp -Recurse -Force
-        Remove-Item -LiteralPath $Zip -Force -ErrorAction SilentlyContinue
+        $tmp = Join-Path (Split-Path -Parent $Zip) ("unpack-" + [guid]::NewGuid().ToString("N"))
+        try {
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            [System.IO.Compression.ZipFile]::ExtractToDirectory($Zip, $tmp)
+            $entries = @(Get-ChildItem -LiteralPath $tmp)
+            $src = if ($entries.Count -eq 1 -and $entries[0].PSIsContainer) { $entries[0].FullName } else { $tmp }
+            Note "unpacked $($entries.Count) entries"
+            for ($attempt = 1; $attempt -le 5; $attempt++) {
+                try {
+                    Copy-Item -Path (Join-Path $src '*') -Destination $Dir -Recurse -Force
+                    Note "copied into $Dir (attempt $attempt)"
+                    break
+                } catch {
+                    if ($attempt -eq 5) { throw }
+                    Note "copy failed, retrying: $($_.Exception.Message)"
+                    Start-Sleep -Seconds 2
+                }
+            }
+            Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $Zip -Force -ErrorAction SilentlyContinue
+            Note "done"
+        } catch {
+            Note "FAILED: $($_.Exception.Message)"
+            Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+        }
         Start-Process -FilePath $Exe -WorkingDirectory $Dir
         """;
 
