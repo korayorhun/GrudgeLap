@@ -5,6 +5,7 @@
 #include "GlpCamera.h"
 #include "GlpCarView.h"
 #include "GlpInput.h"
+#include "GlpScores.h"
 #include "grudgelap_physics.h"
 #include "GlpGame.generated.h"
 
@@ -63,6 +64,7 @@ public:
 	float DrivingSeconds() const { return DrivingTime; }
 	float DashOffset() const { return Dash; }
 	bool Attract() const { return bAttract; }
+	const FGlpScores& HighScores() const { return Scores; }
 	UTexture* InstrumentPanel() const;
 
 protected:
@@ -84,6 +86,8 @@ private:
 	void SaveSettings() const;
 	void SaveBestLap();
 	bool LoadBestLap();
+	void LoadScores();
+	void SaveScores() const;
 	FString SavedFile(const TCHAR* Name) const;
 	FGlpCarView* PlayerCar() const;
 	void FitOutCockpit();
@@ -142,6 +146,8 @@ private:
 
 	FGlpInput Input;
 	FGlpCameraRig Rig;
+	FGlpScores Scores;
+	bool bScoreOffered = false;   // the credit's end has been put to the high-score table
 	int32 CarIndex = 0;
 	int32 Transmission = GLP_MANUAL_AUTO_CLUTCH;
 	bool bKmh = false;

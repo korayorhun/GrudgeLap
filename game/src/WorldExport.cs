@@ -20,18 +20,27 @@ internal static class WorldExport
     {
         var scene = new Node3D { Name = "GrudgeLapWorld" };
         var grass = new List<float[]>();
+        var forest = new List<float[]>();
+        var forestMeshes = new SortedDictionary<int, Mesh>();
         var props = new List<object>();
         foreach (var child in root.GetChildren())
         {
-            if (child is not Node3D node || node is CameraRig or Light3D or Camera3D || node.Name == "FarGround") continue;
+            // The clouds are a sheet for this engine's sky; the other builds its own.
+            if (child is not Node3D node || node is CameraRig or Light3D or Camera3D || node.Name == "FarGround" || node.Name == "Clouds") continue;
             if (node is CarView && node != car) continue;
             foreach (var multimesh in Descendants(node).OfType<MultiMeshInstance3D>())
             {
+                // The wood's trees go out as placements of their variant meshes (Forest-<band>-<variant>), the grass as tufts.
+                var multimeshName = multimesh.Name.ToString();
+                var isForest = multimeshName.StartsWith("Forest-", StringComparison.Ordinal);
+                var variant = isForest ? int.Parse(multimeshName[(multimeshName.LastIndexOf('-') + 1)..], System.Globalization.CultureInfo.InvariantCulture) : 0;
+                if (isForest && multimesh.Multimesh.Mesh is { } treeMesh) forestMeshes.TryAdd(variant, treeMesh);
                 for (var i = 0; i < multimesh.Multimesh.InstanceCount; i++)
                 {
                     var t = multimesh.GlobalTransform * multimesh.Multimesh.GetInstanceTransform(i);
                     var forward = -t.Basis.Z;
-                    grass.Add([t.Origin.X, t.Origin.Y, t.Origin.Z, Mathf.Atan2(forward.X, -forward.Z), t.Basis.Y.Length()]);
+                    if (isForest) forest.Add([t.Origin.X, t.Origin.Y, t.Origin.Z, Mathf.Atan2(forward.X, -forward.Z), t.Basis.X.Length(), t.Basis.Y.Length(), variant]);
+                    else grass.Add([t.Origin.X, t.Origin.Y, t.Origin.Z, Mathf.Atan2(forward.X, -forward.Z), t.Basis.Y.Length()]);
                 }
             }
             var name = node.Name.ToString();
@@ -47,6 +56,9 @@ internal static class WorldExport
             copy.Transform = node.Transform;
             if (node == car) copy.Name = "PlayerCar";
         }
+
+        // One of each tree of the wood travels in the file, named for the placements to find (ForestVariant-<n>).
+        foreach (var (variant, mesh) in forestMeshes) scene.AddChild(new MeshInstance3D { Mesh = mesh, Name = $"ForestVariant-{variant}" });
 
         var document = new GltfDocument();
         var state = new GltfState();
@@ -65,9 +77,10 @@ internal static class WorldExport
             camera = new { eye = Vec(eye.Origin), forward = Vec(-eye.Basis.Z), up = Vec(eye.Basis.Y), fov = camera.Fov },
             props,
             grass,
+            forest,
         };
         System.IO.File.WriteAllText(System.IO.Path.ChangeExtension(path, ".json"), JsonSerializer.Serialize(placement));
-        GD.Print(error == Error.Ok ? $"world exported: {path} ({scene.GetChildCount()} nodes, {props.Count} props, {grass.Count} grass tufts)" : $"world export failed: {error}");
+        GD.Print(error == Error.Ok ? $"world exported: {path} ({scene.GetChildCount()} nodes, {props.Count} props, {grass.Count} grass tufts, {forest.Count} trees of the wood)" : $"world export failed: {error}");
         scene.QueueFree();
         return error;
     }

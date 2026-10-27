@@ -159,12 +159,13 @@ def assets_in(folder, class_name, contains=""):
     return found
 
 
-def import_texture(folder, stem, kind):
-    """Imports one Poly Haven map (diff, nor_gl or arm) once and sets it up for its use."""
+def import_texture(folder, stem, kind, path=None):
+    """Imports one Poly Haven map (diff, nor_gl or arm) once and sets it up for its use; path imports another file
+    (the game's own sheets) under the same folder."""
     dest = f"{GAME}/Textures/{folder}"
     if not assets_in(dest, "Texture2D", stem):
         task = unreal.AssetImportTask()
-        task.filename = os.path.join(POLYHAVEN, "textures", folder, f"{stem}.jpg")
+        task.filename = path or os.path.join(POLYHAVEN, "textures", folder, f"{stem}.jpg")
         task.destination_path = dest
         task.automated = True
         task.replace_existing = True
@@ -182,11 +183,13 @@ def import_texture(folder, stem, kind):
     return texture
 
 
-def surface_material(name, folder, u_tiling, v_tiling, tint=(1.0, 1.0, 1.0), macro=0.0):
+def surface_material(name, folder, u_tiling, v_tiling, tint=(1.0, 1.0, 1.0), macro=0.0, vertex_colour=False, wear=None):
     """Base colour, normal and roughness/AO from one Poly Haven set, tiled on the mesh UVs.
 
     macro > 0 multiplies in the same texture at macro times the tile size as a slow brightness wobble, so a large
-    ground does not show its repeat.
+    ground does not show its repeat. vertex_colour multiplies the mesh's vertex colour in (the road's slabs,
+    wheel tracks, patches and potholes, the shoulders' tones, as the Godot version shades them); wear is a sheet
+    multiplied in on the second UV set (the road's tar snakes and stains).
     """
     path = f"{GAME}/Materials/{name}"
     if eal.does_asset_exist(path):
@@ -232,7 +235,20 @@ def surface_material(name, folder, u_tiling, v_tiling, tint=(1.0, 1.0, 1.0), mac
         mel.connect_material_expressions(tinted, "", colour, "B")
     else:
         mel.connect_material_expressions(tint_node, "", colour, "B")
-    mel.connect_material_property(colour, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    final = colour
+    if vertex_colour:
+        painted = expression(unreal.MaterialExpressionMultiply, -300, -400)
+        mel.connect_material_expressions(final, "", painted, "A")
+        mel.connect_material_expressions(expression(unreal.MaterialExpressionVertexColor, -500, -200), "", painted, "B")
+        final = painted
+    if wear is not None:
+        uv2 = expression(unreal.MaterialExpressionTextureCoordinate, -1400, -1000)
+        uv2.set_editor_property("coordinate_index", 1)
+        worn = expression(unreal.MaterialExpressionMultiply, -100, -400)
+        mel.connect_material_expressions(final, "", worn, "A")
+        mel.connect_material_expressions(sample(wear, unreal.MaterialSamplerType.SAMPLERTYPE_COLOR, uv2, -900, -1000), "RGB", worn, "B")
+        final = worn
+    mel.connect_material_property(final, "", unreal.MaterialProperty.MP_BASE_COLOR)
     mel.connect_material_property(normal, "RGB", unreal.MaterialProperty.MP_NORMAL)
     mel.connect_material_property(masks, "G", unreal.MaterialProperty.MP_ROUGHNESS)
     mel.connect_material_property(masks, "R", unreal.MaterialProperty.MP_AMBIENT_OCCLUSION)
@@ -808,9 +824,12 @@ def dress_track(actors):
     # Mean linear albedos measured from the scans: asphalt 0.10 (kept), the aerial grass (0.17, 0.12, 0.03) is a
     # dry yellow; the tint turns it to a meadow's (0.09, 0.12, 0.03).
     ground = surface_material("M_Ground", "aerial_grass_rock", 5000 / 15.0, 5000 / 15.0, tint=(0.5, 1.0, 1.3), macro=23.0)
-    asphalt = surface_material("M_Asphalt", "asphalt_02", 11.0 / 3.0, 1 / 3.0, tint=(0.9, 0.9, 0.9))
+    # The road's wear sheet is the game's own (tools/make-road-wear.py); the road mesh carries its UV2 and the
+    # vertex colours of the slabs, wheel tracks, patches and potholes.
+    wear = import_texture("GrudgeLap", "road_wear", "colour", path=os.path.join(ROOT, "..", "game", "assets", "textures", "road_wear.png"))
+    asphalt = surface_material("M_Asphalt", "asphalt_02", 11.0 / 3.0, 1 / 3.0, tint=(0.9, 0.9, 0.9), vertex_colour=True, wear=wear)
     # Dry earth, as the Godot version's shoulders and the orange dirt of the original; the grass path read as lawn.
-    verge = surface_material("M_Verge", "brown_mud_dry", 2.2, 1.0, tint=(1.15, 0.95, 0.75))
+    verge = surface_material("M_Verge", "brown_mud_dry", 2.2, 1.0, tint=(1.15, 0.95, 0.75), vertex_colour=True)
     for label, actor in actors.items():
         material = ground if label == "Terrain" else asphalt if label.startswith("Road-") else verge if label.startswith("Shoulder-") else None
         if material is None:
@@ -953,6 +972,15 @@ def scatter(placements, extra, actors):
     spots += [(t["position"], t["yaw"], t["scale"], 10.0) for t in extra["trees"]]
     if trees:
         place("Trees", trees, spots)
+
+    # The wood beyond the fields (FoliageBuilder.BuildForest): the game's placements of its card trees, stood here
+    # as the scanned trees at the game's sizes, not drawn beyond two and a half kilometres. The one-of-each
+    # template meshes the file carries for other importers (ForestVariant-<n>) and the empty Forest node go.
+    wood = placements.get("forest", [])
+    if trees and wood:
+        place("Wood", trees, [((x, y, z), math.degrees(yaw), sx, 10.0) for x, y, z, yaw, sx, sy, variant in wood], cull=250000)
+    for label in [label for label in actors if label.startswith("ForestVariant-") or label == "Forest"]:
+        destroy_with_children(actors[label])
 
     bushes = [(m, s, 1.0) for ms, s in ((meshes["shrub_02"], 1.0), (meshes["shrub_03"], 2.5), (meshes["shrub_04"], 2.0)) for m in ms]
     if bushes:

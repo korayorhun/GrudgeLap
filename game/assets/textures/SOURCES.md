@@ -18,6 +18,8 @@ All CC0 (public domain dedication); re-encoded here at 1K as JPEG to keep the re
 | `fabric_color.jpg`, `fabric_normal.jpg` | ambientCG **Fabric030** (1K-JPG) — the roof lining | https://ambientcg.com/view?id=Fabric030 | CC0 1.0 |
 | `leaf_clusters.png` | composited by `tools/make-foliage.py` from the cutouts of ambientCG **LeafSet001** (1K-JPG colour sheet kept as `tools/leafset001.png`) | https://ambientcg.com/view?id=LeafSet001 | CC0 1.0 |
 | `grass_blades.png` | drawn by `tools/make-foliage.py` (no source material) | this repository | MIT |
+| `road_wear.png` | drawn by `tools/make-road-wear.py` (no source material): the road's wear sheet, tar snakes, patch seams and oil spots, multiplied into the asphalt over its second UV set | this repository | MIT |
+| `clouds.png` | drawn by `tools/make-clouds.py` (no source material): a tileable sheet of fair-weather cumulus, white with a grey underside on a transparent ground | this repository | MIT |
 | `sky.hdr` | Poly Haven **kloofendal_43d_clear_puresky** (2K HDR; the partly cloudy 48d sky of the same place was used before, its haze washed the plain out) | https://polyhaven.com/a/kloofendal_43d_clear_puresky | CC0 1.0 |
 
 ambientCG: https://ambientcg.com (assets dedicated to the public domain under CC0). Poly Haven:

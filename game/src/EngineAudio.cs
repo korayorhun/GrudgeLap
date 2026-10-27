@@ -9,9 +9,11 @@ namespace GrudgeLap.Game;
 /// <summary>
 /// The car's sound. Engine, tyres and road roar, and the V8's overrun pops come from recordings
 /// (<see cref="SampledEngine"/>, <see cref="TyreAudio"/>, the pop one-shots scheduled here); this node mixes the
-/// procedural layers on top: wind that grows with speed, suspension thumps over bumps, crash, bonus bleeps, the
-/// moo, the sign, the train, the cabinet's chime, starter and jingles (<see cref="Jingle"/>), and the 1989-mode
-/// voices (pulse-train engine, filtered-noise squeal). Like the original it drives without music.
+/// procedural layers on top: wind that grows with speed, suspension thumps over bumps, the shifter's clunk, bonus
+/// bleeps, the moo, the sign, the cabinet's chime, starter and jingles (<see cref="Jingle"/>), and the 1989-mode
+/// voices (pulse-train engine, filtered-noise squeal, a noise-burst crash and the train's clack); otherwise the
+/// crash is a recording and the train and the drones are placed in the world by <see cref="WorldAudio"/>. Like
+/// the original it drives without music.
 /// </summary>
 internal sealed partial class EngineAudio : Node
 {
@@ -34,6 +36,8 @@ internal sealed partial class EngineAudio : Node
     private float _trainLevel, _trainClock;
     private float _chime, _chimePhase;
     private float _starter, _starterPhase, _starterLp;
+    private float _clunk, _clunkPhase, _clunkLp;
+    private int _lastGear;
     private Note[]? _song;
     private double _songTime;
     private int _songNext;
@@ -48,6 +52,7 @@ internal sealed partial class EngineAudio : Node
     private readonly float[] _lastCompression = new float[4];
     private readonly List<float> _popsPending = new();   // seconds until each scheduled pop
     private AudioStreamPlayer? _pops;
+    private AudioStreamPlayer? _crashTakes;
     private static readonly string[] PopFiles = ["pop1.wav", "pop2.wav", "pop3.wav", "pop4.wav", "pop5.wav", "crackle.wav"];
 
     public float Volume { get; set; } = 0.8f;
@@ -181,6 +186,7 @@ internal sealed partial class EngineAudio : Node
         _tyres = new TyreAudio();
         AddChild(_tyres);
         _pops = PopPlayer();
+        _crashTakes = CrashPlayer();
         // The engine, tyres, pops and these layers add up on the master bus: a limiter there instead of the output's clipping.
         if (AudioServer.GetBusEffectCount(0) == 0) AudioServer.AddBusEffect(0, new AudioEffectHardLimiter { CeilingDb = -0.5f });
     }
@@ -209,11 +215,23 @@ internal sealed partial class EngineAudio : Node
         return player;
     }
 
+    /// <summary>The crash: three recordings of metal and glass (assets/audio/SOURCES.md), one drawn at random per crash.</summary>
+    private AudioStreamPlayer? CrashPlayer()
+    {
+        var takes = AudioClips.Takes(1.08f, 2f, "crash/crash1.wav", "crash/crash2.wav", "crash/crash3.wav");
+        if (takes is null) return null;
+        var player = new AudioStreamPlayer { Stream = takes, MaxPolyphony = 2, VolumeDb = -1f };
+        AddChild(player);
+        return player;
+    }
+
     public void Update(RaceSession session, float dt)
     {
         var car = session.Car;
         var engine = car.Drivetrain.Engine;
-        _running = engine.Running;
+        // The instant replay has no engine: the car stands wrecked while the crash is shown (the simulation holds
+        // its last revs through the replay, which played on as a frozen note).
+        _running = engine.Running && session.Phase != SessionPhase.Replay;
         _rpm += (MathF.Max(engine.Rpm, 0f) - _rpm) * MathUtil.Clamp01(dt * 12f);
         var load = MathUtil.Clamp01(engine.LastTorque / 500f);
         _load += (load - _load) * MathUtil.Clamp01(dt * 8f);
@@ -230,7 +248,12 @@ internal sealed partial class EngineAudio : Node
         {
             switch (e)
             {
-                case RaceEvent.Crashed: _crash = 1f; break;
+                case RaceEvent.Crashed:
+                    // The recording, with the weight of a thump under it; 1989 mode keeps the cabinet's burst of noise.
+                    if (Retro || _crashTakes is null) _crash = 1f;
+                    else _crashTakes.Play();
+                    _thump = 1f;
+                    break;
                 case RaceEvent.CheckpointPassed:
                 case RaceEvent.LapCompleted: _bleep = 0.35f; break;
                 case RaceEvent.EngineStarted: _starter = 1f; _starterPhase = 0f; break;
@@ -242,7 +265,15 @@ internal sealed partial class EngineAudio : Node
         // The credit's end: the tune of the original's high-score screen, once.
         if (session.Phase == SessionPhase.Finished && _lastPhase != SessionPhase.Finished) PlayJingle(Jingle.GameOver);
         _lastPhase = session.Phase;
-        // The train is heard when it runs within a couple of hundred metres.
+        // The shifter: a clunk on every change of gear while the car is driven (the automatic's too).
+        var gear = car.Drivetrain.Gear;
+        if (gear != _lastGear && session.Phase == SessionPhase.Driving && _running)
+        {
+            _clunk = 1f;
+            _clunkPhase = 0f;
+        }
+        _lastGear = gear;
+        // The train's clack of 1989 mode is heard when it runs within a couple of hundred metres.
         var trainTarget = 0f;
         if (session.Track.Train is { Running: true } train)
         {
@@ -338,7 +369,7 @@ internal sealed partial class EngineAudio : Node
             }
 
             var music = Song() + ChimeSample() + Starter(noise);
-            var extras = Moo() + Clang(noise) + TrainClack(noise) + (Retro ? 0f : Road(noise));
+            var extras = Moo() + Clang(noise) + Clunk(noise) + (Retro ? TrainClack(noise) : Road(noise));
             var sample = MathF.Tanh((engine + squeal + crash + bleep + music + extras) * Volume);
             buffer[i] = new Vector2(sample, sample);
         }
@@ -359,6 +390,20 @@ internal sealed partial class EngineAudio : Node
             _thump -= 1f / (MixRate * 0.16f);
         }
         return wind + thump;
+    }
+
+    /// <summary>The shifter going into a gear: a low thud of ninety milliseconds with the click of the linkage on top.</summary>
+    private float Clunk(float noise)
+    {
+        if (_clunk <= 0f) return 0f;
+        var t = 1f - _clunk;
+        _clunkPhase += 110f / MixRate;
+        if (_clunkPhase >= 1f) _clunkPhase -= 1f;
+        _clunkLp += (noise - _clunkLp) * 0.35f;
+        var thud = MathF.Sin(_clunkPhase * MathF.Tau) * MathF.Exp(-t * 28f);
+        var click = _clunkLp * MathF.Exp(-t * 90f) * 0.8f;
+        _clunk -= 1f / (MixRate * 0.09f);
+        return (thud + click) * 0.28f;
     }
 
     /// <summary>A cow: two formants on a pitch that sags, over about a second.</summary>

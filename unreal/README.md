@@ -75,8 +75,11 @@ To play, open `unreal\GrudgeLapUE.uproject` in the editor and press Play, or sta
 project and `-game`. The keys are the Godot version's: left and right choose the car on the title screen, 1, 2 and
 3 the gearbox, Enter starts; then the arrow keys or WASD drive, E and Q (or 1 to 7, N, R) change gear, Shift is
 the clutch, Space skips the replay or puts the car back on the road, C switches the camera, U the units, F5
-starts a new game, F9 the attract mode, F11 full screen and F12 takes a screenshot. Settings and the best lap are
-kept in `Saved\GrudgeLap`.
+starts a new game, F9 the attract mode, F11 full screen and F12 takes a screenshot. A gamepad has the Godot
+version's layout (left stick steers, the triggers are the pedals, RB / LB shift and pick the gearbox on the title
+screen, X clutch, A starts, B skips, Y camera, Back new game, the d-pad stands in for all). At the end of a
+credit that makes the top ten, the initials are entered as in the Godot version. Settings, the best lap and
+the high scores (`scores.txt`, the Godot version's text form) are kept in `Saved\GrudgeLap`.
 
 For automated checks, `-GlpAudioDump=<file.wav>` records the sound mix and `-GlpMute` keeps the speakers silent.
 
@@ -99,12 +102,16 @@ the development laptop); later runs only cook what changed.
   the imported car's wheels, suspension and steering wheel, and copies of its exterior for the traffic and the
   ghost), the train and the signs that tip over. The camera follows with the game's cockpit, chase and replay
   placements (`GlpCamera`).
-- `GlpHud` draws the readouts and the title screen on the canvas; `GlpInstruments` draws the instrument panel
+- `GlpScores.*` is the high-score table and the entry of initials, as `HighScoreTable.cs` and `ScoreBoard.cs`
+  keep them in Godot, in the same text form.
+- `GlpHud` draws the readouts, the title screen and the high-score panel on the canvas; `GlpInstruments` draws the instrument panel
   into a texture shown on the binnacle and at the foot of the screen; a scene capture fills the rear-view
   mirror. `GlpAudio` mixes the recordings and the synthesis the way the Godot version does, at 44.1 kHz; the
   engine voice is the simulation core's (`glp_engine_*`, the same `audio/GranularEngine` Godot plays, with the
   overrun recordings off the throttle), rendered on the audio thread, and the cabinet's chime, starter and
   jingles (the fanfare of a record lap, the tune of the credit's end) are the same note tables as Godot's.
+  The crash recordings, the shifter's clunk and the train's steam loop are mixed in too, the steam by the
+  train's distance; the Godot version's placed drone engines and Doppler shift are not (the mix is mono).
 - **Coordinates:** the simulation's (x, y, z) in metres is (x, −z, y) × 100 cm in Unreal. Godot shows it as
   (x, y, −z), and the glTF import maps Godot's (x, y, z) to Unreal's (x, z, y).
 - `Scripts/build_scene.py` writes the level and tags what the game moves. It holds the record of what the
@@ -120,3 +127,5 @@ the development laptop); later runs only cook what changed.
   - **Cabin photos:** Godot lays the leather, fabric and carpet on with triplanar mapping, so those meshes come
     without texture coordinates; a material projects the photos in each part's own space instead.
   - **Plain paint:** the strakes and trims carry their own paint material; it takes the traffic's colours too.
+  - **The wood:** the export's `forest` placements become instanced scanned trees (`Wood*`, drawn to 2.5 km);
+    the one-of-each template meshes the file carries (`ForestVariant-<n>`) are removed from the level.

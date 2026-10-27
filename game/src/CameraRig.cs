@@ -102,5 +102,8 @@ internal sealed partial class CameraRig : Node3D
 
     public void ResetChase() => _chaseInitialised = false;
 
+    /// <summary>Where the camera is: the listener of the placed sounds (<see cref="WorldAudio"/>).</summary>
+    public Vector3 Listener => _camera.GlobalPosition;
+
     private float Jitter() => (float)(_rng.NextDouble() * 2.0 - 1.0);
 }

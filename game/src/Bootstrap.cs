@@ -13,7 +13,10 @@ namespace GrudgeLap.Game;
 /// command-line switches used for automated checks: <c>--attract</c> (scripted driver), <c>--screenshot=&lt;file&gt;</c>
 /// with <c>--at=&lt;seconds&gt;</c>, <c>--chase</c>, <c>--orbit=yaw,pitch,distance</c>, <c>--speed-route</c>,
 /// <c>--retro</c>, <c>--no-traffic</c>, <c>--show-all</c>, <c>--invisible</c> (no window on screen, and no claim on the
-/// one-copy-per-computer lock of <see cref="SingleInstance"/>) and <c>--quit-after=&lt;seconds&gt;</c>.
+/// one-copy-per-computer lock of <see cref="SingleInstance"/>), <c>--park</c> (the car waits at the start with its
+/// engine off while the traffic and the train go by: checks of the placed sounds), <c>--time=&lt;seconds&gt;</c> (a credit
+/// of that length), <c>--try-table</c> (the attract driver's credit is offered to the high-score table: checks of the
+/// entry screen), <c>--quality=low|medium|high</c> (the graphics preset for this run) and <c>--quit-after=&lt;seconds&gt;</c>.
 /// </summary>
 public sealed partial class Bootstrap : Node3D
 {
@@ -30,17 +33,25 @@ public sealed partial class Bootstrap : Node3D
     private TrainView? _trainView;
     private CameraRig _cameraRig = null!;
     private Hud _hud = null!;
+    private ScoreBoard _scores = null!;
+    private bool _scoreOffered;   // the credit's end has been put to the high-score table
     private InstrumentCluster _instruments = null!;
     private Texture2D _instrumentPanel = null!;
     private RearMirror? _mirror;
     private EngineAudio _audio = null!;
+    private WorldAudio _world = null!;
     private Updater _updater = null!;
     private readonly KeyboardDriver _keyboard = new();
     private readonly ScriptedDriver _scripted = new();
     private LapRecording? _savedBestLap;
     private bool _attract;
+    private bool _park;
+    private bool _tryTable;
+    private float _creditSeconds = -1f;
     private bool _startChase;
     private bool _retro;
+    private GraphicsQuality _quality = GraphicsQuality.High;
+    private float _overlayUntil = -1f;   // a short notice (graphics preset) on the HUD until then
     private bool _invisible;
     private bool _leaving;      // a second launch on its way out: nothing was built
     private bool _noGhost;
@@ -65,6 +76,7 @@ public sealed partial class Bootstrap : Node3D
         InputSetup.Register();
         _carIndex = Math.Clamp(LoadChoice("car", 0), 0, VehicleSpec.Catalogue.Length - 1);
         _gearbox = (TransmissionMode)Math.Clamp(LoadChoice("transmission", (int)TransmissionMode.Automatic), 0, 2);
+        _quality = (GraphicsQuality)Math.Clamp(LoadChoice("quality", (int)GraphicsQuality.High), 0, 2);
         ParseArgs();   // may override the saved car with --car=
         if (_invisible)
         {
@@ -84,6 +96,9 @@ public sealed partial class Bootstrap : Node3D
 
         _track = OriginalInspiredTrack.Build();
         WorldBuilder.Build(this, _track);
+        // Before the train and the drones: they hand their nodes to it for their sounds.
+        _world = new WorldAudio();
+        AddChild(_world);
         for (var i = 0; i < _track.Props.Count; i++)
         {
             var node = PropBuilder.Build(_track.Props[i], _track.Terrain);
@@ -94,6 +109,7 @@ public sealed partial class Bootstrap : Node3D
         {
             _trainView = TrainView.Create(train, _track.Terrain);
             AddChild(_trainView);
+            _world.AttachTrain(_trainView.Locomotive, train);
         }
         GetViewport().UseTaa = true;
 
@@ -102,7 +118,9 @@ public sealed partial class Bootstrap : Node3D
         _cameraRig = new CameraRig { Mode = _orbit is not null ? CameraMode.Orbit : _startChase ? CameraMode.Chase : CameraMode.Cockpit };
         if (_orbit is { } orbit) _cameraRig.Orbit = orbit;
         AddChild(_cameraRig);
-        _hud = new Hud { Gearbox = _gearbox };
+        _hud = new Hud { Gearbox = _gearbox, ShowFps = LoadChoice("fps", 0) != 0 };
+        _scores = new ScoreBoard();
+        _hud.Scores = _scores;
         var layer = new CanvasLayer { Visible = !_noHud };
         layer.AddChild(_hud);
         AddChild(layer);
@@ -129,6 +147,7 @@ public sealed partial class Bootstrap : Node3D
         }
         GetWindow().Title = $"GrudgeLap {Updater.CurrentVersionText}";
         if (_retro) SetRetro(true);
+        else ApplyGraphics();
         // Automated runs never phone home; a player can also switch the check off in settings.cfg.
         if (!_attract && _screenshotPath is null && System.Environment.GetEnvironmentVariable("GRUDGELAP_NO_UPDATE") is null) _updater.CheckIfDue(manual: false);
     }
@@ -158,6 +177,10 @@ public sealed partial class Bootstrap : Node3D
         foreach (var arg in OS.GetCmdlineUserArgs())
         {
             if (arg == "--attract") _attract = true;
+            else if (arg == "--park") _park = true;
+            else if (arg == "--try-table") _tryTable = true;
+            else if (arg.StartsWith("--quality=", System.StringComparison.Ordinal) && Enum.TryParse<GraphicsQuality>(arg["--quality=".Length..], ignoreCase: true, out var quality)) _quality = quality;   // this run only
+            else if (arg.StartsWith("--time=", System.StringComparison.Ordinal)) float.TryParse(arg["--time=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _creditSeconds);
             else if (arg == "--chase") _startChase = true;
             else if (arg == "--retro") _retro = true;
             else if (arg == "--invisible") _invisible = true;   // automated runs: no window on screen, no focus taken
@@ -204,6 +227,7 @@ public sealed partial class Bootstrap : Node3D
     private void NewSession()
     {
         var options = _noTraffic ? RaceOptions.MediumNoTraffic : RaceOptions.Medium;
+        if (_creditSeconds > 0f) options = options with { InitialTime = _creditSeconds };
         var spec = VehicleSpec.Catalogue[_carIndex];
         _session = new RaceSession(_track, spec, options);
         if (_carView.IsInsideTree() && _carView.Name != $"Car-{spec.Style}")
@@ -218,11 +242,13 @@ public sealed partial class Bootstrap : Node3D
         if (_savedBestLap is not null && !_noGhost) _session.LoadBestLap(_savedBestLap);
         _hud.Bind(_session);
         _instruments.Bind(_session);
+        _scores.Dismiss();
+        _scoreOffered = false;
         _keyboard.Reset();
         _cameraRig.ResetChase();
         BuildDroneViews();
         BuildGhostView();
-        if (_attract)
+        if (_attract || _park)
         {
             _session.ChooseTransmission(_attractMode);
         }
@@ -241,6 +267,7 @@ public sealed partial class Bootstrap : Node3D
             view.Name = "Drone";
             view.SetViewpoint(false);
             AddChild(view);
+            _world.AttachDrone(view, drone);
             _droneViews.Add(view);
         }
     }
@@ -312,9 +339,15 @@ public sealed partial class Bootstrap : Node3D
         _elapsed += dt;
         if (SingleInstance.ActivationRequested()) BringToFront();
         HandleGlobalKeys();
+        WorldBuilder.Tick(dt);
+        if (_overlayUntil >= 0f && _elapsed >= _overlayUntil)
+        {
+            _hud.Overlay = "";
+            _overlayUntil = -1f;
+        }
 
-        var input = _attract ? _scripted.Next(_session) : _keyboard.Sample(dt, MathF.Abs(_session.Car.Speed));
-        if (!_attract && HandleMenuKeys()) input.Ignition = true;
+        var input = _park ? DriverInputs.Idle : _attract ? _scripted.Next(_session) : _keyboard.Sample(dt, MathF.Abs(_session.Car.Speed));
+        if (!_attract && !_park && HandleMenuKeys()) input.Ignition = true;
 
         if (_session.Phase == SessionPhase.Replay && Input.IsActionJustPressed(InputSetup.Abort)) _session.Abort();
         else if (_session.Phase == SessionPhase.Driving && _session.OffRoad && Input.IsActionJustPressed(InputSetup.Abort)) _session.Abort();
@@ -335,7 +368,18 @@ public sealed partial class Bootstrap : Node3D
             if (axis.LengthSquared() > 1e-4f) _tipping.Add((sign, _elapsed, sign.Rotation.Y, axis.Normalized()));
         }
         UpdateTipping();
+        if (_session.Phase == SessionPhase.Finished)
+        {
+            if (!_scoreOffered)
+            {
+                // The credit is over: a score that makes the table asks for initials (the attract mode's does not).
+                _scoreOffered = true;
+                if (!_attract || _tryTable) _scores.Offer(_session.Score, _session.CreditBestLap, _session.CreditBestRoute, _session.Car.Spec.Name);
+            }
+            _scores.Update(dt);
+        }
         _audio.Update(_session, dt);
+        _world.Update(_session, _cameraRig.Listener, dt);
         _hud.Notice = _updater.Status;
         SyncView();
 
@@ -386,6 +430,7 @@ public sealed partial class Bootstrap : Node3D
         _carView.SetViewpoint(insideCar: cockpit && !_showAll);
         _hud.Cockpit = cockpit;
         _audio.Interior = cockpit;
+        _world.Interior = cockpit;
         _mirror?.SetActive(cockpit);
         SyncTraffic(dt);
         SyncGhost();
@@ -468,6 +513,9 @@ public sealed partial class Bootstrap : Node3D
         if (Input.IsActionJustPressed(InputSetup.SelectAuto)) SetGearbox(TransmissionMode.Automatic);
         else if (Input.IsActionJustPressed(InputSetup.SelectManual)) SetGearbox(TransmissionMode.ManualAutoClutch);
         else if (Input.IsActionJustPressed(InputSetup.SelectClutch)) SetGearbox(TransmissionMode.ManualClutch);
+        // The shoulders (or E/Q) step through the gearboxes: a pad has no number keys.
+        else if (Input.IsActionJustPressed(InputSetup.ShiftUp)) SetGearbox((TransmissionMode)(((int)_gearbox + 1) % 3));
+        else if (Input.IsActionJustPressed(InputSetup.ShiftDown)) SetGearbox((TransmissionMode)(((int)_gearbox + 2) % 3));
         if (!Input.IsActionJustPressed(InputSetup.Ignition) && !Input.IsActionJustPressed(InputSetup.Abort) && !click) return false;
         _session.ChooseTransmission(_gearbox);
         return true;
@@ -501,6 +549,18 @@ public sealed partial class Bootstrap : Node3D
         if (Input.IsActionJustPressed(InputSetup.Units)) _instruments.UseKmh = !_instruments.UseKmh;
         if (Input.IsActionJustPressed(InputSetup.NewGame)) NewSession();
         if (Input.IsActionJustPressed(InputSetup.Retro)) SetRetro(!_retro);
+        if (Input.IsActionJustPressed(InputSetup.Quality))
+        {
+            _quality = (GraphicsQuality)(((int)_quality + 1) % 3);
+            SaveChoice("quality", (int)_quality);
+            if (!_retro) ApplyGraphics();
+            Notice($"GRAPHICS: {_quality.ToString().ToUpperInvariant()}");
+        }
+        if (Input.IsActionJustPressed(InputSetup.FpsCounter))
+        {
+            _hud.ShowFps = !_hud.ShowFps;
+            SaveChoice("fps", _hud.ShowFps ? 1 : 0);
+        }
         if (Input.IsActionJustPressed(InputSetup.Update))
         {
             if (_updater.ReadyToApply) _updater.ApplyNow();
@@ -519,18 +579,45 @@ public sealed partial class Bootstrap : Node3D
         }
     }
 
+    /// <summary>A line on the HUD for a couple of seconds.</summary>
+    private void Notice(string text)
+    {
+        _hud.Overlay = text;
+        _overlayUntil = _elapsed + 2.5f;
+    }
+
+    /// <summary>
+    /// The viewport's part of the graphics preset (the environment's is <see cref="WorldBuilder.SetQuality"/>): Low
+    /// renders at three quarters of the window with FXAA instead of multisampling and temporal anti-aliasing.
+    /// </summary>
+    private void ApplyGraphics()
+    {
+        var viewport = GetViewport();
+        var low = _quality == GraphicsQuality.Low;
+        viewport.Scaling3DScale = low ? 0.75f : 1f;
+        viewport.Msaa3D = low ? Viewport.Msaa.Disabled : Viewport.Msaa.Msaa2X;
+        viewport.ScreenSpaceAA = low ? Viewport.ScreenSpaceAAEnum.Fxaa : Viewport.ScreenSpaceAAEnum.Disabled;
+        viewport.UseTaa = !low;
+        WorldBuilder.SetQuality(_quality);
+    }
+
     /// <summary>"1989 mode": a third of the resolution, 20 frames a second, flat colours and no atmosphere.</summary>
     private void SetRetro(bool retro)
     {
         _retro = retro;
-        var viewport = GetViewport();
-        viewport.Scaling3DScale = retro ? 0.32f : 1f;
-        viewport.Msaa3D = retro ? Viewport.Msaa.Disabled : Viewport.Msaa.Msaa2X;
-        viewport.ScreenSpaceAA = Viewport.ScreenSpaceAAEnum.Disabled;
-        viewport.UseTaa = !retro;
+        if (retro)
+        {
+            var viewport = GetViewport();
+            viewport.Scaling3DScale = 0.32f;
+            viewport.Msaa3D = Viewport.Msaa.Disabled;
+            viewport.ScreenSpaceAA = Viewport.ScreenSpaceAAEnum.Disabled;
+            viewport.UseTaa = false;
+        }
         Engine.MaxFps = retro ? 20 : 0;
         WorldBuilder.SetRetro(retro);
+        if (!retro) ApplyGraphics();
         _audio.Retro = retro;
+        _world.Retro = retro;
         _hud.Retro = retro;
     }
 

@@ -12,7 +12,16 @@ namespace
 		EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five, EKeys::Six, EKeys::Seven,
 		EKeys::N, EKeys::R, EKeys::Enter, EKeys::SpaceBar, EKeys::C, EKeys::U, EKeys::F5, EKeys::F8, EKeys::F9,
 		EKeys::F11, EKeys::F12,
+		// The pad's buttons (InputSetup): the stick and the triggers are read as axes.
+		EKeys::Gamepad_DPad_Left, EKeys::Gamepad_DPad_Right, EKeys::Gamepad_DPad_Up, EKeys::Gamepad_DPad_Down,
+		EKeys::Gamepad_LeftStick_Left, EKeys::Gamepad_LeftStick_Right,
+		EKeys::Gamepad_FaceButton_Bottom, EKeys::Gamepad_FaceButton_Right, EKeys::Gamepad_FaceButton_Left, EKeys::Gamepad_FaceButton_Top,
+		EKeys::Gamepad_LeftShoulder, EKeys::Gamepad_RightShoulder, EKeys::Gamepad_Special_Left, EKeys::Gamepad_Special_Right,
+		EKeys::Gamepad_LeftThumbstick, EKeys::Gamepad_RightThumbstick,
 	};
+
+	// Stick travel below this is rest (InputSetup.StickDeadzone).
+	constexpr float StickDeadzone = 0.12f;
 
 	float MoveToward(float Current, float Target, float MaxDelta)
 	{
@@ -76,6 +85,9 @@ void FGlpInput::Update(const APlayerController* Player, float Time)
 			Held.Add(Key);
 		}
 	}
+	StickX = Player ? Player->GetInputAnalogKeyState(EKeys::Gamepad_LeftX) : 0.f;
+	RightTrigger = Player ? Player->GetInputAnalogKeyState(EKeys::Gamepad_RightTriggerAxis) : 0.f;
+	LeftTrigger = Player ? Player->GetInputAnalogKeyState(EKeys::Gamepad_LeftTriggerAxis) : 0.f;
 	for (FScripted& Press : Script)
 	{
 		// Held for its span, and for at least one frame: a slow frame (the machine busy elsewhere) can step over
@@ -100,16 +112,27 @@ bool FGlpInput::Pressed(const FKey& Key) const
 
 glp_inputs FGlpInput::Drive(float DeltaSeconds, float SpeedMps)
 {
-	const bool bLeft = Down(EKeys::Left) || Down(EKeys::A);
-	const bool bRight = Down(EKeys::Right) || Down(EKeys::D);
-	const float Target = (bRight ? 1.f : 0.f) - (bLeft ? 1.f : 0.f);
-	// Full lock takes about 0.35 s parked and 0.7 s at speed; centring is quicker, like a self-aligning wheel.
-	const float SpeedFactor = FMath::Clamp(SpeedMps / 50.f, 0.f, 1.f);
-	const float Rate = Target != 0.f ? FMath::Lerp(2.8f, 1.4f, SpeedFactor) : 4.5f;
-	Steer = MoveToward(Steer, Target, Rate * DeltaSeconds);
-	Throttle = Ramp(Throttle, Down(EKeys::Up) || Down(EKeys::W), DeltaSeconds, 0.18f, 0.12f);
-	Brake = Ramp(Brake, Down(EKeys::Down) || Down(EKeys::S), DeltaSeconds, 0.15f, 0.10f);
-	Clutch = Ramp(Clutch, Down(EKeys::LeftShift) || Down(EKeys::RightShift), DeltaSeconds, 0.12f, 0.25f);
+	if (FMath::Abs(StickX) > StickDeadzone)
+	{
+		// The stick is the wheel: its travel past the dead zone, bent a little for finesse near the centre, reached
+		// quickly enough that a flick is a flick but without the stick's jitter (KeyboardDriver).
+		const float Travel = (FMath::Abs(StickX) - StickDeadzone) / (1.f - StickDeadzone);
+		Steer = MoveToward(Steer, FMath::Sign(StickX) * FMath::Pow(Travel, 1.6f), 8.f * DeltaSeconds);
+	}
+	else
+	{
+		const bool bLeft = Down(EKeys::Left) || Down(EKeys::A) || Down(EKeys::Gamepad_DPad_Left);
+		const bool bRight = Down(EKeys::Right) || Down(EKeys::D) || Down(EKeys::Gamepad_DPad_Right);
+		const float Target = (bRight ? 1.f : 0.f) - (bLeft ? 1.f : 0.f);
+		// Full lock takes about 0.35 s parked and 0.7 s at speed; centring is quicker, like a self-aligning wheel.
+		const float SpeedFactor = FMath::Clamp(SpeedMps / 50.f, 0.f, 1.f);
+		const float Rate = Target != 0.f ? FMath::Lerp(2.8f, 1.4f, SpeedFactor) : 4.5f;
+		Steer = MoveToward(Steer, Target, Rate * DeltaSeconds);
+	}
+	// A pedal is the trigger's position while it is pressed at all, the key's ramp otherwise.
+	Throttle = RightTrigger > 0.02f ? FMath::Clamp(RightTrigger, 0.f, 1.f) : Ramp(Throttle, Down(EKeys::Up) || Down(EKeys::W) || Down(EKeys::Gamepad_DPad_Up), DeltaSeconds, 0.18f, 0.12f);
+	Brake = LeftTrigger > 0.02f ? FMath::Clamp(LeftTrigger, 0.f, 1.f) : Ramp(Brake, Down(EKeys::Down) || Down(EKeys::S) || Down(EKeys::Gamepad_DPad_Down), DeltaSeconds, 0.15f, 0.10f);
+	Clutch = Ramp(Clutch, Down(EKeys::LeftShift) || Down(EKeys::RightShift) || Down(EKeys::Gamepad_FaceButton_Left), DeltaSeconds, 0.12f, 0.25f);
 
 	glp_inputs Input{};
 	Input.steer = Steer;
@@ -125,17 +148,17 @@ glp_inputs FGlpInput::Drive(float DeltaSeconds, float SpeedMps)
 			Input.gear = i + 1;
 		}
 	}
-	if (Pressed(EKeys::N))
+	if (Pressed(EKeys::N) || Pressed(EKeys::Gamepad_LeftThumbstick))
 	{
 		Input.gear = 0;
 	}
-	if (Pressed(EKeys::R))
+	if (Pressed(EKeys::R) || Pressed(EKeys::Gamepad_RightThumbstick))
 	{
 		Input.gear = -1;
 	}
-	Input.shift_up = (Pressed(EKeys::E) || Pressed(EKeys::PageUp)) ? 1 : 0;
-	Input.shift_down = (Pressed(EKeys::Q) || Pressed(EKeys::PageDown)) ? 1 : 0;
-	Input.ignition = Pressed(EKeys::Enter) ? 1 : 0;
+	Input.shift_up = (Pressed(EKeys::E) || Pressed(EKeys::PageUp) || Pressed(EKeys::Gamepad_RightShoulder)) ? 1 : 0;
+	Input.shift_down = (Pressed(EKeys::Q) || Pressed(EKeys::PageDown) || Pressed(EKeys::Gamepad_LeftShoulder)) ? 1 : 0;
+	Input.ignition = (Pressed(EKeys::Enter) || Pressed(EKeys::Gamepad_FaceButton_Bottom) || Pressed(EKeys::Gamepad_Special_Right)) ? 1 : 0;
 	return Input;
 }
 

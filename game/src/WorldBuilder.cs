@@ -31,6 +31,13 @@ internal static class WorldBuilder
     private static Godot.Environment? _environment;
     private static Godot.Environment? _mirrorEnvironment;
     private static DirectionalLight3D? _sun;
+    private static StandardMaterial3D? _steel;
+    private static MeshInstance3D? _clouds;
+    private static Node3D? _forest;
+    private static GraphicsQuality _quality = GraphicsQuality.High;
+    private static bool _retro;
+    /// <summary>How fast the cloud sheet drifts, in tiles per second: about five metres a second on a 2.8 km tile.</summary>
+    private const float CloudDrift = 0.0018f;
     private static readonly List<(StandardMaterial3D Material, Texture2D? Albedo, Texture2D? Normal, Texture2D? Roughness)> _textured = new();
     private static readonly Dictionary<string, StandardMaterial3D> _propMaterials = new();
     /// <summary>Sun direction measured from the brightest patch of the sky HDRI (see assets/textures/SOURCES.md): elevation 43.0, panorama u 0.600.</summary>
@@ -54,6 +61,9 @@ internal static class WorldBuilder
         _environment = null;
         _mirrorEnvironment = null;
         _sun = null;
+        _steel = null;
+        _clouds = null;
+        _forest = null;
         _textured.Clear();
         _propMaterials.Clear();
         FoliageBuilder.ReleaseShared();
@@ -66,6 +76,7 @@ internal static class WorldBuilder
         root.AddChild(BuildSun());
         root.AddChild(BuildFarGround());
         root.AddChild(BuildMountains(track));
+        if (BuildClouds(track) is { } clouds) root.AddChild(clouds);
         root.AddChild(BuildTerrain(track));
         foreach (var path in track.Paths)
         {
@@ -73,9 +84,74 @@ internal static class WorldBuilder
             root.AddChild(BuildShoulders(track, path));
             root.AddChild(BuildCentreLine(track, path));
             foreach (var node in BuildBridges(path, track.Terrain)) root.AddChild(node);
+            if (BuildLoopFrame(path, track.Terrain) is { } frame) root.AddChild(frame);
         }
         foreach (var pad in track.Pads) root.AddChild(BuildPad(pad));
         root.AddChild(FoliageBuilder.BuildGrass(track));
+        var (minX, maxX, minZ, maxZ) = RoadBounds(track);
+        // The wood fills the terrain out to its margin; beyond that lies the flat far ground.
+        _forest = FoliageBuilder.BuildForest(track, minX - TerrainMargin + 40f, maxX + TerrainMargin - 40f, minZ - TerrainMargin + 40f, maxZ + TerrainMargin - 40f);
+        root.AddChild(_forest);
+        ApplyQuality();
+    }
+
+    /// <summary>The extent of the road centre lines.</summary>
+    private static (float MinX, float MaxX, float MinZ, float MaxZ) RoadBounds(TrackGeometry track)
+    {
+        float minX = float.MaxValue, maxX = float.MinValue, minZ = float.MaxValue, maxZ = float.MinValue;
+        foreach (var path in track.Paths)
+        {
+            foreach (var f in path.Frames)
+            {
+                minX = MathF.Min(minX, f.Origin.X); maxX = MathF.Max(maxX, f.Origin.X);
+                minZ = MathF.Min(minZ, f.Origin.Z); maxZ = MathF.Max(maxZ, f.Origin.Z);
+            }
+        }
+        return (minX, maxX, minZ, maxZ);
+    }
+
+    /// <summary>Once a frame: the clouds drift.</summary>
+    public static void Tick(float dt)
+    {
+        if (_clouds?.Mesh is PlaneMesh { Material: StandardMaterial3D material })
+        {
+            material.Uv1Offset += new Vector3(dt * CloudDrift, dt * CloudDrift * 0.35f, 0f);
+        }
+    }
+
+    /// <summary>
+    /// The cost of the picture: what the environment does on top of the geometry. High is everything (global
+    /// illumination, indirect light, reflections, haze); Medium drops the three screen-space passes that cost the
+    /// most; Low keeps only the sun and the fog and thins the wood. The caller sets the viewport's part (resolution,
+    /// anti-aliasing). 1989 mode overrides all of it while it is on.
+    /// </summary>
+    public static void SetQuality(GraphicsQuality quality)
+    {
+        _quality = quality;
+        ApplyQuality();
+    }
+
+    private static void ApplyQuality()
+    {
+        var retro = _retro;
+        var high = !retro && _quality == GraphicsQuality.High;
+        var medium = !retro && _quality >= GraphicsQuality.Medium;
+        if (_sun is not null) _sun.ShadowEnabled = medium;
+        if (_clouds is not null) _clouds.Visible = !retro;
+        if (_forest is not null)
+        {
+            foreach (var child in _forest.GetChildren())
+            {
+                if (child is MultiMeshInstance3D band) band.Visible = medium || band.Name.ToString().StartsWith("Forest-near", StringComparison.Ordinal);
+            }
+        }
+        if (_environment is null) return;
+        _environment.SdfgiEnabled = high;
+        _environment.SsaoEnabled = medium;
+        _environment.SsilEnabled = high;
+        _environment.SsrEnabled = high;
+        _environment.GlowEnabled = medium;
+        _environment.VolumetricFogEnabled = medium;
     }
 
     /// <summary>
@@ -84,6 +160,7 @@ internal static class WorldBuilder
     /// </summary>
     public static void SetRetro(bool retro)
     {
+        _retro = retro;
         foreach (var (material, albedo, normal, roughness) in _textured)
         {
             material.AlbedoTexture = retro ? null : albedo;
@@ -92,16 +169,11 @@ internal static class WorldBuilder
             material.RoughnessTexture = retro ? null : roughness;
             material.TextureFilter = retro ? BaseMaterial3D.TextureFilterEnum.Nearest : BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic;
         }
-        if (_sun is not null) _sun.ShadowEnabled = !retro;
+        if (_asphalt is not null) _asphalt.DetailEnabled = !retro && _asphalt.DetailAlbedo is not null;
         // 1989 shoulders were orange everywhere; today's are dry earth except on the structures.
         if (_gravel is not null) _gravel.AlbedoColor = retro ? new Color(0.9f, 0.45f, 0.1f) : new Color(0.88f, 0.68f, 0.46f);
+        ApplyQuality();
         if (_environment is null) return;
-        _environment.SdfgiEnabled = !retro;
-        _environment.SsaoEnabled = !retro;
-        _environment.SsilEnabled = !retro;
-        _environment.SsrEnabled = !retro;
-        _environment.GlowEnabled = !retro;
-        _environment.VolumetricFogEnabled = !retro;
         RetroLook(_environment, retro);
         if (_mirrorEnvironment is not null) RetroLook(_mirrorEnvironment, retro);
     }
@@ -152,16 +224,35 @@ internal static class WorldBuilder
     }, Photo("grass_color") ?? Noise(0.9f, 5, new[] { (0f, new Color(0.62f, 0.72f, 0.55f)), (0.5f, new Color(0.95f, 1.0f, 0.9f)), (1f, new Color(1.25f, 1.2f, 1.1f)) }, seed: 3),
        Photo("grass_normal") ?? Noise(2.5f, 4, null, seed: 11, asNormal: true), normalScale: 0.7f, Photo("grass_roughness"));
 
-    private static StandardMaterial3D Asphalt => _asphalt ??= Textured(new StandardMaterial3D
+    private static StandardMaterial3D Asphalt
     {
-        // Slightly darkened photo asphalt; the slab shade and the wheel tracks come from the vertex colour multiplied in.
-        AlbedoColor = new Color(0.46f, 0.46f, 0.47f),
-        VertexColorUseAsAlbedo = true,
-        Roughness = 1f,
-        Uv1Scale = new Vector3(2f, 0.18f, 1f),      // u spans the 11 m width, v is metres along: a 5.5 m tile
-        CullMode = BaseMaterial3D.CullModeEnum.Disabled,
-    }, Photo("asphalt_color") ?? Noise(9f, 4, new[] { (0f, new Color(0.82f, 0.82f, 0.82f)), (0.5f, new Color(0.98f, 0.98f, 0.98f)), (1f, new Color(1.15f, 1.15f, 1.15f)) }, seed: 5),
-       Photo("asphalt_normal") ?? Noise(16f, 4, null, seed: 17, asNormal: true), normalScale: 0.5f, Photo("asphalt_roughness"));
+        get
+        {
+            if (_asphalt is not null) return _asphalt;
+            _asphalt = Textured(new StandardMaterial3D
+            {
+                // Slightly darkened photo asphalt; the slab shade, the wheel tracks, the patches and the potholes
+                // come from the vertex colour multiplied in.
+                AlbedoColor = new Color(0.46f, 0.46f, 0.47f),
+                VertexColorUseAsAlbedo = true,
+                Roughness = 1f,
+                Uv1Scale = new Vector3(2f, 0.18f, 1f),      // u spans the 11 m width, v is metres along: a 5.5 m tile
+                CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+            }, Photo("asphalt_color") ?? Noise(9f, 4, new[] { (0f, new Color(0.82f, 0.82f, 0.82f)), (0.5f, new Color(0.98f, 0.98f, 0.98f)), (1f, new Color(1.15f, 1.15f, 1.15f)) }, seed: 5),
+               Photo("asphalt_normal") ?? Noise(16f, 4, null, seed: 17, asNormal: true), normalScale: 0.5f, Photo("asphalt_roughness"));
+            // The wear sheet (tools/make-road-wear.py): tar snakes, sealed cracks and stains multiplied in on the
+            // second UV set, which runs 40 m along the road and drifts across it so the sheet's repeat does not read.
+            var wear = Photo("road_wear", "png");
+            if (wear is not null)
+            {
+                _asphalt.DetailEnabled = true;
+                _asphalt.DetailAlbedo = wear;
+                _asphalt.DetailBlendMode = BaseMaterial3D.BlendModeEnum.Mul;
+                _asphalt.DetailUVLayer = BaseMaterial3D.DetailUV.UV2;
+            }
+            return _asphalt;
+        }
+    }
 
     private static StandardMaterial3D Concrete => _concrete ??= Textured(new StandardMaterial3D
     {
@@ -189,6 +280,15 @@ internal static class WorldBuilder
     /// switch. The texture name is the base of the files in assets/textures (bark, siding, bricks...); a
     /// missing texture leaves a plain tinted material.
     /// </summary>
+    /// <summary>Painted steel for beams (<see cref="Beam"/>): the colour comes with the vertices, both faces drawn.</summary>
+    private static StandardMaterial3D Steel => _steel ??= new StandardMaterial3D
+    {
+        VertexColorUseAsAlbedo = true,
+        Roughness = 0.5f,
+        Metallic = 0.35f,
+        CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+    };
+
     public static StandardMaterial3D PropMaterial(string texture, Color tint, float uvScale, bool triplanar = true, bool matte = false)
     {
         var key = $"{texture}|{tint}|{uvScale}|{triplanar}|{matte}";
@@ -224,9 +324,9 @@ internal static class WorldBuilder
     }
 
     /// <summary>A photo texture from assets/textures, or null when it is not there (then the noise stands in).</summary>
-    private static Texture2D? Photo(string name)
+    private static Texture2D? Photo(string name, string extension = "jpg")
     {
-        var path = $"res://assets/textures/{name}.jpg";
+        var path = $"res://assets/textures/{name}.{extension}";
         return ResourceLoader.Exists(path) ? GD.Load<Texture2D>(path) : null;
     }
 
@@ -340,6 +440,34 @@ internal static class WorldBuilder
     {
         var mesh = new PlaneMesh { Size = new Vector2(16000f, 16000f), SubdivideWidth = 12, SubdivideDepth = 12, Material = Grass };
         return new MeshInstance3D { Mesh = mesh, Position = new Vector3(0f, -0.06f, 0f), Name = "FarGround" };
+    }
+
+    /// <summary>
+    /// Fair-weather clouds: one wide sheet of the cloud texture (tools/make-clouds.py) high over the circuit, seen
+    /// from below, unlit so that it stays as white as the sky's own clouds, drifting slowly (<see cref="Tick"/>).
+    /// </summary>
+    private static MeshInstance3D? BuildClouds(TrackGeometry track)
+    {
+        if (!ResourceLoader.Exists("res://assets/textures/clouds.png")) return null;
+        var material = new StandardMaterial3D
+        {
+            AlbedoTexture = GD.Load<Texture2D>("res://assets/textures/clouds.png"),
+            AlbedoColor = new Color(0.94f, 0.95f, 0.97f),
+            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+            CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+            Uv1Scale = new Vector3(5f, 5f, 1f),
+            TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmaps,
+        };
+        var (minX, maxX, minZ, maxZ) = RoadBounds(track);
+        _clouds = new MeshInstance3D
+        {
+            Mesh = new PlaneMesh { Size = new Vector2(14000f, 14000f), Material = material },
+            Position = Convert.ToGodot(new SN.Vector3((minX + maxX) * 0.5f, 1500f, (minZ + maxZ) * 0.5f)),
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            Name = "Clouds",
+        };
+        return _clouds;
     }
 
     /// <summary>
@@ -657,12 +785,31 @@ internal static class WorldBuilder
 
     // ---- road ribbons ---------------------------------------------------------------------------------
 
-    /// <summary>Lateral stations across the road (fractions of the half width) and the shade at each: darker in the wheel tracks.</summary>
-    private static readonly (float Fraction, float Shade)[] RoadProfile =
-    [
-        (-1f, 1f), (-0.62f, 0.84f), (-0.38f, 0.84f), (0f, 1f), (0.38f, 0.84f), (0.62f, 0.84f), (1f, 1f),
-    ];
+    /// <summary>Vertices across the road: enough to carry a pothole's bowl and the wheel tracks' shade.</summary>
+    private const int RoadStations = 16;
+    /// <summary>Metres between rows of road vertices along the path (the frames are a metre apart).</summary>
+    private const float RoadStep = 0.5f;
 
+    /// <summary>The shade across the road: darker in the two wheel tracks of each lane.</summary>
+    private static float TrackShade(float fraction)
+    {
+        var f = MathF.Abs(fraction);
+        var wear = MathF.Max(Bump(f, 0.38f, 0.14f), Bump(f, 0.62f, 0.14f));
+        return 1f - 0.16f * wear;
+
+        static float Bump(float x, float centre, float width)
+        {
+            var d = MathF.Abs(x - centre) / width;
+            return d >= 1f ? 0f : (1f - d * d) * (1f - d * d);
+        }
+    }
+
+    /// <summary>
+    /// The road ribbon as a grid: a row of vertices every half metre, sixteen stations across, each sunk by the
+    /// road's wear (<see cref="RoadWear.Depth"/>, the same the wheels feel) with the normal tilted into the dent,
+    /// and shaded by the slab, the wheel tracks, the patches, the pothole's bottom and a fine grain, so no two
+    /// metres of asphalt look alike. UV1 carries the photo asphalt, UV2 the wear sheet.
+    /// </summary>
     private static MeshInstance3D BuildRoad(TrackGeometry track, TrackPath path)
     {
         var st = new MeshBuilder();
@@ -670,31 +817,80 @@ internal static class WorldBuilder
         // Where the stunt branch shares the road with the speed branch its asphalt sits a centimetre lower, under the
         // other's: two ribbons on one plane flickered against each other.
         var sink = path.Kind == PathKind.Stunt ? 0.012f : 0f;
+        var grain = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth, Frequency = 0.9f, Seed = 31 + (int)path.Kind };
+        var drift = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth, Frequency = 1f / 70f, Seed = 5 };
+        var loopTint = new Color(1f, 0.62f, 0.55f);   // the loop is a painted steel structure in the original: a dark red deck
+        var vertices = 0;
+
+        int Row(in RoadFrame f)
+        {
+            var first = vertices;
+            var shared = sink > 0f && SiblingSide(track, path, f) != 0;
+            // Alternate the shade every original slab length: the stripey look of the 1989 road, softened.
+            var slab = (int)MathF.Floor(f.Distance / TrackBuilder.Slab);
+            var slabShade = slab % 2 == 0 ? 1f : 0.88f;
+            var tint = f.Kind == SegmentKind.Loop ? loopTint : Colors.White;
+            var gLateral = Convert.ToGodot(f.Lateral);
+            var sign = Convert.ToGodot(f.Normal).Cross(gLateral).Dot(Convert.ToGodot(f.Tangent)) < 0f ? -1f : 1f;
+            var acrossDrift = 0.25f * drift.GetNoise1D(f.Distance);
+            for (var k = 0; k <= RoadStations; k++)
+            {
+                var fraction = -1f + 2f * k / RoadStations;
+                var lateral = fraction * f.HalfWidth;
+                var depth = RoadWear.Depth(path.Kind, f.Kind, f.Distance, lateral, f.HalfWidth);
+                var alongSlope = (RoadWear.Depth(path.Kind, f.Kind, f.Distance + 0.25f, lateral, f.HalfWidth) - RoadWear.Depth(path.Kind, f.Kind, f.Distance - 0.25f, lateral, f.HalfWidth)) / 0.5f;
+                var acrossSlope = (RoadWear.Depth(path.Kind, f.Kind, f.Distance, lateral + 0.1f, f.HalfWidth) - RoadWear.Depth(path.Kind, f.Kind, f.Distance, lateral - 0.1f, f.HalfWidth)) / 0.2f;
+                var normal = SN.Vector3.Normalize(f.Normal + f.Tangent * alongSlope + f.Lateral * acrossSlope);
+                var position = f.Origin + f.Lateral * lateral - f.Normal * (depth + (shared ? sink : 0f));
+                var tone = slabShade * TrackShade(fraction)
+                    * RoadWear.PatchTone(path.Kind, f.Kind, f.Distance, lateral, f.HalfWidth)
+                    * MathF.Max(1f - 9f * MathF.Max(depth - 0.004f, 0f), 0.6f)
+                    * (1f + 0.05f * grain.GetNoise2D(f.Distance * 3.7f, lateral * 2.1f));
+                var colour = tint * tone;
+                colour.A = 1f;
+                st.SetColor(colour);
+                st.SetNormal(Convert.ToGodot(normal));
+                st.SetTangent(gLateral, sign);
+                st.SetUV(new Vector2((fraction + 1f) * 0.5f, f.Distance));
+                st.SetUV2(new Vector2((fraction + 1f) * 0.5f + acrossDrift, f.Distance / 40f));
+                st.AddVertex(Convert.ToGodot(position));
+                vertices++;
+            }
+            return first;
+        }
+
+        void Join(int previous, int row)
+        {
+            for (var k = 0; k < RoadStations; k++)
+            {
+                st.AddIndex(previous + k); st.AddIndex(row + k); st.AddIndex(previous + k + 1);
+                st.AddIndex(previous + k + 1); st.AddIndex(row + k); st.AddIndex(row + k + 1);
+            }
+        }
+
+        var previousRow = -1;
         for (var i = 0; i < frames.Count - 1; i++)
         {
             var a = frames[i];
             var b = frames[i + 1];
-            if (a.Surface == SurfaceType.Chasm || b.Surface == SurfaceType.Chasm) continue;
-            if (sink > 0f && SiblingSide(track, path, a) != 0)
+            if (a.Surface == SurfaceType.Chasm || b.Surface == SurfaceType.Chasm)
             {
-                a = a with { Origin = a.Origin - a.Normal * sink };
-                b = b with { Origin = b.Origin - b.Normal * sink };
+                previousRow = -1;
+                continue;
             }
-            // Alternate the shade every original slab length: the stripey look of the 1989 road.
-            var slab = (int)MathF.Floor(a.Distance / TrackBuilder.Slab);
-            var slabShade = slab % 2 == 0 ? 1f : 0.76f;
-            // The loop is a painted steel structure in the original: a dark red deck.
-            var tint = a.Kind == SegmentKind.Loop ? new Color(1f, 0.62f, 0.55f) : new Color(1f, 1f, 1f);
-            for (var k = 0; k < RoadProfile.Length - 1; k++)
+            var steps = Math.Max(1, (int)MathF.Round((b.Distance - a.Distance) / RoadStep));
+            for (var s = 0; s < steps; s++)
             {
-                var (f0, s0) = RoadProfile[k];
-                var (f1, s1) = RoadProfile[k + 1];
-                var colour = tint * (slabShade * (0.5f * (s0 + s1)));
-                colour.A = 1f;
-                Quad(st,
-                    a.Origin + a.Lateral * (f0 * a.HalfWidth), a.Origin + a.Lateral * (f1 * a.HalfWidth),
-                    b.Origin + b.Lateral * (f0 * b.HalfWidth), b.Origin + b.Lateral * (f1 * b.HalfWidth),
-                    a.Normal, b.Normal, colour, a.Distance, b.Distance, (f0 + 1f) * 0.5f, (f1 + 1f) * 0.5f);
+                var row = Row(s == 0 ? a : RoadFrame.Lerp(a, b, (float)s / steps));
+                if (previousRow >= 0) Join(previousRow, row);
+                previousRow = row;
+            }
+            // The run's last frame closes it: at the end of the path or before a gap.
+            if (i == frames.Count - 2 || frames[i + 2].Surface == SurfaceType.Chasm)
+            {
+                var row = Row(b);
+                Join(previousRow, row);
+                previousRow = -1;
             }
         }
         return new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = Asphalt, Name = $"Road-{path.Kind}" };
@@ -757,7 +953,9 @@ internal static class WorldBuilder
             var a = frames[i];
             var b = frames[i + 1];
             if (a.Surface == SurfaceType.Chasm || b.Surface == SurfaceType.Chasm) continue;
-            var colour = IsStructure(a) ? orange : gravel;
+            // Earth is never one colour: every couple of metres the shoulder is a little paler or darker.
+            var colour = (IsStructure(a) ? orange : gravel) * (1f + 0.14f * (RoadWear.Hash((int)(a.Distance / 2f), 0, 23) - 0.5f));
+            colour.A = 1f;
             var shared = SiblingSide(track, path, a);
             foreach (var side in new[] { -1f, 1f })
             {
@@ -786,20 +984,25 @@ internal static class WorldBuilder
             var b = frames[i + 1];
             if (a.Surface == SurfaceType.Chasm || b.Surface == SurfaceType.Chasm) continue;
             var shared = SiblingSide(track, path, a);
-            // Where the branches share the road, only the branch on the right paints the centre line.
-            if (a.Distance % 9f < 3f && shared != 1)
+            // Paint wears: every dash is a little brighter or duller than the next, a few are gone; the edge lines
+            // fade in and out along the road. Where the branches share the road, only the one on the right paints
+            // the centre line.
+            var dash = (int)MathF.Floor(a.Distance / 9f);
+            var dashTone = 0.55f + 0.45f * RoadWear.Hash(dash, (int)path.Kind, 41);
+            if (a.Distance % 9f < 3f && shared != 1 && RoadWear.Hash(dash, (int)path.Kind, 42) > 0.08f)
             {
                 Quad(st, a.Origin - a.Lateral * 0.08f + a.Normal * 0.012f, a.Origin + a.Lateral * 0.08f + a.Normal * 0.012f,
                     b.Origin - b.Lateral * 0.08f + b.Normal * 0.012f, b.Origin + b.Lateral * 0.08f + b.Normal * 0.012f,
-                    a.Normal, b.Normal, yellow, a.Distance, b.Distance);
+                    a.Normal, b.Normal, (yellow * dashTone) with { A = 1f }, a.Distance, b.Distance);
             }
             foreach (var side in new[] { -1f, 1f })
             {
                 if ((int)side == shared) continue;
                 var o = side * (a.HalfWidth - 0.25f);
+                var edgeTone = 0.6f + 0.4f * RoadWear.Hash((int)(a.Distance / 3f), (int)side, 43);
                 Quad(st, a.Origin + a.Lateral * (o - 0.07f) + a.Normal * 0.012f, a.Origin + a.Lateral * (o + 0.07f) + a.Normal * 0.012f,
                     b.Origin + b.Lateral * (o - 0.07f) + b.Normal * 0.012f, b.Origin + b.Lateral * (o + 0.07f) + b.Normal * 0.012f,
-                    a.Normal, b.Normal, white, a.Distance, b.Distance);
+                    a.Normal, b.Normal, (white * edgeTone) with { A = 1f }, a.Distance, b.Distance);
             }
         }
         var material = new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 0.6f, CullMode = BaseMaterial3D.CullModeEnum.Disabled };
@@ -816,6 +1019,8 @@ internal static class WorldBuilder
         var lastPillar = -100f;
         var lastPost = -100f;
         var pillars = new Node3D { Name = $"Pillars-{path.Kind}" };
+        var towers = new MeshBuilder();
+        var anyTower = false;
 
         for (var i = 0; i < frames.Count - 1; i++)
         {
@@ -868,32 +1073,128 @@ internal static class WorldBuilder
                 }
             }
 
-            // Drawbridge towers at the lip of the gap.
+            // Drawbridge towers at the lip of the gap: the white A-frames of the original, joined over the road, with
+            // cables back to the deck.
             if (a.Kind == SegmentKind.RampUp && b.Kind == SegmentKind.Gap || a.Kind == SegmentKind.Gap && b.Kind == SegmentKind.RampDown)
             {
                 var edge = a.Kind == SegmentKind.Gap ? b : a;
-                foreach (var side in new[] { -1f, 1f })
+                var back = a.Kind == SegmentKind.Gap ? 1f : -1f;   // along the path, toward the ramp's deck
+                var white = new Color(0.93f, 0.93f, 0.90f);
+                var cable = new Color(0.25f, 0.25f, 0.27f);
+                var apexes = new SN.Vector3[2];
+                for (var sideIndex = 0; sideIndex < 2; sideIndex++)
                 {
-                    var foot = edge.Origin + edge.Lateral * (side * (edge.HalfWidth + 2.2f));
-                    var ground = terrain.Height(foot.X, foot.Z) - 0.3f;
-                    var height = foot.Y + 6f - ground;
-                    var tower = new MeshInstance3D
+                    var side = sideIndex == 0 ? -1f : 1f;
+                    var foot = edge.Origin + edge.Lateral * (side * (edge.HalfWidth + 2.6f));
+                    var ground = new SN.Vector3(foot.X, terrain.Height(foot.X, foot.Z) - 0.3f, foot.Z);
+                    var apex = new SN.Vector3(foot.X, foot.Y + 11f, foot.Z);
+                    apexes[sideIndex] = apex;
+                    var legA = ground - edge.Tangent * 2.4f;
+                    var legB = ground + edge.Tangent * 2.4f;
+                    Beam(towers, legA, apex, 0.55f, white);
+                    Beam(towers, legB, apex, 0.55f, white);
+                    Beam(towers, SN.Vector3.Lerp(legA, apex, 0.55f), SN.Vector3.Lerp(legB, apex, 0.55f), 0.35f, white);
+                    for (var k = 1; k <= 3; k++)
                     {
-                        Mesh = new BoxMesh { Size = new Vector3(2.4f, height, 3.0f), Material = Concrete },
-                        Position = Convert.ToGodot(new SN.Vector3(foot.X, ground + height * 0.5f, foot.Z)),
-                        Rotation = new Vector3(0f, -MathF.Atan2(edge.Tangent.X, edge.Tangent.Z), 0f),
-                    };
-                    pillars.AddChild(tower);
+                        var frame = path.FrameAt(MathUtil.Clamp(edge.Distance + back * 12f * k, 0f, path.Length));
+                        var anchor = frame.Origin + frame.Lateral * (side * (frame.HalfWidth + 1.0f)) + frame.Normal * 0.9f;
+                        Beam(towers, apex, anchor, 0.09f, cable);
+                    }
                 }
+                Beam(towers, apexes[0], apexes[1], 0.5f, white);   // the portal beam over the road
+                anyTower = true;
             }
         }
 
         yield return pillars;
+        if (anyTower) yield return new MeshInstance3D { Mesh = towers.Commit(), MaterialOverride = Steel, Name = $"Towers-{path.Kind}" };
         if (anyRail)
         {
             var material = new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 0.5f, Metallic = 0.4f, CullMode = BaseMaterial3D.CullModeEnum.Disabled };
             yield return new MeshInstance3D { Mesh = railings.Commit(), MaterialOverride = material, Name = $"Railings-{path.Kind}" };
         }
+    }
+
+    /// <summary>
+    /// The loop's steelwork: a ring of girders outside the deck on both sides, struts from the deck's edges to the
+    /// ring, cross-beams and braces under the deck, and legs to the ground where the loop is low. From the plain it
+    /// reads as the lattice the real thing could not stand without.
+    /// </summary>
+    private static MeshInstance3D? BuildLoopFrame(TrackPath path, TerrainField terrain)
+    {
+        var st = new MeshBuilder();
+        var steel = new Color(0.58f, 0.60f, 0.63f);
+        var any = false;
+        var last = -100f;
+        SN.Vector3[]? previousRing = null;
+        foreach (var f in path.Frames)
+        {
+            if (f.Kind != SegmentKind.Loop)
+            {
+                previousRing = null;
+                continue;
+            }
+            if (f.Distance - last < 2.5f) continue;
+            last = f.Distance;
+            var ring = new SN.Vector3[2];
+            for (var sideIndex = 0; sideIndex < 2; sideIndex++)
+            {
+                var side = sideIndex == 0 ? -1f : 1f;
+                var edge = f.Origin + f.Lateral * (side * (f.HalfWidth + 0.25f));
+                // The ring sits outside the deck: below it on the way in, above it over the top.
+                ring[sideIndex] = edge - f.Normal * 1.6f + f.Lateral * (side * 0.3f);
+                Beam(st, edge, ring[sideIndex], 0.16f, steel);
+                if (previousRing is not null) Beam(st, previousRing[sideIndex], ring[sideIndex], 0.36f, steel);
+                // Legs where the deck is low and faces up: the way in, the way out and the bottom of the loop.
+                var ground = terrain.Height(ring[sideIndex].X, ring[sideIndex].Z) - 0.3f;
+                var clearance = ring[sideIndex].Y - ground;
+                if (f.Normal.Y > 0.3f && clearance is > 0.6f and < 9f && (int)MathF.Round(f.Distance / 2.5f) % 2 == 0)
+                {
+                    Beam(st, ring[sideIndex], new SN.Vector3(ring[sideIndex].X, ground, ring[sideIndex].Z), 0.3f, steel);
+                }
+            }
+            Beam(st, ring[0], ring[1], 0.3f, steel);
+            if (previousRing is not null) Beam(st, previousRing[0], ring[1], 0.12f, steel);
+            previousRing = ring;
+            any = true;
+        }
+        return any ? new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = Steel, Name = $"LoopFrame-{path.Kind}" } : null;
+    }
+
+    /// <summary>A box of square section <paramref name="thickness"/> from <paramref name="a"/> to <paramref name="b"/> (simulation space), flat-shaded; for <see cref="Steel"/>, which draws both faces.</summary>
+    internal static void Beam(MeshBuilder st, SN.Vector3 a, SN.Vector3 b, float thickness, Color colour)
+    {
+        var ga = Convert.ToGodot(a);
+        var gb = Convert.ToGodot(b);
+        var axis = gb - ga;
+        var length = axis.Length();
+        if (length < 1e-3f) return;
+        axis /= length;
+        var reference = MathF.Abs(axis.Y) < 0.9f ? Vector3.Up : Vector3.Right;
+        var u = axis.Cross(reference).Normalized() * (thickness * 0.5f);
+        var v = axis.Cross(u).Normalized() * (thickness * 0.5f);
+        Span<Vector3> corners = [ga + u + v, ga - u + v, ga - u - v, ga + u - v];
+        var along = axis * length;
+        for (var i = 0; i < 4; i++)
+        {
+            var c0 = corners[i];
+            var c1 = corners[(i + 1) % 4];
+            Face(st, c0, c1, c1 + along, c0 + along, ((c0 + c1) * 0.5f - ga).Normalized(), colour);
+        }
+        Face(st, corners[3], corners[2], corners[1], corners[0], -axis, colour);
+        Face(st, corners[0] + along, corners[1] + along, corners[2] + along, corners[3] + along, axis, colour);
+    }
+
+    private static void Face(MeshBuilder st, Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, Vector3 normal, Color colour)
+    {
+        st.SetColor(colour);
+        st.SetNormal(normal);
+        st.SetUV(new Vector2(0f, 0f)); st.AddVertex(p0);
+        st.SetUV(new Vector2(1f, 0f)); st.AddVertex(p1);
+        st.SetUV(new Vector2(1f, 1f)); st.AddVertex(p2);
+        st.SetUV(new Vector2(0f, 0f)); st.AddVertex(p0);
+        st.SetUV(new Vector2(1f, 1f)); st.AddVertex(p2);
+        st.SetUV(new Vector2(0f, 1f)); st.AddVertex(p3);
     }
 
     /// <summary>Two triangles between consecutive cross-sections (al, ar) and (bl, br), with per-vertex normals; u runs left to right across the strip.</summary>

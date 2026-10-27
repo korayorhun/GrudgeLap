@@ -7,8 +7,10 @@
 class APlayerController;
 
 /**
- * The keyboard, read the game's way (InputSetup and KeyboardDriver): held keys become control positions that
- * ramp like hands and feet do, gear keys and toggles act on the press.
+ * The keyboard and the gamepad, read the game's way (InputSetup and KeyboardDriver): held keys become control
+ * positions that ramp like hands and feet do, the pad's stick and triggers are positions already, gear keys and
+ * toggles act on the press. The pad's layout is the Godot version's: left stick steers, the triggers are the
+ * pedals, the shoulders shift, A starts, B skips, X is the clutch, Y the camera, the d-pad stands in for all.
  *
  * Automated runs can play keys from the command line: -GlpKeys=1:Enter,3-9:Up,4.5:E presses Enter at 1 s, holds
  * Up from 3 to 9 s and taps E at 4.5 s, in seconds since the level started (key names as FKey knows them; "+" may
@@ -48,4 +50,7 @@ private:
 	float Throttle = 0.f;
 	float Brake = 0.f;
 	float Clutch = 0.f;
+	float StickX = 0.f;         // the pad's left stick, -1 to 1
+	float RightTrigger = 0.f;   // 0 to 1
+	float LeftTrigger = 0.f;
 };

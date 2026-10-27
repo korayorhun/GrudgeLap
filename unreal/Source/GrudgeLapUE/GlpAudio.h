@@ -9,9 +9,10 @@
  * The car's sound, as the Godot version makes it (EngineAudio, SampledEngine, TyreAudio): the engine rebuilt
  * firing pulse by firing pulse from recordings by the simulation core's DLL (glp_engine_*, the repository's
  * audio/GranularEngine, the same voice Godot plays); the tyres' rolling roar, squeal, howl, skid and gravel loops
- * faded from the speed and the wheels' slip; the V8's overrun pops; and the procedural layers on top (wind, bump
- * thumps, crash, bleeps, the moo, the sign, the train, the cabinet's chime, starter and jingles). Like the
- * original it drives without music.
+ * faded from the speed and the wheels' slip; the V8's overrun pops; the crash recordings; the train's steam loop,
+ * mixed in by its distance (the Godot version places it in the world, with Doppler, as it does the drones'
+ * engines, which this mix leaves out); and the procedural layers on top (wind, bump thumps, the shifter's clunk,
+ * bleeps, the moo, the sign, the cabinet's chime, starter and jingles). Like the original it drives without music.
  *
  * The recordings are the repository's game/assets/audio, staged beside the binaries by the build (see
  * GrudgeLapUE.Build.cs). Everything is mixed here, mono at the engine recordings' 44.1 kHz (the 22.05 kHz loops
@@ -63,6 +64,8 @@ private:
 		glp_engine Engine = 0;
 		TArray<FClip> Tyres;
 		TArray<FClip> Pops;
+		TArray<FClip> Crashes;   // crash/crash*.wav
+		FClip Steam;             // train/steam.wav, looped
 		~FClips();
 	};
 
@@ -106,7 +109,11 @@ private:
 		float Wind = 0.f;
 		float TrainLevel = 0.f;
 		float Thump = 0.f;
-		bool bCrash = false;
+		bool bCrash = false;    // the burst of noise, when no crash recording is loaded
+		bool bClunk = false;
+		int32 CrashTake = INDEX_NONE;   // a crash recording to fire now: clip index
+		float CrashPitch = 1.f;
+		float CrashGain = 1.f;
 		bool bBleep = false;
 		bool bStarter = false;
 		bool bChime = false;
@@ -131,6 +138,7 @@ private:
 		double Position = 0.0;
 		float Pitch = 1.f;
 		float Gain = 1.f;
+		int32 Bank = 0;   // 0 the pops, 1 the crash recordings
 	};
 
 	static bool LoadClip(const FString& File, FClip& Clip);
@@ -148,6 +156,7 @@ private:
 	float Road(float Noise);
 	float Moo();
 	float Clang(float Noise);
+	float Clunk(float Noise);
 	float TrainClack(float Noise);
 	static float Loop(const FClip& Clip, double& Position, float Step);
 
@@ -167,6 +176,7 @@ private:
 	float LastCompression[4] = {};
 	TArray<float> PopsPending;   // seconds until each scheduled pop
 	int32 LastPop = INDEX_NONE;
+	int32 LastGear = 0;
 	int32 LastPhase = GLP_PHASE_SELECT_TRANSMISSION;
 	bool bChimePending = false;
 
@@ -188,6 +198,9 @@ private:
 	float MooLevel = 0.f, MooPhase = 0.f, MooPitch = 1.f;
 	float ClangLevel = 0.f, ClangPhase = 0.f, ClangPhase2 = 0.f;
 	float TrainClock = 0.f;
+	float ClunkLevel = 0.f, ClunkPhase = 0.f, ClunkLp = 0.f;
+	FVoice SteamVoice;
+	bool bSteam = false;   // the steam loop is loaded: it stands in for the synthesised clack
 	float WindLp = 0.f, Thump = 0.f, ThumpPhase = 0.f;
 
 	// Automated checks (see the class comment); the recording is shared between the threads under DumpLock.

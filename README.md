@@ -77,7 +77,13 @@ shows a replay and puts you back at the last return point; Enter turns the key a
 | F10 | check for / install an update |
 | F11 | full screen |
 | F12 | screenshot (saved under `%APPDATA%\Godot\app_userdata\GrudgeLap`) |
+| F7 | graphics preset: high, medium, low (remembered) |
+| F6 | frame-rate counter |
 | F5 | new game |
+
+A gamepad works too: the left stick steers, the right trigger is the throttle and the left the brake, RB / LB
+shift (on the title screen they step through the gearboxes), X is the clutch, A starts, B skips, Y switches
+the camera, Back starts a new game, and the d-pad stands in for the stick and the pedals.
 
 Rules, from the cabinet's own operator options: 90 s on the clock, +45 s at the checkpoint and at the lap,
 10 s off road and you are put back, wrong way does not count, traffic is solid. The stunt route wants about
@@ -87,6 +93,10 @@ a tree, a sawhorse or the train at the level crossing is a crash.
 
 **Grudge match.** Your best lap is recorded pose by pose and saved. From then on its ghost drives every lap
 with you; beat it and the new lap becomes the ghost.
+
+**High scores.** The ten best credits are kept, and a score that makes the table asks for three initials
+at the end of the credit, as the cabinet did (up and down turn the letter, Enter takes it). The table
+ships with ten names to beat.
 
 ## Build from source
 
@@ -110,9 +120,10 @@ best lap's ghost out of the picture.
 
 - `physics/` — the simulation: raycast-wheel rigid body at 240 Hz, Pacejka-style tyres, torque-curve
   engines (flat-twelve and V8 specs), clutch lock/slip with a launch assist, gearboxes, the track as a graph
-  of road frames built by a turtle API (loop, drawbridge, banked curve, overpass, dips), a ground field that
-  gives the terrain its embankments and cuttings, traffic drones, the rules of a credit, the best-lap
-  recording, and a scripted driver that threads the traffic.
+  of road frames built by a turtle API (loop, drawbridge, banked curve, overpass, dips), the wear of the road
+  (a slow undulation and potholes in the wheel tracks that the wheels feel and the view draws), a ground
+  field that gives the terrain its embankments and cuttings, traffic drones, the rules of a credit, the
+  best-lap recording, the high-score table, and a scripted driver that threads the traffic.
 - `physics.native/` — the same simulation as a native library with a C interface (NativeAOT; the
   `glp_*` functions in `include/grudgelap_physics.h`), for the Unreal Engine version: `dotnet publish
   physics.native -c Release -r win-x64 -o artifacts/physics-native` builds `GrudgeLap.Physics.Native.dll`,
@@ -125,23 +136,28 @@ best lap's ghost out of the picture.
   `audio.tests/` checks its pitch, clicks and silence (set `GRUDGELAP_AUDIO_DEMO` to a folder for
   listenable sweeps).
 - `game/` — the Godot view: world generated from the track (terrain mesh from the ground field with a ring
-  of wooded hills and a snow-capped mountain range round the horizon under a clear sky, photo-textured road
-  with worn wheel tracks, dirt shoulders, bridges with guardrails, pad, grass tufts, trees from leaf cards,
-  fields, textured buildings, the green fork gantry with its traffic light, the red checkpoint banner, signs,
-  the train), lofted car bodies
+  of wooded hills and a snow-capped mountain range round the horizon under a clear sky with drifting clouds,
+  photo-textured road worn like a real one (patches of other asphalt, potholes, tar snakes, oil in the wheel
+  tracks, faded lines, every stretch different), dirt shoulders, bridges with guardrails, the loop in its
+  steel lattice, the drawbridge's white A-frame towers with cables, pad, grass tufts, trees from leaf cards,
+  a wood beyond the fields, fields, textured buildings, the green fork gantry with its traffic light, the
+  red checkpoint banner, signs, the train), lofted car bodies
   with rounded character lines, panel seams and a lined cabin behind tinted glass (leather dashboard,
   binnacle with live dials, a three-spoke wheel that turns with the steering, seats, slim A-pillars, a
   rear-view mirror with its own camera), a driver's-eye cockpit camera whose head sways with the car and
   a chase camera, HUD, engine, tyre (road roar, squeal, howl, screech, gravel) and V8 overrun-pop sounds
-  from recordings over synthesised wind and bump thumps, a synthesised engine and squeal for 1989 mode,
-  crash, moo, sign clang, train, and the cabinet's chime, starter and jingles (a fanfare for a record lap, a
-  tune at the end of the credit; no music while driving, as in the arcade), updater. Design notes in [docs/design.md](docs/design.md), the checklist in
+  from recordings over synthesised wind and bump thumps, the drones' engines and the train's steam and
+  whistle placed in the world with Doppler shift (through the glass from the driver's seat), the shifter's
+  clunk, crash recordings, a synthesised engine and squeal for 1989 mode, moo, sign clang, and the cabinet's
+  chime, starter and jingles (a fanfare for a record lap, a tune at the end of the credit; no music while
+  driving, as in the arcade), keyboard and gamepad, graphics presets, the high-score table with its entry
+  of initials, updater. Design notes in [docs/design.md](docs/design.md), the checklist in
   [docs/feel-checklist.md](docs/feel-checklist.md), what the research found in
   [docs/research-notes.md](docs/research-notes.md).
 - `unreal/` — the Unreal Engine 5 version: the same track and both cars, exported from the game, dressed
   with CC0 photoscans (Poly Haven) under Lumen, Nanite and a physical sky, and the whole game on the
-  simulation through `physics.native`: title screen, gearboxes, traffic, ghost, train, HUD, instruments,
-  mirrors and the same sound. Scripts rebuild the level, play it, drive it for tests, render stills and
+  simulation through `physics.native`: title screen, gearboxes, keyboard and gamepad, traffic, ghost, train,
+  HUD, instruments, mirrors, the high-score table and the same sound. Scripts rebuild the level, play it, drive it for tests, render stills and
   measure the frame rate; see [unreal/README.md](unreal/README.md).
 
 ## Support

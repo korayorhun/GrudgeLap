@@ -133,8 +133,10 @@ public sealed class TrackGeometry
 
         if (onRoad)
         {
-            var surfacePoint = frame.Origin + frame.Lateral * lateral;
-            return new SurfaceHit(true, SurfaceType.Road, frame, lateral, height, surfacePoint, frame.Normal, bestPath, bestIndex);
+            // The worn surface lies a little under (or over) the ideal ribbon; the wheels feel every pothole the view draws.
+            var dip = RoadWear.Depth(bestPath.Kind, frame.Kind, frame.Distance, lateral, frame.HalfWidth);
+            var surfacePoint = frame.Origin + frame.Lateral * lateral - frame.Normal * dip;
+            return new SurfaceHit(true, SurfaceType.Road, frame, lateral, height + dip, surfacePoint, frame.Normal, bestPath, bestIndex);
         }
 
         foreach (var pad in Pads)

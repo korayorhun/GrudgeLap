@@ -58,6 +58,9 @@ public sealed class RaceSession
     public float Elapsed { get; private set; }
     public float LapTime { get; private set; }
     public float BestLapTime { get; private set; } = float.PositiveInfinity;
+    /// <summary>The best lap of this credit alone (a loaded ghost's time does not count), +inf before one is done; for the high-score table.</summary>
+    public float CreditBestLap { get; private set; } = float.PositiveInfinity;
+    public RouteKind CreditBestRoute { get; private set; } = RouteKind.Undecided;
     public int Lap { get; private set; } = 1;
     public int CompletedLaps { get; private set; }
     public long Score { get; private set; }
@@ -319,6 +322,11 @@ public sealed class RaceSession
         {
             CompletedLaps++;
             TimeRemaining += Options.LapBonus;
+            if (LapTime < CreditBestLap)
+            {
+                CreditBestLap = LapTime;
+                CreditBestRoute = Route;
+            }
             if (LapTime < BestLapTime)
             {
                 BestLapTime = LapTime;

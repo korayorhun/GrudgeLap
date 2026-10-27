@@ -95,7 +95,8 @@ void AGlpHud::DrawHUD()
 	}
 
 	// ---- centre messages ------------------------------------------------------------------------
-	const FString& Message = G->Message();
+	// The game-over panel says it all; the session's OUT OF TIME would print over the table.
+	const FString Message = S.phase == GLP_PHASE_FINISHED ? FString() : G->Message();
 	if (!Message.IsEmpty())
 	{
 		const bool bBlink = Message.StartsWith(TEXT("WRONG WAY"), ESearchCase::CaseSensitive) || Message.StartsWith(TEXT("OFF ROAD"), ESearchCase::CaseSensitive);
@@ -116,7 +117,7 @@ void AGlpHud::DrawHUD()
 		const float Y = PanelY + 70.f;
 		Centred(TEXT("GRUDGELAP"), Y, 58.f, White);
 		Centred(FString::Printf(TEXT("<   %s   >"), *G->CarName()), Y + 62.f, 28.f, White);
-		Centred(TEXT("left / right: car"), Y + 90.f, 15.f, Grey);
+		Centred(TEXT("left / right or the stick: car"), Y + 90.f, 15.f, Grey);
 		const TCHAR* Labels[] = { TEXT("1  AUTOMATIC"), TEXT("2  STICK"), TEXT("3  STICK + CLUTCH") };
 		for (int32 i = 0; i < 3; i++)
 		{
@@ -129,16 +130,66 @@ void AGlpHud::DrawHUD()
 			P.Text(Labels[i], X, Y + 144.f, EAlign::Centre, 280.f, 22.f, bChosen ? Gold : Grey);
 		}
 		Centred(TEXT("STICK: you shift, the clutch is worked for you     STICK + CLUTCH: you can stall"), Y + 186.f, 15.f, Grey);
+		Centred(TEXT("pad: stick steers   RT gas   LT brake   RB / LB shift (here: gearbox)   X clutch   A start   B skip   Y camera"), Y + 212.f, 14.f, Grey);
 		const float Pulse = 0.7f + 0.3f * FMath::Sin(Flash * 4.f);
-		Centred(TEXT("PRESS ENTER TO START"), Y + 258.f, 38.f, FGlpPainter::Srgb(1.f, 0.85f, 0.3f, Pulse));
+		Centred(TEXT("PRESS ENTER OR A TO START"), Y + 258.f, 38.f, FGlpPainter::Srgb(1.f, 0.85f, 0.3f, Pulse));
 		Centred(S.grudge_match ? FString::Printf(TEXT("grudge match: the ghost of your best lap, %s, is waiting"), *LapTime(S.best_lap_time)) : FString(TEXT("finish a lap and its ghost will race you next time")),
 			Y + 312.f, 18.f, FGlpPainter::Srgb(0.6f, 0.9f, 1.f));
 		Centred(TEXT("Unreal Engine version   C camera   U units   F11 full screen"), Y + 346.f, 15.f, Grey);
 	}
 	else if (S.phase == GLP_PHASE_FINISHED)
 	{
-		P.Text(TEXT("GAME OVER   SCORE ") + Thousands(S.score), 0.f, Size.Y * 0.45f, EAlign::Centre, Size.X, 40.f, White);
-		P.Text(TEXT("F5 for a new game"), 0.f, Size.Y * 0.45f + 44.f, EAlign::Centre, Size.X, 24.f, FGlpPainter::Srgb(0.8f, 0.8f, 0.8f));
+		// The end of the credit (Hud.DrawFinished): the score, the entry of the initials when it made the table, and the table.
+		const FLinearColor Grey = FGlpPainter::Srgb(0.72f, 0.75f, 0.8f);
+		const FLinearColor Gold = FGlpPainter::Srgb(1.f, 0.85f, 0.3f);
+		auto Centred = [&](const FString& Text, float Y, float FontSize, const FLinearColor& Colour) { P.Text(Text, 0.f, Y, EAlign::Centre, Size.X, FontSize, Colour); };
+		const float PanelX = Size.X * 0.5f - 440.f;
+		const float PanelY = Size.Y * 0.12f;
+		P.Rect(PanelX, PanelY, 880.f, 580.f, FGlpPainter::Srgb(0.03f, 0.03f, 0.04f, 0.8f));
+		const float Y = PanelY + 58.f;
+		Centred(TEXT("GAME OVER   SCORE ") + Thousands(S.score), Y, 40.f, White);
+		const FGlpScores& Board = G->HighScores();
+		if (Board.Entering())
+		{
+			Centred(TEXT("YOU MADE THE TOP TEN - ENTER YOUR INITIALS"), Y + 70.f, 22.f, Gold);
+			const float Pulse = 0.55f + 0.45f * FMath::Sin(Flash * 6.f);
+			const FString Initials = Board.Initials();
+			for (int32 i = 0; i < Initials.Len(); i++)
+			{
+				const float X = Size.X * 0.5f + (i - 1) * 90.f - 45.f;
+				const bool bCurrent = i == Board.Cursor();
+				P.Text(FString::Chr(Initials[i]), X, Y + 180.f, EAlign::Centre, 90.f, 72.f, bCurrent ? FGlpPainter::Srgb(1.f, 0.85f, 0.3f, Pulse) : White);
+				if (bCurrent)
+				{
+					P.Rect(X + 20.f, Y + 194.f, 50.f, 4.f, Gold);
+				}
+			}
+			Centred(TEXT("up / down: letter     left / right: place     ENTER or A: take it"), Y + 250.f, 16.f, Grey);
+		}
+		else
+		{
+			const float Top = Y + 56.f;
+			const float X0 = PanelX + 40.f;
+			P.Text(TEXT("NAME"), X0 + 70.f, Top, EAlign::Left, 100.f, 15.f, Grey);
+			P.Text(TEXT("SCORE"), X0 + 170.f, Top, EAlign::Right, 160.f, 15.f, Grey);
+			P.Text(TEXT("BEST LAP"), X0 + 370.f, Top, EAlign::Left, 120.f, 15.f, Grey);
+			P.Text(TEXT("ROUTE"), X0 + 500.f, Top, EAlign::Left, 120.f, 15.f, Grey);
+			P.Text(TEXT("CAR"), X0 + 620.f, Top, EAlign::Left, 200.f, 15.f, Grey);
+			const TArray<FGlpScore>& Entries = Board.Entries();
+			for (int32 i = 0; i < Entries.Num(); i++)
+			{
+				const FGlpScore& E = Entries[i];
+				const float Row = Top + 34.f + i * 34.f;
+				const FLinearColor Colour = i == Board.Rank() ? Gold : i % 2 == 0 ? White : FGlpPainter::Srgb(0.84f, 0.85f, 0.88f);
+				P.Text(FString::Printf(TEXT("%d."), i + 1), X0, Row, EAlign::Right, 44.f, 22.f, Colour);
+				P.Text(E.Initials, X0 + 70.f, Row, EAlign::Left, 100.f, 22.f, Colour);
+				P.Text(Thousands(E.Score), X0 + 170.f, Row, EAlign::Right, 160.f, 22.f, Colour);
+				P.Text(E.HasLap() ? LapTime(E.BestLap) : TEXT("-:--.-"), X0 + 370.f, Row, EAlign::Left, 120.f, 22.f, Colour);
+				P.Text(E.Route == GLP_ROUTE_SPEED ? TEXT("SPEED") : E.Route == GLP_ROUTE_STUNT ? TEXT("STUNT") : TEXT("-"), X0 + 500.f, Row, EAlign::Left, 120.f, 22.f, Colour);
+				P.Text(E.Car, X0 + 620.f, Row, EAlign::Left, 220.f, 15.f, Colour);
+			}
+		}
+		Centred(TEXT("F5 or BACK: new game"), PanelY + 580.f - 34.f, 20.f, Grey);
 	}
 
 	// The keys: on the instrument band outside the cockpit; from the driver's seat only for the first seconds of

@@ -16,11 +16,15 @@ namespace
 	// TyreAudio's loops, in the order of FFrame.TyreGain.
 	const TCHAR* TyreFiles[] = { TEXT("tyres/road.wav"), TEXT("tyres/squeal.wav"), TEXT("tyres/squeal_hard.wav"), TEXT("tyres/skid.wav"), TEXT("tyres/gravel.wav") };
 	const TCHAR* PopFiles[] = { TEXT("v8/pop1.wav"), TEXT("v8/pop2.wav"), TEXT("v8/pop3.wav"), TEXT("v8/pop4.wav"), TEXT("v8/pop5.wav"), TEXT("v8/crackle.wav") };
+	const TCHAR* CrashFiles[] = { TEXT("crash/crash1.wav"), TEXT("crash/crash2.wav"), TEXT("crash/crash3.wav") };
+	const TCHAR* SteamFile = TEXT("train/steam.wav");
 
 	// Levels of the Godot mix: engine and loops at 0.9 (SampledEngine.Volume, TyreAudio.Volume), the pops' player
 	// at -8 dB, the synthesis at 0.8 into a player at -6 dB, and a limiter on the master bus at -0.5 dB.
 	constexpr float LoopVolume = 0.9f;
 	constexpr float PopLevel = 0.398f;
+	constexpr float CrashLevel = 0.891f;   // the crash takes' player at -1 dB
+	constexpr float SteamLevel = 0.5f;     // the steam loop when the train is on top of the car
 	constexpr float SynthVolume = 0.8f;
 	constexpr float SynthLevel = 0.501f;
 	constexpr float Ceiling = 0.944f;
@@ -28,6 +32,8 @@ namespace
 	// The wind's one-pole low-pass at the 450 Hz of Godot's (0.12 per sample at 22.05 kHz). The noise spreads over
 	// twice Godot's band here, so the filtered wind comes out 3 dB quieter: its level makes up for that.
 	const float WindFollow = 1.f - FMath::Exp(-UE_TWO_PI * 450.f / MixRate);
+	// The clunk's click: the one-pole at 1.5 kHz of Godot's (0.35 per sample at 22.05 kHz).
+	const float ClunkFollow = 1.f - FMath::Exp(-UE_TWO_PI * 1510.f / MixRate);
 	const float WindLevel = 2.6f * UE_SQRT_2;
 
 	// The voices of the jingles (EngineAudio.Brass and the rest).
@@ -225,7 +231,16 @@ void UGlpAudio::SetCar(int32 Style)
 			}
 		}
 	}
-	UE_LOG(LogGlpAudio, Log, TEXT("recordings from %s: engine %s, %d tyre loops, %d pops"), *Directory, Loaded->Engine != 0 ? TEXT("loaded") : TEXT("missing"), Loaded->Tyres.Num(), Loaded->Pops.Num());
+	for (const TCHAR* File : CrashFiles)
+	{
+		FClip Clip;
+		if (LoadClip(FPaths::Combine(Directory, File), Clip))
+		{
+			Loaded->Crashes.Add(MoveTemp(Clip));
+		}
+	}
+	LoadClip(FPaths::Combine(Directory, SteamFile), Loaded->Steam);
+	UE_LOG(LogGlpAudio, Log, TEXT("recordings from %s: engine %s, %d tyre loops, %d pops, %d crashes, steam %s"), *Directory, Loaded->Engine != 0 ? TEXT("loaded") : TEXT("missing"), Loaded->Tyres.Num(), Loaded->Pops.Num(), Loaded->Crashes.Num(), Loaded->Steam.Samples.Num() > 1 ? TEXT("loaded") : TEXT("missing"));
 	GameClips = Loaded;
 	PopsPending.Reset();
 	SynthCommand([this, Loaded]()
@@ -261,7 +276,8 @@ void UGlpAudio::Update(const glp_state& State, float TrainDistance, bool bInteri
 	LastPhase = State.phase;
 
 	// EngineAudio.Update: the smoothed engine state the voice follows.
-	const bool bRunning = State.engine_running != 0;
+	// The instant replay has no engine (EngineAudio): the simulation holds its last revs through it.
+	const bool bRunning = State.engine_running != 0 && State.phase != GLP_PHASE_REPLAY;
 	Rpm += (FMath::Max(State.rpm, 0.f) - Rpm) * Clamp01(DeltaSeconds * 12.f);
 	const float NewLoad = Clamp01(State.engine_torque / 500.f);
 	Load += (NewLoad - Load) * Clamp01(DeltaSeconds * 8.f);
@@ -270,7 +286,6 @@ void UGlpAudio::Update(const glp_state& State, float TrainDistance, bool bInteri
 	Frame.bRunning = bRunning;
 	Frame.bInterior = bInterior;
 
-	Frame.bCrash = Event(State, GLP_EVENT_CRASHED);
 	Frame.bBleep = Event(State, GLP_EVENT_CHECKPOINT_PASSED) || Event(State, GLP_EVENT_LAP_COMPLETED);
 	Frame.bStarter = Event(State, GLP_EVENT_ENGINE_STARTED);
 	Frame.bClang = Event(State, GLP_EVENT_SIGN_HIT);
@@ -333,6 +348,30 @@ void UGlpAudio::Update(const glp_state& State, float TrainDistance, bool bInteri
 		Frame.PopGain = FMath::Pow(10.f, GameRandom.FRandRange(-3.f, 3.f) / 20.f);
 	}
 	LastLoad = NewLoad;
+
+	// The crash: one of the recordings, drawn at random with a spread of pitch (x/÷ 1.08) and level (+-2 dB) as the
+	// Godot version's AudioStreamRandomizer plays them, with the weight of a thump under it; the burst of noise when
+	// none is loaded.
+	if (Event(State, GLP_EVENT_CRASHED))
+	{
+		if (Set.Crashes.IsEmpty())
+		{
+			Frame.bCrash = true;
+		}
+		else
+		{
+			Frame.CrashTake = GameRandom.RandRange(0, Set.Crashes.Num() - 1);
+			Frame.CrashPitch = FMath::Exp(GameRandom.FRandRange(-1.f, 1.f) * FMath::Loge(1.08f));
+			Frame.CrashGain = FMath::Pow(10.f, GameRandom.FRandRange(-2.f, 2.f) / 20.f);
+		}
+		Frame.Thump = 1.f;
+	}
+	// The shifter: a clunk on every change of gear while the car is driven (the automatic's too).
+	if (State.gear != LastGear && State.phase == GLP_PHASE_DRIVING && bRunning)
+	{
+		Frame.bClunk = true;
+	}
+	LastGear = State.gear;
 
 	// TyreAudio.Update: slip angles beyond about four degrees and slip ratios beyond fifteen percent are audible.
 	float Lateral = 0.f, Longitudinal = 0.f, OffRoad = 0.f;
@@ -408,6 +447,15 @@ void UGlpAudio::Apply(const FFrame& Frame)
 	{
 		Crash = 1.f;
 	}
+	if (Frame.bClunk)
+	{
+		ClunkLevel = 1.f;
+		ClunkPhase = 0.f;
+	}
+	if (Frame.CrashTake != INDEX_NONE)
+	{
+		OneShots.Add({ Frame.CrashTake, 0.0, Frame.CrashPitch, Frame.CrashGain, 1 });
+	}
 	if (Frame.bBleep)
 	{
 		Bleep = 0.35f;
@@ -478,6 +526,9 @@ int32 UGlpAudio::OnGenerateAudio(float* OutAudio, int32 NumSamples)
 	{
 		TyreFrom[v] = TyreVoices[v].Gain;
 	}
+	bSteam = Set->Steam.Samples.Num() > 1;
+	const float SteamFrom = SteamVoice.Gain;
+	const float SteamTarget = FMath::Pow(Current.TrainLevel, 1.5f) * SteamLevel;
 	// The limiter's release: a peak above the ceiling is held down and let go over about 0.15 s.
 	const float Release = 1.f - FMath::Exp(-1.f / (0.15f * MixRate));
 	for (int32 i = 0; i < NumSamples; i++)
@@ -491,24 +542,31 @@ int32 UGlpAudio::OnGenerateAudio(float* OutAudio, int32 NumSamples)
 			Tyres += Loop(Clip, TyreVoices[v].Position, Current.TyrePitch[v] * Clip.Rate / MixRate) * Gain;
 		}
 
-		float Pops = 0.f;
+		float Shots = 0.f;
 		for (int32 p = OneShots.Num() - 1; p >= 0; p--)
 		{
 			FOneShot& Shot = OneShots[p];
+			const TArray<FClip>& Bank = Shot.Bank == 1 ? Set->Crashes : Set->Pops;
 			const int32 Index = static_cast<int32>(Shot.Position);
-			if (!Set->Pops.IsValidIndex(Shot.Clip) || Index + 1 >= Set->Pops[Shot.Clip].Samples.Num())
+			if (!Bank.IsValidIndex(Shot.Clip) || Index + 1 >= Bank[Shot.Clip].Samples.Num())
 			{
 				OneShots.RemoveAt(p);
 				continue;
 			}
-			const FClip& Clip = Set->Pops[Shot.Clip];
+			const FClip& Clip = Bank[Shot.Clip];
 			const float Fraction = static_cast<float>(Shot.Position - Index);
-			Pops += FMath::Lerp(Clip.Samples[Index], Clip.Samples[Index + 1], Fraction) * Shot.Gain;
+			Shots += FMath::Lerp(Clip.Samples[Index], Clip.Samples[Index + 1], Fraction) * Shot.Gain * (Shot.Bank == 1 ? CrashLevel : PopLevel);
 			Shot.Position += Shot.Pitch * Clip.Rate / MixRate;
+		}
+		// The train's steam loop, as loud as the train is near.
+		float Steam = 0.f;
+		if (bSteam)
+		{
+			Steam = Loop(Set->Steam, SteamVoice.Position, Set->Steam.Rate / MixRate) * FMath::Lerp(SteamFrom, SteamTarget, T);
 		}
 
 		// Godot's master-bus limiter: instant attack, so nothing passes the ceiling, instead of clipping.
-		const float Mix = EngineBuffer[i] + Tyres + Pops * PopLevel + Synth() * SynthLevel;
+		const float Mix = EngineBuffer[i] + Tyres + Shots + Steam + Synth() * SynthLevel;
 		const float Peak = FMath::Abs(Mix);
 		Limiter = Peak > Limiter ? Peak : Limiter + (Peak - Limiter) * Release;
 		OutAudio[i] = Limiter > Ceiling ? Mix * Ceiling / Limiter : Mix;
@@ -529,6 +587,7 @@ int32 UGlpAudio::OnGenerateAudio(float* OutAudio, int32 NumSamples)
 	{
 		TyreVoices[v].Gain = Current.TyreGain[v];
 	}
+	SteamVoice.Gain = SteamTarget;
 	return NumSamples;
 }
 
@@ -548,7 +607,7 @@ float UGlpAudio::Synth()
 		Sum += FMath::Sin(BleepPhase * UE_TWO_PI) * 0.25f * FMath::Min(1.f, Bleep * 6.f);
 		Bleep -= 1.f / MixRate;
 	}
-	Sum += Song() + ChimeSample() + StarterSample(Noise) + Moo() + Clang(Noise) + TrainClack(Noise) + Road(Noise);
+	Sum += Song() + ChimeSample() + StarterSample(Noise) + Moo() + Clang(Noise) + Clunk(Noise) + (bSteam ? 0.f : TrainClack(Noise)) + Road(Noise);
 	return FMath::Tanh(Sum * SynthVolume);
 }
 
@@ -612,6 +671,26 @@ float UGlpAudio::Clang(float Noise)
 	const float Envelope = ClangLevel * ClangLevel;
 	ClangLevel -= 1.f / (MixRate * 0.7f);
 	return Ring * 0.35f * Envelope;
+}
+
+float UGlpAudio::Clunk(float Noise)
+{
+	// The shifter going into a gear (EngineAudio.Clunk): a low thud of ninety milliseconds with the click of the linkage on top.
+	if (ClunkLevel <= 0.f)
+	{
+		return 0.f;
+	}
+	const float T = 1.f - ClunkLevel;
+	ClunkPhase += 110.f / MixRate;
+	if (ClunkPhase >= 1.f)
+	{
+		ClunkPhase -= 1.f;
+	}
+	ClunkLp += (Noise - ClunkLp) * ClunkFollow;
+	const float Thud = FMath::Sin(ClunkPhase * UE_TWO_PI) * FMath::Exp(-T * 28.f);
+	const float Click = ClunkLp * FMath::Exp(-T * 90.f) * 0.8f;
+	ClunkLevel -= 1.f / (MixRate * 0.09f);
+	return (Thud + Click) * 0.28f;
 }
 
 float UGlpAudio::TrainClack(float Noise)

@@ -15,7 +15,7 @@
 extern "C" {
 #endif
 
-#define GLP_ABI_VERSION 4
+#define GLP_ABI_VERSION 5
 
 typedef intptr_t glp_session; /* 0 is no session */
 typedef intptr_t glp_engine;  /* 0 is no engine voice */
@@ -112,6 +112,9 @@ typedef struct glp_state
     float replay_steer;
     float elapsed;            /* s since the session started */
     int32_t train_running;
+    /* ABI 5 */
+    float credit_best_lap;    /* s, the best lap of this credit alone (a loaded ghost's does not count); +inf before one */
+    int32_t credit_best_route; /* GLP_ROUTE_* of that lap */
 } glp_state;
 
 /* The catalogue's static facts about a car: what instruments and a car body need. */

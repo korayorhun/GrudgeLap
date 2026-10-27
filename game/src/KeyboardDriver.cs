@@ -5,9 +5,11 @@ using GrudgeLap.Physics.Vehicle;
 namespace GrudgeLap.Game;
 
 /// <summary>
-/// Turns held keys into analogue-feeling control positions. Steering ramps faster at low speed and
-/// returns to centre on its own, pedals ramp over a fraction of a second; both keep keyboard play from
-/// being a bang-bang affair and mimic how fast hands move a real wheel.
+/// Turns the player's keys and pad into control positions. Held keys ramp: steering faster at low speed and
+/// returning to centre on its own, pedals over a fraction of a second, which keeps keyboard play from being a
+/// bang-bang affair and mimics how fast hands move a real wheel. A pad's stick and triggers are positions
+/// already and are taken as they are, the stick through a gentle curve so that small corrections stay small;
+/// whichever the player is moving wins (<see cref="InputSetup"/> has the layout).
 /// </summary>
 internal sealed class KeyboardDriver
 {
@@ -20,17 +22,29 @@ internal sealed class KeyboardDriver
 
     public DriverInputs Sample(float dt, float speedMps)
     {
-        var left = Input.IsActionPressed(InputSetup.SteerLeft);
-        var right = Input.IsActionPressed(InputSetup.SteerRight);
-        var target = (right ? 1f : 0f) - (left ? 1f : 0f);
+        var stick = Input.GetJoyAxis(InputSetup.Pad, JoyAxis.LeftX);
+        if (MathF.Abs(stick) > InputSetup.StickDeadzone)
+        {
+            // The stick is the wheel: its travel past the dead zone, bent a little for finesse near the centre,
+            // reached quickly enough that a flick is a flick but without the stick's jitter.
+            var travel = (MathF.Abs(stick) - InputSetup.StickDeadzone) / (1f - InputSetup.StickDeadzone);
+            var target = MathF.Sign(stick) * MathF.Pow(travel, 1.6f);
+            _steer = MathUtil.MoveToward(_steer, target, 8f * dt);
+        }
+        else
+        {
+            var left = Input.IsActionPressed(InputSetup.SteerLeft);
+            var right = Input.IsActionPressed(InputSetup.SteerRight);
+            var target = (right ? 1f : 0f) - (left ? 1f : 0f);
 
-        // Full lock takes ~0.35 s when parked and ~0.7 s at speed; centring is quicker, like a self-aligning wheel.
-        var speedFactor = MathUtil.Clamp01(speedMps / 50f);
-        var rate = target != 0f ? MathUtil.Lerp(2.8f, 1.4f, speedFactor) : 4.5f;
-        _steer = MathUtil.MoveToward(_steer, target, rate * dt);
+            // Full lock takes ~0.35 s when parked and ~0.7 s at speed; centring is quicker, like a self-aligning wheel.
+            var speedFactor = MathUtil.Clamp01(speedMps / 50f);
+            var rate = target != 0f ? MathUtil.Lerp(2.8f, 1.4f, speedFactor) : 4.5f;
+            _steer = MathUtil.MoveToward(_steer, target, rate * dt);
+        }
 
-        _throttle = Ramp(_throttle, Input.IsActionPressed(InputSetup.Throttle), dt, 0.18f, 0.12f);
-        _brake = Ramp(_brake, Input.IsActionPressed(InputSetup.Brake), dt, 0.15f, 0.10f);
+        _throttle = Pedal(_throttle, JoyAxis.TriggerRight, InputSetup.Throttle, dt, 0.18f, 0.12f);
+        _brake = Pedal(_brake, JoyAxis.TriggerLeft, InputSetup.Brake, dt, 0.15f, 0.10f);
         _clutch = Ramp(_clutch, Input.IsActionPressed(InputSetup.Clutch), dt, 0.12f, 0.25f);
 
         var gear = DriverInputs.NoGearChange;
@@ -63,6 +77,14 @@ internal sealed class KeyboardDriver
         _throttle = 0f;
         _brake = 0f;
         _clutch = 0f;
+    }
+
+    /// <summary>A pedal: the trigger's position while it is pressed at all, the key's ramp otherwise.</summary>
+    private static float Pedal(float current, JoyAxis trigger, string action, float dt, float riseSeconds, float fallSeconds)
+    {
+        var pressed = Input.GetJoyAxis(InputSetup.Pad, trigger);
+        if (pressed > 0.02f) return MathUtil.Clamp01(pressed);
+        return Ramp(current, Input.IsActionPressed(action), dt, riseSeconds, fallSeconds);
     }
 
     private static float Ramp(float current, bool pressed, float dt, float riseSeconds, float fallSeconds)

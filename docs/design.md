@@ -69,15 +69,35 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   braking distance; traffic sense (follow a slower drone, pass when the opposite lane is clear for long
   enough, abort a pass when something comes); shared by the tests and the game's attract mode.
 
+- Road wear (`RoadWear`): a deterministic function of the place on the road, shared by the probe and the view
+  so that what is felt is also seen. Settled earthworks undulate by a centimetre over a dozen metres; potholes
+  (at most one per seven-metre cell and lane, bowls 1.8 to 5 cm deep and under a metre across) sit in the band
+  the wheels run in; the structures carry only the millimetres of their joints. Patches of other asphalt are
+  visual only. A finer roughness (4 mm at 1.1 m) was tried and dropped: the rigid probe wheel hammered the
+  suspension with it and the drag strip lost twenty miles an hour of top speed.
+- High scores (`HighScoreTable`): ten lines in order, a factory table to beat, three initials of a 27-letter
+  alphabet, one text form shared with the Unreal version. The session keeps the credit's own best lap
+  (`CreditBestLap`) apart from the loaded ghost's time for it.
+
 ## View (`game/`)
 
 - World is generated from the track at start-up (`WorldBuilder`): terrain mesh sampled from the ground
   field (embankments, cuttings, dips, rolling fields, the hill ring) every 14 m and every 2 m in the cells a
   road's earthwork reaches, 4 cm under the asphalt, with vertex-colour variation and a trodden tint along
-  the road edges (the 14 m grid alone floated the road over dips and buried it where it levels out); photo-textured road ribbons (CC0 ambientCG) in six strips with the
-  alternating slab shades of the original and darker wheel tracks, 2.2 m dirt shoulders (orange on the stunt
-  structures, everywhere in 1989 mode), dashed centre line, bridge decks with steel guardrails and pillars
-  down to the ground, the skid pad; where the two branches share the road at the fork and at the merge only
+  the road edges (the 14 m grid alone floated the road over dips and buried it where it levels out); the
+  photo-textured road (CC0 ambientCG) as a grid of 16 stations every half metre that follows `RoadWear`
+  (sunk by its depth, normals from the slope), with the alternating slab shades of the original, darker
+  wheel tracks, patches of paler and darker asphalt, potholes darkened in their bowls, a grain per vertex, and
+  over it all a wear sheet (`tools/make-road-wear.py`: tar snakes, patch seams, oil spots) multiplied in on a
+  second UV set that drifts across the road so its repeat never reads; the first sheet, with 26 near-black
+  snakes, looked like a spider's web from the car and was cut to nine faint ones; 2.2 m dirt shoulders (orange
+  on the stunt structures, everywhere in 1989 mode) with a tone that wanders every two metres, a dashed
+  centre line and edge lines that fade and skip a dash here and there, bridge decks with steel guardrails and
+  pillars down to the ground, the loop's steelwork (a ring of girders outside the deck on both sides, struts,
+  cross-beams and braces under it, legs to the ground where it is low), the drawbridge's white A-frame
+  towers joined by a portal beam over the road with three cables back to each ramp, the skid pad; a sheet of
+  fair-weather clouds (`tools/make-clouds.py`, periodic fractal noise so it tiles) 1.5 km up, unlit, drifting
+  at five metres a second; where the two branches share the road at the fork and at the merge only
   the outer edges keep their line and shoulder and the stunt ribbon sits a centimetre lower (`SiblingSide`:
   the lines crossed and the ribbons flickered); a ring of mountains round the horizon (ridged noise, forest,
   rock and snow by height and slope) and the hills beyond the roads tinted as woods; clear-sky HDRI with the
@@ -86,7 +106,11 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   aerial perspective so the range stays crisp, AgX tone mapping and TAA.
 - Foliage (`FoliageBuilder`): grass tufts as crossed alpha-scissor cards in multimeshes, dense along the
   roads and sparse over the ground, olive-tinted to the terrain and faded out beyond 150 m; trees as a
-  bark trunk with branches under a canopy of leaf-cluster cards; fields as terrain-hugging patches
+  bark trunk with branches under a canopy of leaf-cluster cards; the wood beyond the fields (`BuildForest`:
+  the dark tree line of the original's horizon) as multimeshes of a cheaper tree in three variants, placed on
+  a jittered 25 m grid from 140 m out to the edge of the terrain, thinned into clearings by a slow noise,
+  kept off the roads, pads, fields and farms by a 20 m cell mask, the band within 450 m of a road casting
+  shadows and the rest not (about 500 trees near, some 20 000 beyond); fields as terrain-hugging patches
   (ploughed dirt, crop rows, hay with bales). Both atlases come from `tools/make-foliage.py`.
 - Props (`PropBuilder`): textured primitives for the barn (siding, tiled roof, the green "33" door at the
   back), houses (orange or white siding, windows, chimney), the shop with canopy, pumps and a GAS sign,
@@ -94,7 +118,9 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   crossbuck, the start gantry, striped sawhorses, the pad column and flower beds. A sign that is hit leans
   over about its base, away from the car. `TrainView` rides the simulation's train on the terrain.
 - Keyboard driver with ramped pedals and speed-dependent steering rates; gears 1-7, left/right pick the car
-  on the title screen.
+  on the title screen. A gamepad (`InputSetup`, the console-era racing layout: left stick, triggers,
+  shoulders, A/B/X/Y, d-pad fallbacks) is read as positions: the stick past a 0.12 dead zone through a 1.6
+  power curve, the triggers straight, whichever the player is moving winning over the keys.
 - Cars: a loft through cross-sections built from a `BodyStyle`'s profile curves keyed along the body,
   monotone-cubic between keys; wheel arches cut into the loft; star-rimmed wheels that steer and spin.
   Quads are wound by the ring direction (tangent turned clockwise = outward), normals are smoothed below a
@@ -130,9 +156,12 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   tachometer with its red zone, gear readout, oil and charge lamps that light while the engine is off.
   The same picture is the binnacle's face in the cockpit and the panel at the foot of the screen in the
   other views, where it scrolls with lateral acceleration like the original's moving dashboard. HUD:
-  time, score, lap, route, best lap and ghost indicator, updater notice, messages. Title screen on a dark
-  panel: car, gearbox (the last choice is remembered, automatic at first), and one press of Enter, Space or
-  a click both chooses and turns the key.
+  time, score, lap, route, best lap and ghost indicator, updater notice, messages, the frame rate on F6. Title
+  screen on a dark panel: car, gearbox (the last choice is remembered, automatic at first; the shoulders or
+  E/Q step through them), and one press of Enter, Space, A or a click both chooses and turns the key. The
+  end of the credit (`ScoreBoard`): the score, the entry of three initials when it made the top ten (up and
+  down turn the letter and repeat while held, left and right move along, Enter or A takes the letter and on
+  the last one the line), then the table with the new line picked out; `user://scores.txt`.
 - Audio: the engine rebuilt firing pulse by firing pulse from recordings (`audio/GranularEngine`, played by
   `SampledEngine` and, through `physics.native`, by the Unreal version): per car an idle recording and a run
   up through a gear are cut into their firing pulses (`tools/make-engine-bank.py`), and every firing period
@@ -145,18 +174,31 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   wheelspin and locked wheels beyond 15 % slip, gravel while a wheel is off the asphalt, each faded and
   pitched from the slip of the four wheels); two to four exhaust pops when the V8 lifts off above 4800 rpm,
   one-shots from a CC0 recording drawn at random with a spread of pitch and level; synthesised wind that
-  grows with speed and a thump when the suspension is jolted; the pulse-train engine and a filtered-noise
-  squeal kept for 1989 mode; crash burst, checkpoint bleep, a cow's moo (formants on a sagging pitch), the
-  clang of a sign going over, the clack of the train's wheels when it runs nearby, and the cabinet's own
-  moments: a chime at every choice on the title screen, the starter at the turn of the key, a brass fanfare
+  grows with speed and a thump when the suspension is jolted; the shifter's clunk at every change of gear (a
+  110 Hz thud with the click of the linkage); a crash as one of three CC0 recordings of metal and glass with
+  a thump under it; the pulse-train engine, a filtered-noise squeal, a noise-burst crash and the clack of
+  the train's wheels kept for 1989 mode; the sounds of the world placed in it (`WorldAudio`): every drone's
+  engine on the drone (the flat-twelve voice at cruise, each car a touch off the others), the train's steam
+  loop and whistle on the locomotive (two blasts for the crossing, nine and five seconds out), attenuated
+  by inverse distance and Doppler-shifted from the simulation's velocities against the camera (the engine's
+  own tracking measures against the wall clock and gave nothing in a fixed-rate run; a parked car hears a
+  drone at 23 m/s drop from 508 to 444 Hz as it passes, the 0.874 the formula gives), through a 1.5 kHz
+  low-pass and 7 dB of glass from the driver's seat; the engine silent through the instant replay (the
+  simulation holds its last revs through it, which played as a frozen note); checkpoint bleep, a cow's moo
+  (formants on a sagging pitch), the clang of a sign going over, and the cabinet's own moments: a chime at every choice on the title screen, the starter at the turn of the key, a brass fanfare
   when a lap beats the record and an FM tune when the credit is over (our notes in the timbres of the FM
   chips; the arcade had no music while driving, so neither does this). The overrun recordings take the
   run-up's place as the throttle closes. A limiter on the master bus. Loops imported compressed (QOA) must end
   at `GetLength() × MixRate` frames, not at the data's byte count: that once cut every loop to its first
   fifth, with a click at each turn.
+- Graphics presets (F7, remembered): High is everything; Medium drops SDFGI, SSIL and screen-space
+  reflections; Low also drops SSAO, glow, the volumetric haze, the sun's shadows and the far wood, renders at
+  three quarters of the window with FXAA instead of MSAA and TAA (`WorldBuilder.SetQuality`,
+  `Bootstrap.ApplyGraphics`); `--quality=` sets one for a run.
 - "1989 mode" (F8): a third of the render resolution, 20 fps, textures and normal maps off, nearest
   filtering, no shadows, global illumination, ambient occlusion, reflections, glow, fog or TAA, a flat sky,
-  orange shoulders everywhere, the synthesised engine and squeal instead of the recordings.
+  orange shoulders everywhere, no clouds or wear sheet, the synthesised engine and squeal instead of the
+  recordings, the placed sounds muted.
 - Updater: once a day the latest GitHub release is fetched; F10 downloads the matching package (installer
   for an installed copy, zip for a portable one), verifies the published SHA-256 and applies it (silent
   installer with `/UPDATE=1`, or a PowerShell script that waits for the game to exit, unpacks over the
@@ -167,16 +209,24 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
 - Command-line switches for automation: `--attract`, `--chase`, `--speed-route`, `--car=v8|flat12`,
   `--no-traffic`, `--no-ghost` (the saved best lap is not raced, for pictures of the car), `--no-hud` (no
   overlay over the 3D scene, for comparing it with another engine's picture), `--retro`,
-  `--screenshot=<file>`, `--at=<s>`, `--quit-after=<s>`,
+  `--screenshot=<file>`, `--at=<s>`, `--quit-after=<s>`, `--park` (the car waits at the start with its
+  engine off while the traffic and the train go by: checks of the placed sounds), `--time=<s>` (a credit
+  of that length), `--try-table` (the attract driver's credit is offered to the high-score table: pictures
+  of the entry screen), `--quality=low|medium|high`,
   `--orbit=<yaw>,<pitch>,<distance>` (degrees and metres, 0 = from behind), `--show-all` (whole car from
   the driver's seat, for checking the body), `--save-best` (an attract lap may become the saved best lap),
   `--export-world=<file.glb>` (writes the generated terrain, roads, bridges, props and the player's car to
-  glTF for another engine, and beside it `<file>.json` with every grass tuft, the props by kind, the car's
-  pose and the cockpit camera; no lights, sky, other cars or grass meshes; then quits),
+  glTF for another engine, and beside it `<file>.json` with every grass tuft, every tree of the wood
+  (position, yaw, scale, variant; one mesh of each variant travels in the file as `ForestVariant-<n>`), the
+  props by kind, the car's pose and the cockpit camera; no lights, sky, clouds, other cars or grass meshes;
+  then quits),
   `--invisible` (the window is parked off-screen, made unfocusable and hidden, so an automated run never
   shows on the desktop or takes the keyboard; pair it with Godot's own `--position -32000,-32000` so the
   window is created off-screen in the first place). Rendering continues for a hidden window, only a
-  minimised one stops it, so `--screenshot` still works.
+  minimised one stops it, so `--screenshot` still works. After a GPU device loss (a Vulkan crash in a long
+  invisible run) such runs can hang before their first frame; recording the run with Godot's own
+  `--write-movie <file.avi> --fixed-fps 30` and taking the frame with ffmpeg has not, and its audio track
+  is the sound check too.
 
 - Start-up: the world is generated, not loaded. Meshes go to the engine through `MeshBuilder` (managed
   arrays, one engine call per mesh; tangents of the terrain grid and the road strips come from their UV
@@ -206,11 +256,17 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
 - **The game runs in Unreal** (`AGlpGame`): the title screen with the car and gearbox choice (both cars:
   the V8 is taken from a second export with `--car=v8`), the keyboard with the manual gearbox, traffic, the
   ghost of the best lap, the train, signs that tip over, the HUD and the instrument panel (drawn on the
-  binnacle and at the foot of the screen), the rear-view and outside mirrors, and the Godot version's sound
-  mixed from the same recordings. Settings and the best lap live in `unreal/Saved/GrudgeLap`; the best-lap
-  file is the simulation's own format, the same as the Godot version's.
-- **Scenery.** Scanned trees stand where the game's trees stand all round the circuit; scanned grass fills
-  the meadow at the start and the 40 m beside every road (about 250 000 tufts, drawn to 300 m).
+  binnacle and at the foot of the screen), the rear-view and outside mirrors, the gamepad with the Godot
+  version's layout, the high-score table and its entry of initials (`GlpScores`, the same text form), and
+  the Godot version's sound mixed from the same recordings: the crash recordings, the shifter's clunk and
+  the train's steam loop, mixed in by its distance (the drones' placed engines and the Doppler shift are not
+  ported; the mono mix has no listener). Settings, the best lap and the high scores live in
+  `unreal/Saved/GrudgeLap`; the best-lap file is the simulation's own format, the same as the Godot
+  version's. ABI 5 of the core added the credit's own best lap to the state for the table.
+- **Scenery.** Scanned trees stand where the game's trees stand all round the circuit and, as the wood
+  beyond the fields, where the game's forest placements are (an instanced component per scan, drawn to
+  2.5 km); scanned grass fills the meadow at the start and the 40 m beside every road (about 250 000 tufts,
+  drawn to 300 m). The loop's steelwork and the drawbridge's towers come across in the export as meshes.
 
 ## Conventions
 
@@ -223,17 +279,18 @@ Settings and the best lap live under `user://` (`%APPDATA%\Godot\app_userdata\Gr
 `tools/release.ps1 -Version x.y.z` stamps the version into `project.godot`, the csproj and the Inno script,
 runs the tests, exports, builds the installer and the portable zip with their SHA-256 files, commits, tags,
 pushes, creates the GitHub release, updates the Scoop bucket and submits the winget manifest. CI
-(`.github/workflows/build.yml`) repeats tests, export and installer on every push. After 0.5.0 nothing is
-published until the stable 1.0 (no GitHub release, Scoop or winget); 1.0 will be the first winget
-submission, the earlier new-package requests were withdrawn.
+(`.github/workflows/build.yml`) repeats tests, export and installer on every push. Since 0.6.0 every
+version goes out as a GitHub release again (`-NoStores`), because the game updates itself from there at
+start-up; Scoop and winget wait for the stable 1.0, which will be the first winget submission (the earlier
+new-package requests were withdrawn).
 
 ## Roadmap
 
 1. Force-feedback wheel support through DirectInput (torque = model force + damping + friction + centring,
    the recipe of the expired 1991 patent); until then, keyboard only.
 2. A cleaner twelve-cylinder recording for the 1984 car if one with a usable licence turns up.
-3. A crash sample instead of the synthesised burst (the tyres and the V8's pops are recorded); a longer
-   overrun recording for the twelve (its bank is one second long).
+3. A longer overrun recording for the twelve (its bank is one second long); a steam locomotive recorded
+   closer than the Welsh one (binaural from a carriage window) if one turns up under CC0.
 4. More circuits built with the same turtle API; the hidden skid pad could grow cones and a timer.
 5. Scanned models instead of lofts and primitives: a car body with real curvature (the loft has twenty
    design points per section, three of them filleted) and buildings with real geometry would be the next

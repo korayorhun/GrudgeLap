@@ -14,14 +14,17 @@ internal sealed class MeshBuilder
     private readonly List<Vector3> _normals = [];
     private readonly List<Color> _colours = [];
     private readonly List<Vector2> _uvs = [];
+    private readonly List<Vector2> _uv2s = [];
     private readonly List<float> _tangentData = [];
     private readonly List<int> _indices = [];
     private Vector3 _normal = Vector3.Up;
     private Color _colour = Colors.White;
     private Vector2 _uv;
+    private Vector2 _uv2;
     private Vector3 _tangent = Vector3.Right;
     private float _tangentSign = 1f;
     private bool _hasUv;
+    private bool _hasUv2;
     private bool _hasTangent;
     private bool _tangents;
 
@@ -32,6 +35,13 @@ internal sealed class MeshBuilder
     {
         _uv = uv;
         _hasUv = true;
+    }
+
+    /// <summary>The second UV set, for a material's detail layer mapped independently of the main texture.</summary>
+    public void SetUV2(Vector2 uv)
+    {
+        _uv2 = uv;
+        _hasUv2 = true;
     }
 
     /// <summary>
@@ -53,6 +63,7 @@ internal sealed class MeshBuilder
         _normals.Add(_normal);
         _colours.Add(_colour);
         _uvs.Add(_uv);
+        _uv2s.Add(_uv2);
         _tangentData.Add(_tangent.X);
         _tangentData.Add(_tangent.Y);
         _tangentData.Add(_tangent.Z);
@@ -74,6 +85,7 @@ internal sealed class MeshBuilder
         arrays[(int)Mesh.ArrayType.Normal] = _normals.ToArray();
         arrays[(int)Mesh.ArrayType.Color] = _colours.ToArray();
         if (_hasUv) arrays[(int)Mesh.ArrayType.TexUV] = _uvs.ToArray();
+        if (_hasUv2) arrays[(int)Mesh.ArrayType.TexUV2] = _uv2s.ToArray();
         if (_hasTangent) arrays[(int)Mesh.ArrayType.Tangent] = _tangentData.ToArray();
         if (_indices.Count > 0) arrays[(int)Mesh.ArrayType.Index] = _indices.ToArray();
         mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);

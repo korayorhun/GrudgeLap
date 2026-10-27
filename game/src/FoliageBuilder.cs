@@ -8,8 +8,8 @@ namespace GrudgeLap.Game;
 
 /// <summary>
 /// Vegetation and fields: grass tufts as cross-quads in multimeshes along every road and scattered over the
-/// ground, trees as a bark trunk with branches under a canopy of leaf-cluster cards, and fields as patches
-/// conforming to the terrain. The tuft and leaf atlases are generated from CC0 material (assets/textures).
+/// ground, trees as a bark trunk with branches under a canopy of leaf-cluster cards, the wood beyond the fields
+/// as multimeshes of a cheaper tree (<see cref="BuildForest"/>), and fields as patches conforming to the terrain. The tuft and leaf atlases are generated from CC0 material (assets/textures).
 /// </summary>
 internal static class FoliageBuilder
 {
@@ -23,6 +23,7 @@ internal static class FoliageBuilder
         _tuft = null;
         _leaf = null;
         _bark = null;
+        _forestLeaf = null;
     }
 
     private static StandardMaterial3D Tuft => _tuft ??= new StandardMaterial3D
@@ -258,6 +259,175 @@ internal static class FoliageBuilder
         st.SetUV(new Vector2(u0, v0 + 0.5f)); st.AddVertex(centre - right - up);
         st.SetUV(new Vector2(u0 + 0.5f, v0)); st.AddVertex(centre + right + up);
         st.SetUV(new Vector2(u0, v0)); st.AddVertex(centre - right + up);
+    }
+
+    // ---- forest ---------------------------------------------------------------------------------------
+
+    private const int ForestVariants = 3;
+    private static StandardMaterial3D? _forestLeaf;
+
+    /// <summary>The leaf material of the wood: the roadside trees' atlas with a lower cut-off, so distant canopies do not thin away in the mipmaps.</summary>
+    private static StandardMaterial3D ForestLeaf => _forestLeaf ??= new StandardMaterial3D
+    {
+        AlbedoTexture = GD.Load<Texture2D>("res://assets/textures/leaf_clusters.png"),
+        Transparency = BaseMaterial3D.TransparencyEnum.AlphaScissor,
+        AlphaScissorThreshold = 0.35f,
+        CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+        VertexColorUseAsAlbedo = true,
+        Roughness = 0.9f,
+        TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic,
+    };
+
+    /// <summary>
+    /// The wood beyond the fields: the dark tree line of the original's horizon, thousands of trees in multimeshes
+    /// from a hundred and forty metres out to the edge of the terrain, thinning into clearings, none on the pads, the
+    /// fields or the farms. A cheaper tree than the roadside ones (a six-sided trunk, no branches, fewer cards), in
+    /// three variants; the band near the roads casts shadows, the far one does not. The nodes are named Forest-*
+    /// so that <see cref="WorldExport"/> can tell them from the grass.
+    /// </summary>
+    public static Node3D BuildForest(TrackGeometry track, float minX, float maxX, float minZ, float maxZ)
+    {
+        var root = new Node3D { Name = "Forest" };
+        const float cell = 20f;
+        const float clearance = 140f;
+        const float nearBand = 450f;
+        // A grid of cells with the roads, pads, buildings and fields marked out to the clearance: a lookup instead
+        // of a search over every road frame for every candidate tree.
+        var nx = (int)MathF.Ceiling((maxX - minX) / cell) + 1;
+        var nz = (int)MathF.Ceiling((maxZ - minZ) / cell) + 1;
+        var blocked = new bool[nx * nz];
+        var near = new bool[nx * nz];
+        void Mark(float x, float z, float radius, bool[] grid)
+        {
+            var r = (int)MathF.Ceiling(radius / cell);
+            var ci = (int)MathF.Floor((x - minX) / cell);
+            var cj = (int)MathF.Floor((z - minZ) / cell);
+            for (var j = Math.Max(cj - r, 0); j <= Math.Min(cj + r, nz - 1); j++)
+            {
+                for (var i = Math.Max(ci - r, 0); i <= Math.Min(ci + r, nx - 1); i++)
+                {
+                    var dx = (i - ci) * cell;
+                    var dz = (j - cj) * cell;
+                    if (dx * dx + dz * dz <= radius * radius) grid[j * nx + i] = true;
+                }
+            }
+        }
+        foreach (var path in track.Paths)
+        {
+            var frames = path.Frames;
+            // Frames are about a metre apart; every tenth is plenty for discs this wide.
+            for (var i = 0; i < frames.Count; i += 10)
+            {
+                Mark(frames[i].Origin.X, frames[i].Origin.Z, clearance, blocked);
+                Mark(frames[i].Origin.X, frames[i].Origin.Z, nearBand, near);
+            }
+        }
+        foreach (var pad in track.Pads) Mark(pad.Centre.X, pad.Centre.Z, pad.Radius + 60f, blocked);
+        foreach (var prop in track.Props) Mark(prop.Position.X, prop.Position.Z, MathF.Max(prop.Size.X, prop.Size.Z) * 0.5f + 30f, blocked);
+
+        var rng = new Random(1989);
+        var clumps = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth, Frequency = 1f / 320f, FractalOctaves = 3, Seed = 23 };
+        var terrain = track.Terrain;
+        var nearTrees = new List<Transform3D>[ForestVariants];
+        var farTrees = new List<Transform3D>[ForestVariants];
+        for (var v = 0; v < ForestVariants; v++)
+        {
+            nearTrees[v] = new List<Transform3D>();
+            farTrees[v] = new List<Transform3D>();
+        }
+        const float spacing = 25f;
+        for (var z = minZ; z < maxZ; z += spacing)
+        {
+            for (var x = minX; x < maxX; x += spacing)
+            {
+                var px = x + (float)rng.NextDouble() * spacing;
+                var pz = z + (float)rng.NextDouble() * spacing;
+                var i = (int)MathF.Floor((px - minX) / cell);
+                var j = (int)MathF.Floor((pz - minZ) / cell);
+                if (i < 0 || i >= nx || j < 0 || j >= nz || blocked[j * nx + i]) continue;
+                // Clumps and clearings from a slow noise; the wood closes in with distance from the roads.
+                var isNear = near[j * nx + i];
+                if (clumps.GetNoise2D(px, pz) < (isNear ? 0.25f : 0.08f)) continue;
+                var y = terrain.Height(px, pz);
+                var scale = 0.75f + 0.6f * (float)rng.NextDouble();
+                var basis = new Basis(Vector3.Up, (float)rng.NextDouble() * MathF.Tau).Scaled(new Vector3(scale, scale * (0.9f + 0.3f * (float)rng.NextDouble()), scale));
+                var transform = new Transform3D(basis, Convert.ToGodot(new SN.Vector3(px, y - 0.15f, pz)));
+                (isNear ? nearTrees : farTrees)[rng.Next(ForestVariants)].Add(transform);
+            }
+        }
+
+        for (var v = 0; v < ForestVariants; v++)
+        {
+            var mesh = ForestTree(v, new Random(100 + v));
+            foreach (var (list, nearBandTrees) in new[] { (nearTrees[v], true), (farTrees[v], false) })
+            {
+                if (list.Count == 0) continue;
+                var multi = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = mesh, InstanceCount = list.Count };
+                for (var i = 0; i < list.Count; i++) multi.SetInstanceTransform(i, list[i]);
+                root.AddChild(new MultiMeshInstance3D
+                {
+                    Multimesh = multi,
+                    Name = $"Forest-{(nearBandTrees ? "near" : "far")}-{v}",
+                    CastShadow = nearBandTrees ? GeometryInstance3D.ShadowCastingSetting.On : GeometryInstance3D.ShadowCastingSetting.Off,
+                });
+            }
+        }
+        GD.Print($"forest: {nearTrees.Sum(l => l.Count)} trees near the roads, {farTrees.Sum(l => l.Count)} beyond");
+        return root;
+    }
+
+    /// <summary>A tree of the wood: a tapered six-sided trunk and a canopy of leaf cards, as two surfaces (bark, leaves) of one mesh.</summary>
+    private static ArrayMesh ForestTree(int variant, Random rng)
+    {
+        var height = 9f + variant * 2.5f;
+        var spread = 3.2f + variant * 0.5f;
+        var trunkHeight = height * 0.45f;
+        var trunk = new MeshBuilder();
+        const int sides = 6;
+        var bottomRadius = 0.22f + height * 0.015f;
+        var topRadius = bottomRadius * 0.45f;
+        trunk.SetColor(Colors.White);
+        for (var s = 0; s < sides; s++)
+        {
+            var a0 = s * MathF.Tau / sides;
+            var a1 = (s + 1) * MathF.Tau / sides;
+            var b0 = new Vector3(MathF.Cos(a0) * bottomRadius, 0f, MathF.Sin(a0) * bottomRadius);
+            var b1 = new Vector3(MathF.Cos(a1) * bottomRadius, 0f, MathF.Sin(a1) * bottomRadius);
+            var t0 = new Vector3(MathF.Cos(a0) * topRadius, trunkHeight, MathF.Sin(a0) * topRadius);
+            var t1 = new Vector3(MathF.Cos(a1) * topRadius, trunkHeight, MathF.Sin(a1) * topRadius);
+            trunk.SetNormal(new Vector3(MathF.Cos((a0 + a1) * 0.5f), 0f, MathF.Sin((a0 + a1) * 0.5f)));
+            // Clockwise seen from outside, as the engine wants its front faces.
+            trunk.SetUV(new Vector2(s / (float)sides, 0f)); trunk.AddVertex(b0);
+            trunk.SetUV(new Vector2((s + 1) / (float)sides, 0f)); trunk.AddVertex(b1);
+            trunk.SetUV(new Vector2(s / (float)sides, 1f)); trunk.AddVertex(t0);
+            trunk.SetUV(new Vector2((s + 1) / (float)sides, 0f)); trunk.AddVertex(b1);
+            trunk.SetUV(new Vector2((s + 1) / (float)sides, 1f)); trunk.AddVertex(t1);
+            trunk.SetUV(new Vector2(s / (float)sides, 1f)); trunk.AddVertex(t0);
+        }
+
+        var canopy = new MeshBuilder();
+        var centre = new Vector3(0f, trunkHeight + height * 0.3f, 0f);
+        var cards = 9 + variant * 2;
+        var ry = height * 0.38f;
+        for (var i = 0; i < cards; i++)
+        {
+            var u = (float)rng.NextDouble() * 2f - 1f;
+            var theta = (float)rng.NextDouble() * MathF.Tau;
+            var r = MathF.Sqrt(1f - u * u) * spread * (0.25f + 0.75f * (float)rng.NextDouble());
+            var p = centre + new Vector3(MathF.Cos(theta) * r, u * ry * (0.5f + 0.5f * (float)rng.NextDouble()), MathF.Sin(theta) * r);
+            var size = spread * (0.9f + 0.6f * (float)rng.NextDouble());
+            // Darker than the roadside trees: the wood reads as the dark line it was on the 1989 horizon.
+            var tone = 0.42f + 0.3f * (float)rng.NextDouble();
+            var colour = new Color(tone * 0.8f, tone, tone * 0.75f);
+            var basis = new Basis(Quaternion.FromEuler(new Vector3((float)rng.NextDouble() * 1.2f - 0.6f, (float)rng.NextDouble() * MathF.Tau, (float)rng.NextDouble() * 1.2f - 0.6f)));
+            Card(canopy, p, basis, size, rng.Next(4), colour);
+        }
+        var mesh = trunk.Commit();
+        var leaves = canopy.Commit();
+        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, leaves.SurfaceGetArrays(0));
+        mesh.SurfaceSetMaterial(0, Bark);
+        mesh.SurfaceSetMaterial(1, ForestLeaf);
+        return mesh;
     }
 
     // ---- fields ---------------------------------------------------------------------------------------

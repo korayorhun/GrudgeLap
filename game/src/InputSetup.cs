@@ -2,7 +2,13 @@ using Godot;
 
 namespace GrudgeLap.Game;
 
-/// <summary>Keyboard bindings, registered in code so the project file stays readable.</summary>
+/// <summary>
+/// Keyboard and gamepad bindings, registered in code so the project file stays readable. The pad follows the
+/// layout every racing game of the console era settled on: the left stick steers, the triggers are the pedals,
+/// the shoulders shift, A starts, B skips, X is the clutch and Y the camera; the d-pad doubles the stick and
+/// the pedals for pads without analogue axes. <see cref="KeyboardDriver"/> reads the stick and the triggers as
+/// positions and the keys through the ramps.
+/// </summary>
 internal static class InputSetup
 {
     public const string SteerLeft = "steer_left";
@@ -34,6 +40,13 @@ internal static class InputSetup
     public const string Attract = "attract";
     public const string Retro = "retro";
     public const string Update = "update";
+    public const string Quality = "quality";
+    public const string FpsCounter = "fps_counter";
+
+    /// <summary>The pad whose stick and triggers the driver reads: the first one connected.</summary>
+    public const int Pad = 0;
+    /// <summary>Stick travel below this is rest: the stick's own wobble and the spring's slack.</summary>
+    public const float StickDeadzone = 0.12f;
 
     public static void Register()
     {
@@ -66,6 +79,31 @@ internal static class InputSetup
         Bind(Attract, Key.F9);
         Bind(Retro, Key.F8);
         Bind(Update, Key.F10);
+        Bind(Quality, Key.F7);
+        Bind(FpsCounter, Key.F6);
+
+        // The pad. The stick and the triggers are read as axes by KeyboardDriver; the actions below let the
+        // same stick pick the car on the title screen and the d-pad stand in for everything.
+        Axis(SteerLeft, JoyAxis.LeftX, -1f);
+        Axis(SteerRight, JoyAxis.LeftX, 1f);
+        Axis(Throttle, JoyAxis.TriggerRight, 1f);
+        Axis(Brake, JoyAxis.TriggerLeft, 1f);
+        Button(SteerLeft, JoyButton.DpadLeft);
+        Button(SteerRight, JoyButton.DpadRight);
+        Button(Throttle, JoyButton.DpadUp);
+        Button(Brake, JoyButton.DpadDown);
+        Button(Clutch, JoyButton.X);
+        Button(ShiftUp, JoyButton.RightShoulder);
+        Button(ShiftDown, JoyButton.LeftShoulder);
+        Button(Ignition, JoyButton.A, JoyButton.Start);
+        Button(Abort, JoyButton.B);
+        Button(Camera, JoyButton.Y);
+        Button(Neutral, JoyButton.LeftStick);
+        Button(Reverse, JoyButton.RightStick);
+        Button(NewGame, JoyButton.Back);
+        // A stick half over before an axis counts as the key pressed: the title screen's car choice and the
+        // d-pad fallbacks should not fire on a nudge.
+        foreach (var action in new[] { SteerLeft, SteerRight, Throttle, Brake }) InputMap.ActionSetDeadzone(action, 0.4f);
     }
 
     private static void Bind(string action, params Key[] keys)
@@ -75,5 +113,20 @@ internal static class InputSetup
         {
             InputMap.ActionAddEvent(action, new InputEventKey { PhysicalKeycode = key });
         }
+    }
+
+    private static void Button(string action, params JoyButton[] buttons)
+    {
+        if (!InputMap.HasAction(action)) InputMap.AddAction(action);
+        foreach (var button in buttons)
+        {
+            InputMap.ActionAddEvent(action, new InputEventJoypadButton { ButtonIndex = button, Device = -1 });
+        }
+    }
+
+    private static void Axis(string action, JoyAxis axis, float direction)
+    {
+        if (!InputMap.HasAction(action)) InputMap.AddAction(action);
+        InputMap.ActionAddEvent(action, new InputEventJoypadMotion { Axis = axis, AxisValue = direction, Device = -1 });
     }
 }

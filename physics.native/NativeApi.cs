@@ -22,7 +22,7 @@ internal sealed class NativeSession(RaceSession session, int car)
 /// </summary>
 internal static class NativeApi
 {
-    public const int AbiVersion = 4;
+    public const int AbiVersion = 5;
     public const int TrafficFlag = 1;
     public const int SpeedRouteFlag = 2;
 
@@ -132,6 +132,8 @@ internal static class NativeApi
             ReplaySeconds = session.Options.ReplaySeconds,
             Elapsed = session.Elapsed,
             TrainRunning = session.Track.Train is { Running: true } ? 1 : 0,
+            CreditBestLap = session.CreditBestLap,
+            CreditBestRoute = (int)session.CreditBestRoute,
         };
         foreach (var e in session.Events) state.Events |= 1u << (int)e;
         Write(state.Position, car.Position);

@@ -35,29 +35,16 @@ internal sealed partial class TyreAudio : Node
             AudioServer.AddBus();
             AudioServer.SetBusName(AudioServer.BusCount - 1, BusName);
         }
-        _road = Loop("tyres/road.wav");
-        _squeal = Loop("tyres/squeal.wav");
-        _howl = Loop("tyres/squeal_hard.wav");
-        _skid = Loop("tyres/skid.wav");
-        _gravel = Loop("tyres/gravel.wav");
+        _road = Loop("road.wav");
+        _squeal = Loop("squeal.wav");
+        _howl = Loop("squeal_hard.wav");
+        _skid = Loop("skid.wav");
+        _gravel = Loop("gravel.wav");
     }
 
     private AudioStreamPlayer Loop(string file)
     {
-        var path = $"res://assets/audio/{file}";
-        var stream = ResourceLoader.Exists(path) ? GD.Load<AudioStreamWav>(path) : null;
-        if (stream is null)
-        {
-            GD.PrintErr($"tyre loop missing: {file}");
-        }
-        else
-        {
-            // The importer leaves the loop points unset. The loop end counts frames, which the data's length does
-            // not give for the compressed (QOA) import: that ended every loop after its first fifth, with a click.
-            stream.LoopMode = AudioStreamWav.LoopModeEnum.Forward;
-            stream.LoopBegin = 0;
-            stream.LoopEnd = (int)Math.Round(stream.GetLength() * stream.MixRate);
-        }
+        var stream = AudioClips.Loop($"tyres/{file}");
         var player = new AudioStreamPlayer { Stream = stream, Bus = BusName, VolumeDb = -80f, Autoplay = false };
         AddChild(player);
         if (stream is not null) player.Play();

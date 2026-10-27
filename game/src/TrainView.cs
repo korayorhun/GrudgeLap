@@ -14,6 +14,9 @@ internal sealed partial class TrainView : Node3D
     private Train _train = null!;
     private TerrainField _terrain = null!;
 
+    /// <summary>The locomotive's node, where the train's sounds are placed.</summary>
+    public Node3D Locomotive => _cars[0];
+
     public static TrainView Create(Train train, TerrainField terrain)
     {
         var view = new TrainView { Name = "Train", _train = train, _terrain = terrain };

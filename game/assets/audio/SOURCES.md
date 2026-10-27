@@ -51,6 +51,35 @@ peak-normalised; the road loop with a 0.5 s cross-fade). The game pitches and fa
 slip of the four wheels (`TyreAudio`); the road loop is the tread's roar as heard in a cabin, recorded at about
 motorway speed. Wind and bumps are synthesised.
 
+## Traffic (`traffic/drone.wav`)
+
+The drones' engine: 2.4 s of the flat-twelve voice itself (the Countach run-up bank played by
+`GranularEngine` at cruise, recorded from the game) looped with a 0.4 s cross-fade by `tools/make-loop.py`;
+no new source material. `WorldAudio` places it on every drone, each a touch off the others in pitch, with
+inverse-distance attenuation and the Doppler shift computed from the simulation.
+
+## Train (`train/steam.wav`, `train/whistle.wav`)
+
+| Clip | Source | Slice | License |
+|---|---|---|---|
+| `train/steam.wav` | Freesound #209972 "Wales steam train.flac" by jrosin (binaural, from the window of a running steam train), https://freesound.org/s/209972/ | 52.0 s + 6.0 s, 0.5 s cross-fade (`make-loop.py`) | CC0 1.0 |
+| `train/whistle.wav` | Freesound #407394 "Steam Whistle.wav" by mike_stranks (a vintage traction engine's whistle), https://freesound.org/s/407394/ | 3.7 s + 2.8 s, 0.5 s fade-out (`make-oneshot.py`) | CC0 1.0 |
+
+Both are placed on the locomotive by `WorldAudio`: the loop while the train runs, the whistle twice as it
+approaches the crossing (nine and five seconds out).
+
+## Crash (`crash/crash1.wav` … `crash/crash3.wav`)
+
+| Clip | Source | Slice | License |
+|---|---|---|---|
+| `crash/crash1.wav` | Freesound #592388 "Car Crash (with Glass)" by magnuswaker, https://freesound.org/s/592388/ | 0.0 s + 2.3 s, 0.5 s fade-out | CC0 1.0 |
+| `crash/crash2.wav` | Freesound #807438 "car crash short 1" by Logicogonist (made from #237375 below), https://freesound.org/s/807438/ | 0.0 s + 0.6 s, 0.15 s fade-out | CC0 1.0 |
+| `crash/crash3.wav` | Freesound #237375 "Car Crash" by squareal, https://freesound.org/s/237375/ | 0.0 s + 1.6 s, 0.4 s fade-out | CC0 1.0 |
+
+Cut with `tools/make-oneshot.py` (peak 0.9) from the high-quality previews. `EngineAudio` plays one at random
+per crash with a spread of pitch (x/÷ 1.08) and level (±2 dB) and a thump under it; 1989 mode keeps the
+cabinet's burst of noise.
+
 ## Exhaust pops (`v8/pop1.wav` … `v8/pop5.wav`, `v8/crackle.wav`)
 
 One-shots cut from Freesound #797835 "Car Antilag (No cleanup, 32float)" by modusmogulus,

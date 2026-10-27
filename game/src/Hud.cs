@@ -27,8 +27,12 @@ internal sealed partial class Hud : Control
     public string Overlay { get; set; } = "";
     /// <summary>Small line under the lap readout: updater status and the like.</summary>
     public string Notice { get; set; } = "";
+    /// <summary>The high-score table and the entry of initials, drawn when the credit is over.</summary>
+    public ScoreBoard? Scores { get; set; }
     public bool ShowHelp { get; set; } = true;
     public bool Retro { get; set; }
+    /// <summary>The frame rate, top left (F6).</summary>
+    public bool ShowFps { get; set; }
 
     public void Bind(RaceSession session)
     {
@@ -91,9 +95,11 @@ internal sealed partial class Hud : Control
         }
         if (Notice != "") DrawString(font, new Vector2(size.X - 520f, 104f), Notice, HorizontalAlignment.Right, 500f, 14, new Color(1f, 0.85f, 0.4f));
         if (Retro) DrawString(font, new Vector2(20f, 84f), "1989 MODE", HorizontalAlignment.Left, -1f, 16, new Color(1f, 0.6f, 0.3f));
+        if (ShowFps) DrawString(font, new Vector2(20f, Retro ? 104f : 84f), $"{Engine.GetFramesPerSecond():0} FPS", HorizontalAlignment.Left, -1f, 16, new Color(0.7f, 0.9f, 0.7f));
 
         // ---- centre messages ------------------------------------------------------------------------
-        var message = Overlay != "" ? Overlay : s.Message;
+        // The game-over panel says it all; the session's OUT OF TIME would print over the table.
+        var message = Overlay != "" ? Overlay : s.Phase == SessionPhase.Finished ? "" : s.Message;
         if (message != "")
         {
             var blink = message.StartsWith("WRONG WAY", System.StringComparison.Ordinal) || message.StartsWith("OFF ROAD", System.StringComparison.Ordinal);
@@ -113,7 +119,7 @@ internal sealed partial class Hud : Control
             var y = panel.Position.Y + 70f;
             Centred(font, "GRUDGELAP", y, 58, white);
             Centred(font, $"<   {car.Spec.Name}   >", y + 62f, 28, white);
-            Centred(font, "left / right: car", y + 90f, 15, grey);
+            Centred(font, "left / right or the stick: car", y + 90f, 15, grey);
             var options = new (string Key, string Label, TransmissionMode Mode)[]
             {
                 ("1", "AUTOMATIC", TransmissionMode.Automatic),
@@ -129,17 +135,70 @@ internal sealed partial class Hud : Control
                 DrawString(font, new Vector2(x, y + 144f), $"{key}  {label}", HorizontalAlignment.Center, 280f, 22, chosen ? new Color(1f, 0.85f, 0.3f) : grey);
             }
             Centred(font, "STICK: you shift, the clutch is worked for you     STICK + CLUTCH: you can stall", y + 186f, 15, grey);
+            Centred(font, "pad: stick steers   RT gas   LT brake   RB / LB shift (here: gearbox)   X clutch   A start   B skip   Y camera", y + 212f, 14, grey);
             var pulse = 0.7f + 0.3f * MathF.Sin(_flash * 4f);
-            Centred(font, "PRESS ENTER TO START", y + 258f, 38, new Color(1f, 0.85f, 0.3f, pulse));
+            Centred(font, "PRESS ENTER OR A TO START", y + 258f, 38, new Color(1f, 0.85f, 0.3f, pulse));
             Centred(font, s.GrudgeMatch ? $"grudge match: the ghost of your best lap, {RaceSession.FormatLapTime(s.BestLapTime)}, is waiting" : "finish a lap and its ghost will race you next time", y + 312f, 18, new Color(0.6f, 0.9f, 1f));
-            Centred(font, $"v{Updater.CurrentVersionText}   F8 1989 mode   F10 check for updates   F11 full screen", y + 346f, 15, grey);
+            Centred(font, $"v{Updater.CurrentVersionText}   F6 fps   F7 graphics   F8 1989 mode   F10 check for updates   F11 full screen", y + 346f, 15, grey);
         }
         else if (s.Phase == SessionPhase.Finished)
         {
-            DrawString(font, new Vector2(0f, size.Y * 0.45f), $"GAME OVER   SCORE {s.Score:N0}", HorizontalAlignment.Center, size.X, 40, new Color(1f, 1f, 1f));
-            DrawString(font, new Vector2(0f, size.Y * 0.45f + 44f), "F5 for a new game", HorizontalAlignment.Center, size.X, 24, new Color(0.8f, 0.8f, 0.8f));
+            DrawFinished(font, size, s);
         }
 
+        DrawHelp(font, size, car, s, bandTop);
+    }
+
+    /// <summary>The end of the credit: the score, the entry of the initials when it made the table, and the table.</summary>
+    private void DrawFinished(Font font, Vector2 size, RaceSession s)
+    {
+        var white = new Color(1f, 1f, 1f);
+        var grey = new Color(0.72f, 0.75f, 0.8f);
+        var gold = new Color(1f, 0.85f, 0.3f);
+        var panel = new Rect2(size.X * 0.5f - 440f, size.Y * 0.12f, 880f, 580f);
+        DrawRect(panel, new Color(0.03f, 0.03f, 0.04f, 0.8f));
+        var y = panel.Position.Y + 58f;
+        Centred(font, $"GAME OVER   SCORE {s.Score:N0}", y, 40, white);
+        if (Scores is { Entering: true } entry)
+        {
+            Centred(font, "YOU MADE THE TOP TEN - ENTER YOUR INITIALS", y + 70f, 22, gold);
+            var pulse = 0.55f + 0.45f * MathF.Sin(_flash * 6f);
+            for (var i = 0; i < entry.Initials.Length; i++)
+            {
+                var x = size.X * 0.5f + (i - 1) * 90f - 45f;
+                var current = i == entry.Cursor;
+                DrawString(font, new Vector2(x, y + 180f), entry.Initials[i].ToString(), HorizontalAlignment.Center, 90f, 72, current ? gold with { A = pulse } : white);
+                if (current) DrawRect(new Rect2(x + 20f, y + 194f, 50f, 4f), gold);
+            }
+            Centred(font, "up / down: letter     left / right: place     ENTER or A: take it", y + 250f, 16, grey);
+        }
+        else if (Scores is { } board)
+        {
+            var top = y + 56f;
+            var x0 = panel.Position.X + 40f;
+            DrawString(font, new Vector2(x0 + 70f, top), "NAME", HorizontalAlignment.Left, 100f, 15, grey);
+            DrawString(font, new Vector2(x0 + 170f, top), "SCORE", HorizontalAlignment.Right, 160f, 15, grey);
+            DrawString(font, new Vector2(x0 + 370f, top), "BEST LAP", HorizontalAlignment.Left, 120f, 15, grey);
+            DrawString(font, new Vector2(x0 + 500f, top), "ROUTE", HorizontalAlignment.Left, 120f, 15, grey);
+            DrawString(font, new Vector2(x0 + 620f, top), "CAR", HorizontalAlignment.Left, 200f, 15, grey);
+            for (var i = 0; i < board.Table.Entries.Count; i++)
+            {
+                var e = board.Table.Entries[i];
+                var row = top + 34f + i * 34f;
+                var colour = i == board.Rank ? gold : i % 2 == 0 ? white : new Color(0.84f, 0.85f, 0.88f);
+                DrawString(font, new Vector2(x0, row), $"{i + 1}.", HorizontalAlignment.Right, 44f, 22, colour);
+                DrawString(font, new Vector2(x0 + 70f, row), e.Initials, HorizontalAlignment.Left, 100f, 22, colour);
+                DrawString(font, new Vector2(x0 + 170f, row), $"{e.Score:N0}", HorizontalAlignment.Right, 160f, 22, colour);
+                DrawString(font, new Vector2(x0 + 370f, row), e.HasLap ? RaceSession.FormatLapTime(e.BestLap) : "-:--.-", HorizontalAlignment.Left, 120f, 22, colour);
+                DrawString(font, new Vector2(x0 + 500f, row), e.Route switch { RouteKind.Speed => "SPEED", RouteKind.Stunt => "STUNT", _ => "-" }, HorizontalAlignment.Left, 120f, 22, colour);
+                DrawString(font, new Vector2(x0 + 620f, row), e.Car, HorizontalAlignment.Left, 220f, 15, colour);
+            }
+        }
+        Centred(font, "F5 or BACK: new game", panel.End.Y - 34f, 20, grey);
+    }
+
+    private void DrawHelp(Font font, Vector2 size, VehicleSim car, RaceSession s, float bandTop)
+    {
         // The keys: on the instrument band outside the cockpit; from the driver's seat only for the first
         // seconds of a run, on a thin strip over the dashboard.
         if (ShowHelp && s.Phase == SessionPhase.Driving && (!Cockpit || _drivingTime < 20f))

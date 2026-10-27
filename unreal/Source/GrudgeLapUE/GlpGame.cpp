@@ -97,6 +97,7 @@ void AGlpGame::BeginPlay()
 	}
 
 	bAttract = FParse::Param(FCommandLine::Get(), TEXT("GlpAttract"));
+	LoadScores();
 	bTraffic = !FParse::Param(FCommandLine::Get(), TEXT("GlpNoTraffic"));
 	bSpeedRoute = FParse::Param(FCommandLine::Get(), TEXT("GlpSpeedRoute"));
 	FString View;
@@ -196,6 +197,8 @@ void AGlpGame::CloseSession(bool bDestroyCopies)
 
 void AGlpGame::NewSession()
 {
+	Scores.Dismiss();
+	bScoreOffered = false;
 	CloseSession(true);
 	Session = Library->Create(CarIndex, (bTraffic ? GLP_TRAFFIC : 0) | (bSpeedRoute ? GLP_SPEED_ROUTE : 0));
 	if (!Session)
@@ -457,7 +460,7 @@ void AGlpGame::Tick(float DeltaSeconds)
 			Controls.ignition = 1;
 		}
 	}
-	if (Input.Pressed(EKeys::SpaceBar) && (Current.phase == GLP_PHASE_REPLAY || (Current.phase == GLP_PHASE_DRIVING && Current.off_road)))
+	if ((Input.Pressed(EKeys::SpaceBar) || Input.Pressed(EKeys::Gamepad_FaceButton_Right)) && (Current.phase == GLP_PHASE_REPLAY || (Current.phase == GLP_PHASE_DRIVING && Current.off_road)))
 	{
 		Library->Abort(Session);
 	}
@@ -468,6 +471,27 @@ void AGlpGame::Tick(float DeltaSeconds)
 	}
 	Library->GetState(Session, &Current);
 	MessageText = Library->Message(Session);
+	if (Current.phase == GLP_PHASE_FINISHED)
+	{
+		if (!bScoreOffered)
+		{
+			// The credit is over: a score that makes the table asks for initials (the attract mode's does not).
+			bScoreOffered = true;
+			if (!bAttract)
+			{
+				Scores.Offer(Current.score, Current.credit_best_lap, Current.credit_best_route, CarNameText);
+			}
+		}
+		const int32 Direction = (Input.Down(EKeys::Up) || Input.Down(EKeys::W) || Input.Down(EKeys::Gamepad_DPad_Up) ? 1 : 0)
+			- (Input.Down(EKeys::Down) || Input.Down(EKeys::S) || Input.Down(EKeys::Gamepad_DPad_Down) ? 1 : 0);
+		const bool bLeft = Input.Pressed(EKeys::Left) || Input.Pressed(EKeys::A) || Input.Pressed(EKeys::Gamepad_DPad_Left) || Input.Pressed(EKeys::Gamepad_LeftStick_Left);
+		const bool bRight = Input.Pressed(EKeys::Right) || Input.Pressed(EKeys::D) || Input.Pressed(EKeys::Gamepad_DPad_Right) || Input.Pressed(EKeys::Gamepad_LeftStick_Right);
+		const bool bConfirm = Input.Pressed(EKeys::Enter) || Input.Pressed(EKeys::SpaceBar) || Input.Pressed(EKeys::Gamepad_FaceButton_Bottom);
+		if (Scores.Update(DeltaSeconds, Direction, bLeft, bRight, bConfirm))
+		{
+			SaveScores();
+		}
+	}
 
 	if (Event(Current, GLP_EVENT_NEW_BEST_LAP) && (!bAttract || bSaveBest))
 	{
@@ -522,8 +546,8 @@ bool AGlpGame::HandleMenu()
 		return false;
 	}
 	// Left/right flips between the cars the level has; the session is rebuilt around the new one.
-	const bool bLeft = Input.Pressed(EKeys::Left) || Input.Pressed(EKeys::A);
-	if (bLeft || Input.Pressed(EKeys::Right) || Input.Pressed(EKeys::D))
+	const bool bLeft = Input.Pressed(EKeys::Left) || Input.Pressed(EKeys::A) || Input.Pressed(EKeys::Gamepad_DPad_Left) || Input.Pressed(EKeys::Gamepad_LeftStick_Left);
+	if (bLeft || Input.Pressed(EKeys::Right) || Input.Pressed(EKeys::D) || Input.Pressed(EKeys::Gamepad_DPad_Right) || Input.Pressed(EKeys::Gamepad_LeftStick_Right))
 	{
 		for (int32 i = 1; i < Cars.Num(); i++)
 		{
@@ -570,8 +594,19 @@ bool AGlpGame::HandleMenu()
 			Audio->Chime();
 		}
 	}
+	else if (Input.Pressed(EKeys::E) || Input.Pressed(EKeys::PageUp) || Input.Pressed(EKeys::Gamepad_RightShoulder) || Input.Pressed(EKeys::Q) || Input.Pressed(EKeys::PageDown) || Input.Pressed(EKeys::Gamepad_LeftShoulder))
+	{
+		// The shoulders (or E/Q) step through the gearboxes: a pad has no number keys.
+		const bool bForward = Input.Pressed(EKeys::E) || Input.Pressed(EKeys::PageUp) || Input.Pressed(EKeys::Gamepad_RightShoulder);
+		Transmission = (Transmission + (bForward ? 1 : 2)) % 3;
+		SaveSettings();
+		if (Audio)
+		{
+			Audio->Chime();
+		}
+	}
 	// One press goes from the title to a running engine: the choice and the key on the same frame.
-	if (!Input.Pressed(EKeys::Enter) && !Input.Pressed(EKeys::SpaceBar))
+	if (!Input.Pressed(EKeys::Enter) && !Input.Pressed(EKeys::SpaceBar) && !Input.Pressed(EKeys::Gamepad_FaceButton_Bottom) && !Input.Pressed(EKeys::Gamepad_Special_Right))
 	{
 		return false;
 	}
@@ -581,7 +616,7 @@ bool AGlpGame::HandleMenu()
 
 void AGlpGame::HandleGlobalKeys()
 {
-	if (Input.Pressed(EKeys::C))
+	if (Input.Pressed(EKeys::C) || Input.Pressed(EKeys::Gamepad_FaceButton_Top))
 	{
 		Rig.bCockpit = !Rig.bCockpit;
 		Rig.Reset();
@@ -591,7 +626,7 @@ void AGlpGame::HandleGlobalKeys()
 		bKmh = !bKmh;
 		SaveSettings();
 	}
-	if (Input.Pressed(EKeys::F5))
+	if (Input.Pressed(EKeys::F5) || Input.Pressed(EKeys::Gamepad_Special_Left))
 	{
 		NewSession();
 	}
@@ -847,6 +882,20 @@ void AGlpGame::SaveSettings() const
 {
 	const FString Text = FString::Printf(TEXT("car=%d\ntransmission=%d\nkmh=%d\n"), CarIndex, Transmission, bKmh ? 1 : 0);
 	FFileHelper::SaveStringToFile(Text, *SavedFile(TEXT("settings.ini")));
+}
+
+void AGlpGame::LoadScores()
+{
+	FString Text;
+	if (FFileHelper::LoadFileToString(Text, *SavedFile(TEXT("scores.txt"))) && !Scores.Parse(Text))
+	{
+		UE_LOG(LogGlpGame, Warning, TEXT("high scores could not be read; the factory table stands"));
+	}
+}
+
+void AGlpGame::SaveScores() const
+{
+	FFileHelper::SaveStringToFile(Scores.Serialize(), *SavedFile(TEXT("scores.txt")));
 }
 
 void AGlpGame::SaveBestLap()
