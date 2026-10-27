@@ -1,4 +1,4 @@
-﻿<Project Sdk="Godot.NET.Sdk/4.7.2">
+<Project Sdk="Godot.NET.Sdk/4.7.2">
 
   <!-- The Godot view: renders and feeds input to the engine-independent simulation in ../physics. -->
   <PropertyGroup>
@@ -10,8 +10,8 @@
     <RootNamespace>GrudgeLap.Game</RootNamespace>
     <AssemblyName>GrudgeLap</AssemblyName>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <Version>0.6.1</Version>
-    <FileVersion>0.6.1.0</FileVersion>
+    <Version>0.7.0</Version>
+    <FileVersion>0.7.0.0</FileVersion>
     <Authors>Koray Orhun</Authors>
   </PropertyGroup>
 
