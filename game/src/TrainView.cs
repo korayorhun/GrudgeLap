@@ -5,8 +5,8 @@ using SN = System.Numerics;
 namespace GrudgeLap.Game;
 
 /// <summary>
-/// The train of the level crossing: a dark red locomotive and three wagons that ride the simulation's
-/// train on the terrain, on no rails (as in 1989).
+/// The train of the level crossing: a dark red locomotive and silver passenger coaches with a red band, riding the
+/// simulation's train on the terrain, on no rails (as in 1989, where a long pale train with a red stripe crossed).
 /// </summary>
 internal sealed partial class TrainView : Node3D
 {
@@ -21,7 +21,10 @@ internal sealed partial class TrainView : Node3D
     {
         var view = new TrainView { Name = "Train", _train = train, _terrain = terrain };
         var body = WorldBuilder.PropMaterial("metal", new Color(0.55f, 0.12f, 0.10f), 0.5f);
-        var wagon = WorldBuilder.PropMaterial("metal", new Color(0.45f, 0.42f, 0.40f), 0.5f);
+        var coach = WorldBuilder.PropMaterial("metal", new Color(0.84f, 0.85f, 0.87f), 0.5f);
+        var band = new StandardMaterial3D { AlbedoColor = new Color(0.70f, 0.08f, 0.07f), Roughness = 0.5f };
+        var windows = new StandardMaterial3D { AlbedoColor = new Color(0.10f, 0.12f, 0.15f), Roughness = 0.2f, Metallic = 0.6f };
+        var roof = new StandardMaterial3D { AlbedoColor = new Color(0.42f, 0.42f, 0.44f), Roughness = 0.7f };
         var dark = new StandardMaterial3D { AlbedoColor = new Color(0.08f, 0.08f, 0.09f), Roughness = 0.8f, Metallic = 0.3f };
         for (var i = 0; i < train.Cars.Length; i++)
         {
@@ -38,7 +41,11 @@ internal sealed partial class TrainView : Node3D
             }
             else
             {
-                Add(car, new BoxMesh { Size = new Vector3(3.0f, 2.8f, 13.5f), Material = wagon }, new Vector3(0f, 2.6f, 0f));
+                // A passenger coach: silver sides, the red band under a row of windows, a grey roof, the dark underframe.
+                Add(car, new BoxMesh { Size = new Vector3(3.0f, 2.8f, 13.5f), Material = coach }, new Vector3(0f, 2.6f, 0f));
+                Add(car, new BoxMesh { Size = new Vector3(3.04f, 0.35f, 13.3f), Material = band }, new Vector3(0f, 2.05f, 0f));
+                Add(car, new BoxMesh { Size = new Vector3(3.04f, 0.6f, 12.6f), Material = windows }, new Vector3(0f, 2.95f, 0f));
+                Add(car, new BoxMesh { Size = new Vector3(2.9f, 0.25f, 13.4f), Material = roof }, new Vector3(0f, 4.1f, 0f));
                 Add(car, new BoxMesh { Size = new Vector3(3.0f, 0.9f, 13.5f), Material = dark }, new Vector3(0f, 0.95f, 0f));
             }
             foreach (var z in new[] { -5f, -3.4f, 3.4f, 5f })

@@ -17,7 +17,8 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   centre, so it points *down* at the top), an open drawbridge with a surface-less gap, overpasses, and
   Hermite splines that close the circuit without hand-solved geometry. Lengths are given in 88 ft slabs,
   the road unit of the original.
-- **Ground** — `TerrainField`: value-noise rolling ground pulled to the edge height of every road built on
+- **Ground** — `TerrainField`: value-noise rolling ground (half a metre on the default circuit, the flat green
+  plain of the original; it was 2.2 m) pulled to the edge height of every road built on
   earth (straights, curves, hills, dips, banked curves, splines), so hills get embankments and dips get
   cuttings; bridges, ramps and the loop are structures and leave the ground alone. The road, its shoulders
   and a 2 m verge form one plane across the ground (tilted on a banked curve), and the ground never rises
@@ -28,21 +29,50 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   terrain mesh; `Height(x, z, out roadWeight)` also says how close to a road edge a point is. The mountain
   range on the horizon is the view's alone (`WorldBuilder.BuildMountains`, 3.2 to 6.4 km out, 240 to 560 m
   high): nothing drives there.
-- **Decor** — `OriginalInspiredTrack` places the props the way the 1989 circuit had them, and in its order
-  along the stunt route (read off the arcade's attract lap): the start gantry, the green fork gantry with its
-  traffic light on the crest, the barn with "33" on its back door and its cows before the drawbridge, the
-  gas station with its pumps between the bridge and the loop, the red checkpoint banner just after the loop,
-  crossbucks at the level crossing, an orange and a white farmhouse, the hut, flowers, sawhorse barriers
-  before the stunts, fields (plough, crop, hay) slid outward until they clear every road, hedgerow trees on
-  their far side, the skid-pad column and a hint sign. Props are *solid* (crash) or *soft*: a cow moos and a
-  sign tips over, once, with no penalty.
-- **Train** — `Train`: a kinematic locomotive and wagons that cross the speed route on a schedule (run,
-  pause, run), on no rails as in 1989. The session treats a car under it as a crash; the scripted driver
+- **Layout** — `OriginalInspiredTrack` follows the plan of the 1989 course. It was traced from the "Original
+  Track" map of the Hard Drivin' II track editor (stitched by the weltenschule analysis; 48 map pixels to the
+  88 ft slab, which also gives the original's laps: about 127 slabs for the speed route and 92 for the stunt
+  route) and checked against an attract-mode video of the arcade: the road's centreline was found as a
+  shortest path along the map's road pixels, straights and arcs were fitted to its heading, and the builder's
+  circuit was laid over the map until the two coincided. The start sits just past a low bridge that carries
+  the start straight over the speed route's diagonal, at the foot of the bare hill whose crest holds the fork
+  8.5 slabs on. Both branches drop the 10 m off the crest at the same rate, over the 102 m of the stunt route's
+  curve, so the road they share for their first metres is one surface; with a gentler descent of its own the
+  speed road stood a metre above the stunt road where they overlap, and a car taking the stunt route dropped
+  off its edge. The speed route carries on over the crest, sweeps round the east side in one long right-hander
+  (190 degrees), passes under the open drawbridge (the routes meet there: on the arcade's speed lap the car
+  drives between the bridge's towers), runs the diagonal over a crest and through the cutting under the start
+  straight, crosses the railway and circles the farm to the north-west, counter-clockwise, with the checkpoint
+  on its top: 3.38 km, 126 slabs. The stunt route drops off the hill to the right past the barn, over a hump
+  to the drawbridge, which jumps the speed route, bends right round the gas station, runs the loop on its
+  westbound straight and the checkpoint nine slabs later, dives through the cutting under its own return leg
+  into the left-handed banked 180 (R 62 m, 32 degrees) and climbs back north over that cutting to the merge:
+  2.51 km, 93 slabs. The skid pad lies off the start straight to the left (a hard left at the line, as in the
+  original), without a sign.
+- **Decor** — in the original's places: the start gantry, the green fork gantry on the crest, yellow chevrons on
+  the outside of the stunt route's curve off the hill, the barn with "33" on its back door and its cows at the
+  road's edge at its foot, sawhorse barriers on both sides of the drawbridge's approach, before the loop and on
+  its exit hump (kept clear of the loop's helix, whose descending half sits behind its entry), the gas station
+  with its pumps inside the bend after the bridge and the hut across the road, the red checkpoint banners,
+  crossbucks at the level crossing, the speed route's farm (orange house, barn, cows) outside the first corner
+  of the east sweep, the second barn and its cows after the speed checkpoint and the houses outside the
+  north-west loop, fields where the original's plan has them (plough, crop, hay) slid outward until they clear
+  every road, hedgerow trees on their far side, a few roadside trees (none within 16 m of another road),
+  flowers and the skid-pad column. Signs as in the original: the speed on a yellow square with a yellow arrow
+  diamond above it before a bend ("90>"), yellow diamonds for DIP and the chevrons. Props are *solid* (crash)
+  or *soft*: a cow moos and a sign tips over, once, with no penalty.
+- **Train** — `Train`: a kinematic locomotive and five passenger coaches that cross the speed route's
+  diagonal after its cutting on a schedule (run, pause, run), on no rails as in 1989; its far end passes within
+  sight of the stunt route's last metres before the merge. The session treats a car under it as a crash; the scripted driver
   stops short of the crossing when a run is due.
 - **Surface probe** — the one question the car asks: what is under this point? Nearest frame search in a
   window around a cursor, interpolation to the neighbour, lateral/height from the frame; the skid pad and
   then the ground field for anything off the road. Branches overlap for their first metres, so the probe
-  also searches sibling branches near a fork.
+  also searches sibling branches near a fork, and where a point is over two roads there (or at a join) it rests
+  on the road surface nearest below it, the one drawn on top: by the nearest frame alone, a car in the right
+  lane just past the fork followed the stunt branch's steeper descent under the speed road and fell through it.
+  The road the cursor has just left is not a candidate there: on the crest a few metres past the fork its last
+  frame was the higher surface, the cursor hopped back onto it and the rules replayed its start line.
 - **Vehicle** — rigid body on four raycast wheels (spring/damper/bump stop), Pacejka-style tyres with a
   friction circle, load sensitivity and relaxation, a per-car grip multiplier, rolling resistance as a
   body force (much higher on grass), aerodynamic drag, speed-sensitive steering lock, optional traction
@@ -60,14 +90,20 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   directions in their own lane, never the stunt route; kinematic, solid to the player, moved away from a
   respawn point.
 - **Rules** — timers from the cabinet's option table (90 s, +45 per lap, +45 at the checkpoint on Medium),
-  route detection at the fork, checkpoints and return points as path markers, off-road ten-second rule,
+  route detection at the fork (announced 45 m in, where the branches have parted), checkpoints and return
+  points as path markers (counted on road that follows on; a hop between the overlapping branches or back
+  across the fork carries the distance over, so nothing is scored or crossed twice), off-road ten-second rule,
   wrong-way detection (suspended on the skid pad), crash detection (hard landing, roll-over, falling into
   the gap or hitting the deck edge, solid props, drones), a 10 s instant replay buffer, the key-turn restart
   after every crash, messages with a shelf life, and the best lap recorded at 20 Hz as the ghost of the
   grudge match (serialisable, loaded into the next credit).
 - **Scripted driver** — pure-pursuit steering along its lane plus a curvature-aware speed plan with
-  braking distance; traffic sense (follow a slower drone, pass when the opposite lane is clear for long
-  enough, abort a pass when something comes); shared by the tests and the game's attract mode.
+  braking distance, slower over a crest (the road falling away takes weight off the tyres:
+  v² = g R k / (1 + κ R k)); it catches a slide with opposite lock once the body slip passes 5° and stays off
+  the pedals past 8°, keeps the wheel still in the air, and times its lane changes by the session clock, so a
+  lap looks the same at 20 fps as at 144 (the game asks it once a frame); traffic sense (follow a slower
+  drone, pass with 480 m of empty opposite lane, hurry back when one comes within 250 m, abort a pass when
+  something comes); shared by the tests and the game's attract mode.
 
 - Road wear (`RoadWear`): a deterministic function of the place on the road, shared by the probe and the view
   so that what is felt is also seen. Settled earthworks undulate by a centimetre over a dozen metres; potholes
@@ -84,15 +120,21 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
 - World is generated from the track at start-up (`WorldBuilder`): terrain mesh sampled from the ground
   field (embankments, cuttings, dips, rolling fields, the hill ring) every 14 m and every 2 m in the cells a
   road's earthwork reaches, 4 cm under the asphalt, with vertex-colour variation and a trodden tint along
-  the road edges (the 14 m grid alone floated the road over dips and buried it where it levels out); the
+  the road edges (the 14 m grid alone floated the road over dips and buried it where it levels out), and
+  round it a flat frame of grass to the horizon with the terrain's ground cut out of it. Until 0.8 the
+  terrain's triangles faced down and were culled from above: a whole flat plane just under the terrain stood in
+  for the ground, the hills showed the undersides of their far slopes, and once the cuttings went 4.5 m down
+  the plane lay across them and their roads; the
   photo-textured road (CC0 ambientCG) as a grid of 16 stations every half metre that follows `RoadWear`
   (sunk by its depth, normals from the slope), with the alternating slab shades of the original, darker
   wheel tracks, patches of paler and darker asphalt, potholes darkened in their bowls, a grain per vertex, and
   over it all a wear sheet (`tools/make-road-wear.py`: tar snakes, patch seams, oil spots) multiplied in on a
   second UV set that drifts across the road so its repeat never reads; the first sheet, with 26 near-black
-  snakes, looked like a spider's web from the car and was cut to nine faint ones; 2.2 m dirt shoulders (orange
-  on the stunt structures, everywhere in 1989 mode) with a tone that wanders every two metres, a dashed
-  centre line and edge lines that fade and skip a dash here and there, bridge decks with steel guardrails and
+  snakes, looked like a spider's web from the car and was cut to nine faint ones; 2.2 m orange shoulders all
+  the way round, as on the 1989 circuit, with a tone that wanders every two metres, one dashed yellow centre line
+  that skips a dash here and there and no edge lines (the orange marks the edges, as in the original); bare
+  earth (the dirt photo, red-brown) wherever the ground has been pulled more than about two metres off the plain
+  to meet a road, the fork hill and the walls of the cuttings, with the grass browning towards it; bridge decks with steel guardrails and
   pillars down to the ground, the loop's steelwork (a ring of girders outside the deck on both sides, struts,
   cross-beams and braces under it, legs to the ground where it is low), the drawbridge's white A-frame
   towers joined by a portal beam over the road with three cables back to each ramp, the skid pad; a sheet of
@@ -102,8 +144,9 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   the lines crossed and the ribbons flickered); a ring of mountains round the horizon (ridged noise, forest,
   rock and snow by height and slope) and the hills beyond the roads tinted as woods; clear-sky HDRI with the
   sun aimed where the picture has it (the partly cloudy sky before it washed the plain to grey), cascaded
-  shadows, SDFGI, SSAO, SSIL, screen-space reflections, a trace of volumetric haze, light fog with little
-  aerial perspective so the range stays crisp, AgX tone mapping and TAA.
+  shadows, SSAO, SSIL, screen-space reflections, a trace of volumetric haze, light fog with little aerial
+  perspective so the range stays crisp, AgX tone mapping and TAA; the ambient light is 80 % sky and 20 % a warm
+  tone for the light the sunlit ground throws back (it stands in for SDFGI, see the presets).
 - Foliage (`FoliageBuilder`): grass tufts as crossed alpha-scissor cards in multimeshes, dense along the
   roads and sparse over the ground, olive-tinted to the terrain and faded out beyond 150 m; trees as a
   bark trunk with branches under a canopy of leaf-cluster cards; the wood beyond the fields (`BuildForest`:
@@ -126,11 +169,21 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   Quads are wound by the ring direction (tangent turned clockwise = outward), normals are smoothed below a
   60 degree crease angle. The three character lines of each section (shoulder, bonnet edge / greenhouse
   base, crest) are rounded with 35-50 mm fillets in four sub-strips, so highlights roll over them like
-  pressed steel; glass, trim and seams are still decided on the twenty-point design outline. Two styles: the flat-twelve (wedge nose with the lamp lids flush in the
-  wing crests and outlined by their shut line, dipped bonnet, small cabin, door-length strakes that fan out
-  into the mouth ahead of the rear arch, louvres, slatted tail, the single mirror up the A-pillar at roof
-  height) and the V8 (low wide nose, long screen, glass engine cover, side scoops, round lamps, four tips,
-  lip). Panel shut lines are dark strips of the loft itself (a
+  pressed steel; glass, trim and seams are still decided on the twenty-point design outline. Two styles. The flat-twelve is keyed on a dimensioned four-view drawing of
+  the 1984 car (4485 x 1976 x 1130 mm, wheelbase 2550, overhangs 1085 / 845, tracks 1520 / 1677), its side and
+  plan views calibrated on their own dimension lines: a long low wedge, 1.57 m wide just behind the nose, 1.82 m
+  at the doors and 1.98 m ahead of the rear wheels; pop-up lamp lids at the outer corners of the bonnet, lying on
+  its slope; an egg-crate grille with driving lamps in a painted bumper, black only at the lip; a long raked screen
+  from a cowl a third of the way back (the windscreen is a glass range of stations, `ScreenFrom`/`ScreenTo`), a
+  short narrow roof whose buttresses run down to a tail 0.77 m high with a short rear window between them; the
+  intake low on the door, a recess cut into the loft (`Intake`: the flank sloping in to its deepest under the
+  rising upper edge) with five strakes flush across it, and a leather panel inside so the road does not show
+  through the lower door; tight arches over 16 in wheels, the rear track and tyres wider than the front; the
+  single mirror half-way up the A-pillar in body colour; louvres between the buttresses; the slatted full-width
+  tail over a painted panel with the plate in a recess. The loft before it had a near constant width, the cabin
+  forward of the middle, the strakes up at the shoulder, the belt line 0.1 m high and the tail 0.13 m high. The
+  glass is darker than it was: lighter, the long screen made the car read as an open targa. The V8 has a low
+  wide nose, a long screen, a glass engine cover, side scoops, round lamps, four tips and a lip. Panel shut lines are dark strips of the loft itself (a
   pair of stations 14 mm apart at each seam); a plate, indicators, door handles, brake discs with red
   calipers and a cellular tread grain on the tyres finish the outside. The cabin is lined and furnished,
   in CC0 leather, carpet and fabric: door trim and roof lining are the loft's opaque upper strips again,
@@ -151,7 +204,8 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   replay; `--orbit` fixes a camera on the car for pictures of it.
 - Rear-view mirror (`RearMirror`): a camera of its own renders a 512x144 picture, flipped left to right,
   starting 2.7 m out past the car's tail and with a lighter environment (no SDFGI, SSR, SSIL, SSAO, glow
-  or volumetric fog); it only runs in the cockpit view.
+  or volumetric fog); it only runs in the cockpit view, and renders every other frame without multisampling
+  (it costs 2.5-3.5 ms of GPU when it does).
 - Instruments (`InstrumentCluster`), drawn into a viewport of their own: speedometer with odometer,
   tachometer with its red zone, gear readout, oil and charge lamps that light while the engine is off.
   The same picture is the binnacle's face in the cockpit and the panel at the foot of the screen in the
@@ -191,10 +245,22 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   run-up's place as the throttle closes. A limiter on the master bus. Loops imported compressed (QOA) must end
   at `GetLength() × MixRate` frames, not at the data's byte count: that once cut every loop to its first
   fifth, with a click at each turn.
-- Graphics presets (F7, remembered): High is everything; Medium drops SDFGI, SSIL and screen-space
-  reflections; Low also drops SSAO, glow, the volumetric haze, the sun's shadows and the far wood, renders at
-  three quarters of the window with FXAA instead of MSAA and TAA (`WorldBuilder.SetQuality`,
-  `Bootstrap.ApplyGraphics`); `--quality=` sets one for a run.
+- Graphics presets (F7, remembered): High is everything; Medium drops SSIL and screen-space reflections; Low
+  also drops SSAO, glow, the volumetric haze, the sun's shadows and the far wood, renders at three quarters of
+  the window with FXAA instead of MSAA and TAA (`WorldBuilder.SetQuality`, `Bootstrap.ApplyGraphics`);
+  `--quality=` sets one for a run. SDFGI was part of High until 0.8: measured on the development laptop it was
+  a third of the main view's GPU time (12.9 ms a frame with it, 9.2 without), doubled the worst frames (38 ms
+  against 18) and held 550 MB of video memory, because its cascades re-voxelise the world as a camera moving
+  at 35 m/s drags them along; every other effect measured under half a millisecond.
+- Frame rate (`Bootstrap.ApplyFrameCap`): the game holds itself to an even fraction of the screen's refresh
+  rate, at most 90 (72 on a 144 Hz panel), 30 while it is in the background and 20 in 1989 mode, and logs
+  each change. Uncapped, the development laptop's 144 Hz panel asked its GPU (an RTX 5060 drawing for an
+  Intel-driven panel) for more frames than High could draw; every session ended within a minute in a driver
+  timeout, a black screen and a lost Vulkan device (28 October 2026). Vsync alone does not hold a hybrid
+  laptop's discrete GPU back; the engine's own limiter does. On a window taller than 1200 lines the 3D view is
+  rendered at 1080 and scaled up with FSR, so a large monitor cannot undo that. A hidden window is throttled
+  by the system to about 17 fps whatever the game asks, so automated runs measure the GPU time a frame takes
+  rather than the frame rate.
 - "1989 mode" (F8): a third of the render resolution, 20 fps, textures and normal maps off, nearest
   filtering, no shadows, global illumination, ambient occlusion, reflections, glow, fog or TAA, a flat sky,
   orange shoulders everywhere, no clouds or wear sheet, the synthesised engine and squeal instead of the
@@ -262,7 +328,10 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   the train's steam loop, mixed in by its distance (the drones' placed engines and the Doppler shift are not
   ported; the mono mix has no listener). Settings, the best lap and the high scores live in
   `unreal/Saved/GrudgeLap`; the best-lap file is the simulation's own format, the same as the Godot
-  version's. ABI 5 of the core added the credit's own best lap to the state for the table.
+  version's. ABI 5 of the core added the credit's own best lap to the state for the table. On a screen the
+  game holds the Godot version's frame cap (`AGlpGame::ApplyFrameCap`: an even fraction of the primary
+  display's refresh rate, at most 90, 30 without the focus) and hands the editor its own back at the end of
+  a Play; the off-screen automation runs keep theirs.
 - **Scenery.** Scanned trees stand where the game's trees stand all round the circuit and, as the wood
   beyond the fields, where the game's forest placements are (an instanced component per scan, drawn to
   2.5 km); scanned grass fills the meadow at the start and the 40 m beside every road (about 250 000 tufts,

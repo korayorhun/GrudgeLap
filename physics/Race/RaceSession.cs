@@ -15,6 +15,11 @@ public sealed class RaceSession
     private const float ReplayRecordHz = 30f;
     private const float WrongWayGrace = 1.6f;
     private const float RespawnClearance = 45f;
+    /// <summary>
+    /// Metres into a branch before the route is announced: the stunt route's curve off the fork hill parts from the
+    /// speed road by a full road width only about 38 m on, and until then the cursor may sit on either.
+    /// </summary>
+    private const float RouteChoiceDistance = 45f;
 
     private readonly List<RaceEvent> _events = new();
     private readonly List<PoseSample> _replay = new();
@@ -253,8 +258,13 @@ public sealed class RaceSession
 
         if (!ReferenceEquals(path, _lastPath))
         {
+            // Onto the road that follows the last one, counting starts at its beginning. A hop between the branches,
+            // which share their first metres, or back across the fork or the merge carries the distance over: the
+            // cursor follows the road surface on top, which just past the fork can be the other branch for a few
+            // metres, and starting from zero there scored the same road twice and replayed the start line.
+            var followsOn = _lastPath is null || _lastPath.Next.Contains(path);
             _lastPath = path;
-            _lastDistance = 0f;
+            _lastDistance = followsOn ? 0f : distance;
         }
 
         if (distance > _lastDistance && Car.OnRoad && !WrongWay)
@@ -263,8 +273,8 @@ public sealed class RaceSession
         }
 
         // The branches share their first metres and the cursor may hop between them; the route is announced
-        // once the car is clearly on one of them.
-        if (path.Kind is PathKind.Speed or PathKind.Stunt && distance > 30f)
+        // once the car is clearly on one of them, past the last metre where the two roads overlap.
+        if (path.Kind is PathKind.Speed or PathKind.Stunt && distance > RouteChoiceDistance)
         {
             var route = path.Kind == PathKind.Speed ? RouteKind.Speed : RouteKind.Stunt;
             if (Route != route)

@@ -34,6 +34,11 @@ links we worked from.
   https://patents.google.com/patent/US5354202A/en (ghost car)
 - Technical analysis of the series: http://weltenschule.de/vgames/HardDrivin/HardDrivin_analysis.html
 - Wikipedia: https://en.wikipedia.org/wiki/Hard_Drivin%27
+- The circuit's plan: the "Original Track" map of the Hard Drivin' II track editor, stitched by the weltenschule
+  analysis (48 map pixels to the 88 ft slab), checked against an attract-mode video of the arcade
+  (https://youtu.be/g6JC-HCNcio): the order of the features, the sides of the buildings, the three crossings.
+- The 1984 coupe's dimensioned four-view drawing (getoutlines.com, CC BY 4.0), the reference for the
+  flat-twelve's body: https://getoutlines.com/blueprints/5759/1984-ferrari-testarossa-coupe-blueprints
 
 ## Rights
 

@@ -187,6 +187,29 @@ internal sealed partial class CarView : Node3D
         public float CabinTo = 0.6f;
         public float FrontArchTop = 0.64f;
         public float RearArchTop = 0.80f;
+        public float FrontArchRadius = ArchRadius;   // horizontal radius of the arch cut about the hub
+        public float RearArchRadius = ArchRadius;
+        public float ScreenFrom = float.NaN;  // z range whose top skin is all glass: the windscreen and the side glass beside it
+        public float ScreenTo = float.NaN;
+        public float RearGlassFrom = float.NaN;   // z range whose skin between the crests is glass: a rear window between buttresses
+        public float RearGlassTo = float.NaN;
+        public float IntakeFrom = float.NaN;  // z range of a recess low on the flank (the strakes' intake)
+        public float IntakeTo = float.NaN;
+        public float IntakeBottom = 0.28f;    // its lower edge, metres above the road
+        public float IntakeTopFront = 0.55f;  // its upper edge at the front, once the front taper is done
+        public float IntakeTopBack = 0.72f;   // and at the back, ahead of the rear arch
+        public float IntakeDepth = 0.07f;
+        public float[] StrakeHeights = [];    // heights of the strakes across the intake, flush with the skin
+        public float StrakesFrom = float.NaN; // where the strakes start (they stop at the intake's back)
+        public float LouvreFrom = 0.83f;      // z range of the louvred engine cover
+        public float LouvreTo = 1.75f;
+        public float NoseTrimBelow = 0.42f;   // the nose face is black below this height
+        public float TailTrimBelow = 0.50f;   // and the tail face
+        public float FrontTrack = float.NaN;  // half tracks of the wheels as drawn (the simulation's HalfTrack otherwise)
+        public float RearTrack = float.NaN;
+        public float FrontTyreWidth = 0.27f;
+        public float RearTyreWidth = 0.27f;
+        public float RimRadius = 0.228f;      // outer radius of the rim lip: 0.228 reads as 18 in, 0.203 is a 16 in wheel
         public bool LampLids;                // pop-up headlamp lids on the wing crests
         public bool Strakes;                 // slatted flank intakes
         public bool Louvres;                 // louvred engine cover (otherwise a glass cover)
@@ -204,32 +227,89 @@ internal sealed partial class CarView : Node3D
         public Color HeadlinerTint = new(0.66f, 0.62f, 0.56f);    // multiplies the grey fabric photo of the roof lining
 
         /// <summary>
-        /// The 1984 flat-twelve: blade nose, lamp lids, dipped bonnet, small cabin, widening rear, strakes, louvres,
-        /// slatted tail. The bonnet rises little from the nose (a wedge, not a shovel): its first stations sit higher
-        /// than the loft once did, the way the period car's long flat bonnet does.
+        /// The 1984 flat-twelve: a long low wedge, 1.57 m wide just behind the nose and 1.82 m at the doors, flaring
+        /// to 1.98 m ahead of the rear wheels; a long raked screen from a cowl a third of the way back; a short narrow
+        /// roof whose buttresses run down to a tail only 0.77 m high; the intake low on the door with five strakes
+        /// across it; pop-up lamp lids at the outer corners of the bonnet; tight arches over 16 in wheels.
         /// </summary>
+        /// <remarks>
+        /// Keyed on a dimensioned four-view drawing of the 1984 coupe (getoutlines.com, CC BY 4.0: 4485 x 1976 x 1130
+        /// mm, wheelbase 2550, overhangs 1085 / 845, tracks 1520 / 1677), its side and plan views each calibrated on
+        /// their own dimension lines, so the heights and widths here are measured rather than eyeballed. The loft
+        /// before it had a near constant width, the cabin forward of the middle, the strakes up at the shoulder, the
+        /// belt line 0.1 m high and the tail 0.13 m high. Keys are Godot z with the nose at -2.355 (1085 mm ahead of
+        /// the front axle at -1.27).
+        /// </remarks>
         public static readonly BodyStyle FlatTwelve = new()
         {
-            Keys = [-2.26f, -2.05f, -1.71f, -1.27f, -0.83f, -0.72f, -0.20f, 0.40f, 0.84f, 1.28f, 1.72f, 2.20f],
-            FloorH = [0.22f, 0.17f, 0.15f, 0.15f, 0.15f, 0.15f, 0.15f, 0.15f, 0.15f, 0.15f, 0.17f, 0.21f],
-            HalfWidth = [0.86f, 0.90f, 0.93f, 0.94f, 0.95f, 0.95f, 0.955f, 0.965f, 0.975f, 0.99f, 0.985f, 0.95f],
-            WaistH = [0.40f, 0.43f, 0.46f, 0.46f, 0.46f, 0.46f, 0.46f, 0.47f, 0.48f, 0.50f, 0.49f, 0.48f],
-            ShoulderH = [0.52f, 0.575f, 0.635f, 0.71f, 0.75f, 0.78f, 0.82f, 0.84f, 0.86f, 0.87f, 0.86f, 0.84f],
-            EdgeW = [0.80f, 0.84f, 0.86f, 0.88f, 0.88f, 0.74f, 0.71f, 0.73f, 0.80f, 0.84f, 0.86f, 0.86f],
-            EdgeH = [0.55f, 0.605f, 0.66f, 0.73f, 0.77f, 0.80f, 0.86f, 0.87f, 0.92f, 0.93f, 0.925f, 0.89f],
-            CrestW = [0.62f, 0.62f, 0.62f, 0.62f, 0.62f, 0.62f, 0.60f, 0.61f, 0.64f, 0.64f, 0.65f, 0.66f],
-            CrestH = [0.585f, 0.635f, 0.68f, 0.745f, 0.785f, 0.81f, 1.10f, 1.10f, 0.94f, 0.95f, 0.94f, 0.905f],
-            CentreH = [0.555f, 0.595f, 0.635f, 0.685f, 0.735f, 0.80f, 1.13f, 1.13f, 0.95f, 0.955f, 0.945f, 0.905f],
+            //         nose      -        -        -    f.axle    cowl   screen  header   roof   r.end    deck  r.axle      -        -     tail
+            Keys = [-2.355f, -2.235f, -2.055f, -1.755f, -1.27f, -1.035f, -0.615f, -0.195f, 0.295f, 0.745f, 0.895f, 1.28f, 1.645f, 1.895f, 2.13f],
+            FloorH = [0.20f, 0.19f, 0.18f, 0.17f, 0.16f, 0.155f, 0.155f, 0.155f, 0.155f, 0.155f, 0.155f, 0.16f, 0.18f, 0.23f, 0.28f],
+            HalfWidth = [0.58f, 0.72f, 0.81f, 0.864f, 0.90f, 0.91f, 0.91f, 0.924f, 0.95f, 0.984f, 0.988f, 0.975f, 0.962f, 0.945f, 0.885f],
+            WaistH = [0.40f, 0.41f, 0.42f, 0.44f, 0.46f, 0.47f, 0.48f, 0.49f, 0.51f, 0.53f, 0.54f, 0.55f, 0.54f, 0.52f, 0.50f],
+            ShoulderH = [0.50f, 0.53f, 0.585f, 0.655f, 0.74f, 0.765f, 0.755f, 0.745f, 0.765f, 0.795f, 0.81f, 0.82f, 0.80f, 0.785f, 0.76f],
+            EdgeW = [0.55f, 0.68f, 0.77f, 0.83f, 0.865f, 0.74f, 0.735f, 0.735f, 0.72f, 0.70f, 0.72f, 0.76f, 0.82f, 0.85f, 0.83f],
+            EdgeH = [0.52f, 0.56f, 0.615f, 0.685f, 0.765f, 0.785f, 0.775f, 0.765f, 0.785f, 0.815f, 0.83f, 0.835f, 0.815f, 0.79f, 0.765f],
+            CrestW = [0.44f, 0.60f, 0.70f, 0.72f, 0.73f, 0.72f, 0.63f, 0.54f, 0.545f, 0.56f, 0.62f, 0.66f, 0.68f, 0.72f, 0.70f],
+            CrestH = [0.535f, 0.575f, 0.635f, 0.707f, 0.79f, 0.815f, 0.95f, 1.08f, 1.115f, 1.07f, 1.035f, 0.93f, 0.835f, 0.78f, 0.765f],
+            CentreH = [0.525f, 0.56f, 0.615f, 0.685f, 0.76f, 0.805f, 0.975f, 1.095f, 1.134f, 1.085f, 0.87f, 0.86f, 0.835f, 0.785f, 0.77f],
+            CowlZ = -1.035f,
+            CabinFrom = -0.20f,
+            CabinTo = 0.75f,
+            ScreenFrom = -1.035f,
+            ScreenTo = -0.195f,
+            RearGlassFrom = 0.745f,
+            RearGlassTo = 0.895f,
+            FrontArchTop = 0.69f,
+            RearArchTop = 0.70f,
+            FrontArchRadius = 0.36f,
+            RearArchRadius = 0.40f,
+            IntakeFrom = -0.735f,
+            IntakeTo = 0.645f,
+            IntakeBottom = 0.28f,
+            IntakeTopFront = 0.535f,
+            IntakeTopBack = 0.725f,
+            IntakeDepth = 0.07f,
+            StrakeHeights = [0.338f, 0.394f, 0.444f, 0.497f, 0.547f],
+            StrakesFrom = -0.705f,
+            LouvreFrom = 0.93f,
+            LouvreTo = 1.84f,
+            NoseTrimBelow = 0.31f,
+            TailTrimBelow = 0.39f,
+            FrontTrack = 0.76f,
+            RearTrack = 0.8385f,
+            FrontTyreWidth = 0.225f,
+            RearTyreWidth = 0.255f,
+            RimRadius = 0.203f,
             LampLids = true,
             Strakes = true,
             Louvres = true,
             SlattedTail = true,
             ExhaustTips = 4,
-            TopSeams = [-0.75f, 0.83f, 1.90f],
-            FlankSeams = [-0.60f, 0.68f],
-            RearBulkheadZ = 0.68f,
+            TopSeams = [-1.265f, 0.92f, 1.86f],
+            FlankSeams = [-0.805f, 0.515f],
+            RearBulkheadZ = 0.70f,
             LeatherTint = new(0.80f, 0.85f, 0.75f),
         };
+
+        /// <summary>
+        /// Depth of the flank intake at <paramref name="z"/> (0 outside it) and the height of its upper edge. The
+        /// recess opens over a short taper at the front, where its upper edge also rises from near the sill, and
+        /// closes over a few centimetres at the back, its rounded rear edge ahead of the rear arch.
+        /// </summary>
+        public (float Depth, float Top) Intake(float z)
+        {
+            if (float.IsNaN(IntakeFrom) || z < IntakeFrom || z > IntakeTo) return (0f, 0f);
+            const float taper = 0.12f, closure = 0.06f;
+            var along = (z - IntakeFrom - taper) / (IntakeTo - IntakeFrom - taper);
+            var line = IntakeTopFront + (IntakeTopBack - IntakeTopFront) * Math.Clamp(along, 0f, 1f);
+            var open = Math.Clamp((z - IntakeFrom) / taper, 0f, 1f);
+            var shut = Math.Clamp((IntakeTo - z) / closure, 0f, 1f);
+            var top = IntakeBottom + 0.08f + (line - IntakeBottom - 0.08f) * Smooth(open);
+            return (IntakeDepth * Smooth(MathF.Min(open, shut)), top);
+
+            static float Smooth(float t) => t * t * (3f - 2f * t);
+        }
 
         /// <summary>The 2012 V8: low wide nose, long screen, teardrop cabin over a glass engine cover, strong rear haunches, round lamps.</summary>
         public static readonly BodyStyle V8 = new()
@@ -297,7 +377,10 @@ internal sealed partial class CarView : Node3D
         }
     }
 
-    private readonly record struct Station(float Z, float ArchLift, bool Cabin);
+    private readonly record struct Station(float Z, float ArchLift, bool Cabin, float IntakeDepth);
+
+    /// <summary>Where the stations through a wheel arch sit, as fractions of the arch radius either side of the hub.</summary>
+    private static readonly float[] ArchSamples = [-1.045f, -1f, -0.909f, -0.682f, -0.341f, 0f, 0.341f, 0.682f, 0.909f, 1f, 1.045f];
 
     /// <summary>
     /// Outline points that are rounded off like pressed sheet metal, both sides: the shoulder, the bonnet edge /
@@ -346,7 +429,15 @@ internal sealed partial class CarView : Node3D
         for (var z = style.Keys[0] + 0.06f; z < style.CowlZ; z += 0.10f) zs.Add(z);
         foreach (var axle in axles)
         {
-            foreach (var offset in new[] { -0.46f, -0.44f, -0.40f, -0.30f, -0.15f, 0f, 0.15f, 0.30f, 0.40f, 0.44f, 0.46f }) zs.Add(axle + offset);
+            var radius = axle < 0f ? style.FrontArchRadius : style.RearArchRadius;
+            foreach (var fraction in ArchSamples) zs.Add(axle + fraction * radius);
+        }
+        if (!float.IsNaN(style.IntakeFrom))
+        {
+            // Every 10 cm along the intake, so its rising edge and its depth ramps stay smooth; a station just outside
+            // each end keeps the recess's dark wall from smearing into the flank beyond it.
+            for (var z = style.IntakeFrom; z <= style.IntakeTo + 1e-4f; z += 0.10f) zs.Add(z);
+            zs.AddRange([style.IntakeFrom - 0.012f, style.IntakeFrom + 0.04f, style.IntakeTo - 0.03f, style.IntakeTo, style.IntakeTo + 0.012f]);
         }
         // A station pair at every shut line gives the seam its own thin strip of quads.
         foreach (var seam in style.TopSeams.Concat(style.FlankSeams))
@@ -365,14 +456,15 @@ internal sealed partial class CarView : Node3D
             foreach (var axle in axles)
             {
                 var d = MathF.Abs(z - axle);
-                if (d <= ArchRadius + 1e-4f)
+                var radius = axle < 0f ? style.FrontArchRadius : style.RearArchRadius;
+                if (d <= radius + 1e-4f)
                 {
                     // Round arch over the hub, ending at hub height, flattened under the wing where the body is low.
-                    var arch = spec.WheelRadius + MathF.Sqrt(MathF.Max(ArchRadius * ArchRadius - d * d, 0f));
+                    var arch = spec.WheelRadius + MathF.Sqrt(MathF.Max(radius * radius - d * d, 0f));
                     lift = MathF.Max(lift, MathF.Min(arch, axle < 0f ? style.FrontArchTop : style.RearArchTop));
                 }
             }
-            stations.Add(new Station(z, lift, z > style.CabinFrom && z < style.CabinTo));
+            stations.Add(new Station(z, lift, z > style.CabinFrom && z < style.CabinTo, style.Intake(z).Depth));
         }
         return [.. stations];
     }
@@ -405,6 +497,15 @@ internal sealed partial class CarView : Node3D
             new(crestW * 0.15f, Mathf.Lerp(centreH, crestH, 0.0225f)),
             new(0f, centreH),
         };
+        var (intakeDepth, intakeTop) = style.Intake(z);
+        if (intakeTop > 0f)
+        {
+            // The recess: the flank from the sill slopes in to its deepest just under the upper edge, a short ceiling
+            // runs back out to the skin there, and the door above stays upright. Deep under the edge, as on the car,
+            // so the edge casts its shadow into the slot.
+            half[2] = new Vector2(w - intakeDepth, intakeTop - 0.035f);
+            half[3] = new Vector2(w, intakeTop);
+        }
         if (s.ArchLift > 0f)
         {
             // The sill and the lower flank are cut up to the arch; the floor centre stays down so the underside
@@ -494,6 +595,14 @@ internal sealed partial class CarView : Node3D
         bool IsGlass(Station front, Station back, int k)
         {
             var top = k >= TopFirst && k <= TopLast;
+            if (!float.IsNaN(style.ScreenFrom))
+            {
+                // A long raked screen spans several stations (the front arch's among them): all of its top skin is glass,
+                // and behind the roof only the skin between the buttresses is the rear window.
+                if (top && front.Z >= style.ScreenFrom - 1e-3f && back.Z <= style.ScreenTo + 1e-3f) return true;
+                if (k > TopFirst + 1 && k < TopLast - 1 && front.Z >= style.RearGlassFrom - 1e-3f && back.Z <= style.RearGlassTo + 1e-3f) return true;
+                return front.Cabin && back.Cabin && (k == TopFirst || k == TopLast);
+            }
             if (front.Cabin != back.Cabin) return top;
             if (front.Cabin && (k == TopFirst || k == TopLast)) return true;
             return k > TopFirst && k < TopLast && front.Z >= style.GlassDeckFrom - 0.01f && back.Z <= style.GlassDeckTo + 0.01f;
@@ -524,8 +633,8 @@ internal sealed partial class CarView : Node3D
                 Tri(target, b, nb, c, nc, d, nd, colour, faceNormal);
             }
         }
-        Cap(bonnet, rings[0], new Vector3(0f, 0f, -1f), 0.42f, _paint);
-        Cap(shell, rings[^1], new Vector3(0f, 0f, 1f), 0.50f, _paint);
+        Cap(bonnet, rings[0], new Vector3(0f, 0f, -1f), style.NoseTrimBelow, _paint);
+        Cap(shell, rings[^1], new Vector3(0f, 0f, 1f), style.TailTrimBelow, _paint);
         // Bulkhead at the cowl: from the driver's seat the bonnet must not read as an open tube with the wheels inside.
         var cowl = Array.FindIndex(stations, s => MathF.Abs(s.Z - style.CowlZ) < 1e-3f);
         Cap(bonnet, rings[cowl], new Vector3(0f, 0f, 1f), float.MaxValue, _paint);
@@ -581,10 +690,11 @@ internal sealed partial class CarView : Node3D
             Clearcoat = 0.9f,
             ClearcoatRoughness = 0.08f,
         };
-        // Tinted glass the cabin shows through; the sky and the road reflect in it.
+        // Dark tinted glass: the cabin shows through it faintly and the sky and the road reflect in it. Lighter, the
+        // long screen and the tall side glass of the flat-twelve made the car read as an open targa.
         var tint = new StandardMaterial3D
         {
-            AlbedoColor = new Color(0.05f, 0.08f, 0.11f, 0.62f),
+            AlbedoColor = new Color(0.05f, 0.08f, 0.11f, 0.80f),
             Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
             Metallic = 0.9f,
             Roughness = 0.05f,
@@ -611,7 +721,8 @@ internal sealed partial class CarView : Node3D
         var archWall = k == 2 || k == RingSize - 3;
         if (lowerSide) return Trim;
         if (archWall && (front.ArchLift > 0f || back.ArchLift > 0f)) return Trim;
-        if (_style.Louvres && front.Z >= 0.83f && back.Z <= 1.75f && k > TopFirst && k < TopLast) return Trim;
+        if (_style.Louvres && front.Z >= _style.LouvreFrom && back.Z <= _style.LouvreTo && k > TopFirst + 1 && k < TopLast - 1) return Trim;
+        if ((k == 2 || k == RingSize - 3) && front.IntakeDepth > 0f && back.IntakeDepth > 0f) return Trim;
         // Shut lines: the 14 mm strip at each seam station goes dark, across the top skin or down the flank.
         var top = k > TopFirst && k < TopLast;
         var flank = k is 3 or 4 || k == RingSize - 4 || k == RingSize - 5;
@@ -697,17 +808,21 @@ internal sealed partial class CarView : Node3D
 
         if (style.LampLids)
         {
-            // Pop-up lamp lids flush in the wing crests, outlined by their shut line; visible from the driver's seat
-            // too. Standing proud they read as two blocks on the bonnet.
-            var lidZ = style.Keys[0] + 0.42f;
-            var lidY = style.Sample(style.CrestH, lidZ) - 0.012f;
+            // Pop-up lamp lids at the outer front corners of the bonnet, lying on its slope and outlined by their shut
+            // line; visible from the driver's seat too. Standing proud they read as two blocks on the bonnet.
+            var lidZ = style.Keys[0] + 0.33f;
+            var lidY = style.Sample(style.CrestH, lidZ) - 0.004f;
+            var rise = (style.Sample(style.CrestH, lidZ + 0.1f) - style.Sample(style.CrestH, lidZ - 0.1f)) / 0.2f;
             foreach (var side in new[] { -1f, 1f })
             {
-                Box(body, new Vector3(0.44f, 0.025f, 0.36f), new Vector3(side * 0.58f, lidY, lidZ), solidPaint);
-                Box(body, new Vector3(0.456f, 0.004f, 0.008f), new Vector3(side * 0.58f, lidY + 0.0105f, lidZ - 0.184f), trim);
-                Box(body, new Vector3(0.456f, 0.004f, 0.008f), new Vector3(side * 0.58f, lidY + 0.0105f, lidZ + 0.184f), trim);
-                Box(body, new Vector3(0.008f, 0.004f, 0.376f), new Vector3(side * 0.58f - 0.224f, lidY + 0.0105f, lidZ), trim);
-                Box(body, new Vector3(0.008f, 0.004f, 0.376f), new Vector3(side * 0.58f + 0.224f, lidY + 0.0105f, lidZ), trim);
+                // A negative pitch lifts the lid's rear edge (+z) to follow the bonnet up towards the screen.
+                var lid = new Node3D { Position = new Vector3(side * 0.555f, lidY, lidZ), Rotation = new Vector3(-MathF.Atan(rise), 0f, 0f) };
+                body.AddChild(lid);
+                Box(lid, new Vector3(0.33f, 0.022f, 0.21f), Vector3.Zero, solidPaint);
+                Box(lid, new Vector3(0.346f, 0.004f, 0.008f), new Vector3(0f, 0.0095f, -0.109f), trim);
+                Box(lid, new Vector3(0.346f, 0.004f, 0.008f), new Vector3(0f, 0.0095f, 0.109f), trim);
+                Box(lid, new Vector3(0.008f, 0.004f, 0.226f), new Vector3(-0.169f, 0.0095f, 0f), trim);
+                Box(lid, new Vector3(0.008f, 0.004f, 0.226f), new Vector3(0.169f, 0.0095f, 0f), trim);
             }
         }
         else
@@ -730,39 +845,37 @@ internal sealed partial class CarView : Node3D
         // Inner walls of the wheel wells, just inboard of the tyres and below the skin, so nothing shows through the arches.
         foreach (var axle in new[] { -spec.FrontAxle, spec.RearAxle })
         {
-            var inboard = spec.HalfTrack - 0.26f;
+            var inboard = HalfTrack(spec, axle < 0f) - 0.26f;
             var top = (axle < 0f ? style.FrontArchTop : style.RearArchTop) - 0.02f;
-            var size = new Vector3(0.16f, top - 0.16f, 0.92f);
+            var size = new Vector3(0.16f, top - 0.16f, 2f * (axle < 0f ? style.FrontArchRadius : style.RearArchRadius) + 0.04f);
             Box(outside, size, new Vector3(-inboard, (top + 0.16f) * 0.5f, axle), trim);
             Box(outside, size, new Vector3(inboard, (top + 0.16f) * 0.5f, axle), trim);
         }
 
         if (style.Strakes)
         {
-            // Flank intakes: a dark recess the length of the door with five strakes that fan out as the slot opens
-            // into the mouth ahead of the rear arch, the signature of the 1984 car. The node's yaw follows the flank,
-            // which widens toward the rear haunch.
-            const float strakeFront = -0.80f, strakeBack = 0.80f;
+            // The strakes across the flank intake, flush with the skin, from the door's front to the rounded back of the
+            // intake ahead of the rear arch: the signature of the 1984 car (the rules of its day frowned on large open
+            // intakes). The loft cuts the recess behind them (BodyStyle.Intake). Each strake is laid in short pieces that
+            // follow the flank as it flares towards the rear wing, a few millimetres inside the skin so that where the
+            // recess has not opened yet the skin hides it instead of fighting it.
+            var strakesTo = style.IntakeTo - 0.05f;
+            const int pieces = 4;
             foreach (var side in new[] { -1f, 1f })
             {
-                var strakes = new Node3D { Position = new Vector3(side * 0.965f, 0.63f, 0.25f), Rotation = new Vector3(0f, side * 0.019f, 0f) };
-                outside.AddChild(strakes);
-                var recess = new MeshBuilder();
-                var outward = Vector3.Right * side;
-                var fa = new Vector3(0f, -0.10f, strakeFront);
-                var fb = new Vector3(0f, 0.14f, strakeFront);
-                var ba = new Vector3(0f, -0.18f, strakeBack);
-                var bb = new Vector3(0f, 0.22f, strakeBack);
-                Tri(recess, fa, outward, fb, outward, ba, outward, Trim, outward);
-                Tri(recess, fb, outward, bb, outward, ba, outward, Trim, outward);
-                strakes.AddChild(new MeshInstance3D { Mesh = recess.Commit(), MaterialOverride = trim });
-                for (var i = 0; i < 5; i++)
+                foreach (var height in style.StrakeHeights)
                 {
-                    var front = -0.10f + 0.048f * (i + 0.5f);
-                    var back = -0.18f + 0.080f * (i + 0.5f);
-                    var slat = Box(strakes, new Vector3(0.06f, 0.024f, strakeBack - strakeFront), new Vector3(side * 0.03f, (front + back) * 0.5f, 0f), solidPaint);
-                    // Rotation about x tips the +z (rear) end down for a positive angle; the rear ends spread.
-                    slat.Rotation = new Vector3(-MathF.Atan2(back - front, strakeBack - strakeFront), 0f, 0f);
+                    for (var p = 0; p < pieces; p++)
+                    {
+                        var z0 = style.StrakesFrom + (strakesTo - style.StrakesFrom) * p / pieces;
+                        var z1 = style.StrakesFrom + (strakesTo - style.StrakesFrom) * (p + 1) / pieces;
+                        var x0 = style.Sample(style.HalfWidth, z0) - 0.016f;
+                        var x1 = style.Sample(style.HalfWidth, z1) - 0.016f;
+                        var length = MathF.Sqrt((z1 - z0) * (z1 - z0) + (x1 - x0) * (x1 - x0)) + 0.004f;
+                        var piece = Box(outside, new Vector3(0.024f, 0.022f, length), new Vector3(side * (x0 + x1) * 0.5f, height, (z0 + z1) * 0.5f), solidPaint);
+                        // A yaw of atan2(dx, dz) turns the piece's length (+z) along the flank.
+                        piece.Rotation = new Vector3(0f, side * MathF.Atan2(x1 - x0, z1 - z0), 0f);
+                    }
                 }
             }
         }
@@ -779,10 +892,16 @@ internal sealed partial class CarView : Node3D
 
         if (style.Louvres)
         {
-            // Engine cover louvres over the dark panel of the loft.
-            for (var i = 0; i < 7; i++)
+            // Engine cover louvres across the dark panel of the loft, between the buttresses, following the deck down;
+            // raised a little over the panel's centre, where the deck dips between the buttresses.
+            const int slats = 8;
+            for (var i = 0; i < slats; i++)
             {
-                Box(outside, new Vector3(1.26f, 0.02f, 0.05f), new Vector3(0f, 0.96f, 1.00f + i * 0.14f), solidPaint);
+                var z = style.LouvreFrom + 0.06f + i * (style.LouvreTo - style.LouvreFrom - 0.12f) / (slats - 1);
+                var crestW = style.Sample(style.CrestW, z);
+                var centreH = style.Sample(style.CentreH, z);
+                var y = centreH + 0.3f * (style.Sample(style.CrestH, z) - centreH) + 0.004f;
+                Box(outside, new Vector3(2f * 0.62f * crestW, 0.02f, 0.05f), new Vector3(0f, y, z), solidPaint);
             }
         }
         else
@@ -795,14 +914,17 @@ internal sealed partial class CarView : Node3D
         var tailZ = style.Keys[^1];
         if (style.SlattedTail)
         {
-            // Full-width black grille, lamps behind it, five slats across.
-            Box(outside, new Vector3(1.90f, 0.32f, 0.05f), new Vector3(0f, 0.68f, tailZ), trim);
-            Box(outside, new Vector3(0.64f, 0.16f, 0.02f), new Vector3(-0.56f, 0.69f, tailZ + 0.032f), lamp);
-            Box(outside, new Vector3(0.64f, 0.16f, 0.02f), new Vector3(0.56f, 0.69f, tailZ + 0.032f), lamp);
-            for (var i = 0; i < 5; i++)
+            // The full-width slatted grille with the lamps glowing through it, over a painted panel that carries the
+            // plate in a recess; the black lower bumper below (the tail face's trim line) holds the tips.
+            var grilleW = 2f * style.Sample(style.HalfWidth, tailZ) - 0.06f;
+            Box(outside, new Vector3(grilleW, 0.19f, 0.05f), new Vector3(0f, 0.635f, tailZ), trim);
+            Box(outside, new Vector3(0.60f, 0.13f, 0.02f), new Vector3(-0.54f, 0.635f, tailZ + 0.032f), lamp);
+            Box(outside, new Vector3(0.60f, 0.13f, 0.02f), new Vector3(0.54f, 0.635f, tailZ + 0.032f), lamp);
+            for (var i = 0; i < 6; i++)
             {
-                Box(outside, new Vector3(1.90f, 0.018f, 0.09f), new Vector3(0f, 0.56f + i * 0.06f, tailZ + 0.035f), trim);
+                Box(outside, new Vector3(grilleW, 0.014f, 0.08f), new Vector3(0f, 0.555f + i * 0.032f, tailZ + 0.035f), trim);
             }
+            Box(outside, new Vector3(0.58f, 0.13f, 0.01f), new Vector3(0f, 0.465f, tailZ + 0.004f), trim);
         }
         else
         {
@@ -832,7 +954,7 @@ internal sealed partial class CarView : Node3D
             var tip = new MeshInstance3D
             {
                 Mesh = new CylinderMesh { TopRadius = 0.045f, BottomRadius = 0.045f, Height = 0.16f, Material = chrome, RadialSegments = 16 },
-                Position = new Vector3(x, 0.36f, tailZ + 0.03f),
+                Position = new Vector3(x, style.SlattedTail ? 0.33f : 0.36f, tailZ + 0.03f),
                 RotationDegrees = new Vector3(90f, 0f, 0f),
             };
             outside.AddChild(tip);
@@ -840,30 +962,53 @@ internal sealed partial class CarView : Node3D
 
         // Number plate, front indicators and door handles; a nose slot on the flat-twelve.
         var plateMat = new StandardMaterial3D { AlbedoColor = new Color(0.92f, 0.92f, 0.9f), Roughness = 0.5f };
-        Box(outside, new Vector3(0.52f, 0.11f, 0.012f), new Vector3(0f, style.SlattedTail ? 0.45f : 0.56f, tailZ + 0.03f), plateMat);
+        Box(outside, new Vector3(0.52f, 0.11f, 0.012f), new Vector3(0f, style.SlattedTail ? 0.465f : 0.56f, tailZ + (style.SlattedTail ? 0.016f : 0.03f)), plateMat);
         var amber = new StandardMaterial3D { AlbedoColor = Amber, EmissionEnabled = true, Emission = Amber, EmissionEnergyMultiplier = 0.35f };
         var noseZ = style.Keys[0] + 0.10f;
         foreach (var side in new[] { -1f, 1f })
         {
+            if (style.LampLids)
+            {
+                // Indicators at the ends of the grille band, where the bumper turns back round the corner, and the
+                // handle at the top of the door just ahead of its rear shut line.
+                var cornerZ = style.Keys[0] + 0.11f;
+                var indicator = Box(outside, new Vector3(0.12f, 0.06f, 0.03f), new Vector3(side * (style.Sample(style.HalfWidth, cornerZ) - 0.035f), 0.40f, cornerZ), amber);
+                indicator.Rotation = new Vector3(0f, side * 0.75f, 0f);
+                var doorZ = style.FlankSeams[^1] - 0.09f;
+                Box(outside, new Vector3(0.025f, 0.03f, 0.13f), new Vector3(side * (style.Sample(style.HalfWidth, doorZ) - 0.005f), style.Sample(style.ShoulderH, doorZ) - 0.05f, doorZ), trim);
+                continue;
+            }
             var y = style.Sample(style.ShoulderH, noseZ) - 0.07f;
-            var indicator = Box(outside, new Vector3(0.16f, 0.045f, 0.03f), new Vector3(side * 0.74f, y, noseZ), amber);
-            indicator.Rotation = new Vector3(0f, side * 0.45f, 0f);
+            var oldIndicator = Box(outside, new Vector3(0.16f, 0.045f, 0.03f), new Vector3(side * 0.74f, y, noseZ), amber);
+            oldIndicator.Rotation = new Vector3(0f, side * 0.45f, 0f);
             var handleZ = style.CabinTo - 0.05f;
             Box(outside, new Vector3(0.025f, 0.03f, 0.13f), new Vector3(side * (style.Sample(style.HalfWidth, handleZ) - 0.005f), style.Sample(style.ShoulderH, handleZ) - 0.12f, handleZ), trim);
         }
-        if (style.LampLids) Box(outside, new Vector3(0.96f, 0.07f, 0.05f), new Vector3(0f, 0.43f, style.Keys[0] + 0.015f), trim);
+        if (style.LampLids)
+        {
+            // The nose: a black egg-crate grille across the painted bumper, the driving lamps behind its outer ends;
+            // only the lip under it is black (the nose face's trim line).
+            var faceZ = style.Keys[0];
+            var grilleW = 2f * style.HalfWidth[0] - 0.10f;
+            Box(outside, new Vector3(grilleW, 0.125f, 0.02f), new Vector3(0f, 0.397f, faceZ - 0.005f), trim);
+            var driving = new StandardMaterial3D { AlbedoColor = new Color(0.85f, 0.86f, 0.82f), Metallic = 0.6f, Roughness = 0.2f };
+            foreach (var side in new[] { -1f, 1f }) Box(outside, new Vector3(0.17f, 0.075f, 0.01f), new Vector3(side * (grilleW * 0.5f - 0.13f), 0.397f, faceZ - 0.019f), driving);
+            var crate = new StandardMaterial3D { AlbedoColor = new Color(0.16f, 0.16f, 0.17f), Roughness = 0.6f };
+            for (var i = 0; i <= 16; i++) Box(outside, new Vector3(0.008f, 0.12f, 0.012f), new Vector3(-grilleW * 0.5f + grilleW * i / 16f, 0.397f, faceZ - 0.027f), crate);
+            foreach (var barY in new[] { 0.36f, 0.397f, 0.434f }) Box(outside, new Vector3(grilleW, 0.007f, 0.012f), new Vector3(0f, barY, faceZ - 0.027f), crate);
+        }
 
         // The outside mirrors hang on the body, not in "Outside": the driver sees them through the side windows.
         // Each is a housing wide across the car with its glass on the rear face, towards the driver.
         var mirrorGlass = new StandardMaterial3D { AlbedoColor = new Color(0.75f, 0.77f, 0.8f), Metallic = 1f, Roughness = 0.04f };
         if (style.LampLids)
         {
-            // The single mirror of the early cars: on a stalk up the driver's A-pillar, its head at roof height and
-            // well outboard, where the driver sees over the wing's shoulder.
-            var stalk = Box(body, new Vector3(0.26f, 0.028f, 0.028f), new Vector3(-0.89f, 1.05f, -0.50f), trim);
-            stalk.Rotation = new Vector3(0f, 0f, -MathF.Atan2(0.10f, 0.22f));
-            Box(body, new Vector3(0.17f, 0.11f, 0.07f), new Vector3(-1.02f, 1.11f, -0.50f), trim);
-            Box(body, new Vector3(0.15f, 0.09f, 0.004f), new Vector3(-1.02f, 1.11f, -0.463f), mirrorGlass);
+            // The single mirror of the early cars, high on the driver's A-pillar: a stalk from the side glass out past
+            // the wing, the head in body colour at about the height of the driver's eyes, seen through the side window.
+            var stalk = Box(body, new Vector3(0.22f, 0.018f, 0.018f), new Vector3(-0.83f, 0.91f, -0.555f), trim);
+            stalk.Rotation = new Vector3(0f, 0f, -MathF.Atan2(0.06f, 0.21f));
+            Box(body, new Vector3(0.17f, 0.10f, 0.07f), new Vector3(-1.01f, 0.95f, -0.555f), solidPaint);
+            Box(body, new Vector3(0.15f, 0.08f, 0.004f), new Vector3(-1.01f, 0.95f, -0.518f), mirrorGlass);
         }
         else
         {
@@ -896,7 +1041,17 @@ internal sealed partial class CarView : Node3D
         var cowlH = style.Sample(style.CentreH, style.CowlZ);
         var eye = new Vector3(DriverX, style.EyeH, style.EyeZ);
 
-        Box(body, new Vector3(1.70f, 0.04f, 1.30f), new Vector3(0f, 0.36f, 0.05f), carpet);   // floor
+        if (float.IsNaN(style.ScreenFrom))
+        {
+            Box(body, new Vector3(1.70f, 0.04f, 1.30f), new Vector3(0f, 0.36f, 0.05f), carpet);   // floor
+        }
+        else
+        {
+            // A screen set far forward leaves a long footwell: the floor runs from under the dash to the bulkhead, and
+            // stays clear of the intake's recess in the flanks.
+            var floorFrom = style.CowlZ + 0.15f;
+            Box(body, new Vector3(1.60f, 0.04f, style.RearBulkheadZ - floorFrom), new Vector3(0f, 0.36f, (floorFrom + style.RearBulkheadZ) * 0.5f), carpet);
+        }
         // Dashboard: a profile swept across the cabin, (metres behind the windscreen base, metres below it): along
         // the top, over a rolled lip 0.24 m back and down the fascia to the knees. The wheel's hub sits well
         // behind the fascia, as in a car, not inside it.
@@ -906,7 +1061,22 @@ internal sealed partial class CarView : Node3D
             new(0.237f, -0.070f), new(0.230f, -0.100f), new(0.212f, -0.160f), new(0.200f, -0.280f), new(0.190f, -0.400f),
             new(0.100f, -0.430f),
         ];
-        body.AddChild(new MeshInstance3D { Mesh = SweepAcross(dashProfile.Select(p => new Vector2(style.CowlZ + p.X, cowlH + p.Y)).ToArray(), 0.88f), MaterialOverride = dash, Name = "Dashboard" });
+        // A long screen leaves a deep dashboard: its top runs on towards the driver until the lip is half a metre from
+        // the eyes, and it stays inside the base of the side glass (wider, its ends showed through the doors' tops).
+        var longScreen = !float.IsNaN(style.ScreenFrom);
+        var stretch = longScreen ? MathF.Max(0f, style.EyeZ - 0.50f - style.CowlZ - 0.237f) : 0f;
+        var dashHalf = longScreen ? MathF.Min(0.88f, style.Sample(style.EdgeW, style.CowlZ) - 0.03f) : 0.88f;
+        var swept = dashProfile.Select((p, i) => new Vector2(style.CowlZ + p.X + (i >= 2 ? stretch : 0f), cowlH + p.Y)).ToArray();
+        body.AddChild(new MeshInstance3D { Mesh = SweepAcross(swept, dashHalf), MaterialOverride = dash, Name = "Dashboard" });
+        if (!float.IsNaN(style.IntakeFrom))
+        {
+            // Below the door trim the intake's recess is not lined: a leather panel inside it keeps the road from
+            // showing through the lower door. Outside, it sits behind the recess's dark wall.
+            var from = MathF.Max(style.IntakeFrom, style.CowlZ);
+            var to = MathF.Min(style.IntakeTo, style.RearBulkheadZ);
+            var x = style.Sample(style.HalfWidth, from) - style.IntakeDepth - 0.05f;
+            foreach (var side in new[] { -1f, 1f }) Box(body, new Vector3(0.02f, 0.36f, to - from), new Vector3(side * x, 0.54f, (from + to) * 0.5f), leather);
+        }
 
         // Binnacle: its face 0.62 m ahead of the eyes and 17 degrees below them, turned to face them, in a pod
         // under a curved visor whose top stays 9 degrees below the eyes, under the line of sight to the road.
@@ -1039,13 +1209,16 @@ internal sealed partial class CarView : Node3D
         var caliperMat = new StandardMaterial3D { AlbedoColor = new Color(0.75f, 0.08f, 0.05f), Roughness = 0.5f };
         var alloy = new StandardMaterial3D { AlbedoColor = new Color(0.76f, 0.76f, 0.78f), Metallic = 0.9f, Roughness = 0.28f };
         var dish = new StandardMaterial3D { AlbedoColor = new Color(0.16f, 0.16f, 0.17f), Metallic = 0.6f, Roughness = 0.5f };
-        var tyreMesh = Tyre(spec.WheelRadius, rubber);
+        var style = _style;
+        var tyres = new[] { Tyre(spec.WheelRadius, style.FrontTyreWidth * 0.5f, style.RimRadius, rubber), Tyre(spec.WheelRadius, style.RearTyreWidth * 0.5f, style.RimRadius, rubber) };
+        var front = HalfTrack(spec, true);
+        var rear = HalfTrack(spec, false);
         var hubs = new[]
         {
-            new SN.Vector3(-spec.HalfTrack, spec.HubHeight, spec.FrontAxle),
-            new SN.Vector3(spec.HalfTrack, spec.HubHeight, spec.FrontAxle),
-            new SN.Vector3(-spec.HalfTrack, spec.HubHeight, -spec.RearAxle),
-            new SN.Vector3(spec.HalfTrack, spec.HubHeight, -spec.RearAxle),
+            new SN.Vector3(-front, spec.HubHeight, spec.FrontAxle),
+            new SN.Vector3(front, spec.HubHeight, spec.FrontAxle),
+            new SN.Vector3(-rear, spec.HubHeight, -spec.RearAxle),
+            new SN.Vector3(rear, spec.HubHeight, -spec.RearAxle),
         };
         for (var i = 0; i < 4; i++)
         {
@@ -1054,7 +1227,11 @@ internal sealed partial class CarView : Node3D
             _outsideOnly.Add(pivot);
             var spinner = new Node3D { Name = "Spin" };
             pivot.AddChild(spinner);
-            spinner.AddChild(new MeshInstance3D { Mesh = tyreMesh });
+            var isFront = i < 2;
+            spinner.AddChild(new MeshInstance3D { Mesh = tyres[isFront ? 0 : 1] });
+            // The rim sits inside the tyre's sidewall: its faces move in with a narrower tyre.
+            var inset = (isFront ? style.FrontTyreWidth : style.RearTyreWidth) / 0.27f;
+            var rim = style.RimRadius;
 
             // Five-spoke star rim on the outer face of the wheel.
             var side = MathF.Sign(hubs[i].X);
@@ -1072,20 +1249,20 @@ internal sealed partial class CarView : Node3D
             });
             spinner.AddChild(new MeshInstance3D
             {
-                Mesh = new CylinderMesh { TopRadius = 0.215f, BottomRadius = 0.215f, Height = 0.02f, Material = dish, RadialSegments = 24 },
-                Position = new Vector3(side * 0.07f, 0f, 0f),
+                Mesh = new CylinderMesh { TopRadius = rim - 0.013f, BottomRadius = rim - 0.013f, Height = 0.02f, Material = dish, RadialSegments = 24 },
+                Position = new Vector3(side * 0.07f * inset, 0f, 0f),
                 RotationDegrees = new Vector3(0f, 0f, 90f),
             });
             spinner.AddChild(new MeshInstance3D
             {
-                Mesh = new TorusMesh { InnerRadius = 0.205f, OuterRadius = 0.228f, Material = alloy, RingSegments = 32, Rings = 8 },
-                Position = new Vector3(side * 0.12f, 0f, 0f),
+                Mesh = new TorusMesh { InnerRadius = rim - 0.023f, OuterRadius = rim, Material = alloy, RingSegments = 32, Rings = 8 },
+                Position = new Vector3(side * 0.12f * inset, 0f, 0f),
                 RotationDegrees = new Vector3(0f, 0f, 90f),
             });
             spinner.AddChild(new MeshInstance3D
             {
                 Mesh = new CylinderMesh { TopRadius = 0.055f, BottomRadius = 0.055f, Height = 0.04f, Material = alloy, RadialSegments = 16 },
-                Position = new Vector3(side * 0.115f, 0f, 0f),
+                Position = new Vector3(side * 0.115f * inset, 0f, 0f),
                 RotationDegrees = new Vector3(0f, 0f, 90f),
             });
             for (var s = 0; s < 5; s++)
@@ -1093,8 +1270,8 @@ internal sealed partial class CarView : Node3D
                 var angle = s * Mathf.Tau / 5f;
                 spinner.AddChild(new MeshInstance3D
                 {
-                    Mesh = new BoxMesh { Size = new Vector3(0.025f, 0.20f, 0.045f), Material = alloy },
-                    Position = new Vector3(side * 0.11f, 0.11f * Mathf.Cos(angle), 0.11f * Mathf.Sin(angle)),
+                    Mesh = new BoxMesh { Size = new Vector3(0.025f, rim - 0.028f, 0.045f), Material = alloy },
+                    Position = new Vector3(side * 0.11f * inset, ((rim - 0.028f) * 0.5f + 0.01f) * Mathf.Cos(angle), ((rim - 0.028f) * 0.5f + 0.01f) * Mathf.Sin(angle)),
                     Rotation = new Vector3(angle, 0f, 0f),
                 });
             }
@@ -1103,13 +1280,15 @@ internal sealed partial class CarView : Node3D
         }
     }
 
-    /// <summary>Tyre as a lathe around the x axis: flat tread, rounded shoulders, open bore for the rim.</summary>
-    private static ArrayMesh Tyre(float radius, Material material)
+    /// <summary>Tyre as a lathe around the x axis: flat tread, rounded shoulders, open bore for a rim of radius <paramref name="rim"/>.</summary>
+    private static ArrayMesh Tyre(float radius, float halfWidth, float rim, Material material)
     {
+        var bead = rim - 0.003f;
+        var sidewall = rim + 0.072f;
         var profile = new Vector2[]
         {
-            new(0.225f, -0.13f), new(0.30f, -0.135f), new(radius - 0.006f, -0.11f), new(radius, 0f),
-            new(radius - 0.006f, 0.11f), new(0.30f, 0.135f), new(0.225f, 0.13f),
+            new(bead, -halfWidth + 0.005f), new(sidewall, -halfWidth), new(radius - 0.006f, -halfWidth + 0.025f), new(radius, 0f),
+            new(radius - 0.006f, halfWidth - 0.025f), new(sidewall, halfWidth), new(bead, halfWidth - 0.005f),
         };
         const int segments = 44;
         var st = new MeshBuilder();
@@ -1139,6 +1318,13 @@ internal sealed partial class CarView : Node3D
 
         static Vector3 Revolve(Vector2 rx, float angle) => new(rx.Y, rx.X * Mathf.Cos(angle), rx.X * Mathf.Sin(angle));
         static Vector3 RevolveNormal(Vector2 n, float angle) => new Vector3(n.Y, n.X * Mathf.Cos(angle), n.X * Mathf.Sin(angle)).Normalized();
+    }
+
+    /// <summary>Half track of an axle as drawn: the style's (the period car's front and rear differ), or the simulation's.</summary>
+    private float HalfTrack(VehicleSpec spec, bool front)
+    {
+        var drawn = front ? _style.FrontTrack : _style.RearTrack;
+        return float.IsNaN(drawn) ? spec.HalfTrack : drawn;
     }
 
     public void SetPose(SN.Vector3 position, SN.Quaternion orientation) => Transform = Convert.ToGodot(position, orientation);

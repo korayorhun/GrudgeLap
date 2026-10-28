@@ -18,9 +18,10 @@ tuning change that breaks one shows up before anyone sits in the car. Values are
 | Full lock at 95 mph | rear breaks away | 28° rear slip | `Full_lock_at_high_speed_spins_the_car` |
 | Grass | like mud | 5x the coasting loss of asphalt | `Grass_is_like_mud` |
 | Braking in gear over a jump | clutch slips, engine keeps running | min 2390 rpm over bridge and overpass | `Engine_keeps_running_over_jumps_in_top_gear` |
-| Rules: scripted lap, stunt route (3.0 km), empty road | checkpoint, lap bonus, no crash | 104 s, 0 crashes | `Scripted_driver_completes_a_lap` |
-| Rules: scripted lap, speed route (3.2 km), empty road | same | 104 s, 0 crashes | `Scripted_driver_completes_a_lap` |
-| Scripted lap, speed route, 8 drones both ways | lap completed, at most one crash | 0 crashes, follows and overtakes | `Scripted_driver_threads_the_traffic_on_the_speed_route` |
+| Rules: scripted lap, stunt route (2.5 km), empty road | checkpoint, lap bonus, no crash | 92 s, 0 crashes | `Scripted_driver_completes_a_lap` |
+| Rules: scripted lap, speed route (3.4 km), empty road | same | 105 s, 0 crashes | `Scripted_driver_completes_a_lap` |
+| Scripted laps at 20, 30, 90 and 144 fps (one driver call per frame, as in the game) | both routes, no crash, no run-off, no lap counted at the fork | 90 s and 102 s laps at every rate | `Scripted_driver_completes_a_lap_at_any_frame_rate` |
+| Scripted lap, speed route, 8 drones both ways | lap completed, at most one crash | 108 s, 0 crashes, follows and overtakes | `Scripted_driver_threads_the_traffic_on_the_speed_route` |
 | Drones | keep their lane, never enter the stunt route | 300 s, every step | `Drones_keep_their_lane_and_never_enter_the_stunt_route` |
 | Ram a drone | crash → replay → return point clear of traffic | yes | `Hitting_a_drone_crashes_and_replays` |
 | Hit a barn | crash → replay → key turn at last return point | yes | `Driving_into_a_barn_crashes_and_returns_to_the_last_point` |

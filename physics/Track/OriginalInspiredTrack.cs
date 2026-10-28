@@ -3,206 +3,162 @@ using System.Numerics;
 namespace GrudgeLap.Physics.Track;
 
 /// <summary>
-/// The default circuit, laid out in the spirit of the 1989 course: a start straight under a green gantry that
-/// bridges over the speed route's return leg, a long hill with the fork on its crest, a speed route that
-/// swings round the east side past a barn and its cows, crosses a railway, dives back diagonally under the
-/// start through two dips and circles the farm to the north-west, a stunt route that drops off the hill past
-/// a barn to the open drawbridge, bridges over the speed route, passes the shop with its pumps, runs the loop
-/// on its bottom straight with the checkpoint gate just after it, swings through the banked 180 and climbs
-/// back north to the merge, and a hidden skid pad round a column in the open ground off the speed route.
-/// Farm fields, houses, the shop, the camouflaged hut, flowers, yellow signs that tip over, sawhorse barriers
-/// and the rail-less train are the decor of the original, met in its order; geometry is ours, only the rhythm
-/// is borrowed.
+/// The default circuit, laid out on the plan of the 1989 course (see remarks): a start straight that bridges the
+/// speed route's diagonal just before the line, then climbs at once to the fork on the crest of a bare hill. The
+/// speed route carries straight on over the crest, sweeps round the east side in one long right-hander, passes
+/// under the open drawbridge, runs the diagonal back over a crest and through the cutting under the start, meets
+/// the train and circles the farm to the north-west, counter-clockwise, with the checkpoint on its top. The stunt
+/// route drops off the hill to the right past a barn, over a hump to the drawbridge, which jumps the speed route,
+/// bends right past the gas station, runs the loop on its westbound straight and the checkpoint nine slabs later,
+/// dives through the cutting under its own return leg into the banked 180 and climbs back north over that cutting
+/// to the merge. A hidden skid pad lies off the start straight to the left.
 /// </summary>
+/// <remarks>
+/// The plan was traced from the "Original Track" map of the 1990 Hard Drivin' II track editor (stitched by the
+/// weltenschule analysis; 48 map pixels to the 88 ft slab) and checked against an attract-mode video of the
+/// arcade: the order of the features, the sides of the farm buildings and the three crossings (the start straight
+/// over the speed diagonal, the drawbridge over the speed route, the stunt route over itself) are the original's;
+/// the segments are straights and arcs fitted to the traced centreline. The speed lap comes to about 127 slabs, the
+/// stunt lap to about 91. World frame: x east, z north, the start line at the origin.
+/// </remarks>
 public static class OriginalInspiredTrack
 {
-    /// <summary>Where both routes merge, heading 60; the road then bends to east and runs to the start line.</summary>
-    private static readonly Vector3 JoinPoint = new(-60f, 0f, -30f);
+    /// <summary>Where both routes merge, heading east; the start straight runs on from here.</summary>
+    private static readonly Vector3 JoinPoint = new(-175f, 0f, 0f);
     public const float PadRadius = 48f;
-    /// <summary>Distance along the speed route where the railway crosses: on the diagonal, before the first dip.</summary>
-    public const float CrossingDistance = 918f + 70f;
+    /// <summary>The skid pad: off the start straight to the left, as in the original (a hard left at the line).</summary>
+    private static readonly Vector3 PadCentre = new(40f, 0f, 110f);
+    /// <summary>Radius of the stunt route's right-hander off the fork hill.</summary>
+    private const float HillCurveRadius = 65f;
+    /// <summary>Length of that curve (a quarter turn), over which both branches drop the 10 m off the crest.</summary>
+    private const float HillDescentLength = HillCurveRadius * MathF.PI / 2f;
+    /// <summary>Distance along the speed route where the railway crosses: on the diagonal, after the cutting.</summary>
+    public const float CrossingDistance = 1640f;
 
     public static TrackGeometry Build()
     {
-        // ---- Final: a short stub at the merge so both branches end at the same frame -------------------------
-        var final = new TrackBuilder(PathKind.Final, JoinPoint, 60f)
+        // ---- Final: from the merge over the speed route's diagonal to just behind the line ---------------------
+        var final = new TrackBuilder(PathKind.Final, JoinPoint, 90f)
             .Mark(MarkerKind.ReturnPoint, "join")
-            .Straight(10f);
+            .Straight(111f)
+            .Overpass(50f, 1.0f)                  // the speed route's cutting passes under it
+            .Straight(4f);
 
-        // ---- Common: bend to east, start line, the bridge over the speed route's return leg, the hill ---------
+        // ---- Common: the line, then the climb to the fork on the crest ----------------------------------------
+        // The car starts 10 m behind the line: its first crossing opens the lap.
         var common = TrackBuilder.ContinueFrom(final.Path, PathKind.Common)
-            .Curve(30f, 110f)
+            .Straight(10f)
             .Mark(MarkerKind.StartFinish, "START")
             .Mark(MarkerKind.ReturnPoint, "start")
-            .Straight(45f)
-            .Overpass(140f, 4.5f)
-            .Straight(105f)
-            .Mark(MarkerKind.Sign, "HILL")
-            .Straight(161f, 10f)
+            .Straight(74f)
+            .Straight(154f, 10f)
             .Mark(MarkerKind.Sign, "SPEED/STUNT");
 
-        // ---- Speed route: down the hill, round the east side, the crossing and the diagonal with its dips under the start, the big loop ----
+        // ---- Speed route --------------------------------------------------------------------------------------
+        // Off the crest the branches share their first metres of road, so they drop at the same rate until they
+        // have parted: the speed road takes its 10 m over the length of the stunt route's curve off the hill and
+        // runs on flat. With a gentler descent of its own it stood up to a metre above the stunt road where the two
+        // overlap, and a car taking the stunt route dropped off its edge 25 m past the fork.
         var speed = TrackBuilder.ContinueFrom(common.Path, PathKind.Speed)
-            .Straight(161f, -10f)
+            .Straight(HillDescentLength, -10f)
+            .Straight(161f - HillDescentLength)
             .Mark(MarkerKind.ReturnPoint, "speed-1")
-            .Curve(45f, 130f)
-            .Straight(120f)
-            .Curve(45f, 130f)
-            .Mark(MarkerKind.Sign, "90")
-            .Straight(130f)
-            .Mark(MarkerKind.Sign, "40")
-            .Mark(MarkerKind.Sign, "->")
-            .Curve(90f, 85f)
+            .Straight(20f)
+            .Mark(MarkerKind.Sign, "90>")
+            .Curve(85f, 205f)
+            .Curve(65f, 205f)
+            .Curve(41f, 155f)
             .Mark(MarkerKind.ReturnPoint, "speed-2")
-            .Straight(100f)
-            .Curve(40f, 100f)
-            .Mark(MarkerKind.Sign, "RR")
-            .Straight(300f)                       // the diagonal: 856 m; the railway crosses it, then it passes under the start straight's bridge
+            .Curve(10f, 600f)
+            .Curve(31f, 290f)                     // under the open drawbridge
+            .Straight(150f)
+            .Hill(140f, 3f)
+            .Straight(10f)
             .Mark(MarkerKind.Sign, "DIP")
-            .Hill(110f, -3f)
-            .Straight(130f)
-            .Mark(MarkerKind.Sign, "DIP")
-            .Hill(100f, -2.5f)
-            .Straight(216f)                       // then under the stunt route's bridge near its end
-            .Mark(MarkerKind.Sign, "60")
-            .Curve(-40.2f, 110f)
+            .Hill(110f, -4.5f)                    // the cutting under the start straight
+            .Straight(25f)
+            .Curve(5f, 700f)
+            .Curve(18f, 400f)
+            .Mark(MarkerKind.Sign, "90<")
+            .Curve(-51f, 150f)
             .Mark(MarkerKind.Checkpoint, "speed")
             .Mark(MarkerKind.ReturnPoint, "speed-3")
-            .Straight(150f)
-            .Mark(MarkerKind.Sign, "40")
-            .Mark(MarkerKind.Sign, "<-")
-            .Curve(-90f, 95f)
-            .Straight(100f)
-            .Mark(MarkerKind.Sign, "40")
-            .Mark(MarkerKind.Sign, "<-")
-            .Curve(-90f, 95f)
+            .Straight(48f)
+            .Curve(-30f, 165f)
+            .Curve(-67f, 270f)
+            .Mark(MarkerKind.Sign, "90<")
+            .Curve(-35f, 270f)
+            .Curve(-51f, 151f)
             .Mark(MarkerKind.ReturnPoint, "speed-4")
-            .Straight(100f)
-            .Curve(-50f, 120f);
+            .Curve(-45f, 268f);
 
-        // ---- Stunt route: off the hill to the drawbridge, over the speed route, loop, banked 180, back north ----
+        // ---- Stunt route --------------------------------------------------------------------------------------
         var stunt = TrackBuilder.ContinueFrom(common.Path, PathKind.Stunt)
-            .Curve(90f, 100f, 0f, -10f)
+            .Curve(90f, HillCurveRadius, 0f, -10f)   // off the hill to the right
             .Mark(MarkerKind.ReturnPoint, "stunt-1")
-            .Mark(MarkerKind.Sign, "60")
-            .Straight(90f)
-            .Drawbridge(30f, 7f, 18f, 34f)
-            .Mark(MarkerKind.ReturnPoint, "stunt-2")
-            .Overpass(140f, 4.5f)                 // over the speed route's diagonal
+            .Hill(60f, 3f)                        // the hump at its foot
             .Straight(10f)
+            .Curve(20f, 300f)
             .Mark(MarkerKind.Sign, "60")
-            .Curve(45f, 80f)
-            .Straight(90f)
-            .Curve(45f, 80f)
+            .Straight(67f)
+            .Drawbridge(30f, 7f, 18f, 34f)        // over the speed route
+            .Mark(MarkerKind.ReturnPoint, "stunt-2")
+            .Straight(58f)
+            .Curve(95f, 83f)                      // round the gas station
+            .Straight(40f)
             .Mark(MarkerKind.ReturnPoint, "stunt-3")
-            .Straight(260f)                       // past the shop with its pumps, the loop ahead
             .Mark(MarkerKind.Sign, "60")
+            .Straight(25f)
             .Loop(15f, 11f)
             .Mark(MarkerKind.ReturnPoint, "stunt-4")
+            .Hill(60f, 2f)
             .Straight(60f)
-            .Mark(MarkerKind.Checkpoint, "stunt")   // after the loop, as the original's checkpoint gate came
-            .Straight(60f)
-            .Mark(MarkerKind.Sign, "DIP")
-            .Hill(100f, -2.5f)
-            .Straight(150f)
-            .Mark(MarkerKind.Sign, "90")
-            .Curve(-180f, 75f, 32f)
-            .Mark(MarkerKind.ReturnPoint, "stunt-5")
+            .Mark(MarkerKind.Sign, "90<")
+            .Curve(-35f, 150f)
             .Straight(40f)
-            .Curve(-90f, 80f)
-            .Overpass(140f, 4.5f)                 // over its own bottom straight
-            .Straight(270f)
-            .Curve(45f, 140f);
+            .Mark(MarkerKind.Checkpoint, "stunt")
+            .Straight(40f)
+            .Mark(MarkerKind.Sign, "DIP")
+            .Hill(110f, -4.5f)                    // the cutting under the return leg
+            .Curve(-25f, 150f)
+            .Straight(40f)
+            .Mark(MarkerKind.Sign, "90<")
+            .Curve(-180f, 62f, 32f)
+            .Mark(MarkerKind.ReturnPoint, "stunt-5")
+            .Curve(-50f, 145f)
+            .Straight(6.5f)
+            .Overpass(90f, 1.0f)                  // over the bottom straight's cutting
+            .Straight(120f)
+            .Curve(35f, 250f);
 
-        // Both approaches arrive heading close to the merge's own 60 degrees, so the connecting splines stay gentle.
         speed.SplineTo(final.Path.First).JoinTo(final.Path);
         stunt.SplineTo(final.Path.First).JoinTo(final.Path);
 
-        // The ground and the props are laid out on a preliminary circuit; the skid pad then needs a spot that
-        // is clear of all of them, and the final circuit carries the pad in its terrain.
-        var draft = new TrackGeometry(common.Path, speed.Path, stunt.Path, final.Path) { Name = "Farm Circuit" };
-        PlaceProps(draft);
-        var pad = FindPadSpot(draft);
-        var track = new TrackGeometry(common.Path, speed.Path, stunt.Path, final.Path, [pad]) { Name = "Farm Circuit" };
-        foreach (var prop in draft.Props)
-        {
-            track.Props.Add(prop with { Position = prop.Position with { Y = track.Terrain.Height(prop.Position.X, prop.Position.Z) } });
-        }
-        // The column the pad is driven round, and a plain road sign pointing the curious off the road toward it.
-        track.Props.Add(new TrackProp(PropKind.Tower, pad.Centre, 0f, new Vector3(3f, 14f, 3f), "pad-column"));
-        var hint = speed.Path.FrameAt(PadHintDistance(draft, pad));
-        var hintSide = MathF.Sign(Vector3.Dot(pad.Centre - hint.Origin, hint.Lateral));
-        var hintPos = hint.Origin + hint.Lateral * (hintSide * 8.5f);
-        hintPos.Y = track.Terrain.Height(hintPos.X, hintPos.Z);
-        track.Props.Add(new TrackProp(PropKind.Sign, hintPos, MathF.Atan2(hint.Tangent.X, hint.Tangent.Z) * MathUtil.Rad2Deg, new Vector3(1.2f, 2.6f, 0.2f), hintSide > 0 ? "PAD >" : "< PAD"));
+        var pad = new SkidPad(PadCentre, PadRadius);
+        var track = new TrackGeometry(common.Path, speed.Path, stunt.Path, final.Path, [pad], rollingGround: 0.5f) { Name = "Farm Circuit" };
+        PlaceProps(track);
+        track.Props.Add(new TrackProp(PropKind.Tower, pad.Centre with { Y = track.Terrain.Height(pad.Centre.X, pad.Centre.Z) }, 0f, new Vector3(3f, 14f, 3f), "pad-column"));
 
-        // The train: crosses the diagonal at right angles, 17 m/s, out of sight for a while between runs.
         var crossing = speed.Path.FrameAt(CrossingDistance);
         var crossingPoint = crossing.Origin with { Y = track.Terrain.Height(crossing.Origin.X, crossing.Origin.Z) };
-        // Visible for 160 m either side of the road; parked out of sight for half a minute between runs. The
-        // phase puts the first run at 32 s, so the scripted driver (and the lap tests) meet an empty crossing.
-        track.Train = new Train(crossingPoint, crossing.Lateral, halfLength: 160f, speed: 17f, cars: 4, pause: 30f, phase: 33f);
+        // A long passenger train (six cars), 17 m/s, out of sight for half a minute between runs.
+        track.Train = new Train(crossingPoint, crossing.Lateral, halfLength: 160f, speed: 17f, cars: 6, pause: 30f, phase: 33f);
         return track;
     }
 
     /// <summary>
-    /// Picks the skid pad's spot: beside the speed route, far enough from every road and every solid prop
-    /// that the pad and its approach stay clear, preferring the roomiest candidate.
+    /// The decor, where the original has it: positions are distances along the routes (lateral metres to the
+    /// driver's right, negative to the left), read off the traced plan and the attract video.
     /// </summary>
-    private static SkidPad FindPadSpot(TrackGeometry draft)
-    {
-        var speed = draft.Speed;
-        var best = Vector3.Zero;
-        var bestClearance = 0f;
-        for (var s = speed.Length * 0.05f; s < speed.Length * 0.55f; s += 40f)
-        {
-            var f = speed.FrameAt(s);
-            var flatLateral = MathUtil.SafeNormalize(new Vector3(f.Lateral.X, 0f, f.Lateral.Z), Vector3.UnitX);
-            foreach (var lateral in new[] { -100f, -125f, -150f, 100f, 125f, 150f })
-            {
-                var candidate = f.Origin + flatLateral * lateral;
-                var clearance = draft.ClearanceFromRoads(candidate);
-                foreach (var prop in draft.Props)
-                {
-                    if (!prop.Solid && prop.Kind != PropKind.Field) continue;
-                    var dx = prop.Position.X - candidate.X;
-                    var dz = prop.Position.Z - candidate.Z;
-                    clearance = MathF.Min(clearance, MathF.Sqrt(dx * dx + dz * dz) - MathF.Max(prop.Size.X, prop.Size.Z) * 0.5f);
-                }
-                if (clearance > bestClearance)
-                {
-                    bestClearance = clearance;
-                    best = candidate;
-                }
-            }
-        }
-        best.Y = draft.Terrain.Base(best.X, best.Z);
-        return new SkidPad(best, PadRadius);
-    }
-
-    /// <summary>Distance along the speed route of the frame nearest to the pad (where the hint sign stands).</summary>
-    private static float PadHintDistance(TrackGeometry draft, SkidPad pad)
-    {
-        var best = 0f;
-        var bestDistance = float.MaxValue;
-        foreach (var f in draft.Speed.Frames)
-        {
-            var dx = f.Origin.X - pad.Centre.X;
-            var dz = f.Origin.Z - pad.Centre.Z;
-            var d = dx * dx + dz * dz;
-            if (d < bestDistance)
-            {
-                bestDistance = d;
-                best = f.Distance;
-            }
-        }
-        return best;
-    }
-
     private static void PlaceProps(TrackGeometry track)
     {
         var props = track.Props;
         var terrain = track.Terrain;
+        var speed = track.Speed;
+        var stunt = track.Stunt;
+        var sign = new Vector3(1.2f, 2.6f, 0.2f);
+        var cow = new Vector3(2.2f, 1.5f, 0.8f);
+        var barrier = new Vector3(2.2f, 1.0f, 0.5f);
 
         void Beside(TrackPath path, float distance, float lateral, PropKind kind, Vector3 size, string label = "", float yawOffset = 0f)
         {
@@ -215,6 +171,15 @@ public static class OriginalInspiredTrack
 
         void At(float x, float z, float yawDeg, PropKind kind, Vector3 size, string label = "")
             => props.Add(new TrackProp(kind, new Vector3(x, terrain.Height(x, z), z), yawDeg, size, label));
+
+        // A roadside tree, unless that spot is near another road (where the routes cross or run close).
+        void Tree(TrackPath path, float distance, float lateral, Vector3 size, string label)
+        {
+            var f = path.FrameAt(distance);
+            var pos = f.Origin + f.Lateral * lateral;
+            if (track.ClearanceFromRoads(pos) < 16f) return;
+            At(pos.X, pos.Z, 0f, PropKind.Tree, size, label);
+        }
 
         // A field beside the road: slid outward and shrunk until the whole rectangle keeps clear of every road.
         void Field(TrackPath path, float distance, float lateral, float width, float depth, string label)
@@ -245,27 +210,15 @@ public static class OriginalInspiredTrack
             }
         }
 
-        // Signs come straight from the markers so they stay in sync with the layout; arrows and RR stand on both sides.
+        // Signs, gantries and the checkpoint banners come from the markers, so they move with the layout.
         foreach (var path in track.Paths)
         {
             foreach (var m in path.Markers)
             {
                 if (m.Kind == MarkerKind.Sign)
                 {
-                    if (m.Label == "SPEED/STUNT")
-                    {
-                        Beside(path, m.Distance, 0f, PropKind.Signpost, new Vector3(1.2f, 2.6f, 0.2f), m.Label);
-                    }
-                    else if (m.Label == "RR")
-                    {
-                        Beside(path, m.Distance, 8.5f, PropKind.Crossbuck, new Vector3(1.6f, 3.2f, 0.2f), m.Label);
-                        Beside(path, m.Distance, -8.5f, PropKind.Crossbuck, new Vector3(1.6f, 3.2f, 0.2f), m.Label);
-                    }
-                    else
-                    {
-                        Beside(path, m.Distance, 8.5f, PropKind.Sign, new Vector3(1.2f, 2.6f, 0.2f), m.Label);
-                        if (m.Label is "->" or "<-") Beside(path, m.Distance, -8.5f, PropKind.Sign, new Vector3(1.2f, 2.6f, 0.2f), m.Label);
-                    }
+                    if (m.Label == "SPEED/STUNT") Beside(path, m.Distance, 0f, PropKind.Signpost, sign, m.Label);
+                    else Beside(path, m.Distance, 8.5f, PropKind.Sign, sign, m.Label);
                 }
                 else if (m.Kind == MarkerKind.Checkpoint)
                 {
@@ -278,72 +231,82 @@ public static class OriginalInspiredTrack
             }
         }
 
-        var speed = track.Speed;
-        var stunt = track.Stunt;
-        var common = track.Common;
-
-        // ---- East side (speed route): the farm after the first curves ----------------------------------------
-        Beside(speed, speed.Length * 0.12f, 45f, PropKind.House, new Vector3(10f, 7f, 9f), "orange", -30f);
-        Beside(speed, speed.Length * 0.22f, 48f, PropKind.Hut, new Vector3(5f, 3f, 4f), "THE HUT", 180f);
-        Beside(speed, speed.Length * 0.30f, 50f, PropKind.Barn, new Vector3(16f, 8f, 11f), "33");
-        Beside(speed, speed.Length * 0.30f + 20f, 44f, PropKind.Cow, new Vector3(2.2f, 1.5f, 0.8f), "", 70f);
-        Beside(speed, speed.Length * 0.30f + 12f, 62f, PropKind.Cow, new Vector3(2.2f, 1.5f, 0.8f), "", -20f);
-        Field(speed, speed.Length * 0.27f, 120f, 110f, 90f, "plough");
-        Field(speed, speed.Length * 0.165f, 118f, 70f, 60f, "crop");
-        Beside(speed, speed.Length * 0.08f, -60f, PropKind.Flowers, new Vector3(8f, 0.5f, 8f));
-
-        // ---- The diagonal: the level crossing, flowers -------------------------------------------------------
-        Beside(speed, speed.Length * 0.41f, 40f, PropKind.Flowers, new Vector3(8f, 0.5f, 8f));
-        Beside(speed, speed.Length * 0.52f, 36f, PropKind.Flowers, new Vector3(7f, 0.5f, 7f));
-
-        // ---- North-west loop: barn, cows, houses, fields ------------------------------------------------------
-        Beside(speed, speed.Length * 0.70f, -45f, PropKind.Barn, new Vector3(18f, 9f, 12f), "33");
-        Beside(speed, speed.Length * 0.70f + 22f, -40f, PropKind.Cow, new Vector3(2.2f, 1.5f, 0.8f));
-        Beside(speed, speed.Length * 0.70f + 34f, -52f, PropKind.Cow, new Vector3(2.2f, 1.5f, 0.8f), "", 40f);
-        Beside(speed, speed.Length * 0.76f, 40f, PropKind.House, new Vector3(11f, 7f, 9f), "white", -20f);
-        Beside(speed, speed.Length * 0.86f, 42f, PropKind.House, new Vector3(10f, 7f, 9f), "orange", 15f);
-        Beside(speed, speed.Length * 0.80f, -40f, PropKind.Flowers, new Vector3(8f, 0.5f, 8f));
-        Field(speed, speed.Length * 0.74f, -130f, 120f, 90f, "hay");
-        Field(speed, speed.Length * 0.66f, -110f, 90f, 70f, "crop");
-
-        // ---- Stunt side, in the original's order: the barn before the drawbridge, the shop with its pumps between the
-        // bridge and the loop, a house past the banked curve, a cow by the bottom straight, barriers at the fork -------
-        Beside(stunt, 120f, -48f, PropKind.Barn, new Vector3(16f, 8f, 11f), "33", 20f);
-        Beside(stunt, 138f, -40f, PropKind.Cow, new Vector3(2.2f, 1.5f, 0.8f), "", -60f);
-        Beside(stunt, 112f, -62f, PropKind.Cow, new Vector3(2.2f, 1.5f, 0.8f), "", 30f);
-        Beside(stunt, stunt.Length * 0.34f, 46f, PropKind.Shop, new Vector3(14f, 5f, 10f), "GAS", -90f);
-        Beside(stunt, stunt.Length * 0.34f + 9f, 34f, PropKind.Pump, new Vector3(1.0f, 1.8f, 0.6f), "", -90f);
-        Beside(stunt, stunt.Length * 0.34f + 4f, 34f, PropKind.Pump, new Vector3(1.0f, 1.8f, 0.6f), "", -90f);
-        Beside(stunt, stunt.Length * 0.52f, 40f, PropKind.House, new Vector3(10f, 7f, 9f), "white", 25f);
-        Beside(stunt, stunt.Length * 0.72f, -36f, PropKind.Cow, new Vector3(2.2f, 1.5f, 0.8f));
-        Field(stunt, stunt.Length * 0.44f, 85f, 130f, 80f, "plough");
-        Field(stunt, stunt.Length * 0.62f, 90f, 100f, 70f, "crop");
-        foreach (var d in new[] { 40f, 52f, 64f })
+        // ---- Stunt route ---------------------------------------------------------------------------------------
+        // Chevrons on the outside of the curve off the hill, from where it has pulled clear of the speed road, and
+        // the barn with its cows at the road's edge on the left at its foot (the original's car could be put into it).
+        foreach (var d in new[] { 52f, 66f, 80f, 94f })
         {
-            Beside(stunt, d, 9.5f, PropKind.Barrier, new Vector3(2.2f, 1.0f, 0.5f));
+            Beside(stunt, d, -8.5f, PropKind.Sign, sign, "->");
         }
-
-        // Tree lines: outside the speed route and in the open ground between the branches.
-        // Stops short of the merge, where the stunt route runs alongside.
-        for (var i = 0; i < 23; i++)
+        Beside(stunt, 112f, -20f, PropKind.Barn, new Vector3(16f, 8f, 11f), "33", 90f);
+        Beside(stunt, 126f, -13f, PropKind.Cow, cow, "", 60f);
+        Beside(stunt, 98f, -15f, PropKind.Cow, cow, "", -30f);
+        // Sawhorses on both sides of the drawbridge's approach, and before the loop and on its exit hump: kept 20 m
+        // clear of the loop itself, whose descending half sits behind its entry and beside its exit.
+        foreach (var d in new[] { 300f, 316f, 332f, 642f, 654f, 812f, 826f, 840f })
         {
-            var d = speed.Length * (0.03f + 0.037f * i);
+            Beside(stunt, d, 8.6f, PropKind.Barrier, barrier);
+            Beside(stunt, d, -8.6f, PropKind.Barrier, barrier);
+        }
+        Beside(stunt, 812f, 9f, PropKind.Sign, sign, "60");
+        // The gas station inside the bend after the bridge, its pumps towards the road; the hut across the road.
+        Beside(stunt, 586f, 32f, PropKind.Shop, new Vector3(14f, 5f, 10f), "GAS", -90f);
+        Beside(stunt, 580f, 21f, PropKind.Pump, new Vector3(1.0f, 1.8f, 0.6f), "", -90f);
+        Beside(stunt, 592f, 21f, PropKind.Pump, new Vector3(1.0f, 1.8f, 0.6f), "", -90f);
+        Beside(stunt, 548f, -26f, PropKind.Hut, new Vector3(5f, 3f, 4f), "THE HUT", 180f);
+        Beside(stunt, 620f, -30f, PropKind.Flowers, new Vector3(8f, 0.5f, 8f));
+        // A white house on the open ground west of the return leg, a cow by the bottom straight.
+        Beside(stunt, 1860f, -42f, PropKind.House, new Vector3(11f, 7f, 9f), "white", 25f);
+        Beside(stunt, 960f, 30f, PropKind.Cow, cow, "", 40f);
+        Beside(stunt, 1760f, 28f, PropKind.Flowers, new Vector3(7f, 0.5f, 7f));
+
+        // ---- Speed route ---------------------------------------------------------------------------------------
+        // The farm on the left, outside the first corner of the east sweep: the orange house, the barn and its cows.
+        Beside(speed, 262f, -38f, PropKind.House, new Vector3(10f, 7f, 9f), "orange", -30f);
+        Beside(speed, 318f, -42f, PropKind.Barn, new Vector3(16f, 8f, 11f), "33", 10f);
+        Beside(speed, 340f, -32f, PropKind.Cow, cow, "", 70f);
+        Beside(speed, 330f, -55f, PropKind.Cow, cow, "", -20f);
+        // Crossbucks either side of the level crossing on the diagonal.
+        Beside(speed, CrossingDistance - 40f, 8.5f, PropKind.Crossbuck, new Vector3(1.6f, 3.2f, 0.2f), "RR");
+        Beside(speed, CrossingDistance - 40f, -8.5f, PropKind.Crossbuck, new Vector3(1.6f, 3.2f, 0.2f), "RR");
+        Beside(speed, 1180f, 34f, PropKind.Flowers, new Vector3(8f, 0.5f, 8f));
+        Beside(speed, 1560f, -30f, PropKind.Flowers, new Vector3(7f, 0.5f, 7f));
+        // North-west loop, counter-clockwise: the barn and its cows on the right just after the checkpoint, the
+        // houses on the right (outside) down the west side.
+        Beside(speed, 1885f, 40f, PropKind.Barn, new Vector3(18f, 9f, 12f), "33", 5f);
+        Beside(speed, 1905f, 30f, PropKind.Cow, cow, "", 40f);
+        Beside(speed, 1868f, 52f, PropKind.Cow, cow, "", -50f);
+        Beside(speed, 2290f, 46f, PropKind.House, new Vector3(10f, 7f, 9f), "orange", 15f);
+        Beside(speed, 2400f, 44f, PropKind.House, new Vector3(11f, 7f, 9f), "white", -20f);
+        Beside(speed, 2150f, -36f, PropKind.Flowers, new Vector3(8f, 0.5f, 8f));
+
+        // ---- Fields: inside and outside the east sweep, round the north-west loop, as on the original's plan --------
+        Field(speed, 300f, -95f, 140f, 110f, "hay");
+        Field(speed, 520f, -80f, 120f, 110f, "plough");
+        Field(speed, 690f, -85f, 130f, 100f, "crop");
+        Field(speed, 420f, 110f, 120f, 100f, "crop");
+        Field(speed, 600f, 105f, 110f, 90f, "plough");
+        Field(speed, 1990f, 100f, 150f, 120f, "crop");
+        Field(speed, 2160f, 110f, 130f, 110f, "plough");
+        Field(speed, 2360f, 100f, 120f, 110f, "hay");
+        Field(speed, 2510f, 105f, 120f, 100f, "crop");
+        Field(speed, 2120f, -130f, 150f, 120f, "crop");
+        Field(speed, 2690f, 95f, 110f, 110f, "plough");
+        Field(stunt, 1880f, -120f, 120f, 90f, "crop");
+
+        // A few trees along the roads (the original's plain is open; the wood stands back at the horizon), and
+        // hedgerows along the long side of each field that faces away from the road.
+        for (var i = 0; i < 14; i++)
+        {
+            var d = speed.Length * (0.04f + 0.066f * i);
             var side = i % 3 == 0 ? -1f : 1f;
-            Beside(speed, d, side * (24f + 11f * (i % 4)), PropKind.Tree, new Vector3(4.5f + (i % 3), 8f + (i % 4), 4.5f + (i % 3)), $"speed-tree-{i}");
+            Tree(speed, d, side * (26f + 10f * (i % 4)), new Vector3(4.5f + (i % 3), 8f + (i % 4), 4.5f + (i % 3)), $"speed-tree-{i}");
         }
-        for (var i = 0; i < 12; i++)
+        for (var i = 0; i < 8; i++)
         {
-            var d = stunt.Length * (0.05f + 0.075f * i);
-            Beside(stunt, d, (i % 2 == 0 ? 1f : -1f) * (26f + 8f * (i % 3)), PropKind.Tree, new Vector3(5f, 9f, 5f), $"stunt-tree-{i}");
+            var d = stunt.Length * (0.08f + 0.11f * i);
+            Tree(stunt, d, (i % 2 == 0 ? 1f : -1f) * (28f + 8f * (i % 3)), new Vector3(5f, 9f, 5f), $"stunt-tree-{i}");
         }
-        // A wood beyond the north-west corner of the speed loop, and hedgerows along the fields.
-        var corner = speed.FrameAt(speed.Length * 0.74f).Origin;
-        for (var i = 0; i < 12; i++)
-        {
-            At(corner.X - 120f + i * 19f, corner.Z + 140f - (i % 3) * 28f, 0f, PropKind.Tree, new Vector3(5f, 10f, 5f), $"wood-a-{i}");
-            At(corner.X - 170f, corner.Z + 100f + i * 30f, 0f, PropKind.Tree, new Vector3(5f, 9f, 5f), $"wood-b-{i}");
-        }
-        // Hedgerows along the long side of each field that faces away from the road.
         foreach (var field in props.Where(p => p.Kind == PropKind.Field).ToList())
         {
             var yaw = field.YawDeg * MathUtil.Deg2Rad;

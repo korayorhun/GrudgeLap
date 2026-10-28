@@ -202,20 +202,21 @@ public sealed class TrackTests
             var toe = crest.Origin + crest.Lateral * (side * 60f);
             Assert.True(terrain.Height(toe.X, toe.Z) < edge.Y - 4f, "the embankment should have come down by 60 m out");
         }
-        // Bridges are structures: the ground under the start overpass stays near the base level.
-        var deck = track.Common.Frames.Where(f => f.Kind == SegmentKind.Overpass).OrderByDescending(f => f.Origin.Y).First();
+        // Bridges are structures: under the low bridge before the line the ground is the speed route's cutting, well
+        // below the deck, not an embankment pulled up to it.
+        var deck = track.Final.Frames.Where(f => f.Kind == SegmentKind.Overpass).OrderByDescending(f => f.Origin.Y).First();
         Assert.True(terrain.Height(deck.Origin.X, deck.Origin.Z) < deck.Origin.Y - 3f);
         // Dips cut into the ground.
         var dip = track.Speed.Frames.Where(f => f.Kind == SegmentKind.Dip).OrderBy(f => f.Origin.Y).First();
         Assert.True(dip.Origin.Y < -2f);
         Assert.InRange(terrain.Height(dip.Origin.X + dip.Lateral.X * 7f, dip.Origin.Z + dip.Lateral.Z * 7f), dip.Origin.Y - 0.6f, dip.Origin.Y + 0.6f);
-        // Somewhere far from every road the ground is not flat.
+        // Somewhere far from every road the ground is not quite flat: a gentle roll, the original's plain.
         var rolling = false;
         for (var x = -600f; x <= 600f && !rolling; x += 50f)
         {
             for (var z = -600f; z <= 600f; z += 50f)
             {
-                if (track.ClearanceFromRoads(new Vector3(x, 0f, z)) > 80f && MathF.Abs(terrain.Height(x, z)) > 0.5f) { rolling = true; break; }
+                if (track.ClearanceFromRoads(new Vector3(x, 0f, z)) > 80f && MathF.Abs(terrain.Height(x, z)) > 0.2f) { rolling = true; break; }
             }
         }
         Assert.True(rolling);

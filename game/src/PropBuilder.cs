@@ -99,27 +99,42 @@ internal static class PropBuilder
                 break;
 
             case PropKind.Sign:
-                Cylinder(node, 0.06f, 2.2f, Plain(new Color(0.5f, 0.5f, 0.5f)), y: 1.1f);
-                var warning = prop.Label is "DIP" or "HILL" or "->" or "<-";
-                if (warning)
+            {
+                // The original's signs: the speed on a yellow square, with a yellow diamond and its arrow above it where
+                // the road bends ("90>" turns right), yellow diamonds for DIP and the chevrons, white squares for the rest.
+                var label = prop.Label;
+                var bend = label.Length > 1 && label[^1] is '>' or '<' && !label.StartsWith('-') && !label.StartsWith('<');
+                var number = bend ? label[..^1] : label;
+                var signYellow = Plain(new Color(0.95f, 0.78f, 0.1f));
+                var pole = Plain(new Color(0.5f, 0.5f, 0.5f));
+                if (label is "DIP" or "HILL" or "->" or "<-")
                 {
-                    // Yellow diamond.
-                    var diamond = new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(0.95f, 0.95f, 0.06f), Material = Plain(new Color(0.95f, 0.78f, 0.1f)) }, Position = new Vector3(0f, 2.7f, 0f), Rotation = new Vector3(0f, 0f, Mathf.Pi / 4f) };
+                    Cylinder(node, 0.06f, 2.2f, pole, y: 1.1f);
+                    var diamond = new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(0.95f, 0.95f, 0.06f), Material = signYellow }, Position = new Vector3(0f, 2.7f, 0f), Rotation = new Vector3(0f, 0f, Mathf.Pi / 4f) };
                     node.AddChild(diamond);
+                    if (label is "->" or "<-") Arrow(node, label == "->", new Vector3(0f, 2.7f, 0.05f));
+                    else Label(node, label, new Vector3(0f, 2.7f, 0.05f), 40, new Color(0.05f, 0.05f, 0.05f));
+                }
+                else if (int.TryParse(number, out _))
+                {
+                    Cylinder(node, 0.06f, bend ? 3.4f : 2.2f, pole, y: bend ? 1.7f : 1.1f);
+                    Box(node, new SN.Vector3(1.0f, 1.0f, 0.06f), signYellow, y: 2.45f);
+                    Label(node, number, new Vector3(0f, 2.45f, 0.05f), 40, new Color(0.05f, 0.05f, 0.05f));
+                    if (bend)
+                    {
+                        var diamond = new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(0.8f, 0.8f, 0.06f), Material = signYellow }, Position = new Vector3(0f, 3.55f, 0f), Rotation = new Vector3(0f, 0f, Mathf.Pi / 4f) };
+                        node.AddChild(diamond);
+                        Arrow(node, label[^1] == '>', new Vector3(0f, 3.55f, 0.05f));
+                    }
                 }
                 else
                 {
+                    Cylinder(node, 0.06f, 2.2f, pole, y: 1.1f);
                     Box(node, new SN.Vector3(1.1f, 1.1f, 0.06f), Plain(new Color(0.95f, 0.95f, 0.95f)), y: 2.7f);
-                }
-                if (prop.Label is "->" or "<-")
-                {
-                    Arrow(node, prop.Label == "->", new Vector3(0f, 2.7f, 0.05f));
-                }
-                else
-                {
-                    Label(node, prop.Label, new Vector3(0f, 2.7f, 0.05f), prop.Label.Length > 3 ? 28 : 40, new Color(0.05f, 0.05f, 0.05f));
+                    Label(node, label, new Vector3(0f, 2.7f, 0.05f), label.Length > 3 ? 28 : 40, new Color(0.05f, 0.05f, 0.05f));
                 }
                 break;
+            }
 
             case PropKind.Crossbuck:
                 Cylinder(node, 0.08f, 3.2f, Plain(new Color(0.9f, 0.9f, 0.9f)), y: 1.6f);

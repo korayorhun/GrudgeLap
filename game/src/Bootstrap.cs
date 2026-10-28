@@ -70,6 +70,8 @@ public sealed partial class Bootstrap : Node3D
     private TransmissionMode _attractMode = TransmissionMode.ManualAutoClutch;
     private TransmissionMode _gearbox;  // what the title screen starts with: the last choice, automatic at first
     private bool _clicked;
+    private bool _focused = true;
+    private float _frameCapCheckAt;
 
     public override void _Ready()
     {
@@ -112,6 +114,11 @@ public sealed partial class Bootstrap : Node3D
             _world.AttachTrain(_trainView.Locomotive, train);
         }
         GetViewport().UseTaa = true;
+        // A window resized (or made full screen) changes the render ceiling of ApplyGraphics.
+        GetViewport().SizeChanged += () =>
+        {
+            if (!_retro && !_leaving) ApplyGraphics();
+        };
 
         _carView = CarView.Create(VehicleSpec.Catalogue[_carIndex]);
         AddChild(_carView);
@@ -148,6 +155,7 @@ public sealed partial class Bootstrap : Node3D
         GetWindow().Title = $"GrudgeLap {Updater.CurrentVersionText}";
         if (_retro) SetRetro(true);
         else ApplyGraphics();
+        ApplyFrameCap();
         // Automated runs never phone home; a player can also switch the check off in settings.cfg.
         if (!_attract && _screenshotPath is null && System.Environment.GetEnvironmentVariable("GRUDGELAP_NO_UPDATE") is null) _updater.CheckIfDue(manual: false);
     }
@@ -340,6 +348,12 @@ public sealed partial class Bootstrap : Node3D
         if (SingleInstance.ActivationRequested()) BringToFront();
         HandleGlobalKeys();
         WorldBuilder.Tick(dt);
+        if (_elapsed >= _frameCapCheckAt)
+        {
+            // The window may have moved to a screen with another refresh rate.
+            _frameCapCheckAt = _elapsed + 2f;
+            ApplyFrameCap();
+        }
         if (_overlayUntil >= 0f && _elapsed >= _overlayUntil)
         {
             _hud.Overlay = "";
@@ -396,6 +410,34 @@ public sealed partial class Bootstrap : Node3D
     public override void _Notification(int what)
     {
         if (what == NotificationWMCloseRequest && !_leaving) Shutdown();
+        else if (what is (int)NotificationApplicationFocusOut or (int)NotificationApplicationFocusIn)
+        {
+            _focused = what == NotificationApplicationFocusIn;
+            ApplyFrameCap();
+        }
+    }
+
+    /// <summary>
+    /// Holds the frame rate to an even fraction of the screen's refresh rate, at most 90 (72 on a 144 Hz panel), to
+    /// 30 while the window is in the background and to 20 in 1989 mode.
+    /// </summary>
+    /// <remarks>
+    /// Uncapped, the game asks the GPU for one frame per refresh: 144 a second on the development laptop's panel,
+    /// more than the High preset can draw, so the GPU ran flat out for the whole drive. On that laptop (RTX 5060
+    /// rendering for an Intel-driven panel) every such session ended in a driver timeout within a minute: Windows
+    /// reset the GPU, Vulkan reported the device lost and the screen went black (28 October 2026). Vsync alone does
+    /// not hold a hybrid laptop's discrete GPU back reliably; the engine's own limiter does. A cap that divides the
+    /// refresh rate keeps every frame on screen for the same number of refreshes, so the motion stays even.
+    /// </remarks>
+    private void ApplyFrameCap()
+    {
+        var refresh = DisplayServer.ScreenGetRefreshRate(DisplayServer.WindowGetCurrentScreen());
+        if (refresh < 30f) refresh = 60f;   // unknown (-1) on some drivers and remote sessions
+        var cap = _retro ? 20 : !_focused ? 30 : Math.Max(30, (int)MathF.Round(refresh / MathF.Ceiling(refresh / 90f)));
+        if (Engine.MaxFps == cap) return;
+        Engine.MaxFps = cap;
+        // One line per change: a crash report then says what the game was asking of the GPU.
+        GD.Print($"frame cap: {cap} fps on a {refresh:0} Hz screen{(_retro ? " (1989 mode)" : _focused ? "" : " (in the background)")}");
     }
 
     /// <summary>Another launch asked for the game: restore and raise this window instead of opening a second copy.</summary>
@@ -588,13 +630,18 @@ public sealed partial class Bootstrap : Node3D
 
     /// <summary>
     /// The viewport's part of the graphics preset (the environment's is <see cref="WorldBuilder.SetQuality"/>): Low
-    /// renders at three quarters of the window with FXAA instead of multisampling and temporal anti-aliasing.
+    /// renders at three quarters of the window with FXAA instead of multisampling and temporal anti-aliasing. On a
+    /// window taller than 1200 pixels the 3D picture is rendered at 1080 lines and scaled up with FSR, so that a
+    /// large monitor cannot put the GPU back where it was before the frame cap (see <see cref="ApplyFrameCap"/>).
     /// </summary>
     private void ApplyGraphics()
     {
         var viewport = GetViewport();
         var low = _quality == GraphicsQuality.Low;
-        viewport.Scaling3DScale = low ? 0.75f : 1f;
+        var height = viewport.GetVisibleRect().Size.Y;
+        var ceiling = height > 1200f ? 1080f / height : 1f;
+        viewport.Scaling3DMode = ceiling < 1f ? Viewport.Scaling3DModeEnum.Fsr : Viewport.Scaling3DModeEnum.Bilinear;
+        viewport.Scaling3DScale = (low ? 0.75f : 1f) * ceiling;
         viewport.Msaa3D = low ? Viewport.Msaa.Disabled : Viewport.Msaa.Msaa2X;
         viewport.ScreenSpaceAA = low ? Viewport.ScreenSpaceAAEnum.Fxaa : Viewport.ScreenSpaceAAEnum.Disabled;
         viewport.UseTaa = !low;
@@ -608,12 +655,13 @@ public sealed partial class Bootstrap : Node3D
         if (retro)
         {
             var viewport = GetViewport();
+            viewport.Scaling3DMode = Viewport.Scaling3DModeEnum.Bilinear;
             viewport.Scaling3DScale = 0.32f;
             viewport.Msaa3D = Viewport.Msaa.Disabled;
             viewport.ScreenSpaceAA = Viewport.ScreenSpaceAAEnum.Disabled;
             viewport.UseTaa = false;
         }
-        Engine.MaxFps = retro ? 20 : 0;
+        ApplyFrameCap();
         WorldBuilder.SetRetro(retro);
         if (!retro) ApplyGraphics();
         _audio.Retro = retro;

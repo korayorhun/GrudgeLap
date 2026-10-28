@@ -5,8 +5,9 @@ using GrudgeLap.Physics.Vehicle;
 namespace GrudgeLap.Physics.Race;
 
 /// <summary>
-/// A simple automatic driver: pure-pursuit steering along its lane, a speed plan that reads the curvature
-/// ahead (with braking distance in mind) and the stunt windows (64 mph for the bridge and the loop), and
+/// A simple automatic driver: pure-pursuit steering along its lane that catches a slide with opposite lock and
+/// keeps the wheel still in the air, a speed plan that reads the curvature ahead (crests and braking distance in
+/// mind) and the stunt windows (64 mph for the bridge and the loop), and
 /// enough traffic sense to follow a slower drone and overtake it when the other lane is clear. Used by the
 /// headless tests and by the game's attract mode / screenshot automation, so both exercise the same code.
 /// </summary>
@@ -19,9 +20,17 @@ public sealed class ScriptedDriver
     private const float Lane = 2.4f;                // metres right of the centre line on two-way roads
     private const float FollowGap = 24f;            // metres behind a slower drone before matching its speed
     private const float OvertakeGap = 55f;          // metres behind a slower drone at which the pass is set up
-    private const float OncomingClearance = 340f;   // metres of empty opposite lane needed to start a pass
+    // Metres of empty opposite lane needed to start a pass. Out, past and back takes up to seven seconds, and a
+    // drone coming the other way closes at about 60 m/s: with 340 m the attract driver met one on its way back.
+    private const float OncomingClearance = 480f;
+    private const float UrgentReturnGap = 250f;     // an oncoming drone closer than this hurries the car back to its lane
     private const float AbortClearance = 150f;      // an oncoming drone closer than this ends a pass in progress
+    private const float SlipDeadband = 5f * MathUtil.Deg2Rad;  // body slip the car carries in a fast bend before the driver steers into it
+    private const float SlideSlip = 8f * MathUtil.Deg2Rad;     // body slip at which the driver is off the pedals until it gathers up
     private int _lastGear;
+    private float _lastElapsed = -1f;
+    private float _lastSteer;
+    private float _oncomingGap = float.MaxValue;
     private float _lane = Lane;
     private TrafficCar? _passing;
 
@@ -56,16 +65,33 @@ public sealed class ScriptedDriver
         }
 
         var trafficLimit = MathF.Min(PlanTraffic(session, path, distance, out var laneTarget), PlanCrossing(session, path, distance));
-        const float dt = 1f / 60f;
-        _lane = MathUtil.MoveToward(_lane, laneTarget, 1.6f * dt);
+        // The driver is asked once a frame at whatever rate the game runs (20 to 90 fps, 60 in the tests); the
+        // session clock gives the time since the last call, so the lane change takes the same time at any rate.
+        var dt = _lastElapsed < 0f ? 1f / 60f : MathUtil.Clamp(session.Elapsed - _lastElapsed, 0f, 0.1f);
+        _lastElapsed = session.Elapsed;
+        // A lane change takes three seconds; back out of the oncoming lane with a drone coming, it takes half that.
+        var hurry = _oncomingGap < UrgentReturnGap && _lane < laneTarget;
+        _lane = MathUtil.MoveToward(_lane, laneTarget, (hurry ? 3.2f : 1.6f) * dt);
 
         var lookAhead = MathF.Max(8f, MathF.Abs(car.Speed) * 0.7f);
         var ahead = FrameAlong(path, distance + lookAhead, branchUndecided);
         var target = ahead.Origin + ahead.Lateral * _lane;
         var toTarget = target - car.Position;
         var angle = MathF.Atan2(Vector3.Dot(toTarget, car.Right), MathF.Max(Vector3.Dot(toTarget, car.Forward), 0.1f));
-        angle -= (car.BodyHit.Lateral - _lane) * 0.015f;
+        // Lane error from the road being followed: just past the fork the cursor may still sit on the other branch,
+        // whose centre line is metres away, and measured from it the correction steered the wrong way.
+        var here = FrameAlong(path, distance, branchUndecided);
+        angle -= (Vector3.Dot(car.Position - here.Origin, here.Lateral) - _lane) * 0.015f;
+        // Catch a slide the way a driver does: steer toward where the car is going. Body slip beyond the deadband
+        // is added to the lock (in a right-hander whose tail steps out the slip is to the left: less right lock,
+        // then opposite lock), and in a real slide both pedals stay off until the car has gathered up.
+        var slip = MathF.Atan2(Vector3.Dot(car.Velocity, car.Right), MathF.Max(MathF.Abs(Vector3.Dot(car.Velocity, car.Forward)), 1f));
+        if (MathF.Abs(slip) > SlipDeadband) angle += slip - MathF.CopySign(SlipDeadband, slip);
+        var sliding = MathF.Abs(slip) > SlideSlip && MathF.Abs(car.Speed) > 6f;
         var steer = MathUtil.Clamp(angle / car.MaxSteerAngleAt(car.Speed), -1f, 1f);
+        // In the air the wheels steer nothing; winding on lock there only lands the car with it.
+        if (car.Airborne) steer = _lastSteer;
+        _lastSteer = steer;
 
         var targetSpeed = MathF.Min(PlanSpeed(car, branchUndecided), trafficLimit);
         PlannedMph = targetSpeed * MathUtil.MphPerMps;
@@ -85,9 +111,9 @@ public sealed class ScriptedDriver
         return new DriverInputs
         {
             Steer = steer,
-            Throttle = MathUtil.Clamp01(error * 0.5f + 0.1f),
+            Throttle = sliding ? 0f : MathUtil.Clamp01(error * 0.5f + 0.1f),
             // Braking in the air only locks the wheels; wait for the landing.
-            Brake = car.Airborne ? 0f : MathUtil.Clamp01(-error * 0.4f - 0.3f),
+            Brake = car.Airborne || sliding ? 0f : MathUtil.Clamp01(-error * 0.4f - 0.3f),
             Gear = DriverInputs.NoGearChange,
             ShiftUp = shiftUp,
             ShiftDown = shiftDown,
@@ -101,6 +127,7 @@ public sealed class ScriptedDriver
     private float PlanTraffic(RaceSession session, TrackPath path, float distance, out float laneTarget)
     {
         laneTarget = path.Kind == PathKind.Stunt ? 0f : Lane;
+        _oncomingGap = float.MaxValue;
         var traffic = session.Traffic;
         if (traffic is null || path.Kind == PathKind.Stunt) return float.MaxValue;
 
@@ -125,6 +152,7 @@ public sealed class ScriptedDriver
                 slowerGap = gap;
             }
         }
+        _oncomingGap = oncomingGap;
 
         if (_passing is not null)
         {
@@ -259,8 +287,12 @@ public sealed class ScriptedDriver
                     var bank = MathF.Asin(MathUtil.Clamp(MathF.Abs(frame.Normal.X * frame.Tangent.Z - frame.Normal.Z * frame.Tangent.X), 0f, 1f));
                     var tanB = MathF.Tan(bank);
                     var mu = RoadFriction * car.Spec.TireGrip * CornerMargin;
-                    var denominator = MathF.Max(1f - mu * tanB, 0.2f);
-                    limit = MathF.Sqrt(MathUtil.Gravity * radius * (tanB + mu) / denominator);
+                    var k = (tanB + mu) / MathF.Max(1f - mu * tanB, 0.2f);
+                    // Over a crest the road falls away under the car and takes weight off the tyres: with g reduced
+                    // by v^2 times the vertical curvature, v^2 = g R k / (1 + crest R k). The stunt route's curve off
+                    // the fork hill starts on the crest; taken at the flat-road speed, the tail stepped out there.
+                    var crest = MathF.Max(0f, (MathF.Asin(previous.Tangent.Y) - MathF.Asin(frame.Tangent.Y)) / step);
+                    limit = MathF.Sqrt(MathUtil.Gravity * radius * k / (1f + crest * radius * k));
                 }
             }
             // What we may do now so that braking at BrakingDecel brings us to `limit` by that point.

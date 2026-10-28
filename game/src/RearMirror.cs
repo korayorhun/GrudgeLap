@@ -18,6 +18,8 @@ internal sealed partial class RearMirror : Node3D
     private const float GlassWidth = 0.21f;
     private SubViewport _viewport = null!;
     private Camera3D _camera = null!;
+    private bool _active = true;
+    private bool _skipFrame;
 
     public static RearMirror Create(Material housing)
     {
@@ -37,8 +39,7 @@ internal sealed partial class RearMirror : Node3D
         {
             Name = "MirrorView",
             Size = GlassPixels,
-            RenderTargetUpdateMode = SubViewport.UpdateMode.Always,
-            Msaa3D = Viewport.Msaa.Msaa2X,
+            RenderTargetUpdateMode = SubViewport.UpdateMode.Once,
         };
         AddChild(_viewport);
         _camera = new Camera3D { Fov = 26f, Near = 2.7f, Far = 9000f, Current = true, Environment = WorldBuilder.MirrorEnvironment() };
@@ -67,11 +68,17 @@ internal sealed partial class RearMirror : Node3D
         var car = GetParentNode3D()?.GlobalBasis ?? GlobalBasis;
         var basis = car * new Basis(Vector3.Up, Mathf.Pi) * new Basis(Vector3.Right, -0.03f);
         _camera.GlobalTransform = new Transform3D(basis, GlobalPosition);
+        // Every other frame: the mirror renders the world a second time, 2.5-3.5 ms of GPU a frame on the development
+        // laptop, and a picture this small does not need the full frame rate.
+        if (!_active) return;
+        _skipFrame = !_skipFrame;
+        if (!_skipFrame) _viewport.RenderTargetUpdateMode = SubViewport.UpdateMode.Once;
     }
 
     /// <summary>Runs the mirror's camera only while the driver can look into it; from outside the glass keeps its last picture.</summary>
     public void SetActive(bool active)
     {
-        _viewport.RenderTargetUpdateMode = active ? SubViewport.UpdateMode.Always : SubViewport.UpdateMode.Disabled;
+        _active = active;
+        _viewport.RenderTargetUpdateMode = active ? SubViewport.UpdateMode.Once : SubViewport.UpdateMode.Disabled;
     }
 }

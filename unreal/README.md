@@ -79,7 +79,10 @@ starts a new game, F9 the attract mode, F11 full screen and F12 takes a screensh
 version's layout (left stick steers, the triggers are the pedals, RB / LB shift and pick the gearbox on the title
 screen, X clutch, A starts, B skips, Y camera, Back new game, the d-pad stands in for all). At the end of a
 credit that makes the top ten, the initials are entered as in the Godot version. Settings, the best lap and
-the high scores (`scores.txt`, the Godot version's text form) are kept in `Saved\GrudgeLap`.
+the high scores (`scores.txt`, the Godot version's text form) are kept in `Saved\GrudgeLap`. Like the Godot
+version, the game holds its frame rate to an even fraction of the primary display's refresh rate, at most 90 (72
+on a 144 Hz panel) and 30 in the background, and logs each change (`frame cap:`): uncapped, a hybrid laptop's
+GPU ran flat out and its driver timed out. Runs with `-RenderOffScreen` (the scripts below) set their own.
 
 For automated checks, `-GlpAudioDump=<file.wav>` records the sound mix and `-GlpMute` keeps the speakers silent.
 

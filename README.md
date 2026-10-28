@@ -5,8 +5,11 @@ seven-speed V8 of 2012 with a sports exhaust, both with real engine recordings �
 *speed* route and a short *stunt* route with an open drawbridge, a vertical loop and a banked 180, dips,
 traffic in both directions, checkpoints against the clock, an instant replay after every crash, a hidden
 skid pad, a "1989 mode" and the *grudge match*: the ghost of your best lap races you on every lap after.
-The scenery is the one you remember: a red barn with "33" on its door, cows in the fields, a farmhouse after
-the curve, a gas station, a camouflaged hut, yellow signs that tip over when you clip them, sawhorses before
+The track follows the original's plan: the start at the foot of a bare hill with the fork on its crest, a
+speed route that sweeps round the east side and passes under the open drawbridge, a stunt route that jumps
+the speed route on that drawbridge, runs the loop and the banked 180 and crosses over itself, and orange
+shoulders all the way round. The scenery is the one you remember: a red barn with "33" on its door, cows in
+the fields, a farmhouse after the curve, a gas station, a camouflaged hut, yellow signs that tip over when you clip them, sawhorses before
 the stunts and a level crossing where a train really does come through. You sit in a leather-lined cabin,
 reading working dials through a steering wheel that turns as you steer, with the road behind you in the
 mirror, and the tyres squeal, howl and scrabble on gravel from real recordings. Keyboard-playable on Windows,
@@ -16,7 +19,9 @@ windowed or full screen. Free, open source, no assets copied from anywhere.
 vites, spor egzoz; gerçek motor kayıtları), uzun *speed* ve kısa *stunt* (açık köprü, dikey loop, eğimli
 180°) rotaları, çukurlar, iki yönlü trafik, süreye karşı kontrol noktaları, her kazadan sonra anlık tekrar,
 gizli skid pad, "1989 modu" ve *grudge match*: en iyi turunuzun hayaleti sonraki her turda sizinle yarışır.
-Manzara hatırladığınız gibi: kapısında "33" yazan kırmızı ahır, tarlalarda inekler, virajdan sonra çiftlik
+Pist orijinalin planında: başlangıç, tepesinde çatal olan çıplak bir tepenin eteğinde; speed rotası doğuyu
+dolanıp açık köprünün altından geçer; stunt rotası o köprüden speed rotasının üstünden atlar, loop'u ve eğimli
+180°'yi geçip kendi üstünden aşar; yol kenarları baştan sona turuncu. Manzara hatırladığınız gibi: kapısında "33" yazan kırmızı ahır, tarlalarda inekler, virajdan sonra çiftlik
 evi, benzin istasyonu, kamuflajlı kulübe, çarpınca devrilen sarı levhalar, stunt öncesi tahta bariyerler ve
 gerçekten tren geçen bir hemzemin geçit. Deri kaplı bir kabinde oturur, çalışan göstergeleri siz
 çevirdikçe dönen direksiyonun içinden okur, arkanızdaki yolu dikiz aynasında görürsünüz; lastik
@@ -87,8 +92,8 @@ the camera, Back starts a new game, and the d-pad stands in for the stick and th
 
 Rules, from the cabinet's own operator options: 90 s on the clock, +45 s at the checkpoint and at the lap,
 10 s off road and you are put back, wrong way does not count, traffic is solid. The stunt route wants about
-60-80 mph for the open drawbridge and at least 60 for the loop. Somewhere off the speed route a sign
-points to the skid pad; donuts there cost nothing. Cows and signs only complain when you hit them; a barn,
+60-80 mph for the open drawbridge and at least 60 for the loop. A hard left at the start line takes you
+to the skid pad, as in the original; donuts there cost nothing. Cows and signs only complain when you hit them; a barn,
 a tree, a sawhorse or the train at the level crossing is a crash.
 
 **Grudge match.** Your best lap is recorded pose by pose and saved. From then on its ghost drives every lap
@@ -130,7 +135,8 @@ best lap's ghost out of the picture.
   which needs no .NET where it runs.
 - `physics.tests/` — the feel checklist as numbers: 0-60, top speed, braking, stall, launch, the loop's
   minimum speed, the drawbridge window, the banked 180, the spin, grass, jumps in top gear, scripted laps on
-  both routes with and without traffic, drone collisions, the ghost, the skid pad, the ground and the props.
+  both routes with and without traffic and at any frame rate from 20 to 144 fps, drone collisions, the ghost,
+  the skid pad, the ground and the props.
 - `audio/` — the engine voice both versions play: real recordings cut into their firing pulses
   (`tools/make-engine-bank.py`) and laid down again one per firing period of the simulated revs;
   `audio.tests/` checks its pitch, clicks and silence (set `GRUDGELAP_AUDIO_DEMO` to a folder for
@@ -138,7 +144,8 @@ best lap's ghost out of the picture.
 - `game/` — the Godot view: world generated from the track (terrain mesh from the ground field with a ring
   of wooded hills and a snow-capped mountain range round the horizon under a clear sky with drifting clouds,
   photo-textured road worn like a real one (patches of other asphalt, potholes, tar snakes, oil in the wheel
-  tracks, faded lines, every stretch different), dirt shoulders, bridges with guardrails, the loop in its
+  tracks, a faded centre line, every stretch different), orange shoulders all the way round, bare earth on
+  the fork hill and in the cuttings, bridges with guardrails, the loop in its
   steel lattice, the drawbridge's white A-frame towers with cables, pad, grass tufts, trees from leaf cards,
   a wood beyond the fields, fields, textured buildings, the green fork gantry with its traffic light, the
   red checkpoint banner, signs, the train), lofted car bodies

@@ -15,8 +15,8 @@ public sealed class RaceSessionTests
 
     public RaceSessionTests(ITestOutputHelper output) => _out = output;
 
-    /// <summary>Runs the scripted driver until the first completed lap or 240 s, tracing events.</summary>
-    private List<RaceEvent> DriveLap(RaceSession session, ScriptedDriver driver, string label)
+    /// <summary>Runs the scripted driver until the first completed lap or 240 s, tracing events; one call per <paramref name="dt"/>, as one per frame in the game.</summary>
+    private List<RaceEvent> DriveLap(RaceSession session, ScriptedDriver driver, string label, float dt = Dt)
     {
         var events = new List<RaceEvent>();
         var t = 0f;
@@ -24,7 +24,7 @@ public sealed class RaceSessionTests
         while (t < 240f && session.Phase != SessionPhase.Finished)
         {
             var input = driver.Next(session);
-            session.Step(input, Dt);
+            session.Step(input, dt);
             events.AddRange(session.Events);
             foreach (var e in session.Events)
             {
@@ -42,7 +42,7 @@ public sealed class RaceSessionTests
             }
             if (session.Phase == SessionPhase.Replay) session.Abort();
             if (events.Contains(RaceEvent.LapCompleted)) break;
-            t += Dt;
+            t += dt;
         }
         _out.WriteLine($"{label}: t={t:F1}s phase={session.Phase} laps={session.CompletedLaps} score={session.Score} crashes={session.CrashCount} time left={session.TimeRemaining:F0} best lap={session.BestLapTime:F1}");
         return events;
@@ -69,6 +69,37 @@ public sealed class RaceSessionTests
         Assert.Equal(1, session.CompletedLaps);
         Assert.True(session.CrashCount <= 1, $"crashes {session.CrashCount}");
         Assert.True(session.Score > 5000, $"score {session.Score}");
+    }
+
+    /// <summary>
+    /// The game steps the rules once a frame at whatever rate its frame cap allows: up to 90 fps in front, 30 in the
+    /// background and in recordings, 20 in 1989 mode (144 checks that nothing in the driver counts frames). The
+    /// attract lap has to hold at all of them, and the fork must not count a lap: a cursor that hopped back to the
+    /// start road there replayed its start line.
+    /// </summary>
+    [Theory]
+    [InlineData(true, 20)]
+    [InlineData(false, 20)]
+    [InlineData(true, 30)]
+    [InlineData(false, 30)]
+    [InlineData(true, 90)]
+    [InlineData(false, 90)]
+    [InlineData(true, 144)]
+    [InlineData(false, 144)]
+    public void Scripted_driver_completes_a_lap_at_any_frame_rate(bool stunt, int fps)
+    {
+        var track = OriginalInspiredTrack.Build();
+        var session = new RaceSession(track, new VehicleSpec(), RaceOptions.MediumNoTraffic);
+        var driver = new ScriptedDriver { PreferStunt = stunt };
+        session.ChooseTransmission(TransmissionMode.ManualAutoClutch);
+
+        var events = DriveLap(session, driver, $"{(stunt ? "stunt" : "speed")} route at {fps} fps", 1f / fps);
+        Assert.Contains(RaceEvent.CheckpointPassed, events);
+        Assert.Contains(RaceEvent.LapCompleted, events);
+        Assert.Equal(1, session.CompletedLaps);
+        Assert.Equal(2, session.Lap);
+        Assert.True(session.CrashCount == 0, $"crashes {session.CrashCount} (last {session.LastCrash})");
+        Assert.DoesNotContain(RaceEvent.LeftRoad, events);
     }
 
     [Fact]

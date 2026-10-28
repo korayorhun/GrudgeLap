@@ -20,17 +20,30 @@ internal static class WorldBuilder
     private const float TerrainCell = 14f;
     /// <summary>Terrain cells along the roads are split this many times each way (2 m; see <see cref="BuildTerrain"/>).</summary>
     private const int TerrainSplit = 7;
-    /// <summary>Metres the terrain mesh keeps below the asphalt under a road.</summary>
-    private const float RoadClearance = 0.04f;
+    /// <summary>
+    /// Metres the terrain mesh keeps below the road plane under a road, its shoulders and verges: deeper than the
+    /// worn asphalt goes (a pothole of <see cref="RoadWear.MaxDepth"/> and a centimetre of roughness), or the grass
+    /// shows through the wheel tracks. The shoulders slope down to meet the ground at their outer edge
+    /// (<see cref="ShoulderDrop"/>).
+    /// </summary>
+    private const float RoadClearance = RoadWear.MaxDepth + 0.03f;
+    /// <summary>How far the shoulders' outer edge sits below the road plane: a centimetre above the ground there.</summary>
+    private const float ShoulderDrop = RoadClearance - 0.01f;
     private const float TerrainMargin = 2400f;
 
     private static StandardMaterial3D? _grass;
     private static StandardMaterial3D? _asphalt;
     private static StandardMaterial3D? _concrete;
     private static StandardMaterial3D? _gravel;
+    private static StandardMaterial3D? _earth;
     private static Godot.Environment? _environment;
     private static Godot.Environment? _mirrorEnvironment;
     private static DirectionalLight3D? _sun;
+    // Ambient light: mostly the sky, the rest a warm tone for the light the sunlit ground throws back. It stands in
+    // for SDFGI, which lit the scene the same way but cost a third of the GPU's frame (see SetQuality).
+    private const float SkyAmbientShare = 0.8f;
+    private static readonly Color GroundBounce = new(0.62f, 0.58f, 0.46f);
+    private const float AmbientEnergy = 1.15f;
     private static StandardMaterial3D? _steel;
     private static MeshInstance3D? _clouds;
     private static Node3D? _forest;
@@ -58,6 +71,7 @@ internal static class WorldBuilder
         _asphalt = null;
         _concrete = null;
         _gravel = null;
+        _earth = null;
         _environment = null;
         _mirrorEnvironment = null;
         _sun = null;
@@ -74,7 +88,7 @@ internal static class WorldBuilder
     {
         root.AddChild(BuildEnvironment());
         root.AddChild(BuildSun());
-        root.AddChild(BuildFarGround());
+        root.AddChild(BuildFarGround(track));
         root.AddChild(BuildMountains(track));
         if (BuildClouds(track) is { } clouds) root.AddChild(clouds);
         root.AddChild(BuildTerrain(track));
@@ -120,11 +134,18 @@ internal static class WorldBuilder
     }
 
     /// <summary>
-    /// The cost of the picture: what the environment does on top of the geometry. High is everything (global
-    /// illumination, indirect light, reflections, haze); Medium drops the three screen-space passes that cost the
-    /// most; Low keeps only the sun and the fog and thins the wood. The caller sets the viewport's part (resolution,
-    /// anti-aliasing). 1989 mode overrides all of it while it is on.
+    /// The cost of the picture: what the environment does on top of the geometry. High is everything (indirect
+    /// light, reflections, haze); Medium drops the screen-space indirect light and reflections; Low keeps only the
+    /// sun and the fog and thins the wood. The caller sets the viewport's part (resolution, anti-aliasing). 1989 mode
+    /// overrides all of it while it is on.
     /// </summary>
+    /// <remarks>
+    /// SDFGI (signed-distance-field global illumination) was part of High until 0.8. Measured on the development
+    /// laptop it was a third of the main view's GPU time (12.9 ms a frame with it, 9.2 ms without) and doubled the
+    /// worst frames (38 ms against 18): its cascades re-voxelise the world as the camera moves, which a car at
+    /// 35 m/s does all the time. Every other effect measured under half a millisecond. The game now draws its
+    /// ambient light from the sky plus a warm ground tone instead (SkyAmbientShare, GroundBounce).
+    /// </remarks>
     public static void SetQuality(GraphicsQuality quality)
     {
         _quality = quality;
@@ -146,7 +167,6 @@ internal static class WorldBuilder
             }
         }
         if (_environment is null) return;
-        _environment.SdfgiEnabled = high;
         _environment.SsaoEnabled = medium;
         _environment.SsilEnabled = high;
         _environment.SsrEnabled = high;
@@ -170,8 +190,8 @@ internal static class WorldBuilder
             material.TextureFilter = retro ? BaseMaterial3D.TextureFilterEnum.Nearest : BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic;
         }
         if (_asphalt is not null) _asphalt.DetailEnabled = !retro && _asphalt.DetailAlbedo is not null;
-        // 1989 shoulders were orange everywhere; today's are dry earth except on the structures.
-        if (_gravel is not null) _gravel.AlbedoColor = retro ? new Color(0.9f, 0.45f, 0.1f) : new Color(0.88f, 0.68f, 0.46f);
+        // The shoulders' orange is their vertex colour; with the textures off it shows as it is.
+        if (_gravel is not null) _gravel.AlbedoColor = retro ? new Color(1f, 1f, 1f) : new Color(1.0f, 0.82f, 0.62f);
         ApplyQuality();
         if (_environment is null) return;
         RetroLook(_environment, retro);
@@ -185,8 +205,8 @@ internal static class WorldBuilder
         environment.BackgroundMode = retro ? Godot.Environment.BGMode.Color : Godot.Environment.BGMode.Sky;
         environment.BackgroundColor = new Color(0.30f, 0.52f, 0.86f);
         environment.AmbientLightSource = retro ? Godot.Environment.AmbientSource.Color : Godot.Environment.AmbientSource.Sky;
-        environment.AmbientLightColor = new Color(0.55f, 0.6f, 0.7f);
-        environment.AmbientLightEnergy = retro ? 0.9f : 1f;
+        environment.AmbientLightColor = retro ? new Color(0.55f, 0.6f, 0.7f) : GroundBounce;
+        environment.AmbientLightEnergy = retro ? 0.9f : AmbientEnergy;
         environment.TonemapMode = retro ? Godot.Environment.ToneMapper.Linear : Godot.Environment.ToneMapper.Agx;
     }
 
@@ -201,7 +221,6 @@ internal static class WorldBuilder
         if (_mirrorEnvironment is null)
         {
             _mirrorEnvironment = (Godot.Environment)_environment.Duplicate();
-            _mirrorEnvironment.SdfgiEnabled = false;
             _mirrorEnvironment.SsaoEnabled = false;
             _mirrorEnvironment.SsilEnabled = false;
             _mirrorEnvironment.SsrEnabled = false;
@@ -219,10 +238,14 @@ internal static class WorldBuilder
         // A deeper green than the photo's own: the pale tint read as hay, and the plain of the 1989 game is a saturated green.
         AlbedoColor = new Color(0.50f, 0.66f, 0.36f),
         Roughness = 1f,
+        // Grass barely reflects and is matte all over (no roughness map): with the photo's roughness map at the
+        // default specular, its smoother specks glinted on every slope facing the sun, a patch of white frost on
+        // the rims of the cuttings.
+        MetallicSpecular = 0.2f,
         Uv1Scale = new Vector3(1150f, 1150f, 1f),    // the terrain's UV spans 5000 m: a 4.3 m tile
         VertexColorUseAsAlbedo = true,
     }, Photo("grass_color") ?? Noise(0.9f, 5, new[] { (0f, new Color(0.62f, 0.72f, 0.55f)), (0.5f, new Color(0.95f, 1.0f, 0.9f)), (1f, new Color(1.25f, 1.2f, 1.1f)) }, seed: 3),
-       Photo("grass_normal") ?? Noise(2.5f, 4, null, seed: 11, asNormal: true), normalScale: 0.7f, Photo("grass_roughness"));
+       Photo("grass_normal") ?? Noise(2.5f, 4, null, seed: 11, asNormal: true), normalScale: 0.7f);
 
     private static StandardMaterial3D Asphalt
     {
@@ -263,11 +286,25 @@ internal static class WorldBuilder
     }, Photo("concrete_color") ?? Noise(1.5f, 3, new[] { (0f, new Color(0.8f, 0.8f, 0.8f)), (1f, new Color(1f, 1f, 1f)) }, seed: 23),
        Photo("concrete_normal"), 0.5f, Photo("concrete_roughness"));
 
-    /// <summary>Shoulders: dry earth along the road (u across, v in metres along); the vertex colour tints the structures orange.</summary>
+    /// <summary>
+    /// Bare earth of the earthworks: the fork hill and its flanks, the walls of the cuttings. It uses the terrain's own
+    /// UVs (a 4.3 m tile) and its vertex colour for the shading, like the grass it replaces there.
+    /// </summary>
+    private static StandardMaterial3D Earth => _earth ??= Textured(new StandardMaterial3D
+    {
+        // The red-brown earth of the original's hill and the orange of its cuttings, from the dirt photo.
+        AlbedoColor = new Color(0.86f, 0.50f, 0.27f),
+        Roughness = 1f,
+        Uv1Scale = new Vector3(1150f, 1150f, 1f),
+        VertexColorUseAsAlbedo = true,
+    }, Photo("dirt_color") ?? Noise(4f, 3, new[] { (0f, new Color(0.7f, 0.65f, 0.55f)), (1f, new Color(1f, 0.95f, 0.85f)) }, seed: 43),
+       Photo("dirt_normal"), 0.6f, Photo("dirt_roughness"));
+
+    /// <summary>Shoulders: orange earth along the road, as on the whole 1989 circuit (u across, v in metres along).</summary>
     private static StandardMaterial3D Gravel => _gravel ??= Textured(new StandardMaterial3D
     {
-        // Warm tan: the dirt photo tinted toward the orange shoulders of the original without going to paint.
-        AlbedoColor = new Color(0.88f, 0.68f, 0.46f),
+        // A pale base under the orange vertex colour: the dirt photo comes out as the original's orange shoulders.
+        AlbedoColor = new Color(1.0f, 0.82f, 0.62f),
         VertexColorUseAsAlbedo = true,
         Roughness = 1f,
         Uv1Scale = new Vector3(1f, 0.45f, 1f),
@@ -372,14 +409,13 @@ internal static class WorldBuilder
             BackgroundMode = Godot.Environment.BGMode.Sky,
             Sky = new Sky { SkyMaterial = sky, RadianceSize = Sky.RadianceSizeEnum.Size256 },
             AmbientLightSource = Godot.Environment.AmbientSource.Sky,
-            AmbientLightSkyContribution = 0.4f,
+            AmbientLightSkyContribution = SkyAmbientShare,
+            AmbientLightColor = GroundBounce,
+            AmbientLightEnergy = AmbientEnergy,
             // AgX keeps the saturated paint and the sky from clipping the way ACES does.
             TonemapMode = Godot.Environment.ToneMapper.Agx,
             TonemapExposure = 0.9f,
             TonemapWhite = 6f,
-            SdfgiEnabled = true,
-            SdfgiCascades = 6,
-            SdfgiMinCellSize = 0.4f,
             SsaoEnabled = true,
             SsaoRadius = 1.5f,
             SsaoIntensity = 1.5f,
@@ -435,11 +471,75 @@ internal static class WorldBuilder
         return _sun;
     }
 
-    /// <summary>Flat ground to the horizon, just under the terrain mesh, where the ground field has flattened out; it reaches past the mountains.</summary>
-    private static MeshInstance3D BuildFarGround()
+    /// <summary>
+    /// Flat ground to the horizon round the terrain mesh, just under the level the ground field flattens out to at its
+    /// edge; it reaches past the mountains.
+    /// </summary>
+    /// <remarks>
+    /// A frame with the terrain mesh's ground (<see cref="TerrainBounds"/>) cut out of it, overlapping the mesh's edge a
+    /// little so the two meet without a crack. Until 0.8 it was a whole 16 km plane at this height under the terrain,
+    /// harmless while no ground went more than a few centimetres below it. The 1989 course's two cuttings go 4.5 m
+    /// down: the plane lay across them and their roads, and a car drove under a sheet of grass at the DIP sign.
+    /// </remarks>
+    private static MeshInstance3D BuildFarGround(TrackGeometry track)
     {
-        var mesh = new PlaneMesh { Size = new Vector2(16000f, 16000f), SubdivideWidth = 12, SubdivideDepth = 12, Material = Grass };
-        return new MeshInstance3D { Mesh = mesh, Position = new Vector3(0f, -0.06f, 0f), Name = "FarGround" };
+        const float half = 8000f;
+        const float overlap = 20f;
+        const int split = 6;
+        var (minX, maxX, minZ, maxZ) = TerrainBounds(track);
+        var st = new MeshBuilder();
+        var vertices = 0;
+        void Rectangle(float x0, float x1, float z0, float z1)
+        {
+            var first = vertices;
+            for (var j = 0; j <= split; j++)
+            {
+                for (var i = 0; i <= split; i++)
+                {
+                    var x = MathUtil.Lerp(x0, x1, i / (float)split);
+                    var z = MathUtil.Lerp(z0, z1, j / (float)split);
+                    st.SetColor(Colors.White);
+                    st.SetNormal(Vector3.Up);
+                    st.SetTangent(Vector3.Right, 1f);
+                    // The terrain mesh's UVs, so the grass keeps its scale across the seam.
+                    st.SetUV(new Vector2(x / 5000f + 0.5f, z / 5000f + 0.5f));
+                    st.AddVertex(Convert.ToGodot(new SN.Vector3(x, 0f, z)));
+                    vertices++;
+                }
+            }
+            // Wound as the terrain's cells (see BuildTerrain), front faces up.
+            for (var j = 0; j < split; j++)
+            {
+                for (var i = 0; i < split; i++)
+                {
+                    var a = first + j * (split + 1) + i;
+                    var c = a + split + 1;
+                    st.AddIndex(a); st.AddIndex(c); st.AddIndex(a + 1);
+                    st.AddIndex(a + 1); st.AddIndex(c); st.AddIndex(c + 1);
+                }
+            }
+        }
+        var (holeX0, holeX1, holeZ0, holeZ1) = (minX + overlap, maxX - overlap, minZ + overlap, maxZ - overlap);
+        Rectangle(-half, half, -half, holeZ0);
+        Rectangle(-half, half, holeZ1, half);
+        Rectangle(-half, holeX0, holeZ0, holeZ1);
+        Rectangle(holeX1, half, holeZ0, holeZ1);
+        return new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = Grass, Position = new Vector3(0f, -0.06f, 0f), Name = "FarGround" };
+    }
+
+    /// <summary>The ground the terrain mesh covers (simulation x and z): every road's extent and <see cref="TerrainMargin"/> round it.</summary>
+    private static (float MinX, float MaxX, float MinZ, float MaxZ) TerrainBounds(TrackGeometry track)
+    {
+        float minX = float.MaxValue, maxX = float.MinValue, minZ = float.MaxValue, maxZ = float.MinValue;
+        foreach (var path in track.Paths)
+        {
+            foreach (var f in path.Frames)
+            {
+                minX = MathF.Min(minX, f.Origin.X); maxX = MathF.Max(maxX, f.Origin.X);
+                minZ = MathF.Min(minZ, f.Origin.Z); maxZ = MathF.Max(maxZ, f.Origin.Z);
+            }
+        }
+        return (minX - TerrainMargin, maxX + TerrainMargin, minZ - TerrainMargin, maxZ + TerrainMargin);
     }
 
     /// <summary>
@@ -589,16 +689,7 @@ internal static class WorldBuilder
     private static MeshInstance3D BuildTerrain(TrackGeometry track)
     {
         var terrain = track.Terrain;
-        float minX = float.MaxValue, maxX = float.MinValue, minZ = float.MaxValue, maxZ = float.MinValue;
-        foreach (var path in track.Paths)
-        {
-            foreach (var f in path.Frames)
-            {
-                minX = MathF.Min(minX, f.Origin.X); maxX = MathF.Max(maxX, f.Origin.X);
-                minZ = MathF.Min(minZ, f.Origin.Z); maxZ = MathF.Max(maxZ, f.Origin.Z);
-            }
-        }
-        minX -= TerrainMargin; maxX += TerrainMargin; minZ -= TerrainMargin; maxZ += TerrainMargin;
+        var (minX, maxX, minZ, maxZ) = TerrainBounds(track);
         var nx = (int)MathF.Ceiling((maxX - minX) / TerrainCell) + 1;
         var nz = (int)MathF.Ceiling((maxZ - minZ) / TerrainCell) + 1;
         var heights = new float[nx * nz];
@@ -647,9 +738,13 @@ internal static class WorldBuilder
             var b = Point(pi + size, pj);
             var c = Point(pi, pj + size);
             var d = Point(pi + size, pj + size);
-            // Godot front faces wind clockwise; the Z flip of the view makes the simulation's counter-clockwise order clockwise.
-            indices.Add(a); indices.Add(b); indices.Add(c);
-            indices.Add(b); indices.Add(d); indices.Add(c);
+            // Godot's front faces wind clockwise seen from the front. Seen from above with north up, a, b (east of a)
+            // and c (north of a) run counter-clockwise in the view as in the simulation: the Z flip relabels the
+            // axis, it does not mirror the ground. Wound a, b, c (as until 0.8) every triangle faced down and was
+            // culled from above; the flat ground plane under it hid that, and the far slopes of the hills showed
+            // their undersides.
+            indices.Add(a); indices.Add(c); indices.Add(b);
+            indices.Add(b); indices.Add(c); indices.Add(d);
         }
         var refined = 0;
         for (var j = 0; j < cellsZ; j++)
@@ -717,6 +812,9 @@ internal static class WorldBuilder
 
         var variation = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth, Frequency = 1f / 140f, FractalOctaves = 2, Seed = 77 };
         var st = new MeshBuilder();
+        var vertexEarth = new float[count];
+        var vertexShade = new float[count];
+        var vertexColour = new Color[count];
         // The ring of hills beyond the roads (TerrainField.Base) is wooded: from the circuit it reads as the dark band
         // of trees under the mountains, as in the 1989 game, without a tree being placed there.
         var roadMinX = minX + TerrainMargin; var roadMaxX = maxX - TerrainMargin;
@@ -728,6 +826,7 @@ internal static class WorldBuilder
             var h = vertexHeight[v];
             var normal = vertexNormal[v];
             var shade = 0.80f + 0.20f * normal.Y - 0.012f * MathF.Max(-h, 0f);
+            vertexShade[v] = shade;
             var n = variation.GetNoise2D(x, z);                      // -1..1
             var r = shade * (1f + 0.10f * n);
             var g = shade * (1f + 0.05f * n);
@@ -742,7 +841,16 @@ internal static class WorldBuilder
             r = MathUtil.Lerp(r, shade * 0.36f, wooded);
             g = MathUtil.Lerp(g, shade * 0.50f, wooded);
             b = MathUtil.Lerp(b, shade * 0.34f, wooded);
-            st.SetColor(new Color(r, g, b));
+            // Earthworks: where the ground has been pulled well off the plain (which rolls by half a metre) to meet a
+            // road, inside the circuit's box, it is bare earth (BuildEarth); the grass beside it browns towards it.
+            var earth = outside < 0f ? MathUtil.Clamp01((MathF.Abs(h) - 1.8f) / 0.6f) : 0f;
+            vertexEarth[v] = earth;
+            var brown = MathUtil.Clamp01((MathF.Abs(h) - 1.0f) / 0.8f) * (outside < 0f ? 1f : 0f);
+            r = MathUtil.Lerp(r, shade * 0.88f, brown * 0.55f);
+            g = MathUtil.Lerp(g, shade * 0.70f, brown * 0.55f);
+            b = MathUtil.Lerp(b, shade * 0.45f, brown * 0.55f);
+            vertexColour[v] = new Color(r, g, b);
+            st.SetColor(vertexColour[v]);
             var gNormal = Convert.ToGodot(normal);
             // u follows x on this grid: the tangent is +x laid onto the slope, the bitangent then runs along v.
             st.SetTangent((Vector3.Right - gNormal * gNormal.X).Normalized(), 1f);
@@ -750,9 +858,93 @@ internal static class WorldBuilder
             st.SetUV(new Vector2(x / 5000f + 0.5f, z / 5000f + 0.5f));
             st.AddVertex(Convert.ToGodot(new SN.Vector3(x, h, z)));
         }
-        foreach (var index in indices) st.AddIndex(index);
-        GD.Print($"terrain: {count} vertices, {indices.Count / 3} triangles, {refined} of {cellsX * cellsZ} cells refined along the roads");
-        return new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = Grass, Name = "Terrain" };
+        // Grass or bare earth, split along the earthworks' contour (vertexEarth = 0.5, ground about 2.1 m off the
+        // plain): a triangle the contour crosses is cut where it crosses, one piece to each mesh. Sorted whole by its
+        // corners, the triangles left a saw-tooth of 2 m spikes along every cutting and round the hill.
+        var es = new MeshBuilder();
+        var grassVertices = count;
+        var earthOf = new Dictionary<int, int>();
+        var crossings = new Dictionary<long, (int Grass, int Earth)>();
+        var earthTriangles = 0;
+        float EarthTone(int v) => vertexShade[v] * (1f + 0.08f * variation.GetNoise2D((minX + points[v].I * step) * 3f, (minZ + points[v].J * step) * 3f));
+        void EarthAttributes(MeshBuilder builder, Vector3 gNormal, float tone, float x, float z)
+        {
+            builder.SetColor(new Color(tone, tone, tone));
+            builder.SetTangent((Vector3.Right - gNormal * gNormal.X).Normalized(), 1f);
+            builder.SetNormal(gNormal);
+            builder.SetUV(new Vector2(x / 5000f + 0.5f, z / 5000f + 0.5f));
+        }
+        int EarthVertex(int v)
+        {
+            if (earthOf.TryGetValue(v, out var e)) return e;
+            e = earthOf.Count + crossings.Count;
+            var x = minX + points[v].I * step;
+            var z = minZ + points[v].J * step;
+            EarthAttributes(es, Convert.ToGodot(vertexNormal[v]), EarthTone(v), x, z);
+            es.AddVertex(Convert.ToGodot(new SN.Vector3(x, vertexHeight[v], z)));
+            earthOf[v] = e;
+            return e;
+        }
+        // The point on edge u-w where the earth weight is one half, added to both meshes once per edge.
+        (int Grass, int Earth) Crossing(int u, int w)
+        {
+            var key = u < w ? ((long)u << 32) | (uint)w : ((long)w << 32) | (uint)u;
+            if (crossings.TryGetValue(key, out var known)) return known;
+            var t = MathUtil.Clamp01((0.5f - vertexEarth[u]) / (vertexEarth[w] - vertexEarth[u]));
+            var x = MathUtil.Lerp(minX + points[u].I * step, minX + points[w].I * step, t);
+            var z = MathUtil.Lerp(minZ + points[u].J * step, minZ + points[w].J * step, t);
+            var position = Convert.ToGodot(new SN.Vector3(x, MathUtil.Lerp(vertexHeight[u], vertexHeight[w], t), z));
+            var gNormal = Convert.ToGodot(SN.Vector3.Normalize(SN.Vector3.Lerp(vertexNormal[u], vertexNormal[w], t)));
+            st.SetColor(vertexColour[u].Lerp(vertexColour[w], t));
+            st.SetTangent((Vector3.Right - gNormal * gNormal.X).Normalized(), 1f);
+            st.SetNormal(gNormal);
+            st.SetUV(new Vector2(x / 5000f + 0.5f, z / 5000f + 0.5f));
+            st.AddVertex(position);
+            EarthAttributes(es, gNormal, MathUtil.Lerp(EarthTone(u), EarthTone(w), t), x, z);
+            es.AddVertex(position);
+            var made = (grassVertices++, earthOf.Count + crossings.Count);
+            crossings[key] = made;
+            return made;
+        }
+        for (var t = 0; t < indices.Count; t += 3)
+        {
+            var (a, b, c) = (indices[t], indices[t + 1], indices[t + 2]);
+            var earthCorners = (vertexEarth[a] >= 0.5f ? 1 : 0) + (vertexEarth[b] >= 0.5f ? 1 : 0) + (vertexEarth[c] >= 0.5f ? 1 : 0);
+            if (earthCorners == 0)
+            {
+                st.AddIndex(a); st.AddIndex(b); st.AddIndex(c);
+                continue;
+            }
+            if (earthCorners == 3)
+            {
+                es.AddIndex(EarthVertex(a)); es.AddIndex(EarthVertex(b)); es.AddIndex(EarthVertex(c));
+                earthTriangles++;
+                continue;
+            }
+            // Turn the corners (keeping the winding) until the one alone on its side of the contour comes first.
+            var loneIsEarth = earthCorners == 1;
+            while ((vertexEarth[a] >= 0.5f) != loneIsEarth) (a, b, c) = (b, c, a);
+            var ab = Crossing(a, b);
+            var ac = Crossing(a, c);
+            if (loneIsEarth)
+            {
+                es.AddIndex(EarthVertex(a)); es.AddIndex(ab.Earth); es.AddIndex(ac.Earth);
+                st.AddIndex(ab.Grass); st.AddIndex(b); st.AddIndex(c);
+                st.AddIndex(ab.Grass); st.AddIndex(c); st.AddIndex(ac.Grass);
+                earthTriangles++;
+            }
+            else
+            {
+                st.AddIndex(a); st.AddIndex(ab.Grass); st.AddIndex(ac.Grass);
+                es.AddIndex(ab.Earth); es.AddIndex(EarthVertex(b)); es.AddIndex(EarthVertex(c));
+                es.AddIndex(ab.Earth); es.AddIndex(EarthVertex(c)); es.AddIndex(ac.Earth);
+                earthTriangles += 2;
+            }
+        }
+        GD.Print($"terrain: {count} vertices, {indices.Count / 3} triangles, {refined} of {cellsX * cellsZ} cells refined along the roads, {earthTriangles} of earthworks, {crossings.Count} contour points");
+        var ground = new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = Grass, Name = "Terrain" };
+        if (earthTriangles > 0) ground.AddChild(new MeshInstance3D { Mesh = es.Commit(), MaterialOverride = Earth, Name = "TerrainEarth" });
+        return ground;
     }
 
     /// <summary>The road material mapped by world position, for the disc of the pad.</summary>
@@ -944,7 +1136,6 @@ internal static class WorldBuilder
     {
         var st = new MeshBuilder();
         var frames = path.Frames;
-        var gravel = new Color(0.96f, 0.92f, 0.84f);
         var orange = new Color(0.95f, 0.46f, 0.12f);
         // As wide as the original's dirt shoulders; the ground field keeps its plane out past this (TerrainField.Verge).
         const float width = 2.2f;
@@ -954,7 +1145,7 @@ internal static class WorldBuilder
             var b = frames[i + 1];
             if (a.Surface == SurfaceType.Chasm || b.Surface == SurfaceType.Chasm) continue;
             // Earth is never one colour: every couple of metres the shoulder is a little paler or darker.
-            var colour = (IsStructure(a) ? orange : gravel) * (1f + 0.14f * (RoadWear.Hash((int)(a.Distance / 2f), 0, 23) - 0.5f));
+            var colour = orange * (1f + 0.14f * (RoadWear.Hash((int)(a.Distance / 2f), 0, 23) - 0.5f));
             colour.A = 1f;
             var shared = SiblingSide(track, path, a);
             foreach (var side in new[] { -1f, 1f })
@@ -962,8 +1153,8 @@ internal static class WorldBuilder
                 if ((int)side == shared) continue;
                 var ao = a.Origin + a.Lateral * (side * a.HalfWidth);
                 var bo = b.Origin + b.Lateral * (side * b.HalfWidth);
-                var ai = ao + a.Lateral * (side * width) - a.Normal * 0.02f;
-                var bi = bo + b.Lateral * (side * width) - b.Normal * 0.02f;
+                var ai = ao + a.Lateral * (side * width) - a.Normal * ShoulderDrop;
+                var bi = bo + b.Lateral * (side * width) - b.Normal * ShoulderDrop;
                 // Keep the winding left-to-right on both sides: back faces get their normal flipped and go dark.
                 if (side > 0) Quad(st, ao, ai, bo, bi, a.Normal, b.Normal, colour, a.Distance, b.Distance);
                 else Quad(st, ai, ao, bi, bo, a.Normal, b.Normal, colour, a.Distance, b.Distance);
@@ -977,16 +1168,15 @@ internal static class WorldBuilder
         var st = new MeshBuilder();
         var frames = path.Frames;
         var yellow = new Color(0.95f, 0.78f, 0.20f);
-        var white = new Color(0.9f, 0.9f, 0.9f);
         for (var i = 0; i < frames.Count - 1; i++)
         {
             var a = frames[i];
             var b = frames[i + 1];
             if (a.Surface == SurfaceType.Chasm || b.Surface == SurfaceType.Chasm) continue;
             var shared = SiblingSide(track, path, a);
-            // Paint wears: every dash is a little brighter or duller than the next, a few are gone; the edge lines
-            // fade in and out along the road. Where the branches share the road, only the one on the right paints
-            // the centre line.
+            // One dashed yellow centre line and no edge lines, as on the 1989 circuit, where the orange shoulders mark
+            // the edges. Paint wears: every dash is a little brighter or duller than the next, a few are gone. Where the
+            // branches share the road, only the one on the right paints the centre line.
             var dash = (int)MathF.Floor(a.Distance / 9f);
             var dashTone = 0.55f + 0.45f * RoadWear.Hash(dash, (int)path.Kind, 41);
             if (a.Distance % 9f < 3f && shared != 1 && RoadWear.Hash(dash, (int)path.Kind, 42) > 0.08f)
@@ -994,15 +1184,6 @@ internal static class WorldBuilder
                 Quad(st, a.Origin - a.Lateral * 0.08f + a.Normal * 0.012f, a.Origin + a.Lateral * 0.08f + a.Normal * 0.012f,
                     b.Origin - b.Lateral * 0.08f + b.Normal * 0.012f, b.Origin + b.Lateral * 0.08f + b.Normal * 0.012f,
                     a.Normal, b.Normal, (yellow * dashTone) with { A = 1f }, a.Distance, b.Distance);
-            }
-            foreach (var side in new[] { -1f, 1f })
-            {
-                if ((int)side == shared) continue;
-                var o = side * (a.HalfWidth - 0.25f);
-                var edgeTone = 0.6f + 0.4f * RoadWear.Hash((int)(a.Distance / 3f), (int)side, 43);
-                Quad(st, a.Origin + a.Lateral * (o - 0.07f) + a.Normal * 0.012f, a.Origin + a.Lateral * (o + 0.07f) + a.Normal * 0.012f,
-                    b.Origin + b.Lateral * (o - 0.07f) + b.Normal * 0.012f, b.Origin + b.Lateral * (o + 0.07f) + b.Normal * 0.012f,
-                    a.Normal, b.Normal, (white * edgeTone) with { A = 1f }, a.Distance, b.Distance);
             }
         }
         var material = new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 0.6f, CullMode = BaseMaterial3D.CullModeEnum.Disabled };

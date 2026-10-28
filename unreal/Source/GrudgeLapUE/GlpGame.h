@@ -92,6 +92,7 @@ private:
 	FGlpCarView* PlayerCar() const;
 	void FitOutCockpit();
 	void ShowSideMirrors(bool bInside);
+	void ApplyFrameCap();
 
 	UPROPERTY(VisibleAnywhere, Category = "GrudgeLap")
 	TObjectPtr<UCameraComponent> Camera;
@@ -168,6 +169,10 @@ private:
 	bool bClockFromStart = false;
 	bool bSaveBest = false;
 	int32 AttractGearbox = GLP_MANUAL_AUTO_CLUTCH;
+	bool bFrameCap = false;      // the game holds its frame rate (a window on a screen, not the off-screen runs)
+	int32 FrameCap = 0;          // fps asked for at the last look
+	float FrameCapCheck = 0.f;   // game time of the next look at the screen and the focus
+	float FrameCapBefore = 0.f;  // t.MaxFPS before the game took it over, handed back at the end
 	float LogTimer = 0.f;
 	float DriveTime = 0.f;
 };

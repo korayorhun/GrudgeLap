@@ -50,44 +50,68 @@ public sealed class TrackGeometry
     /// </summary>
     public SurfaceHit Probe(Vector3 point, ref PathCursor cursor, bool updateCursor)
     {
-        var bestPath = cursor.Path;
-        var bestIndex = cursor.FrameIndex;
-        var bestScore = float.MaxValue;
+        // The nearest frame of every path within reach: the cursor's own window, the heads of the paths that follow
+        // it, and near the start of a path its parent's tail and, at a fork, the shared first metres of its siblings.
+        Span<int> nearest = stackalloc int[Paths.Count];
+        Span<float> nearestScore = stackalloc float[Paths.Count];
+        nearest.Fill(-1);
+        nearestScore.Fill(float.MaxValue);
 
-        void Consider(TrackPath path, int from, int to)
+        Consider(cursor.Path, cursor.FrameIndex - SearchWindow, cursor.FrameIndex + SearchWindow, point, nearest, nearestScore);
+        if (cursor.FrameIndex + SearchWindow >= cursor.Path.Frames.Count - 1)
         {
-            var frames = path.Frames;
-            from = Math.Max(0, from);
-            to = Math.Min(frames.Count - 1, to);
-            for (var i = from; i <= to; i++)
+            foreach (var next in cursor.Path.Next) Consider(next, 0, SearchWindow, point, nearest, nearestScore);
+        }
+        if (cursor.FrameIndex < BranchOverlap)
+        {
+            foreach (var parent in Paths)
             {
-                var score = Vector3.DistanceSquared(frames[i].Origin, point);
-                if (score < bestScore)
+                if (!parent.Next.Contains(cursor.Path)) continue;
+                Consider(parent, parent.Frames.Count - 1 - SearchWindow, parent.Frames.Count - 1, point, nearest, nearestScore);
+                foreach (var sibling in parent.Next)
                 {
-                    bestScore = score;
-                    bestPath = path;
-                    bestIndex = i;
+                    if (!ReferenceEquals(sibling, cursor.Path)) Consider(sibling, 0, BranchOverlap, point, nearest, nearestScore);
                 }
             }
         }
 
-        Consider(cursor.Path, cursor.FrameIndex - SearchWindow, cursor.FrameIndex + SearchWindow);
-        if (cursor.FrameIndex + SearchWindow >= cursor.Path.Frames.Count - 1)
+        var bestPath = cursor.Path;
+        var bestIndex = cursor.FrameIndex;
+        var bestScore = float.MaxValue;
+        var inReach = 0;
+        for (var p = 0; p < Paths.Count; p++)
         {
-            foreach (var next in cursor.Path.Next) Consider(next, 0, SearchWindow);
-        }
-        if (cursor.FrameIndex < BranchOverlap)
-        {
-            // Near the start of a path: the previous path's tail and, because the branches leaving a fork share
-            // their first metres, the whole overlap region of every sibling branch.
-            foreach (var parent in Paths)
+            if (nearest[p] < 0) continue;
+            inReach++;
+            if (nearestScore[p] < bestScore)
             {
-                if (!parent.Next.Contains(cursor.Path)) continue;
-                Consider(parent, parent.Frames.Count - 1 - SearchWindow, parent.Frames.Count - 1);
-                foreach (var sibling in parent.Next)
-                {
-                    if (!ReferenceEquals(sibling, cursor.Path)) Consider(sibling, 0, BranchOverlap);
-                }
+                bestScore = nearestScore[p];
+                bestPath = Paths[p];
+                bestIndex = nearest[p];
+            }
+        }
+        if (inReach > 1)
+        {
+            // Two roads in reach (a fork or a join): where the point is over both, it rests on the road surface nearest
+            // below it, the one drawn on top. By the nearest origin alone, a car in the right lane just past the fork
+            // followed the stunt branch curving away under it, sank with its steeper descent below the speed road and
+            // fell through it once the cursor caught up. Only roads the point is beside count, so a path's last frame
+            // metres behind cannot claim it. The path the cursor has just left is not a candidate: back on the crest
+            // a few metres past the fork, its last frame was the higher surface and the cursor hopped back onto it,
+            // which replayed that path's markers from the start (a lap counted at the fork). A car that really
+            // reverses past the fork goes back by the nearest origin above.
+            var bestHeight = float.MaxValue;
+            for (var p = 0; p < Paths.Count; p++)
+            {
+                if (nearest[p] < 0 || Paths[p].Next.Contains(cursor.Path)) continue;
+                var near = Paths[p].Frames[nearest[p]];
+                var rel = point - near.Origin;
+                if (MathF.Abs(Vector3.Dot(rel, near.Tangent)) > 3f) continue;
+                var above = Vector3.Dot(rel, near.Normal);
+                if (MathF.Abs(Vector3.Dot(rel, near.Lateral)) > near.HalfWidth || above < -0.6f || above >= bestHeight) continue;
+                bestHeight = above;
+                bestPath = Paths[p];
+                bestIndex = nearest[p];
             }
         }
 
@@ -154,6 +178,26 @@ public sealed class TrackGeometry
         var groundY = Terrain.Height(point.X, point.Z);
         var grassPoint = new Vector3(point.X, groundY, point.Z);
         return new SurfaceHit(true, SurfaceType.Grass, frame, lateral, point.Y - groundY, grassPoint, Terrain.Normal(point.X, point.Z), bestPath, bestIndex);
+    }
+
+    /// <summary>Records the frame of <paramref name="path"/> between two indices nearest to <paramref name="point"/>.</summary>
+    private void Consider(TrackPath path, int from, int to, Vector3 point, Span<int> nearest, Span<float> nearestScore)
+    {
+        var p = 0;
+        while (p < Paths.Count && !ReferenceEquals(Paths[p], path)) p++;
+        if (p == Paths.Count) return;
+        var frames = path.Frames;
+        from = Math.Max(0, from);
+        to = Math.Min(frames.Count - 1, to);
+        for (var i = from; i <= to; i++)
+        {
+            var score = Vector3.DistanceSquared(frames[i].Origin, point);
+            if (score < nearestScore[p])
+            {
+                nearestScore[p] = score;
+                nearest[p] = i;
+            }
+        }
     }
 
     /// <summary>Resolves the path and distance a cursor points at, for rules and HUD use.</summary>

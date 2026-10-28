@@ -14,6 +14,8 @@
 #include "GlpSpace.h"
 #include "HAL/FileManager.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "HAL/PlatformMisc.h"
+#include "Misc/App.h"
 #include "Misc/CommandLine.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -96,6 +98,13 @@ void AGlpGame::BeginPlay()
 		return;
 	}
 
+	// On a screen the game holds its own frame rate (ApplyFrameCap); the off-screen automation runs set theirs.
+	bFrameCap = GEngine && !FParse::Param(FCommandLine::Get(), TEXT("RenderOffScreen"));
+	if (bFrameCap)
+	{
+		FrameCapBefore = GEngine->GetMaxFPS();
+		ApplyFrameCap();
+	}
 	bAttract = FParse::Param(FCommandLine::Get(), TEXT("GlpAttract"));
 	LoadScores();
 	bTraffic = !FParse::Param(FCommandLine::Get(), TEXT("GlpNoTraffic"));
@@ -166,6 +175,11 @@ void AGlpGame::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	// The world is going away with every actor in it: only the simulation's session needs closing.
 	CloseSession(false);
+	if (bFrameCap && GEngine)
+	{
+		// Play in the editor: the editor gets its own frame rate back.
+		GEngine->SetMaxFPS(FrameCapBefore);
+	}
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -423,6 +437,12 @@ void AGlpGame::Tick(float DeltaSeconds)
 		return;
 	}
 	Time += DeltaSeconds;
+	if (bFrameCap && Time >= FrameCapCheck)
+	{
+		// The window may have lost the focus or moved to a screen with another refresh rate.
+		FrameCapCheck = Time + 1.f;
+		ApplyFrameCap();
+	}
 	APlayerController* Player = GetWorld()->GetFirstPlayerController();
 	if (Player && Player->GetViewTarget() != this)
 	{
@@ -651,6 +671,26 @@ void AGlpGame::HandleGlobalKeys()
 		const FString File = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Screenshots"), FString::Printf(TEXT("grudgelap-%s.png"), *FDateTime::Now().ToString(TEXT("%Y%m%d-%H%M%S"))));
 		FScreenshotRequest::RequestScreenshot(File, true, false);
 	}
+}
+
+void AGlpGame::ApplyFrameCap()
+{
+	// The Godot version's Bootstrap.ApplyFrameCap: an even fraction of the screen's refresh rate, at most 90 (72 on a
+	// 144 Hz panel), and 30 while the window is in the background. Uncapped, the development laptop's 144 Hz panel
+	// kept its GPU (an RTX 5060 drawing for an Intel-driven panel) flat out, and the driver timed out within a
+	// minute: a black screen and a lost device (28 October 2026). Vsync alone does not hold a hybrid laptop's
+	// discrete GPU back; the engine's limiter does. The refresh rate is the primary display's.
+	const float Refresh = static_cast<float>(FPlatformMisc::GetMaxRefreshRate());
+	const bool bFocused = FApp::HasFocus();
+	const int32 Cap = bFocused ? FMath::Max(30, FMath::RoundToInt(Refresh / FMath::CeilToFloat(Refresh / 90.f))) : 30;
+	if (Cap == FrameCap)
+	{
+		return;
+	}
+	FrameCap = Cap;
+	GEngine->SetMaxFPS(static_cast<float>(Cap));
+	// One line per change: a crash report then says what the game was asking of the GPU.
+	UE_LOG(LogGlpGame, Log, TEXT("frame cap: %d fps on a %.0f Hz screen%s"), Cap, Refresh, bFocused ? TEXT("") : TEXT(" (in the background)"));
 }
 
 void AGlpGame::SyncViews(float DeltaSeconds)

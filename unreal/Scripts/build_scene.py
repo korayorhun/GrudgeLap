@@ -830,14 +830,17 @@ def dress_track(actors):
     asphalt = surface_material("M_Asphalt", "asphalt_02", 11.0 / 3.0, 1 / 3.0, tint=(0.9, 0.9, 0.9), vertex_colour=True, wear=wear)
     # Dry earth, as the Godot version's shoulders and the orange dirt of the original; the grass path read as lawn.
     verge = surface_material("M_Verge", "brown_mud_dry", 2.2, 1.0, tint=(1.15, 0.95, 0.75), vertex_colour=True)
+    # The earthworks (the fork hill, the cuttings' walls) are bare earth in the game: its TerrainEarth mesh shares
+    # the terrain's UVs (5 km across), so the mud scan tiles every 4 m there, tinted to the hill's red-brown.
+    earth = surface_material("M_Earth", "brown_mud_dry", 5000 / 4.0, 5000 / 4.0, tint=(1.15, 0.78, 0.55))
     for label, actor in actors.items():
-        material = ground if label == "Terrain" else asphalt if label.startswith("Road-") else verge if label.startswith("Shoulder-") else None
+        material = ground if label == "Terrain" else earth if label == "TerrainEarth" else asphalt if label.startswith("Road-") else verge if label.startswith("Shoulder-") else None
         if material is None:
             continue
         for component in mesh_components(actor):
             for slot in range(component.get_num_materials()):
                 component.set_material(slot, material)
-            if label == "Terrain":
+            if label in ("Terrain", "TerrainEarth"):
                 # A mesh distance field spans at most a few hundred voxels, 25 to 50 m each across the 6 km terrain:
                 # Lumen's software tracing then saw the 1.4 m roadside ditches as inside the ground and left them
                 # black. The sun's shadows come from virtual shadow maps either way.
