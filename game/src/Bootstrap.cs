@@ -26,6 +26,9 @@ public sealed partial class Bootstrap : Node3D
     private RaceSession _session = null!;
     private TrackGeometry _track = null!;
     private CarView _carView = null!;
+    private CrashScene? _crash;
+    private string? _ram;
+    private SN.Vector3? _ramTarget;
     private CarView? _ghostView;
     private readonly List<CarView> _droneViews = new();
     private readonly Dictionary<int, Node3D> _propNodes = new();
@@ -103,6 +106,12 @@ public sealed partial class Bootstrap : Node3D
         }
 
         _track = OriginalInspiredTrack.Build();
+        if (_ram == "test")
+        {
+            // The crash replay's test (--ram=test): a tree on the start straight, 80 m on, in the middle of the road.
+            var spot = _track.Common.FrameAt(80f);
+            _track.Props.Add(new TrackProp(PropKind.Tree, spot.Origin, 0f, new SN.Vector3(1.0f, 7f, 1.0f), "crash-test"));
+        }
         WorldBuilder.Build(this, _track);
         // Before the train and the drones: they hand their nodes to it for their sounds.
         _world = new WorldAudio();
@@ -117,6 +126,7 @@ public sealed partial class Bootstrap : Node3D
         {
             _trainView = TrainView.Create(train, _track.Terrain);
             AddChild(_trainView);
+            AddChild(TrainView.BuildRailway(train, _track));
             _world.AttachTrain(_trainView.Locomotive, train);
         }
         GetViewport().UseTaa = true;
@@ -193,6 +203,7 @@ public sealed partial class Bootstrap : Node3D
         {
             if (arg == "--attract") _attract = true;
             else if (arg == "--park") _park = true;
+            else if (arg.StartsWith("--ram", System.StringComparison.Ordinal)) _ram = arg.StartsWith("--ram=", System.StringComparison.Ordinal) ? arg["--ram=".Length..] : "tree";   // automated runs: drive into a tree, a building or a drone for the crash replay
             else if (arg == "--try-table") _tryTable = true;
             else if (arg.StartsWith("--quality=", System.StringComparison.Ordinal) && Enum.TryParse<GraphicsQuality>(arg["--quality=".Length..], ignoreCase: true, out var quality)) _quality = quality;   // this run only
             else if (arg.StartsWith("--time=", System.StringComparison.Ordinal)) float.TryParse(arg["--time=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _creditSeconds);
@@ -225,9 +236,17 @@ public sealed partial class Bootstrap : Node3D
             else if (arg == "--show-all") _showAll = true;
             else if (arg == "--save-best") _saveBest = true;   // debug: let an attract lap become the saved best lap
             else if (arg.StartsWith("--export-world=", System.StringComparison.Ordinal)) _exportWorld = arg["--export-world=".Length..];
-            else if (arg == "--car=v8") _carIndex = 1;
-            else if (arg == "--car=flat12") _carIndex = 0;
+            else if (arg.StartsWith("--car=", System.StringComparison.Ordinal)) _carIndex = CarIndex(arg["--car=".Length..], _carIndex);
         }
+    }
+
+    /// <summary>The car a --car= switch names: its index in the catalogue or one of the short names; otherwise the current one.</summary>
+    private static int CarIndex(string name, int current)
+    {
+        string[] names = ["flat12", "v8", "hothatch", "five", "turbohatch"];
+        var index = System.Array.IndexOf(names, name.ToLowerInvariant());
+        if (index < 0 && int.TryParse(name, out var number)) index = number;
+        return index >= 0 && index < VehicleSpec.Catalogue.Length ? index : current;
     }
 
     /// <summary>
@@ -248,6 +267,7 @@ public sealed partial class Bootstrap : Node3D
         if (_creditSeconds > 0f) options = options with { InitialTime = _creditSeconds };
         var spec = VehicleSpec.Catalogue[_carIndex];
         _session = new RaceSession(_track, spec, options);
+        EndCrash();
         if (_carView.IsInsideTree() && _carView.Name != $"Car-{spec.Style}")
         {
             _carView.QueueFree();
@@ -256,7 +276,7 @@ public sealed partial class Bootstrap : Node3D
             FitOutPlayerCar();
         }
         _carView.Name = $"Car-{spec.Style}";
-        _audio.SetCar(spec.Style);
+        _audio.SetCar(spec);
         if (_savedBestLap is not null && !_noGhost) _session.LoadBestLap(_savedBestLap);
         _hud.Bind(_session);
         _instruments.Bind(_session);
@@ -266,7 +286,7 @@ public sealed partial class Bootstrap : Node3D
         _cameraRig.ResetChase();
         BuildDroneViews();
         BuildGhostView();
-        if (_attract || _park)
+        if (_attract || _park || _ram is not null)
         {
             _session.ChooseTransmission(_attractMode);
         }
@@ -396,7 +416,7 @@ public sealed partial class Bootstrap : Node3D
             _overlayUntil = -1f;
         }
 
-        var input = _park ? DriverInputs.Idle : _attract ? _scripted.Next(_session) : _keyboard.Sample(dt, MathF.Abs(_session.Car.Speed));
+        var input = _ram is not null ? RamInputs() : _park ? DriverInputs.Idle : _attract ? _scripted.Next(_session) : _keyboard.Sample(dt, MathF.Abs(_session.Car.Speed));
         if (!_attract && !_park && HandleMenuKeys()) input.Ignition = true;
 
         if (_session.Phase == SessionPhase.Replay && Input.IsActionJustPressed(InputSetup.Abort)) _session.Abort();
@@ -534,21 +554,74 @@ public sealed partial class Bootstrap : Node3D
         _trainView?.Sync();
         if (_session.Phase == SessionPhase.Replay && _session.Replay.Count > 1)
         {
-            // Scrub through the recorded poses over the replay duration.
-            var samples = _session.Replay;
-            var t = MathUtil.Clamp01(_session.ReplayTime / _session.Options.ReplaySeconds);
-            var index = (int)(t * (samples.Count - 1));
-            var sample = samples[index];
-            _carView.SetPose(sample.Position, sample.Orientation);
-            var forward = SN.Vector3.Transform(SN.Vector3.UnitZ, sample.Orientation);
-            _cameraRig.Replay(Convert.ToGodot(sample.Position), Convert.ToGodot(forward));
+            // The recorded approach, then the crash played out and the car damaged (CrashScene).
+            _crash ??= new CrashScene(this, _carView, _session, effects: !_retro);
+            var pose = _crash.Pose(_session.ReplayTime, _session.Options.ReplaySeconds);
+            if (_crash.StruckThisFrame) _audio.ReplayCrash();
+            _carView.Transform = pose;
+            _cameraRig.Replay(pose.Origin, _crash.ViewForward, _crash.CloseUp);
             return;
         }
+        EndCrash();
         _carView.SetPose(car.Position, car.Orientation);
         _carView.SetWheels(car.Wheels, car.SteerAngle, car.Spec);
         _cameraRig.Roughness = car.Wheels.Any(w => w.InContact && w.Surface != SurfaceType.Road) ? 1f : 0f;
         _cameraRig.Acceleration = new Vector2(car.LateralAcceleration, car.LongitudinalAcceleration);
         _cameraRig.FollowCar(_carView.GlobalTransform, MathF.Abs(car.Speed), dt);
+    }
+
+    /// <summary>
+    /// For the crash replay in automated runs (--ram=tree, --ram=building, --ram=traffic, --ram=test with a tree
+    /// planted on the start straight): the course is driven as in the attract mode until a thing of that kind comes
+    /// up within 50 m ahead and 25 degrees of the nose, and then the car is driven flat out into it.
+    /// </summary>
+    private DriverInputs RamInputs()
+    {
+        var input = _scripted.Next(_session);
+        var car = _session.Car;
+        if (_session.Phase != SessionPhase.Driving)
+        {
+            _ramTarget = null;
+            return input;
+        }
+        SN.Vector3? found = null;
+        var nearest = 50f;
+        void Consider(SN.Vector3 point)
+        {
+            var to = point - car.Position;
+            to.Y = 0f;
+            var distance = to.Length();
+            if (distance < 3f || distance > nearest || SN.Vector3.Dot(to / distance, car.Forward) < MathF.Cos(0.44f)) return;
+            nearest = distance;
+            found = point;
+        }
+        if (_ram == "traffic" && _session.Traffic is not null)
+        {
+            foreach (var drone in _session.Traffic.Cars) Consider(drone.Position);
+        }
+        else
+        {
+            foreach (var prop in _session.Track.Props)
+            {
+                if (prop.Solid && (_ram is "tree" or "test") == (prop.Kind == PropKind.Tree)) Consider(prop.Position);
+            }
+        }
+        // Once a target is taken it is held (a drone's is followed as it moves).
+        if (found is { } point && (_ramTarget is null || _ram == "traffic")) _ramTarget = point;
+        if (_ramTarget is not { } target) return input;
+        var toTarget = target - car.Position;
+        var angle = MathF.Atan2(SN.Vector3.Dot(toTarget, car.Right), MathF.Max(SN.Vector3.Dot(toTarget, car.Forward), 0.1f));
+        input.Throttle = 1f;
+        input.Brake = 0f;
+        input.Steer = MathUtil.Clamp(angle / car.MaxSteerAngleAt(car.Speed), -1f, 1f);
+        return input;
+    }
+
+    /// <summary>The replay is over or cut short: the car is repaired and the debris cleared.</summary>
+    private void EndCrash()
+    {
+        _crash?.End();
+        _crash = null;
     }
 
     private void UpdateTipping()
@@ -598,10 +671,12 @@ public sealed partial class Bootstrap : Node3D
         var click = _clicked;
         _clicked = false;
         if (_session.Phase != SessionPhase.SelectTransmission) return false;
-        // Left/right flips between the cars; the session is rebuilt around the new spec.
-        if (Input.IsActionJustPressed(InputSetup.SteerLeft) || Input.IsActionJustPressed(InputSetup.SteerRight))
+        // Left/right steps through the cars, either way round; the session is rebuilt around the new spec.
+        var step = Input.IsActionJustPressed(InputSetup.SteerLeft) ? -1 : Input.IsActionJustPressed(InputSetup.SteerRight) ? 1 : 0;
+        if (step != 0)
         {
-            _carIndex = (_carIndex + 1) % VehicleSpec.Catalogue.Length;
+            var count = VehicleSpec.Catalogue.Length;
+            _carIndex = (_carIndex + step + count) % count;
             SaveChoice("car", _carIndex);
             NewSession();
             _audio.Chime();

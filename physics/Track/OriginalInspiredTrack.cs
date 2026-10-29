@@ -137,6 +137,7 @@ public static class OriginalInspiredTrack
         var pad = new SkidPad(PadCentre, PadRadius);
         var track = new TrackGeometry(common.Path, speed.Path, stunt.Path, final.Path, [pad], rollingGround: 0.5f) { Name = "Farm Circuit" };
         PlaceProps(track);
+        track.AddBridgePiers();
         track.Props.Add(new TrackProp(PropKind.Tower, pad.Centre with { Y = track.Terrain.Height(pad.Centre.X, pad.Centre.Z) }, 0f, new Vector3(3f, 14f, 3f), "pad-column"));
 
         var crossing = speed.Path.FrameAt(CrossingDistance);

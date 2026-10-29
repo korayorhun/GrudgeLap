@@ -2,8 +2,10 @@ namespace GrudgeLap.Physics.Vehicle;
 
 /// <summary>
 /// Tunable description of a car. The default is a late-80s rear-wheel-drive flat-twelve sports car with the
-/// original game's four-speed gearbox; <see cref="V8Evo"/> is a 2010s mid-engined V8 with a seven-speed box.
-/// The numbers are game numbers, tuned for feel, not a manufacturer datasheet.
+/// original game's four-speed gearbox; <see cref="V8Evo"/> is a 2010s mid-engined V8 with a seven-speed box; three
+/// front-wheel-drive hatchbacks follow the hot hatches of 1997-2008 (<see cref="HotHatch"/>, <see cref="FiveHatch"/>,
+/// <see cref="TurboHatch"/>). The numbers are game numbers, tuned for feel from the published figures of the cars
+/// they follow (power, torque, mass, wheelbase, track, tyres, gearing), not a manufacturer datasheet.
 /// </summary>
 public sealed record VehicleSpec
 {
@@ -29,8 +31,10 @@ public sealed record VehicleSpec
     public float RollingResistance { get; init; } = 0.015f;
     /// <summary>Multiplier on the surface friction: modern tyres grip harder than 1984's.</summary>
     public float TireGrip { get; init; } = 1.0f;
-    /// <summary>Electronic traction control: the throttle is eased when the driven wheels spin up. Period-correct only on the modern car.</summary>
+    /// <summary>Electronic traction control: the throttle is eased when the driven wheels spin up. Period-correct only on the modern cars.</summary>
     public bool TractionControl { get; init; }
+    /// <summary>The engine drives the front wheels (a transverse engine in a hatchback) instead of the rear.</summary>
+    public bool FrontWheelDrive { get; init; }
 
     // Suspension (raycast model per wheel)
     public float WheelRadius { get; init; } = 0.33f;
@@ -91,12 +95,130 @@ public sealed record VehicleSpec
         EngineInertia = 0.20f,
     };
 
+    /// <summary>
+    /// A hot hatch of 2001 (after the 2.0-litre Clio of the time): 172 hp at 6250, 1140 kg with the driver, five
+    /// gears, 205/45 R16 tyres, the front axle carrying 62 % of the weight, no traction control. 0-60 in about 7 s.
+    /// </summary>
+    public static VehicleSpec HotHatch => new()
+    {
+        Name = "HOT HATCH 2.0 16V '01",
+        Style = CarStyle.HotHatch,
+        Engine = EngineSpec.HotHatch,
+        SpeedoMaxMph = 150f,
+        MassKg = 1140f,
+        InertiaRoll = 390f,
+        InertiaYaw = 1500f,
+        InertiaPitch = 1450f,
+        HalfTrack = 0.73f,
+        FrontAxle = 0.95f,
+        RearAxle = 1.52f,
+        HubHeight = -0.20f,
+        DragCoefficient = 0.34f,
+        FrontalArea = 1.95f,
+        TireGrip = 1.08f,
+        WheelRadius = 0.296f,
+        SuspensionRest = 0.22f,
+        SuspensionStiffness = 30000f,
+        SuspensionDamping = 2900f,
+        MaxCompression = 0.13f,
+        MaxSteerLowSpeedDeg = 34f,
+        MaxSteerHighSpeedDeg = 7.5f,
+        FrontBrakeTorque = 2100f,
+        RearBrakeTorque = 800f,
+        GearRatios = [-3.55f, 0f, 3.09f, 1.84f, 1.32f, 1.03f, 0.86f],
+        FinalDrive = 4.21f,
+        ClutchMaxTorque = 360f,
+        EngineInertia = 0.12f,
+        WheelInertia = 0.9f,
+        FrontWheelDrive = true,
+    };
+
+    /// <summary>
+    /// A five-cylinder hatch of 1997 (after the 2.0 20-valve Bravo): 147 hp at 6100, the five's warble, 1310 kg,
+    /// five gears, 195/55 R15 tyres. Slower than the others, and the one that sounds like nothing else.
+    /// </summary>
+    public static VehicleSpec FiveHatch => new()
+    {
+        Name = "FIVE 2.0 20V HATCH '97",
+        Style = CarStyle.FiveHatch,
+        Engine = EngineSpec.FiveCylinder,
+        SpeedoMaxMph = 150f,
+        MassKg = 1310f,
+        InertiaRoll = 430f,
+        InertiaYaw = 1750f,
+        InertiaPitch = 1700f,
+        HalfTrack = 0.73f,
+        FrontAxle = 0.95f,
+        RearAxle = 1.59f,
+        HubHeight = -0.20f,
+        DragCoefficient = 0.32f,
+        FrontalArea = 2.0f,
+        TireGrip = 1.0f,
+        WheelRadius = 0.298f,
+        SuspensionRest = 0.23f,
+        SuspensionStiffness = 30000f,
+        SuspensionDamping = 3000f,
+        MaxCompression = 0.14f,
+        MaxSteerLowSpeedDeg = 33f,
+        MaxSteerHighSpeedDeg = 7f,
+        FrontBrakeTorque = 2100f,
+        RearBrakeTorque = 850f,
+        GearRatios = [-3.71f, 0f, 3.35f, 2.05f, 1.41f, 1.03f, 0.82f],
+        FinalDrive = 4.07f,
+        ClutchMaxTorque = 330f,
+        EngineInertia = 0.14f,
+        WheelInertia = 0.9f,
+        FrontWheelDrive = true,
+    };
+
+    /// <summary>
+    /// A turbo hatch of 2008 (after the 2.0 TFSI Leon of the time): 240 hp, 300 N m from 2200 to 5500 once the
+    /// turbo has spooled, 1480 kg, six gears, 225/40 R18 tyres and traction control. 0-60 in about 6 s.
+    /// </summary>
+    public static VehicleSpec TurboHatch => new()
+    {
+        Name = "TURBO HATCH 2.0T '08",
+        Style = CarStyle.TurboHatch,
+        Engine = EngineSpec.TurboFour,
+        SpeedoMaxMph = 170f,
+        MassKg = 1480f,
+        InertiaRoll = 470f,
+        InertiaYaw = 2000f,
+        InertiaPitch = 1950f,
+        HalfTrack = 0.765f,
+        FrontAxle = 0.98f,
+        RearAxle = 1.60f,
+        HubHeight = -0.20f,
+        DragCoefficient = 0.33f,
+        FrontalArea = 2.15f,
+        TireGrip = 1.18f,
+        TractionControl = true,
+        WheelRadius = 0.319f,
+        SuspensionRest = 0.22f,
+        SuspensionStiffness = 38000f,
+        SuspensionDamping = 3700f,
+        MaxCompression = 0.13f,
+        MaxSteerLowSpeedDeg = 33f,
+        MaxSteerHighSpeedDeg = 7f,
+        FrontBrakeTorque = 3000f,
+        RearBrakeTorque = 1300f,
+        GearRatios = [-3.18f, 0f, 3.36f, 2.09f, 1.47f, 1.10f, 0.87f, 0.73f],
+        FinalDrive = 3.65f,
+        ClutchMaxTorque = 520f,
+        EngineInertia = 0.13f,
+        WheelInertia = 1.0f,
+        FrontWheelDrive = true,
+    };
+
     /// <summary>The cars the player can choose from, in menu order.</summary>
-    public static VehicleSpec[] Catalogue => [FlatTwelve, V8Evo];
+    public static VehicleSpec[] Catalogue => [FlatTwelve, V8Evo, HotHatch, FiveHatch, TurboHatch];
 }
 
 public enum CarStyle
 {
     FlatTwelve,
     V8,
+    HotHatch,
+    FiveHatch,
+    TurboHatch,
 }

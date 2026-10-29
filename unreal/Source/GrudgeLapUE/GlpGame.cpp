@@ -36,7 +36,7 @@ namespace
 		float Height;
 		float Back;
 	};
-	const FEyePoint EyePoints[] = { { 0.98f, 0.15f }, { 1.02f, 0.12f } };
+	const FEyePoint EyePoints[] = { { 0.98f, 0.15f }, { 1.02f, 0.12f }, { 1.14f, 0.42f }, { 1.13f, 0.55f }, { 1.17f, 0.45f } };
 
 	void HideTree(AActor* Actor, bool bHidden)
 	{
@@ -232,7 +232,7 @@ void AGlpGame::NewSession()
 		}
 	}
 	bInsideShown = false;
-	const FEyePoint& Eye = EyePoints[FMath::Clamp(CarSpec.style, 0, 1)];
+	const FEyePoint& Eye = EyePoints[FMath::Clamp(CarSpec.style, 0, (int32)UE_ARRAY_COUNT(EyePoints) - 1)];
 	Rig.Eye = FVector3f(-0.38f, Eye.Height - CarSpec.cg_height, Eye.Back);
 	Rig.CgHeight = CarSpec.cg_height;
 	Rig.Reset();

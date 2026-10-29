@@ -233,6 +233,12 @@ internal static class PropBuilder
                 }
                 break;
 
+            case PropKind.Pier:
+                // A concrete pier under a deck, sunk 0.3 m into the ground so no gap shows on a slope; a tower's footprint is
+                // drawn with the tower (WorldBuilder.BuildTowers).
+                if (prop.Label != "tower") Box(node, new SN.Vector3(size.X, size.Y + 0.3f, size.Z), WorldBuilder.PropMaterial("concrete", new Color(0.78f, 0.77f, 0.74f), 0.5f), y: (size.Y - 0.3f) * 0.5f);
+                break;
+
             case PropKind.Train:
                 Box(node, size, WorldBuilder.PropMaterial("metal", new Color(0.5f, 0.12f, 0.1f), 0.5f), y: size.Y * 0.5f);
                 break;

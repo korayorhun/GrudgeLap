@@ -91,13 +91,17 @@ internal sealed partial class CameraRig : Node3D
         _camera.Fov = 62f;
     }
 
-    /// <summary>Replay: a high crane shot that keeps the crash car centred, like the "God's eye" view of the original.</summary>
-    public void Replay(Vector3 carPosition, Vector3 carForward)
+    /// <summary>
+    /// Replay: a high crane shot that keeps the crash car centred, like the "God's eye" view of the original, coming
+    /// down to a few metres off the car for the crash itself (<paramref name="closeUp"/> 1, CrashScene).
+    /// </summary>
+    public void Replay(Vector3 carPosition, Vector3 viewForward, float closeUp = 0f)
     {
-        var back = (carForward * -1f).Normalized();
-        var eye = carPosition + back * 26f + Vector3.Up * 16f + new Vector3(back.Z, 0f, -back.X) * 10f;
+        var back = (viewForward * -1f).Normalized();
+        var reach = Mathf.Lerp(1f, 0.3f, closeUp);
+        var eye = carPosition + back * (26f * reach) + Vector3.Up * Mathf.Lerp(16f, 3.2f, closeUp) + new Vector3(back.Z, 0f, -back.X) * (10f * reach);
         _camera.GlobalTransform = new Transform3D(Basis.LookingAt(carPosition + Vector3.Up * 0.8f - eye, Vector3.Up), eye);
-        _camera.Fov = 50f;
+        _camera.Fov = Mathf.Lerp(50f, 56f, closeUp);
     }
 
     public void ResetChase() => _chaseInitialised = false;

@@ -4,9 +4,9 @@ namespace GrudgeLap.Physics.Track;
 
 /// <summary>
 /// The train of the original: a locomotive and a few wagons that cross the speed route at a level crossing
-/// every so often, on no visible rails (a quirk of the 1989 game kept on purpose). Kinematic: it runs along
-/// a straight line through the crossing at a steady speed, pauses out of sight and comes round again.
-/// Solid to the car.
+/// every so often. Kinematic: it runs along a straight line through the crossing at a steady speed, pauses out
+/// of sight and comes round again. Solid to the car. The 1989 game drew no rails under it; since 0.9 the view
+/// lays a railway along the line (<see cref="LineFrom"/> to <see cref="LineTo"/>).
 /// </summary>
 public sealed class Train
 {
@@ -33,6 +33,9 @@ public sealed class Train
 
     /// <summary>Where the line meets the road.</summary>
     public Vector3 Crossing { get; }
+    /// <summary>The stretch of the line the train is ever on, metres along <see cref="Direction"/> from the crossing: from the far end of the parked train to the locomotive at the end of its run.</summary>
+    public float LineFrom => -_halfLength - (2 * Cars.Length - 1) * CarSpacing - CarLength;
+    public float LineTo => _halfLength + CarLength;
     /// <summary>Unit direction of travel.</summary>
     public Vector3 Direction { get; }
     public float Speed { get; }

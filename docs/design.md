@@ -60,9 +60,15 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   every road, hedgerow trees on their far side, a few roadside trees (none within 16 m of another road),
   flowers and the skid-pad column. Signs as in the original: the speed on a yellow square with a yellow arrow
   diamond above it before a bend ("90>"), yellow diamonds for DIP and the chevrons. Props are *solid* (crash)
-  or *soft*: a cow moos and a sign tips over, once, with no penalty.
+  or *soft*: a cow moos and a sign tips over, once, with no penalty. The piers under the jump's ramps and the
+  drawbridge towers are solid props as well (`TrackGeometry.AddBridgePiers`, 0.9: the view drew them alone before
+  and the car drove through them); a tower is stood further out, or left out, where its legs would land on the
+  speed route that runs under the jump, so each lip of the gap keeps one tower, on opposite sides.
 - **Train** — `Train`: a kinematic locomotive and five passenger coaches that cross the speed route's
-  diagonal after its cutting on a schedule (run, pause, run), on no rails as in 1989; its far end passes within
+  diagonal after its cutting on a schedule (run, pause, run), on a railway the view lays along its line since
+  0.9 (`TrainView.BuildRailway`: a gravel bed, sleepers and rails 14 cm proud of the ground, the rails set
+  flush in the asphalt across the road; 1989 had none and the train read as a lorry crossing the fields); its
+  far end passes within
   sight of the stunt route's last metres before the merge. The session treats a car under it as a crash; the scripted driver
   stops short of the crossing when a run is due.
 - **Surface probe** — the one question the car asks: what is under this point? Nearest frame search in a
@@ -75,12 +81,20 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   frame was the higher surface, the cursor hopped back onto it and the rules replayed its start line.
 - **Vehicle** — rigid body on four raycast wheels (spring/damper/bump stop), Pacejka-style tyres with a
   friction circle, load sensitivity and relaxation, a per-car grip multiplier, rolling resistance as a
-  body force (much higher on grass), aerodynamic drag, speed-sensitive steering lock, optional traction
-  control that eases the throttle as the driven wheels spin up. Rear-wheel drive through an open
-  differential.
-- **Cars** — `VehicleSpec` presets: the 1984 flat-twelve (1580 kg, four speeds, 6900 rpm) and the 2012 V8
-  (1485 kg, seven speeds, 9000 rpm, stickier tyres, traction control). Each carries an `EngineSpec`
-  (idle, redline, full-throttle curve, engine braking), a body style and the recordings to play.
+  body force (much higher on grass: grip 0.66 and resistance 0.11 of the load since 0.9, from 0.55 and 0.16,
+  which made the verge a trap), aerodynamic drag, speed-sensitive steering lock, optional traction
+  control that eases the throttle as the driven wheels spin up. Rear- or front-wheel drive
+  (`VehicleSpec.FrontWheelDrive`) through an open differential; a turbo engine's torque builds with its boost
+  (`EngineModel.Boost`: half a second of lag above a threshold rpm, falling at a third of that rate so a
+  shift does not lose it), and the view whistles and vents it.
+- **Cars** — `VehicleSpec` presets: the 1984 flat-twelve (1580 kg, four speeds, 6900 rpm), the 2012 V8
+  (1485 kg, seven speeds, 9000 rpm, stickier tyres, traction control) and, since 0.9, three front-wheel-drive
+  hatchbacks tuned to the published figures of the cars they follow: a 2001 hot hatch (1140 kg, 172 hp, five
+  speeds, 7200 rpm, no traction control), a 1997 five-cylinder (1310 kg, 147 hp, five speeds, the five's
+  warble) and a 2008 turbo (1480 kg, 240 hp with 300 N m from 2200 rpm on boost, six speeds, traction
+  control); `VehicleTests.Hatchbacks_match_their_published_figures` holds their 0-60 and top speed. Each
+  carries an `EngineSpec` (idle, redline, full-throttle curve, engine braking, cylinders, the recordings'
+  folder, boost), a body style and the recordings to play.
 - **Drivetrain** — torque-curve engine with idle governor, rev limiter and stall; clutch as a lock/slip
   state machine with the slip torque limited to what synchronises the two inertias in one step (the axle
   side includes the car's mass through the tyres; otherwise the flywheel hammers the wheels and a stall is
@@ -279,6 +293,39 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   filtering, no shadows, global illumination, ambient occlusion, reflections, glow, fog or TAA, a flat sky,
   orange shoulders everywhere, no clouds or wear sheet, the synthesised engine and squeal instead of the
   recordings, the placed sounds muted.
+- The hatchbacks (`CarView.Hatchbacks.cs`, 0.9): three `BodyStyle`s keyed on dimensioned blueprints
+  (getoutlines.com, CC BY 4.0: the 2000 Clio, the 1995 Bravo three-door and the 2007 Leon), their side views
+  measured every 5 cm for the roofline and at every 5 cm of height for the nose and the tail, the end views for
+  the tumblehome. Stations run every 10 cm from the cowl to the tail (`RunStep`) so the curved roof and the
+  tailgate follow the profile, the shoulder has its own width (`ShoulderW`, the flank tucks in above the
+  waist) and the rear window spans the whole width between the crests. Their details are not boxes: the
+  headlamps, grille and intake are outlines seen from the front, filled with shrinking rings and carried back
+  along z onto the skin (`EndGrid`, `SkinZ` on sections cached every centimetre), the tail lamps the same from
+  behind, the rubbing strip and the pillars over the side glass carried in from the side; each lies a few
+  millimetres off the paint along its normal, so it follows the curve of the nose or the corner of the
+  tailgate. A hatchback's cabin has upright seats on bases, a rear bench and a parcel shelf, and a modern
+  airbag hub; every car gained a centre stack (vents, radio, heater knobs), a console with the gear lever and
+  the handbrake and sun visors. The end caps of the loft are cut along the trim line (the black bumper's edge
+  ran as a V down from the centre of the fan before). The title screen prints the car's power (from the torque
+  curve), mass, driven wheels and gears, and left/right step through the cars both ways.
+- Crash damage (`CrashScene`, `CarView.Damage.cs`, 0.9): the simulation stops the car when it comes within
+  reach of what it hit and starts the replay; the view plays the recorded approach at its own pace with the
+  crane coming down to a few metres off the car and swinging round to a front three-quarter view of the blow,
+  runs the car on until it touches the obstacle (the nearest point of the prop's box, the drone or the wagon),
+  then plays out the crash the simulation never did: a dent pressed into the shell, the glass and the lining
+  over a few frames (vertices moved along the push with a creased falloff, each moved face taking its own
+  normal so the metal reads crumpled), a wider shallow crumple round it and a buckled bonnet on a frontal
+  blow; the outside parts within reach (lamps, grille, plate, mirrors, strip) unparented into a debris node
+  and thrown with bits of paint, plastic and glass that tumble, bounce and come to rest on the road; sparks
+  fanned back off the obstacle; a steam plume from the radiator; the glass near the blow (and the screen on a
+  hard frontal one) laid again with a cracked texture (cellular noise's cell edges on a colour ramp); and the
+  car rebounding, spinning from the impulse acting off the centre of gravity, rocking in pitch and sliding
+  to rest, the first second in slow motion. When the replay is over (`Repair`) the original meshes are put
+  back, the parts re-parented and the debris freed, and the session sets the car down. 1989 mode keeps the
+  cabinet's replay: the recording from the crane, no damage.
+- Off the road (0.9): the grass tufts are 0.45 m tall (0.75 before, a metre with the scale: a car on the verge
+  drove under the grass) and start 4.5 m past the shoulder, a mown verge. The drones' and the ghost's wheels
+  are drawn at rest, one radius over the road: set at the hub mounts they hung 16 cm up and the cars floated.
 - Updater: once a day the latest GitHub release is fetched; F10 downloads the matching package (installer
   for an installed copy, zip for a portable one), verifies the published SHA-256 and applies it (silent
   installer with `/UPDATE=1`, or a PowerShell script that waits for the game to exit, unpacks over the
@@ -286,7 +333,10 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
 - One copy per computer (`SingleInstance`): the game holds a Global named mutex; a second launch signals a
   named event, which the running game polls every frame to restore and raise its window, and quits before
   building the world. `--invisible` runs neither take nor check the lock.
-- Command-line switches for automation: `--attract`, `--chase`, `--speed-route`, `--car=v8|flat12`,
+- Command-line switches for automation: `--attract`, `--chase`, `--speed-route`,
+  `--car=flat12|v8|hothatch|five|turbohatch` (or the car's index), `--ram=tree|building|traffic|test` (the
+  scripted driver runs the course until a thing of that kind is near and drives into it, or into a tree planted
+  on the start straight: the crash replay on film),
   `--no-traffic`, `--no-ghost` (the saved best lap is not raced, for pictures of the car), `--no-hud` (no
   overlay over the 3D scene, for comparing it with another engine's picture), `--retro`,
   `--screenshot=<file>`, `--at=<s>`, `--quit-after=<s>`, `--park` (the car waits at the start with its
@@ -377,6 +427,7 @@ new-package requests were withdrawn).
 3. A longer overrun recording for the twelve (its bank is one second long); a steam locomotive recorded
    closer than the Welsh one (binaural from a carriage window) if one turns up under CC0.
 4. More circuits built with the same turtle API; the hidden skid pad could grow cones and a timer.
+   The hatchbacks in the Unreal version: an export of each (`--car=`) and their entries in `build_scene.py`.
 5. Scanned models instead of lofts and primitives: a car body with real curvature (the loft has twenty
    design points per section, three of them filleted) and buildings with real geometry would be the next
    step past textured primitives. A reflection probe riding with the car was tried in 0.5 and left out:

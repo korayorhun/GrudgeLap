@@ -5,9 +5,11 @@
 | Godot Engine 4.7 (.NET edition) | game engine, shipped with the game | MIT — https://godotengine.org/license/ |
 | .NET 8 runtime | shipped next to the exe (`data_GrudgeLap_windows_x86_64`) | MIT |
 | Godot.NET.Sdk | build integration | MIT |
-| "Car Engine Sounds" (Internet Archive item `car-engines`) | the engines' run-up grain banks, cut from the `3 Ferrari 458` and `15 Lamborghini Countach` tracks (see `game/assets/audio/SOURCES.md`) | CC0 1.0 Universal, as declared by the uploader — https://archive.org/details/car-engines |
+| "Car Engine Sounds" (Internet Archive item `car-engines`) | the engines' run-up grain banks, cut from the `3 Ferrari 458`, `15 Lamborghini Countach`, `honda civic type r`, `honda s2000` and `25 Nissan Pulsar` tracks (see `game/assets/audio/SOURCES.md`) | CC0 1.0 Universal, as declared by the uploader — https://archive.org/details/car-engines |
 | Freesound #585215 "Car Engine: Maserati GranTurismo Switch to Sport Mode and Launch" by myeclecticself | the V8's idle grain bank (`v8/engine_idle`) | CC0 1.0 — https://freesound.org/s/585215/ |
 | Freesound #112075 "Lambo idle and rev.mp3" by cheesepuff | the twelve's idle grain bank (`flat12/engine_idle`) | CC0 1.0 — https://freesound.org/s/112075/ |
+| Freesound #95838 "RG Volvo Engine.wav" by cmusounddesign | the five-cylinder's idle grain bank (`five/engine_idle`) | CC BY 4.0 — https://freesound.org/s/95838/ (credit: cmusounddesign) |
+| getoutlines.com blueprints of a 1984 coupe, the 2000 Clio, the 1995 Bravo and the 2007 Leon | the measurements the car lofts are keyed on (`CarView.BodyStyle`); no drawing is shipped | CC BY 4.0 — https://getoutlines.com |
 | Freesound #383476 "Car interior driving 02.wav" by Daphne_in_Wonderland | the tyres' rolling roar on the road (`tyres/road.wav`) | CC0 1.0 — https://freesound.org/s/383476/ |
 | Freesound #850041 "tire-squeal" by JeffPearson | the cornering squeal loop (`tyres/squeal.wav`) | CC0 1.0 — https://freesound.org/s/850041/ |
 | "Sounds Effects 2" (Internet Archive item `Sound_Effects_2`, Wayzata Technology, 1995), file "squealing tires" | the hard-cornering howl (`tyres/squeal_hard.wav`) | CC0 1.0, as declared in the item's metadata — https://archive.org/details/Sound_Effects_2 |
@@ -29,12 +31,13 @@ Every mesh, the track and all other sounds in the game are generated at run time
 repository; the only files brought in are the CC0 textures, the CC0 sky, the engine grain banks, the tyre and
 road loops, the exhaust pops, the train's steam and whistle and the crashes (the grass-tuft atlas, the road
 wear sheet and the cloud sheet are drawn by scripts in `tools/`; the drones' engine loop is the game's own
-voice recorded). These are the only recorded sound material; they were cut and normalised from the CC0
-recordings above (the slices are listed in `game/assets/audio/SOURCES.md`) and carry no other claim. If you own a cleaner recording of a flat-twelve and are willing
+voice recorded). These are the only recorded sound material; they were cut and normalised from the CC0 and CC BY recordings
+above (the slices are listed in `game/assets/audio/SOURCES.md`) and carry no other claim. If you own a cleaner recording of a flat-twelve and are willing
 to license it CC0 or CC-BY, an issue is welcome.
 
-The car names ("FLAT-12 GT '84", "V8 GTB '12 SPORT EXHAUST") are descriptions of an engine layout, a body
-style and a year; they are not the names of any make or model, and the bodies are our own lofts.
+The car names ("FLAT-12 GT '84", "V8 GTB '12 SPORT EXHAUST", "HOT HATCH 2.0 16V '01", "FIVE 2.0 20V HATCH
+'97", "TURBO HATCH 2.0T '08") are descriptions of an engine layout, a body style and a year; they are not the
+names of any make or model, and the bodies are our own lofts, keyed on the proportions of the period cars.
 
 Not affiliated with, endorsed by, or derived from the assets of any arcade manufacturer or car maker. The
 game mechanics it pays homage to are described in expired U.S. patents (5,044,956; 5,005,148; 5,269,687;

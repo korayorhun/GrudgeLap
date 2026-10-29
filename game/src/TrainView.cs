@@ -6,13 +6,18 @@ namespace GrudgeLap.Game;
 
 /// <summary>
 /// The train of the level crossing: a dark red locomotive and silver passenger coaches with a red band, riding the
-/// simulation's train on the terrain, on no rails (as in 1989, where a long pale train with a red stripe crossed).
+/// simulation's train along its railway (<see cref="BuildRailway"/>; the 1989 game had a long pale train with a
+/// red stripe cross on no rails).
 /// </summary>
 internal sealed partial class TrainView : Node3D
 {
     private readonly List<Node3D> _cars = new();
     private Train _train = null!;
     private TerrainField _terrain = null!;
+
+    /// <summary>Height of the rails' top over the ground: the wheels stand on it.</summary>
+    private const float RailTop = 0.14f;
+    private const float Gauge = 1.435f;
 
     /// <summary>The locomotive's node, where the train's sounds are placed.</summary>
     public Node3D Locomotive => _cars[0];
@@ -62,6 +67,126 @@ internal sealed partial class TrainView : Node3D
         return view;
     }
 
+    /// <summary>
+    /// The railway along the train's line: a gravel bed, sleepers every 0.65 m and two rails at standard gauge, laid
+    /// low on the ground (the rails' top 14 cm over it, so the road's level crossing needs no ramp); where the line
+    /// crosses a road the bed and the sleepers stop and the rails lie in the asphalt, their top flush with it. Without
+    /// it, as in 1989, the train looked like a lorry driving across the fields and the road.
+    /// </summary>
+    public static Node3D BuildRailway(Train train, TrackGeometry track)
+    {
+        var root = new Node3D { Name = "Railway" };
+        var terrain = track.Terrain;
+        var direction = train.Direction;
+        var right = new SN.Vector3(-direction.Z, 0f, direction.X);
+        const float step = 2f;
+        var count = (int)MathF.Ceiling((train.LineTo - train.LineFrom) / step) + 1;
+        var points = new SN.Vector3[count];
+        var paved = new bool[count];
+        for (var i = 0; i < count; i++)
+        {
+            var p = train.Crossing + direction * (train.LineFrom + i * step);
+            paved[i] = OnRoad(track, p);
+            points[i] = new SN.Vector3(p.X, terrain.Height(p.X, p.Z), p.Z);
+        }
+
+        // The bed: a strip of gravel a little proud of the ground, 3 m wide, its edges down in the grass.
+        var bed = new MeshBuilder();
+        for (var i = 0; i < count - 1; i++)
+        {
+            if (paved[i] || paved[i + 1]) continue;
+            var a = points[i];
+            var b = points[i + 1];
+            void Strip(float x0, float y0, float x1, float y1)
+            {
+                var a0 = Convert.ToGodot(a + right * x0 + SN.Vector3.UnitY * y0);
+                var a1 = Convert.ToGodot(a + right * x1 + SN.Vector3.UnitY * y1);
+                var b0 = Convert.ToGodot(b + right * x0 + SN.Vector3.UnitY * y0);
+                var b1 = Convert.ToGodot(b + right * x1 + SN.Vector3.UnitY * y1);
+                var normal = (b0 - a0).Cross(a1 - a0).Normalized();
+                if (normal.Y < 0f) normal = -normal;
+                foreach (var v in new[] { a0, b0, a1, a1, b0, b1 })
+                {
+                    bed.SetNormal(normal);
+                    bed.AddVertex(v);
+                }
+            }
+            Strip(-1.6f, -0.08f, -1.15f, 0.04f);
+            Strip(-1.15f, 0.04f, 1.15f, 0.04f);
+            Strip(1.15f, 0.04f, 1.6f, -0.08f);
+        }
+        var gravel = WorldBuilder.PropMaterial("dirt", new Color(0.62f, 0.60f, 0.57f), 1.5f);
+        gravel.CullMode = BaseMaterial3D.CullModeEnum.Disabled;
+        root.AddChild(new MeshInstance3D { Mesh = bed.Commit(), MaterialOverride = gravel, Name = "Ballast" });
+
+        // Sleepers on the bed, one mesh for all of them.
+        var transforms = new List<Transform3D>();
+        var yaw = -MathF.Atan2(direction.X, direction.Z);
+        for (var s = 0f; s < (count - 1) * step; s += 0.65f)
+        {
+            var i = (int)(s / step);
+            if (paved[i] || paved[Math.Min(i + 1, count - 1)]) continue;
+            var p = SN.Vector3.Lerp(points[i], points[Math.Min(i + 1, count - 1)], s / step - i);
+            transforms.Add(new Transform3D(new Basis(Vector3.Up, yaw), Convert.ToGodot(p + SN.Vector3.UnitY * 0.06f)));
+        }
+        var sleepers = new MultiMesh
+        {
+            TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
+            Mesh = new BoxMesh { Size = new Vector3(2.5f, 0.07f, 0.24f), Material = WorldBuilder.PropMaterial("bark", new Color(0.42f, 0.36f, 0.30f), 1f) },
+            InstanceCount = transforms.Count,
+        };
+        for (var i = 0; i < transforms.Count; i++) sleepers.SetInstanceTransform(i, transforms[i]);
+        root.AddChild(new MultiMeshInstance3D { Multimesh = sleepers, Name = "Sleepers" });
+
+        // The rails: their top 14 cm over the ground, or flush with the asphalt across a road.
+        var rails = new MeshBuilder();
+        foreach (var side in new[] { -0.5f * Gauge, 0.5f * Gauge })
+        {
+            for (var i = 0; i < count - 1; i++)
+            {
+                var topA = paved[i] ? 0.01f : RailTop;
+                var topB = paved[i + 1] ? 0.01f : RailTop;
+                var a = points[i] + right * side;
+                var b = points[i + 1] + right * side;
+                foreach (var (x0, x1, top) in new[] { (-0.036f, 0.036f, true), (-0.036f, -0.036f, false), (0.036f, 0.036f, false) })
+                {
+                    var a0 = Convert.ToGodot(a + right * x0 + SN.Vector3.UnitY * (top ? topA : topA - 0.12f));
+                    var a1 = Convert.ToGodot(a + right * x1 + SN.Vector3.UnitY * topA);
+                    var b0 = Convert.ToGodot(b + right * x0 + SN.Vector3.UnitY * (top ? topB : topB - 0.12f));
+                    var b1 = Convert.ToGodot(b + right * x1 + SN.Vector3.UnitY * topB);
+                    var normal = top ? Vector3.Up : Convert.ToGodot(right * MathF.Sign(x0)).Normalized();
+                    foreach (var v in new[] { a0, b0, a1, a1, b0, b1 })
+                    {
+                        rails.SetNormal(normal);
+                        rails.AddVertex(v);
+                    }
+                }
+            }
+        }
+        var steel = new StandardMaterial3D { AlbedoColor = new Color(0.55f, 0.53f, 0.50f), Metallic = 0.9f, Roughness = 0.35f, CullMode = BaseMaterial3D.CullModeEnum.Disabled };
+        root.AddChild(new MeshInstance3D { Mesh = rails.Commit(), MaterialOverride = steel, Name = "Rails" });
+        return root;
+    }
+
+    /// <summary>True when the point is on a road or its shoulders (within 1.5 m of the edge of a frame beside it).</summary>
+    private static bool OnRoad(TrackGeometry track, SN.Vector3 point)
+    {
+        foreach (var path in track.Paths)
+        {
+            foreach (var f in path.Frames)
+            {
+                var d = point - f.Origin;
+                d.Y = 0f;
+                if (d.LengthSquared() > 400f) continue;
+                var tangent = SN.Vector3.Normalize(f.Tangent with { Y = 0f });
+                if (MathF.Abs(SN.Vector3.Dot(d, tangent)) > 1.2f) continue;
+                var lateral = SN.Vector3.Normalize(f.Lateral with { Y = 0f });
+                if (MathF.Abs(SN.Vector3.Dot(d, lateral)) < f.HalfWidth + 1.5f) return true;
+            }
+        }
+        return false;
+    }
+
     private static void Add(Node3D parent, Mesh mesh, Vector3 position, Vector3? rotation = null)
     {
         parent.AddChild(new MeshInstance3D { Mesh = mesh, Position = position, Rotation = rotation ?? Vector3.Zero });
@@ -77,7 +202,7 @@ internal sealed partial class TrainView : Node3D
         for (var i = 0; i < _cars.Count; i++)
         {
             var c = _train.Cars[i];
-            var y = _terrain.Height(c.X, c.Z);
+            var y = _terrain.Height(c.X, c.Z) + RailTop;
             _cars[i].Position = Convert.ToGodot(new SN.Vector3(c.X, y, c.Z));
             _cars[i].Rotation = new Vector3(0f, yaw, 0f);
         }

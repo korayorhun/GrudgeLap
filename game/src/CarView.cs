@@ -9,7 +9,8 @@ namespace GrudgeLap.Game;
 /// Visual stand-in for a car: a loft through cross-sections built from a <see cref="BodyStyle"/>'s profile
 /// curves, wheel arches cut into the loft, period details (lamp lids, strakes, louvres and slatted tail for
 /// the 1984 flat-twelve; slim lamps, side scoops, glass engine cover, round lamps and four exhaust tips for
-/// the 2012 V8) and four star-rimmed wheels that steer and spin from the simulation. The node's origin is
+/// the 2012 V8; lamps, grilles and tailgates laid on the skin for the hatchbacks, CarView.Hatchbacks.cs) and
+/// four star-rimmed wheels that steer and spin from the simulation. The node's origin is
 /// the centre of gravity, as in the simulation, so the body sits lower by the static ride height. The cabin
 /// is furnished and lined (dashboard, instrument binnacle, steering wheel that turns, seats, door trim, roof
 /// lining, pillars) and seen through tinted glass; from the driver's seat the shell and the glass are not
@@ -62,7 +63,14 @@ internal sealed partial class CarView : Node3D
             Name = "Car",
             _paint = paint ?? DefaultPaint,
             _wheelRadius = spec.WheelRadius,
-            _style = spec.Style == CarStyle.V8 ? BodyStyle.V8 : BodyStyle.FlatTwelve,
+            _style = spec.Style switch
+            {
+                CarStyle.V8 => BodyStyle.V8,
+                CarStyle.HotHatch => BodyStyle.HotHatch,
+                CarStyle.FiveHatch => BodyStyle.FiveHatch,
+                CarStyle.TurboHatch => BodyStyle.TurboHatch,
+                _ => BodyStyle.FlatTwelve,
+            },
         };
         var sag = spec.MassKg * MathUtil.Gravity / 4f / spec.SuspensionStiffness;
         view._cgHeight = spec.SuspensionRest + spec.WheelRadius - sag - spec.HubHeight;
@@ -170,7 +178,7 @@ internal sealed partial class CarView : Node3D
     // built from the style's curves, keyed at the design stations; metres above the road at rest.
 
     /// <summary>Profile curves and details of one car body; values keyed at <see cref="Keys"/>.</summary>
-    internal sealed class BodyStyle
+    internal sealed partial class BodyStyle
     {
         public required float[] Keys;        // Godot z of the design stations, nose negative
         public required float[] FloorH;
@@ -439,6 +447,13 @@ internal sealed partial class CarView : Node3D
             for (var z = style.IntakeFrom; z <= style.IntakeTo + 1e-4f; z += 0.10f) zs.Add(z);
             zs.AddRange([style.IntakeFrom - 0.012f, style.IntakeFrom + 0.04f, style.IntakeTo - 0.03f, style.IntakeTo, style.IntakeTo + 0.012f]);
         }
+        if (!float.IsNaN(style.RunStep))
+        {
+            // Stations all the way to the tail, so a curved roof and a tailgate follow the profile between the keys;
+            // and one just inside each end of the cabin, where the side glass starts and stops.
+            for (var z = style.CowlZ + style.RunStep; z < style.Keys[^1] - 0.02f; z += style.RunStep) zs.Add(z);
+            zs.AddRange([style.CabinFrom + 0.002f, style.CabinTo - 0.002f]);
+        }
         // A station pair at every shut line gives the seam its own thin strip of quads.
         foreach (var seam in style.TopSeams.Concat(style.FlankSeams))
         {
@@ -452,21 +467,28 @@ internal sealed partial class CarView : Node3D
             // Keys and arch samples can land on the same station (give or take float rounding); a zero-length
             // quad between them would only spoil the normal smoothing.
             if (stations.Count > 0 && z - stations[^1].Z < 1e-3f) continue;
-            var lift = 0f;
-            foreach (var axle in axles)
-            {
-                var d = MathF.Abs(z - axle);
-                var radius = axle < 0f ? style.FrontArchRadius : style.RearArchRadius;
-                if (d <= radius + 1e-4f)
-                {
-                    // Round arch over the hub, ending at hub height, flattened under the wing where the body is low.
-                    var arch = spec.WheelRadius + MathF.Sqrt(MathF.Max(radius * radius - d * d, 0f));
-                    lift = MathF.Max(lift, MathF.Min(arch, axle < 0f ? style.FrontArchTop : style.RearArchTop));
-                }
-            }
-            stations.Add(new Station(z, lift, z > style.CabinFrom && z < style.CabinTo, style.Intake(z).Depth));
+            stations.Add(StationAt(spec, z));
         }
         return [.. stations];
+    }
+
+    /// <summary>The section at <paramref name="z"/>: its arch cut, whether it is in the cabin, and the intake's depth there.</summary>
+    private Station StationAt(VehicleSpec spec, float z)
+    {
+        var style = _style;
+        var lift = 0f;
+        foreach (var axle in new[] { -spec.FrontAxle, spec.RearAxle })
+        {
+            var d = MathF.Abs(z - axle);
+            var radius = axle < 0f ? style.FrontArchRadius : style.RearArchRadius;
+            if (d <= radius + 1e-4f)
+            {
+                // Round arch over the hub, ending at hub height, flattened under the wing where the body is low.
+                var arch = spec.WheelRadius + MathF.Sqrt(MathF.Max(radius * radius - d * d, 0f));
+                lift = MathF.Max(lift, MathF.Min(arch, axle < 0f ? style.FrontArchTop : style.RearArchTop));
+            }
+        }
+        return new Station(z, lift, z > style.CabinFrom && z < style.CabinTo, style.Intake(z).Depth);
     }
 
     /// <summary>
@@ -489,7 +511,7 @@ internal sealed partial class CarView : Node3D
             new(w - 0.08f, floor),
             new(w - 0.005f, 0.30f),
             new(w, style.Sample(style.WaistH, z)),
-            new(w - 0.01f, style.Sample(style.ShoulderH, z)),
+            new(style.ShoulderW is { } shoulderW ? style.Sample(shoulderW, z) : w - 0.01f, style.Sample(style.ShoulderH, z)),
             new(style.Sample(style.EdgeW, z), style.Sample(style.EdgeH, z)),
             new(crestW, crestH),
             new(crestW * 0.70f, Mathf.Lerp(centreH, crestH, 0.49f)),
@@ -598,9 +620,11 @@ internal sealed partial class CarView : Node3D
             if (!float.IsNaN(style.ScreenFrom))
             {
                 // A long raked screen spans several stations (the front arch's among them): all of its top skin is glass,
-                // and behind the roof only the skin between the buttresses is the rear window.
+                // and behind the roof only the skin between the buttresses is the rear window; a hatchback's spans
+                // from crest to crest, its pillars beside it.
                 if (top && front.Z >= style.ScreenFrom - 1e-3f && back.Z <= style.ScreenTo + 1e-3f) return true;
-                if (k > TopFirst + 1 && k < TopLast - 1 && front.Z >= style.RearGlassFrom - 1e-3f && back.Z <= style.RearGlassTo + 1e-3f) return true;
+                var inset = style.Hatchback ? 0 : 1;
+                if (k > TopFirst + inset && k < TopLast - inset && front.Z >= style.RearGlassFrom - 1e-3f && back.Z <= style.RearGlassTo + 1e-3f) return true;
                 return front.Cabin && back.Cabin && (k == TopFirst || k == TopLast);
             }
             if (front.Cabin != back.Cabin) return top;
@@ -653,8 +677,10 @@ internal sealed partial class CarView : Node3D
             for (var j = 0; j < n; j++)
             {
                 var k = StripOrigin[j];
-                // The sills and the floor are below the cabin floor, and the windows stay open.
-                if (k < 3 || k > RingSize - 4 || IsGlass(front, back, k)) continue;
+                // The sills and the floor are below the cabin floor, and the windows stay open. A hatchback's waist is
+                // high above its floor, so its doors are lined from the sill up.
+                var lowest = style.Hatchback ? 2 : 3;
+                if (k < lowest || k > RingSize - 1 - lowest || IsGlass(front, back, k)) continue;
                 var roof = front.Cabin && back.Cabin && k > TopFirst && k < TopLast;
                 var j2 = (j + 1) % n;
                 var faceNormal = faces[i][j];
@@ -677,7 +703,9 @@ internal sealed partial class CarView : Node3D
         foreach (var (tool, material, name) in lined)
         {
             // The shell casts the cabin's shadow; the lining just inside it would only add shadow acne.
-            body.AddChild(new MeshInstance3D { Mesh = tool.Commit(), MaterialOverride = material, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Name = name });
+            var liningMesh = new MeshInstance3D { Mesh = tool.Commit(), MaterialOverride = material, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Name = name };
+            body.AddChild(liningMesh);
+            AddDeformable(liningMesh);
         }
 
         // Little metallic: a metallic albedo reflects the sky and turns the red pink; the gloss comes from the clearcoat.
@@ -706,12 +734,16 @@ internal sealed partial class CarView : Node3D
         body.AddChild(bonnetMesh);
         body.AddChild(shellMesh);
         body.AddChild(glassMesh);
+        AddDeformable(bonnetMesh);
+        AddDeformable(shellMesh);
+        AddDeformable(glassMesh);
         _outsideOnly.Add(shellMesh);
         // Tinted glass lets the sun through: no shadow, and from the seat it is not drawn at all.
         glassMesh.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
         _glass = glassMesh;
 
         BuildDetails(body, spec);
+        CollectParts(body);
     }
 
     /// <summary>Vertex colour of a loft quad: black sills, bumpers, arch walls and engine louvres; paint elsewhere.</summary>
@@ -720,7 +752,9 @@ internal sealed partial class CarView : Node3D
         var lowerSide = k <= 1 || k >= RingSize - 2;
         var archWall = k == 2 || k == RingSize - 3;
         if (lowerSide) return Trim;
-        if (archWall && (front.ArchLift > 0f || back.ArchLift > 0f)) return Trim;
+        // Over a wheel the flank below the waist is the arch's wall, dark on the low cars; a hatchback's waist is high
+        // and its wing is painted down to the lip of the arch.
+        if (archWall && !_style.Hatchback && (front.ArchLift > 0f || back.ArchLift > 0f)) return Trim;
         if (_style.Louvres && front.Z >= _style.LouvreFrom && back.Z <= _style.LouvreTo && k > TopFirst + 1 && k < TopLast - 1) return Trim;
         if ((k == 2 || k == RingSize - 3) && front.IntakeDepth > 0f && back.IntakeDepth > 0f) return Trim;
         // Shut lines: the 14 mm strip at each seam station goes dark, across the top skin or down the flank.
@@ -783,14 +817,36 @@ internal sealed partial class CarView : Node3D
         st.AddVertex(c);
     }
 
+    /// <summary>
+    /// Closes a ring with a flat face, black below <paramref name="trimBelow"/> and painted above. Each triangle of
+    /// the fan is cut along the trim line, so the edge between the two runs level across the face; coloured whole,
+    /// the fan drew it as a V down from the centre.
+    /// </summary>
     private static void Cap(MeshBuilder st, Vector3[] ring, Vector3 normal, float trimBelow, Color paint)
     {
         var centre = Centroid(ring);
+        var below = new List<Vector3>(4);
+        var above = new List<Vector3>(4);
         for (var j = 0; j < ring.Length; j++)
         {
             var j2 = (j + 1) % ring.Length;
-            var colour = (ring[j].Y + ring[j2].Y) * 0.5f < trimBelow ? Trim : paint;
-            Tri(st, centre, normal, ring[j], normal, ring[j2], normal, colour, normal);
+            below.Clear();
+            above.Clear();
+            Vector3[] corners = [centre, ring[j], ring[j2]];
+            for (var i = 0; i < 3; i++)
+            {
+                var p = corners[i];
+                var q = corners[(i + 1) % 3];
+                (p.Y < trimBelow ? below : above).Add(p);
+                if (p.Y < trimBelow != q.Y < trimBelow)
+                {
+                    var cut = p.Lerp(q, (trimBelow - p.Y) / (q.Y - p.Y));
+                    below.Add(cut);
+                    above.Add(cut);
+                }
+            }
+            for (var i = 1; i + 1 < below.Count; i++) Tri(st, below[0], normal, below[i], normal, below[i + 1], normal, Trim, normal);
+            for (var i = 1; i + 1 < above.Count; i++) Tri(st, above[0], normal, above[i], normal, above[i + 1], normal, paint, normal);
         }
     }
 
@@ -805,6 +861,11 @@ internal sealed partial class CarView : Node3D
         var chrome = new StandardMaterial3D { AlbedoColor = new Color(0.8f, 0.8f, 0.82f), Metallic = 0.95f, Roughness = 0.2f };
 
         BuildInterior(body, trim);
+        if (style.Hatchback)
+        {
+            BuildHatchDetails(body, spec, solidPaint, trim, chrome);
+            return;
+        }
 
         if (style.LampLids)
         {
@@ -842,15 +903,7 @@ internal sealed partial class CarView : Node3D
         body.AddChild(outside);
         _outsideOnly.Add(outside);
 
-        // Inner walls of the wheel wells, just inboard of the tyres and below the skin, so nothing shows through the arches.
-        foreach (var axle in new[] { -spec.FrontAxle, spec.RearAxle })
-        {
-            var inboard = HalfTrack(spec, axle < 0f) - 0.26f;
-            var top = (axle < 0f ? style.FrontArchTop : style.RearArchTop) - 0.02f;
-            var size = new Vector3(0.16f, top - 0.16f, 2f * (axle < 0f ? style.FrontArchRadius : style.RearArchRadius) + 0.04f);
-            Box(outside, size, new Vector3(-inboard, (top + 0.16f) * 0.5f, axle), trim);
-            Box(outside, size, new Vector3(inboard, (top + 0.16f) * 0.5f, axle), trim);
-        }
+        BuildWheelWells(outside, spec, trim);
 
         if (style.Strakes)
         {
@@ -1023,6 +1076,20 @@ internal sealed partial class CarView : Node3D
         }
     }
 
+    /// <summary>Inner walls of the wheel wells, just inboard of the tyres and below the skin, so nothing shows through the arches.</summary>
+    private void BuildWheelWells(Node3D outside, VehicleSpec spec, Material trim)
+    {
+        var style = _style;
+        foreach (var axle in new[] { -spec.FrontAxle, spec.RearAxle })
+        {
+            var inboard = HalfTrack(spec, axle < 0f) - 0.26f;
+            var top = (axle < 0f ? style.FrontArchTop : style.RearArchTop) - 0.02f;
+            var size = new Vector3(0.16f, top - 0.16f, 2f * (axle < 0f ? style.FrontArchRadius : style.RearArchRadius) + 0.04f);
+            _wheelWells.Add(Box(outside, size, new Vector3(-inboard, (top + 0.16f) * 0.5f, axle), trim));
+            _wheelWells.Add(Box(outside, size, new Vector3(inboard, (top + 0.16f) * 0.5f, axle), trim));
+        }
+    }
+
     /// <summary>
     /// The cabin: a carpeted floor, a leather dashboard swept across the car, a hooded binnacle whose face shows
     /// the instrument panel (<see cref="MountInstruments"/>), a three-spoke wheel on a column leaning back 22
@@ -1127,27 +1194,38 @@ internal sealed partial class CarView : Node3D
         column.AddChild(spin);
         _steeringSpin = spin;
         spin.AddChild(new MeshInstance3D { Mesh = new TorusMesh { InnerRadius = 0.158f, OuterRadius = 0.194f, Material = dash, Rings = 48, RingSegments = 12 } });
-        spin.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.045f, BottomRadius = 0.05f, Height = 0.035f, Material = dark, RadialSegments = 24 } });
+        // The modern cars carry the airbag in a padded hub and leather spokes; the 1984 car has a small horn push and
+        // satin spokes. The pad sits a little below the column (local +Z is down) and no wider than keeps the gear
+        // readout between the dials in view.
+        var airbag = style.Hatchback || ReferenceEquals(style, BodyStyle.V8);
+        var hubRadius = airbag ? 0.058f : 0.045f;
+        spin.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = hubRadius, BottomRadius = hubRadius + 0.005f, Height = airbag ? 0.05f : 0.035f, Material = dark, RadialSegments = 24 }, Position = new Vector3(0f, airbag ? 0.012f : 0f, airbag ? 0.022f : 0f) });
         foreach (var angle in new[] { 0f, 90f, -90f })
         {
             // Local +Z of the tilted column points down, so the spoke at 0 degrees is the bottom one.
             var a = Mathf.DegToRad(angle);
             spin.AddChild(new MeshInstance3D
             {
-                Mesh = new BoxMesh { Size = new Vector3(0.026f, 0.007f, 0.13f), Material = satin },
+                Mesh = new BoxMesh { Size = new Vector3(airbag ? 0.04f : 0.026f, airbag ? 0.012f : 0.007f, 0.13f), Material = airbag ? dash : satin },
                 Position = new Vector3(MathF.Sin(a) * 0.105f, 0.004f, MathF.Cos(a) * 0.105f),
                 Rotation = new Vector3(0f, a, 0f),
             });
         }
 
+        // The seats of the low cars sit the driver reclined, the eyes half a metre over the cushion; a hatchback's
+        // sit upright on a base above the floor, the cushion 0.62 m under the eyes.
+        var seatZ = style.Hatchback ? style.EyeZ + 0.07f : 0.22f;
+        var seatY = style.Hatchback ? style.EyeH - 0.62f : 0.47f;
         foreach (var x in new[] { DriverX, -DriverX })
         {
-            Box(body, new Vector3(0.50f, 0.14f, 0.52f), new Vector3(x, 0.47f, 0.22f), leather);
-            var backrest = Box(body, new Vector3(0.50f, 0.52f, 0.12f), new Vector3(x, 0.72f, 0.50f), leather);
+            Box(body, new Vector3(0.50f, 0.14f, 0.52f), new Vector3(x, seatY, seatZ), leather);
+            var backrest = Box(body, new Vector3(0.50f, 0.52f, 0.12f), new Vector3(x, seatY + 0.25f, seatZ + 0.28f), leather);
             // A positive pitch tips the top towards +z, the tail: the backrest reclines from the cushion onto the headrest.
             backrest.Rotation = new Vector3(0.22f, 0f, 0f);
-            Box(body, new Vector3(0.26f, 0.12f, 0.10f), new Vector3(x, 0.99f, 0.54f), leather);
+            Box(body, new Vector3(0.26f, 0.12f, 0.10f), new Vector3(x, seatY + 0.52f, seatZ + 0.32f), leather);
+            if (style.Hatchback) Box(body, new Vector3(0.40f, seatY - 0.45f, 0.40f), new Vector3(x, (seatY + 0.31f) * 0.5f, seatZ), dark);
         }
+        if (style.Hatchback) BuildRearSeats(body, leather, carpet);
 
         // A-pillars from the cowl corners to the roof corners above the screen. The eyes are twice as far from the
         // foot of the left one as from its top, so a pillar of even section looks twice as wide where it meets
@@ -1162,12 +1240,77 @@ internal sealed partial class CarView : Node3D
             Pillar(body, a, b, 0.020f, 0.013f, dash);
         }
 
+        BuildCentreStack(body, dash, dark, satin, stretch);
+
+        // Sun visors folded up under the header, one each side, at the top of the driver's view as in a car. Each
+        // hangs where the lining is lowest over it, at its outer end, the roof's crown falling towards the crest.
+        var visorZ = roofZ + 0.07f;
+        var crown = style.Sample(style.CentreH, visorZ) - style.Sample(style.CrestH, visorZ);
+        var outerEnd = 0.52f / style.Sample(style.CrestW, visorZ);
+        var visorY = style.Sample(style.CentreH, visorZ) - LiningInset - 0.02f - crown * outerEnd * outerEnd;
+        var fabric = WorldBuilder.PropMaterial("fabric", style.HeadlinerTint, 3f);
+        foreach (var x in new[] { DriverX, -DriverX })
+        {
+            var visorBoard = Box(body, new Vector3(0.30f, 0.016f, 0.16f), new Vector3(x, visorY, visorZ), fabric);
+            // A negative pitch lowers the front edge, along the roof as it falls to the header.
+            visorBoard.Rotation = new Vector3(-0.10f, 0f, 0f);
+        }
+
         // Wipers parked across the base of the screen.
         foreach (var x in new[] { -0.40f, 0.22f })
         {
             var blade = Box(body, new Vector3(0.52f, 0.012f, 0.03f), new Vector3(x, cowlH + 0.012f, style.CowlZ - 0.05f), trim);
             blade.RotationDegrees = new Vector3(0f, 12f, 0f);
         }
+    }
+
+    /// <summary>
+    /// The middle of the dashboard and the floor between the seats: a centre stack on the fascia (two vents, the
+    /// radio with its lit display, three heater knobs), the console running back from its foot with the gear lever
+    /// in its gaiter and the handbrake behind it.
+    /// </summary>
+    private void BuildCentreStack(Node3D body, Material dash, Material dark, Material satin, float stretch)
+    {
+        var style = _style;
+        var cowlH = style.Sample(style.CentreH, style.CowlZ);
+        // The fascia's face runs 0.19-0.21 m behind the cowl (plus the deep dashboard's stretch), from 0.10 to 0.40 m
+        // under its top; the stack stands 2 cm proud of it.
+        var faceZ = style.CowlZ + 0.215f + stretch;
+        var stack = new Node3D { Name = "CentreStack", Position = new Vector3(0f, cowlH - 0.25f, faceZ) };
+        body.AddChild(stack);
+        Box(stack, new Vector3(0.30f, 0.30f, 0.04f), Vector3.Zero, dash);
+        var slat = new StandardMaterial3D { AlbedoColor = new Color(0.10f, 0.10f, 0.11f), Metallic = 0.3f, Roughness = 0.5f };
+        foreach (var x in new[] { -0.075f, 0.075f })
+        {
+            Box(stack, new Vector3(0.12f, 0.065f, 0.01f), new Vector3(x, 0.10f, 0.021f), dark);
+            for (var i = 0; i < 4; i++) Box(stack, new Vector3(0.11f, 0.006f, 0.014f), new Vector3(x, 0.077f + i * 0.015f, 0.024f), slat);
+        }
+        var display = new StandardMaterial3D { AlbedoColor = new Color(0.1f, 0.25f, 0.3f), EmissionEnabled = true, Emission = new Color(0.25f, 0.75f, 0.85f), EmissionEnergyMultiplier = 0.6f };
+        Box(stack, new Vector3(0.19f, 0.055f, 0.01f), new Vector3(0f, 0.01f, 0.021f), dark);
+        Box(stack, new Vector3(0.08f, 0.018f, 0.004f), new Vector3(0f, 0.016f, 0.027f), display);
+        foreach (var x in new[] { -0.08f, 0f, 0.08f })
+        {
+            stack.AddChild(new MeshInstance3D
+            {
+                Mesh = new CylinderMesh { TopRadius = 0.022f, BottomRadius = 0.024f, Height = 0.02f, Material = satin, RadialSegments = 16 },
+                Position = new Vector3(x, -0.09f, 0.03f),
+                RotationDegrees = new Vector3(90f, 0f, 0f),
+            });
+        }
+
+        // The console from the foot of the fascia to between the seats, the lever ahead of the seat cushions.
+        var seatZ = style.Hatchback ? style.EyeZ + 0.07f : 0.22f;
+        var consoleFrom = faceZ - 0.02f;
+        var consoleTo = seatZ + 0.10f;
+        Box(body, new Vector3(0.22f, 0.16f, consoleTo - consoleFrom), new Vector3(0f, 0.44f, (consoleFrom + consoleTo) * 0.5f), dash);
+        var leverZ = seatZ - 0.32f;
+        var gaiter = new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.018f, BottomRadius = 0.06f, Height = 0.06f, Material = dark, RadialSegments = 16 }, Position = new Vector3(0f, 0.55f, leverZ) };
+        body.AddChild(gaiter);
+        body.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.009f, BottomRadius = 0.011f, Height = 0.15f, Material = satin, RadialSegments = 12 }, Position = new Vector3(0f, 0.64f, leverZ) });
+        body.AddChild(new MeshInstance3D { Mesh = new SphereMesh { Radius = 0.026f, Height = 0.05f, Material = dark, RadialSegments = 16, Rings = 8 }, Position = new Vector3(0f, 0.72f, leverZ) });
+        var handbrake = Box(body, new Vector3(0.035f, 0.03f, 0.24f), new Vector3(0f, 0.56f, seatZ - 0.05f), dark);
+        // Off, the lever lies nearly flat, its grip at the rear a little raised: a negative pitch lifts the +z end.
+        handbrake.Rotation = new Vector3(-0.20f, 0f, 0f);
     }
 
     /// <summary>
@@ -1239,12 +1382,17 @@ internal sealed partial class CarView : Node3D
         var tyres = new[] { Tyre(spec.WheelRadius, style.FrontTyreWidth * 0.5f, style.RimRadius, rubber), Tyre(spec.WheelRadius, style.RearTyreWidth * 0.5f, style.RimRadius, rubber) };
         var front = HalfTrack(spec, true);
         var rear = HalfTrack(spec, false);
+        // The hubs as the car stands at rest, one wheel radius over the road. The player's car moves them with the
+        // suspension every frame (SetWheels); the drones and the ghost keep them here. Set at the hub mounts (the
+        // spring fully compressed) as until 0.9, their wheels hung 16 cm over the road and the cars seemed to float.
+        var sag = spec.MassKg * MathUtil.Gravity / 4f / spec.SuspensionStiffness;
+        var hubY = spec.HubHeight - (spec.SuspensionRest - sag);
         var hubs = new[]
         {
-            new SN.Vector3(-front, spec.HubHeight, spec.FrontAxle),
-            new SN.Vector3(front, spec.HubHeight, spec.FrontAxle),
-            new SN.Vector3(-rear, spec.HubHeight, -spec.RearAxle),
-            new SN.Vector3(rear, spec.HubHeight, -spec.RearAxle),
+            new SN.Vector3(-front, hubY, spec.FrontAxle),
+            new SN.Vector3(front, hubY, spec.FrontAxle),
+            new SN.Vector3(-rear, hubY, -spec.RearAxle),
+            new SN.Vector3(rear, hubY, -spec.RearAxle),
         };
         for (var i = 0; i < 4; i++)
         {

@@ -200,11 +200,15 @@ void UGlpAudio::SetCar(int32 Style)
 	LoadedStyle = Style;
 	const FString Directory = AudioDirectory();
 	TSharedPtr<FClips, ESPMode::ThreadSafe> Loaded = MakeShared<FClips, ESPMode::ThreadSafe>();
-	// SampledEngine.Load: the grain banks of the car, as the V8 or the twelve.
+	// SampledEngine.Load: the grain banks of the car's engine, by its body style (CarStyle: the twelve, the V8, the
+	// hot hatch's four, the five, the turbo hatch's four), with the cylinders that turn revs into firing pulses.
+	struct FEngineBank { const TCHAR* Folder; int32 Cylinders; };
+	static const FEngineBank EngineBanks[] = { { TEXT("flat12"), 12 }, { TEXT("v8"), 8 }, { TEXT("hothatch"), 4 }, { TEXT("five"), 5 }, { TEXT("turbohatch"), 4 } };
+	const FEngineBank& Bank = EngineBanks[FMath::Clamp(Style, 0, (int32)UE_ARRAY_COUNT(EngineBanks) - 1)];
 	if (const FGlpLibrary* Library = FGlpLibrary::Get())
 	{
-		const FString Banks = FPaths::Combine(Directory, Style == 1 ? TEXT("v8") : TEXT("flat12"));
-		Loaded->Engine = Library->EngineCreate(TCHAR_TO_UTF8(*Banks), Style == 1 ? 8 : 12);
+		const FString Banks = FPaths::Combine(Directory, Bank.Folder);
+		Loaded->Engine = Library->EngineCreate(TCHAR_TO_UTF8(*Banks), Bank.Cylinders);
 		if (Loaded->Engine == 0)
 		{
 			UE_LOG(LogGlpAudio, Warning, TEXT("engine sound unavailable: %s"), *Library->LastError());

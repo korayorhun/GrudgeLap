@@ -67,6 +67,9 @@ public sealed class TrackTests
             {
                 foreach (var f in path.Frames)
                 {
+                    // A pier stands under the deck it holds up and a drawbridge tower beside its lip: a road raised over
+                    // the ground there is that structure. Every road on the ground keeps clear of them, as of the rest.
+                    if (prop.Kind == PropKind.Pier && f.Origin.Y > prop.Position.Y + 0.5f) continue;
                     var flat = new Vector3(prop.Position.X - f.Origin.X, 0f, prop.Position.Z - f.Origin.Z);
                     if (flat.Length() < f.HalfWidth + 2f + radius)
                     {
@@ -78,6 +81,44 @@ public sealed class TrackTests
         }
         foreach (var o in offenders) _out.WriteLine(o);
         Assert.Empty(offenders);
+    }
+
+    /// <summary>
+    /// The piers under the jump's ramps and the drawbridge towers are solid props, and none stands on a road on the
+    /// ground: the speed route runs under the jump, and until 0.9 a tower stood with a leg on its asphalt.
+    /// </summary>
+    [Fact]
+    public void Bridge_piers_and_towers_are_solid_and_off_the_roads_below()
+    {
+        var track = OriginalInspiredTrack.Build();
+        var piers = track.Props.Where(p => p.Kind == PropKind.Pier).ToList();
+        Assert.Contains(piers, p => p.Label == "pier");
+        Assert.Contains(piers, p => p.Label == "tower");
+        foreach (var pier in piers)
+        {
+            Assert.True(pier.Solid);
+            // The footprint's corners, in the pier's yawed frame.
+            var yaw = pier.YawDeg * MathUtil.Deg2Rad;
+            var axisX = new Vector3(MathF.Cos(yaw), 0f, -MathF.Sin(yaw));
+            var axisZ = new Vector3(MathF.Sin(yaw), 0f, MathF.Cos(yaw));
+            foreach (var (sx, sz) in new[] { (-1f, -1f), (-1f, 1f), (1f, -1f), (1f, 1f) })
+            {
+                var corner = pier.Position + axisX * (sx * pier.Size.X * 0.5f) + axisZ * (sz * pier.Size.Z * 0.5f);
+                foreach (var path in track.Paths)
+                {
+                    foreach (var f in path.Frames)
+                    {
+                        // Its own deck runs over it; a road on the ground must keep a metre clear of it.
+                        if (f.Origin.Y > pier.Position.Y + 0.5f) continue;
+                        var d = corner - f.Origin;
+                        d.Y = 0f;
+                        if (MathF.Abs(Vector3.Dot(d, Vector3.Normalize(f.Tangent with { Y = 0f }))) > 1.2f) continue;
+                        var lateral = MathF.Abs(Vector3.Dot(d, Vector3.Normalize(f.Lateral with { Y = 0f })));
+                        Assert.True(lateral > f.HalfWidth + 1f, $"{pier.Label} at ({pier.Position.X:F0}, {pier.Position.Z:F0}) reaches {path.Kind} s={f.Distance:F0}");
+                    }
+                }
+            }
+        }
     }
 
     [Fact]

@@ -21,6 +21,9 @@ public class GranularEngineTests
     [Theory]
     [InlineData("v8", 8, 5600f)]
     [InlineData("flat12", 12, 4800f)]
+    [InlineData("hothatch", 4, 5000f)]
+    [InlineData("five", 5, 4500f)]
+    [InlineData("turbohatch", 4, 4500f)]
     public void Overrun_bank_sounds_off_the_throttle_at_the_firing_frequency(string car, int cylinders, float rpm)
     {
         var with = Load(car, cylinders, overrun: true);
@@ -77,6 +80,12 @@ public class GranularEngineTests
     [InlineData("v8", 8, 7600f)]
     [InlineData("flat12", 12, 4200f)]
     [InlineData("flat12", 12, 6500f)]
+    [InlineData("hothatch", 4, 3500f)]
+    [InlineData("hothatch", 4, 6500f)]
+    [InlineData("five", 5, 3000f)]
+    [InlineData("five", 5, 6000f)]
+    [InlineData("turbohatch", 4, 3000f)]
+    [InlineData("turbohatch", 4, 5800f)]
     public void Sounds_at_the_firing_frequency_of_the_revs(string car, int cylinders, float rpm)
     {
         var engine = Load(car, cylinders);
@@ -89,6 +98,9 @@ public class GranularEngineTests
     [Theory]
     [InlineData("v8", 8)]
     [InlineData("flat12", 12)]
+    [InlineData("hothatch", 4)]
+    [InlineData("five", 5)]
+    [InlineData("turbohatch", 4)]
     public void Idles_at_the_idle_firing_frequency(string car, int cylinders)
     {
         var engine = Load(car, cylinders);
@@ -101,6 +113,9 @@ public class GranularEngineTests
     [Theory]
     [InlineData("v8", 8, 8600f)]
     [InlineData("flat12", 12, 7400f)]
+    [InlineData("hothatch", 4, 7000f)]
+    [InlineData("five", 5, 6600f)]
+    [InlineData("turbohatch", 4, 6500f)]
     public void Sweeps_without_clicks_and_falls_silent_when_stopped(string car, int cylinders, float top)
     {
         var engine = Load(car, cylinders);

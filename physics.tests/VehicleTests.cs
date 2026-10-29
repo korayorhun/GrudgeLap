@@ -136,6 +136,34 @@ public sealed class VehicleTests
         Assert.InRange(reached, 4.0f, 7.5f);
     }
 
+    /// <summary>
+    /// The hatchbacks against the figures of the cars they follow: 0-60 mph and top speed, driven flat out from a
+    /// standing start with the shifts at the redline (a launch with wheelspin, as most magazine runs were not).
+    /// </summary>
+    [Theory]
+    [InlineData(2, 6.0f, 8.2f, 124f, 145f)]   // hot hatch: 7.2 s to 62 mph, 220 km/h
+    [InlineData(3, 7.2f, 9.8f, 120f, 140f)]   // five: 8.5 s to 62 mph, 215 km/h
+    [InlineData(4, 5.2f, 7.4f, 138f, 160f)]   // turbo hatch: 6.4 s to 62 mph, 247 km/h
+    public void Hatchbacks_match_their_published_figures(int car, float zeroToSixtyMin, float zeroToSixtyMax, float topMin, float topMax)
+    {
+        var spec = VehicleSpec.Catalogue[car];
+        Assert.True(spec.FrontWheelDrive);
+        var sprint = StartedCar(DragStrip(), spec: spec);
+        var t = 0f;
+        var reached = -1f;
+        DriveFlatOut(sprint, 15f, c =>
+        {
+            t += Dt;
+            if (reached < 0f && c.SpeedMph >= 60f) reached = t;
+        });
+        var top = StartedCar(DragStrip(6000f), spec: spec);
+        DriveFlatOut(top, 90f);
+        _out.WriteLine($"{spec.Name}: 0-60 mph {reached:F2} s, top speed {top.SpeedMph:F0} mph in gear {top.Drivetrain.Gear} at {top.Drivetrain.Engine.Rpm:F0} rpm");
+        Assert.InRange(reached, zeroToSixtyMin, zeroToSixtyMax);
+        Assert.InRange(top.SpeedMph, topMin, topMax);
+        Assert.True(top.OnRoad);
+    }
+
     [Fact]
     public void Top_speed_lands_in_the_150_mph_class()
     {

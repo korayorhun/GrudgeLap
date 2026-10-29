@@ -23,7 +23,7 @@ internal sealed partial class SampledEngine : Node
     private readonly Vector2[] _frames = new Vector2[Chunk];
     private AudioStreamGeneratorPlayback? _playback;
     private GranularEngine? _engine;
-    private CarStyle? _loaded;
+    private string? _loaded;
 
     public float Volume { get; set; } = 0.9f;
     /// <summary>The listener sits in the cabin (the cockpit view): the engine is heard through the bulkhead.</summary>
@@ -41,14 +41,14 @@ internal sealed partial class SampledEngine : Node
         _playback = player.GetStreamPlayback() as AudioStreamGeneratorPlayback;
     }
 
-    /// <summary>Loads the grain banks of a car, replacing the previous ones.</summary>
-    public void Load(CarStyle style)
+    /// <summary>Loads the grain banks of an engine (its <see cref="EngineSpec.SoundFolder"/>), replacing the previous ones.</summary>
+    public void Load(EngineSpec engine)
     {
-        if (_loaded == style) return;
-        _loaded = style;
-        var folder = style == CarStyle.V8 ? "v8" : "flat12";
+        if (_loaded == engine.SoundFolder) return;
+        _loaded = engine.SoundFolder;
+        var folder = engine.SoundFolder;
         var drive = Bank(folder, "engine_drive", required: true);
-        _engine = drive is null ? null : new GranularEngine(Bank(folder, "engine_idle"), drive, style == CarStyle.V8 ? 8 : 12, overrun: Bank(folder, "engine_overrun"));
+        _engine = drive is null ? null : new GranularEngine(Bank(folder, "engine_idle"), drive, engine.Cylinders, overrun: Bank(folder, "engine_overrun"));
     }
 
     /// <summary>A grain bank of the car's folder; only the run-up is required, a car may have no idle or overrun recording.</summary>

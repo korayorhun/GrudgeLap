@@ -1,7 +1,7 @@
 namespace GrudgeLap.Physics.Vehicle;
 
 /// <summary>
-/// Engine + clutch + four-speed gearbox feeding the rear axle. The clutch is a lock/slip state machine:
+/// Engine + clutch + gearbox feeding the driven axle (the rear, or the front on a front-wheel-drive car). The clutch is a lock/slip state machine:
 /// while slipping it transmits Coulomb torque limited by the pedal, when the speeds meet it locks and the
 /// engine inertia is lumped onto the wheels. That is numerically stable at the 240 Hz step and still gives
 /// the two behaviours the original cabinet was known for: a launch you can fluff, and a stall.
@@ -18,9 +18,9 @@ public sealed class Drivetrain
     /// <summary>Effective clutch engagement after driver assists, 0 = open, 1 = fully engaged.</summary>
     public float Engagement { get; private set; }
     public TransmissionMode Mode { get; set; } = TransmissionMode.ManualAutoClutch;
-    /// <summary>Torque delivered to the rear axle (sum of both wheels) during the last step.</summary>
+    /// <summary>Torque delivered to the driven axle (sum of both wheels) during the last step.</summary>
     public float AxleTorque { get; private set; }
-    /// <summary>Extra inertia the rear wheels carry while the clutch is locked, already reflected through the gearing.</summary>
+    /// <summary>Extra inertia the driven wheels carry while the clutch is locked, already reflected through the gearing.</summary>
     public float ReflectedInertia { get; private set; }
 
     public Drivetrain(VehicleSpec spec)
@@ -53,7 +53,7 @@ public sealed class Drivetrain
     }
 
     /// <summary>
-    /// Steps the drivetrain. <paramref name="axleSpeed"/> is the mean rear wheel angular velocity (rad/s).
+    /// Steps the drivetrain. <paramref name="axleSpeed"/> is the mean angular velocity of the driven wheels (rad/s).
     /// Returns nothing; read <see cref="AxleTorque"/> and <see cref="ReflectedInertia"/> afterwards.
     /// </summary>
     public void Step(in DriverInputs input, float axleSpeed, float groundSpeed, float dt)

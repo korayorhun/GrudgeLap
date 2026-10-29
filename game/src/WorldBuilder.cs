@@ -97,9 +97,10 @@ internal static class WorldBuilder
             root.AddChild(BuildRoad(track, path));
             root.AddChild(BuildShoulders(track, path));
             root.AddChild(BuildCentreLine(track, path));
-            foreach (var node in BuildBridges(path, track.Terrain)) root.AddChild(node);
+            foreach (var node in BuildBridges(path)) root.AddChild(node);
             if (BuildLoopFrame(path, track.Terrain) is { } frame) root.AddChild(frame);
         }
+        if (BuildTowers(track) is { } towers) root.AddChild(towers);
         foreach (var pad in track.Pads) root.AddChild(BuildPad(pad));
         root.AddChild(FoliageBuilder.BuildGrass(track));
         var (minX, maxX, minZ, maxZ) = RoadBounds(track);
@@ -1191,17 +1192,14 @@ internal static class WorldBuilder
     }
 
     /// <summary>Overpass decks and drawbridge ramps get concrete pillars (down to the ground) and railings.</summary>
-    private static IEnumerable<Node3D> BuildBridges(TrackPath path, TerrainField terrain)
+    private static IEnumerable<Node3D> BuildBridges(TrackPath path)
     {
         var frames = path.Frames;
         var railings = new MeshBuilder();
         var grey = new Color(0.75f, 0.75f, 0.75f);
         var anyRail = false;
-        var lastPillar = -100f;
         var lastPost = -100f;
         var pillars = new Node3D { Name = $"Pillars-{path.Kind}" };
-        var towers = new MeshBuilder();
-        var anyTower = false;
 
         for (var i = 0; i < frames.Count - 1; i++)
         {
@@ -1234,66 +1232,55 @@ internal static class WorldBuilder
             }
             if (a.Distance - lastPost >= 6f) lastPost = a.Distance;
 
-            if (a.Distance - lastPillar >= 14f && a.Origin.Y > 1.0f)
-            {
-                lastPillar = a.Distance;
-                foreach (var side in new[] { -1f, 1f })
-                {
-                    var foot = a.Origin + a.Lateral * (side * (a.HalfWidth - 1.2f));
-                    var ground = terrain.Height(foot.X, foot.Z) - 0.3f;
-                    // Stop 0.25 m under the deck so the pillar top never shows through a low stretch of ramp.
-                    var height = foot.Y - 0.25f - ground;
-                    if (height < 0.5f) continue;
-                    var pillar = new MeshInstance3D
-                    {
-                        Mesh = new BoxMesh { Size = new Vector3(1.2f, height, 1.6f), Material = Concrete },
-                        Position = Convert.ToGodot(new SN.Vector3(foot.X, ground + height * 0.5f, foot.Z)),
-                        Rotation = new Vector3(0f, -MathF.Atan2(a.Tangent.X, a.Tangent.Z), 0f),
-                    };
-                    pillars.AddChild(pillar);
-                }
-            }
+            // The piers under the deck are props of the track (TrackGeometry.AddBridgePiers), solid to the car and
+            // drawn by PropBuilder.
 
-            // Drawbridge towers at the lip of the gap: the white A-frames of the original, joined over the road, with
-            // cables back to the deck.
-            if (a.Kind == SegmentKind.RampUp && b.Kind == SegmentKind.Gap || a.Kind == SegmentKind.Gap && b.Kind == SegmentKind.RampDown)
-            {
-                var edge = a.Kind == SegmentKind.Gap ? b : a;
-                var back = a.Kind == SegmentKind.Gap ? 1f : -1f;   // along the path, toward the ramp's deck
-                var white = new Color(0.93f, 0.93f, 0.90f);
-                var cable = new Color(0.25f, 0.25f, 0.27f);
-                var apexes = new SN.Vector3[2];
-                for (var sideIndex = 0; sideIndex < 2; sideIndex++)
-                {
-                    var side = sideIndex == 0 ? -1f : 1f;
-                    var foot = edge.Origin + edge.Lateral * (side * (edge.HalfWidth + 2.6f));
-                    var ground = new SN.Vector3(foot.X, terrain.Height(foot.X, foot.Z) - 0.3f, foot.Z);
-                    var apex = new SN.Vector3(foot.X, foot.Y + 11f, foot.Z);
-                    apexes[sideIndex] = apex;
-                    var legA = ground - edge.Tangent * 2.4f;
-                    var legB = ground + edge.Tangent * 2.4f;
-                    Beam(towers, legA, apex, 0.55f, white);
-                    Beam(towers, legB, apex, 0.55f, white);
-                    Beam(towers, SN.Vector3.Lerp(legA, apex, 0.55f), SN.Vector3.Lerp(legB, apex, 0.55f), 0.35f, white);
-                    for (var k = 1; k <= 3; k++)
-                    {
-                        var frame = path.FrameAt(MathUtil.Clamp(edge.Distance + back * 12f * k, 0f, path.Length));
-                        var anchor = frame.Origin + frame.Lateral * (side * (frame.HalfWidth + 1.0f)) + frame.Normal * 0.9f;
-                        Beam(towers, apex, anchor, 0.09f, cable);
-                    }
-                }
-                Beam(towers, apexes[0], apexes[1], 0.5f, white);   // the portal beam over the road
-                anyTower = true;
-            }
         }
 
         yield return pillars;
-        if (anyTower) yield return new MeshInstance3D { Mesh = towers.Commit(), MaterialOverride = Steel, Name = $"Towers-{path.Kind}" };
         if (anyRail)
         {
             var material = new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 0.5f, Metallic = 0.4f, CullMode = BaseMaterial3D.CullModeEnum.Disabled };
             yield return new MeshInstance3D { Mesh = railings.Commit(), MaterialOverride = material, Name = $"Railings-{path.Kind}" };
         }
+    }
+
+    /// <summary>
+    /// The drawbridge towers at the lips of the gap (TrackGeometry.DrawbridgeTowers, which also makes them solid): the
+    /// white A-frames of the original, a cross-tie between the legs, cables back to the deck and a portal beam over
+    /// the road joining the two towers of a lip.
+    /// </summary>
+    private static MeshInstance3D? BuildTowers(TrackGeometry track)
+    {
+        var st = new MeshBuilder();
+        var white = new Color(0.93f, 0.93f, 0.90f);
+        var cable = new Color(0.25f, 0.25f, 0.27f);
+        var any = false;
+        foreach (var lip in track.DrawbridgeTowers().GroupBy(t => (t.Path, t.Edge.Distance)))
+        {
+            foreach (var (path, edge, side, foot, apex) in lip)
+            {
+                var along = SN.Vector3.Normalize(edge.Tangent with { Y = 0f });
+                var legA = foot - along * TrackGeometry.TowerLegSpread;
+                var legB = foot + along * TrackGeometry.TowerLegSpread;
+                Beam(st, legA, apex, 0.55f, white);
+                Beam(st, legB, apex, 0.55f, white);
+                Beam(st, SN.Vector3.Lerp(legA, apex, 0.55f), SN.Vector3.Lerp(legB, apex, 0.55f), 0.35f, white);
+                // Cables back along the deck, away from the gap: forward from the far lip (the gap lies behind it),
+                // backward from the near one.
+                var back = path.FrameAt(MathUtil.Clamp(edge.Distance - 3f, 0f, path.Length)).Kind == SegmentKind.Gap ? 1f : -1f;
+                for (var k = 1; k <= 3; k++)
+                {
+                    var frame = path.FrameAt(MathUtil.Clamp(edge.Distance + back * 12f * k, 0f, path.Length));
+                    var anchor = frame.Origin + frame.Lateral * (side * (frame.HalfWidth + 1.0f)) + frame.Normal * 0.9f;
+                    Beam(st, apex, anchor, 0.09f, cable);
+                }
+                any = true;
+            }
+            var apexes = lip.Select(t => t.Apex).ToArray();
+            if (apexes.Length == 2) Beam(st, apexes[0], apexes[1], 0.5f, white);   // the portal beam over the road
+        }
+        return any ? new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = Steel, Name = "Towers" } : null;
     }
 
     /// <summary>

@@ -121,7 +121,7 @@ internal sealed partial class Hud : Control
             var y = panel.Position.Y + 70f;
             Centred(font, "GRUDGELAP", y, 58, white);
             Centred(font, $"<   {car.Spec.Name}   >", y + 62f, 28, white);
-            Centred(font, "left / right or the stick: car", y + 90f, 15, grey);
+            Centred(font, $"{CarFigures(car.Spec)}      left / right or the stick: car {CarNumber(car.Spec)} of {VehicleSpec.Catalogue.Length}", y + 90f, 15, grey);
             var options = new (string Key, string Label, TransmissionMode Mode)[]
             {
                 ("1", "AUTOMATIC", TransmissionMode.Automatic),
@@ -221,6 +221,20 @@ internal sealed partial class Hud : Control
         }
         Centred(font, "F5: new game     ESC or BACK: menu and quit", panel.End.Y - 34f, 20, grey);
     }
+
+    /// <summary>
+    /// The figures that tell the cars apart on the title screen: peak power in metric horsepower (the units the
+    /// period brochures used) worked out from the torque curve, mass, driven wheels and gears.
+    /// </summary>
+    private static string CarFigures(VehicleSpec spec)
+    {
+        var power = spec.Engine.FullThrottleCurve.Max(p => p.Rpm * p.Torque) / 7023f;
+        var drive = spec.FrontWheelDrive ? "FRONT-WHEEL DRIVE" : "REAR-WHEEL DRIVE";
+        var turbo = spec.Engine.BoostShare > 0f ? "  TURBO" : "";
+        return $"{power:0} HP{turbo}   {spec.MassKg:0} KG   {drive}   {spec.ForwardGearCount} GEARS";
+    }
+
+    private static int CarNumber(VehicleSpec spec) => System.Array.FindIndex(VehicleSpec.Catalogue, c => c.Name == spec.Name) + 1;
 
     private void DrawHelp(Font font, Vector2 size, VehicleSim car, RaceSession s, float bandTop)
     {

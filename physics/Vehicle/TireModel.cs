@@ -18,7 +18,7 @@ public static class TireModel
     {
         SurfaceType.Road => 1.08f,
         SurfaceType.Pad => 1.02f,
-        SurfaceType.Grass => 0.55f,
+        SurfaceType.Grass => 0.66f,
         _ => 0f,
     };
 

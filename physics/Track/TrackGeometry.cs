@@ -35,6 +35,115 @@ public sealed class TrackGeometry
     public List<TrackProp> Props { get; } = new();
     /// <summary>The train at the level crossing, if the circuit has one.</summary>
     public Train? Train { get; set; }
+
+    /// <summary>
+    /// The piers under every bridge and ramp, and the legs of the drawbridge towers, as solid props: the car crashes
+    /// into them as into a building. Until 0.9 the view drew them alone and the car drove through them.
+    /// </summary>
+    /// <remarks>
+    /// A pier every 14 m where a deck stands more than 1.6 m high, under each edge of the deck (1.2 m inboard),
+    /// from the ground to a quarter of a metre under the deck. None is set within 2.5 m of another road, where a
+    /// road passes under the bridge. The towers are where <see cref="DrawbridgeTowers"/> stands them.
+    /// </remarks>
+    public void AddBridgePiers()
+    {
+        foreach (var path in Paths)
+        {
+            var frames = path.Frames;
+            var lastPier = -100f;
+            for (var i = 0; i < frames.Count - 1; i++)
+            {
+                var a = frames[i];
+                var b = frames[i + 1];
+                var bridge = a.Kind is SegmentKind.Overpass or SegmentKind.RampUp or SegmentKind.RampDown && a.Origin.Y > 0.4f;
+                if (!bridge) continue;
+                var yaw = MathF.Atan2(a.Tangent.X, a.Tangent.Z) * MathUtil.Rad2Deg;
+                if (a.Distance - lastPier >= 14f && a.Origin.Y > 1.6f)
+                {
+                    lastPier = a.Distance;
+                    foreach (var side in new[] { -1f, 1f })
+                    {
+                        var foot = a.Origin + a.Lateral * (side * (a.HalfWidth - 1.2f));
+                        var ground = Terrain.Height(foot.X, foot.Z);
+                        var height = foot.Y - 0.25f - ground;
+                        if (height < 0.8f || NearOtherRoad(foot, path, a.Distance, 2.5f)) continue;
+                        Props.Add(new TrackProp(PropKind.Pier, new Vector3(foot.X, ground, foot.Z), yaw, new Vector3(1.2f, height, 1.6f), "pier"));
+                    }
+                }
+            }
+        }
+        foreach (var tower in DrawbridgeTowers())
+        {
+            var edge = tower.Edge;
+            var yaw = MathF.Atan2(edge.Tangent.X, edge.Tangent.Z) * MathUtil.Rad2Deg;
+            var ground = Terrain.Height(tower.Foot.X, tower.Foot.Z);
+            Props.Add(new TrackProp(PropKind.Pier, tower.Foot with { Y = ground }, yaw, new Vector3(0.6f, tower.Apex.Y - ground, 2f * TowerLegSpread + 0.6f), "tower"));
+        }
+    }
+
+    /// <summary>Metres the legs of a drawbridge tower spread along the road either side of its foot.</summary>
+    public const float TowerLegSpread = 2.4f;
+
+    /// <summary>
+    /// The white A-frame towers of the drawbridge, one each side of the road at both lips of the gap: the foot on
+    /// the ground (0.3 m into it), the apex 11 m over the deck's edge. A tower stands 2.6 m past the road's edge,
+    /// further out where its legs would land on another road, and not at all where that road runs within 14 m: the
+    /// speed route runs under the jump, and until 0.9 a tower stood with a leg on its asphalt. On the 1989 course one
+    /// tower stands at each lip, on opposite sides.
+    /// </summary>
+    public IEnumerable<(TrackPath Path, RoadFrame Edge, float Side, Vector3 Foot, Vector3 Apex)> DrawbridgeTowers()
+    {
+        foreach (var path in Paths)
+        {
+            var frames = path.Frames;
+            for (var i = 0; i < frames.Count - 1; i++)
+            {
+                var a = frames[i];
+                var b = frames[i + 1];
+                if (!(a.Kind == SegmentKind.RampUp && b.Kind == SegmentKind.Gap || a.Kind == SegmentKind.Gap && b.Kind == SegmentKind.RampDown)) continue;
+                var edge = a.Kind == SegmentKind.Gap ? b : a;
+                var along = Vector3.Normalize(edge.Tangent with { Y = 0f });
+                foreach (var side in new[] { -1f, 1f })
+                {
+                    for (var offset = 2.6f; offset <= 14f; offset += 0.5f)
+                    {
+                        var top = edge.Origin + edge.Lateral * (side * (edge.HalfWidth + offset));
+                        var foot = new Vector3(top.X, Terrain.Height(top.X, top.Z) - 0.3f, top.Z);
+                        // The legs' feet and the ends of the footprint, half a metre past each, clear of every other road.
+                        var reach = along * (TowerLegSpread + 0.5f);
+                        if (NearOtherRoad(foot, path, edge.Distance, 2f)
+                            || NearOtherRoad(foot + reach, path, edge.Distance, 2f)
+                            || NearOtherRoad(foot - reach, path, edge.Distance, 2f))
+                        {
+                            continue;
+                        }
+                        yield return (path, edge, side, foot, new Vector3(top.X, top.Y + 11f, top.Z));
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>True when a road other than this stretch of <paramref name="own"/> passes within <paramref name="clearance"/> of its edge.</summary>
+    private bool NearOtherRoad(Vector3 point, TrackPath own, float ownDistance, float clearance)
+    {
+        foreach (var path in Paths)
+        {
+            foreach (var f in path.Frames)
+            {
+                if (path == own && MathF.Abs(f.Distance - ownDistance) < 40f) continue;
+                var d = point - f.Origin;
+                d.Y = 0f;
+                if (d.LengthSquared() > 900f) continue;
+                var tangent = Vector3.Normalize(f.Tangent with { Y = 0f });
+                if (MathF.Abs(Vector3.Dot(d, tangent)) > 1.5f) continue;
+                var lateral = Vector3.Normalize(f.Lateral with { Y = 0f });
+                if (MathF.Abs(Vector3.Dot(d, lateral)) < f.HalfWidth + clearance) return true;
+            }
+        }
+        return false;
+    }
     public string Name { get; init; } = "Track";
 
     public RoadFrame StartFrame => Common.First;
@@ -252,7 +361,7 @@ public readonly record struct SurfaceHit(
 /// <summary>A roadside object. Solid props crash the car; soft ones (signs, cows) just react.</summary>
 public sealed record TrackProp(PropKind Kind, Vector3 Position, float YawDeg, Vector3 Size, string Label = "")
 {
-    public bool Solid => Kind is PropKind.Barn or PropKind.House or PropKind.Shop or PropKind.Hut or PropKind.Tree or PropKind.Tower or PropKind.Barrier or PropKind.Train or PropKind.Pump;
+    public bool Solid => Kind is PropKind.Barn or PropKind.House or PropKind.Shop or PropKind.Hut or PropKind.Tree or PropKind.Tower or PropKind.Barrier or PropKind.Train or PropKind.Pump or PropKind.Pier;
     /// <summary>Soft props the car drives through: they react (a sign tips, a cow moos) but never stop it.</summary>
     public bool Soft => Kind is PropKind.Cow or PropKind.Sign or PropKind.Crossbuck;
 }
@@ -279,4 +388,9 @@ public enum PropKind
     Crossbuck,
     /// <summary>Fuel pump at the shop.</summary>
     Pump,
+    /// <summary>
+    /// A concrete pier under a bridge or a ramp (<see cref="TrackGeometry.AddBridgePiers"/>), or with the label
+    /// "tower" the footprint of a drawbridge tower's legs, which the view draws with the tower.
+    /// </summary>
+    Pier,
 }

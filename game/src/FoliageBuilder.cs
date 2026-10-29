@@ -106,7 +106,8 @@ internal static class FoliageBuilder
             colours[v].Add(new Color(tone * (0.78f + 0.2f * (float)rng.NextDouble()), tone, tone * 0.58f));
         }
 
-        // Dense along every road, thinning out with distance from the shoulder.
+        // Dense along every road, thinning out with distance from the shoulder; the first metres past the shoulder are
+        // a mown verge, so a car that runs wide is not swallowed by the grass at once.
         foreach (var path in track.Paths)
         {
             var frames = path.Frames;
@@ -118,7 +119,7 @@ internal static class FoliageBuilder
                 for (var k = 0; k < 5; k++)
                 {
                     var side = rng.Next(2) == 0 ? -1f : 1f;
-                    var lateral = f.HalfWidth + 2.2f + (float)rng.NextDouble() * 26f;
+                    var lateral = f.HalfWidth + 4.5f + (float)rng.NextDouble() * 24f;
                     if (rng.NextDouble() > 1.1f - (lateral - f.HalfWidth) / 30f) continue;
                     var p = f.Origin + f.Lateral * (side * lateral);
                     Place(p.X, p.Z, 0.55f + 0.45f * (float)rng.NextDouble());
@@ -168,7 +169,11 @@ internal static class FoliageBuilder
         return root;
     }
 
-    /// <summary>Two crossed quads, 1.2 m wide and 0.75 m tall, mapped to one cell of the tuft atlas (4 x 2).</summary>
+    /// <summary>
+    /// Two crossed quads, 1.2 m wide and 0.45 m tall (up to about 0.6 m with the placement's scale), mapped to one
+    /// cell of the tuft atlas (4 x 2). Until 0.9 they stood 0.75 m, a metre with the scale: a car off the road drove
+    /// with its wheels and doors under the grass, and from the seat the cards filled the screen.
+    /// </summary>
     private static ArrayMesh TuftMesh(int variant)
     {
         var st = new MeshBuilder();
@@ -176,7 +181,7 @@ internal static class FoliageBuilder
         var v0 = (variant / 4) / 2f;
         var u1 = u0 + 0.25f;
         var v1 = v0 + 0.5f;
-        const float w = 0.6f, h = 0.75f;
+        const float w = 0.6f, h = 0.45f;
         foreach (var yaw in new[] { 0f, Mathf.Pi / 2f })
         {
             var right = new Vector3(Mathf.Cos(yaw), 0f, Mathf.Sin(yaw));

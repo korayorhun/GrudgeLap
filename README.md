@@ -1,29 +1,33 @@
 # GrudgeLap
 
-**EN** · A homage to the 1989 arcade driving simulators. Two cars — a four-speed flat-twelve of 1984 and a
-seven-speed V8 of 2012 with a sports exhaust, both with real engine recordings — a fork between a long
+**EN** · A homage to the 1989 arcade driving simulators. Five cars — a four-speed flat-twelve of 1984, a
+seven-speed V8 of 2012 with a sports exhaust and three front-wheel-drive hot hatches of 1997-2008 (a
+sixteen-valve two-litre, a five-cylinder and a two-litre turbo), all with real engine recordings — a fork between a long
 *speed* route and a short *stunt* route with an open drawbridge, a vertical loop and a banked 180, dips,
-traffic in both directions, checkpoints against the clock, an instant replay after every crash, a hidden
+traffic in both directions, checkpoints against the clock, an instant replay after every crash in which the car
+crumples where it hit and sheds its lamps and trim, a hidden
 skid pad, a "1989 mode" and the *grudge match*: the ghost of your best lap races you on every lap after.
 The track follows the original's plan: the start at the foot of a bare hill with the fork on its crest, a
 speed route that sweeps round the east side and passes under the open drawbridge, a stunt route that jumps
 the speed route on that drawbridge, runs the loop and the banked 180 and crosses over itself, and orange
 shoulders all the way round. The scenery is the one you remember: a red barn with "33" on its door, cows in
 the fields, a farmhouse after the curve, a gas station, a camouflaged hut, yellow signs that tip over when you clip them, sawhorses before
-the stunts and a level crossing where a train really does come through. You sit in a leather-lined cabin,
+the stunts and a level crossing with its railway, where a train really does come through. You sit in a leather-lined cabin,
 reading working dials through a steering wheel that turns as you steer, with the road behind you in the
 mirror, and the tyres squeal, howl and scrabble on gravel from real recordings. Keyboard-playable on Windows,
 windowed or full screen. Free, open source, no assets copied from anywhere.
 
-**TR** · 1989'un arcade sürüş simülatörlerine saygı duruşu. İki araba (1984 flat-12, 4 vites; 2012 V8, 7
-vites, spor egzoz; gerçek motor kayıtları), uzun *speed* ve kısa *stunt* (açık köprü, dikey loop, eğimli
-180°) rotaları, çukurlar, iki yönlü trafik, süreye karşı kontrol noktaları, her kazadan sonra anlık tekrar,
+**TR** · 1989'un arcade sürüş simülatörlerine saygı duruşu. Beş araba (1984 flat-12, 4 vites; 2012 V8, 7
+vites, spor egzoz; 1997-2008'den üç önden çekişli hot hatch: 2.0 16V, beş silindirli ve 2.0 turbo; hepsinde
+gerçek motor kayıtları), uzun *speed* ve kısa *stunt* (açık köprü, dikey loop, eğimli
+180°) rotaları, çukurlar, iki yönlü trafik, süreye karşı kontrol noktaları, her kazadan sonra arabanın çarptığı
+yerden ezildiği ve parçalarının uçuştuğu anlık tekrar,
 gizli skid pad, "1989 modu" ve *grudge match*: en iyi turunuzun hayaleti sonraki her turda sizinle yarışır.
 Pist orijinalin planında: başlangıç, tepesinde çatal olan çıplak bir tepenin eteğinde; speed rotası doğuyu
 dolanıp açık köprünün altından geçer; stunt rotası o köprüden speed rotasının üstünden atlar, loop'u ve eğimli
 180°'yi geçip kendi üstünden aşar; yol kenarları baştan sona turuncu. Manzara hatırladığınız gibi: kapısında "33" yazan kırmızı ahır, tarlalarda inekler, virajdan sonra çiftlik
 evi, benzin istasyonu, kamuflajlı kulübe, çarpınca devrilen sarı levhalar, stunt öncesi tahta bariyerler ve
-gerçekten tren geçen bir hemzemin geçit. Deri kaplı bir kabinde oturur, çalışan göstergeleri siz
+raylı hemzemin geçitten gerçekten geçen bir tren. Deri kaplı bir kabinde oturur, çalışan göstergeleri siz
 çevirdikçe dönen direksiyonun içinden okur, arkanızdaki yolu dikiz aynasında görürsünüz; lastik
 ciyaklaması, patinaj ve çakıl sesleri gerçek kayıtlardan. Windows'ta
 klavyeyle oynanır; pencere veya tam ekran. Ücretsiz,
@@ -37,8 +41,8 @@ açık kaynak.
 | ![speed route](docs/images/farm.jpg) | |
 
 The name, track, cars and sounds are our own. The ideas come from a game we loved; nothing from it is
-copied. The car names are descriptions, not makes or models; the engine and tyre recordings are CC0 (see
-[THIRD_PARTY.md](THIRD_PARTY.md)).
+copied. The car names are descriptions, not makes or models; the engine and tyre recordings are CC0 or CC BY,
+credited in [THIRD_PARTY.md](THIRD_PARTY.md).
 
 ## Install
 
@@ -64,13 +68,14 @@ One copy runs per computer: starting it again brings the running game to the fro
 ## Play
 
 Press **Enter** (or Space, or click) on the title screen and you are off. Before that, **left / right**
-picks the car and **1 / 2 / 3** the gearbox (automatic at first; your last choice is remembered). A crash
+picks the car (the screen shows its power, weight, driven wheels and gears) and **1 / 2 / 3** the gearbox
+(automatic at first; your last choice is remembered). A crash
 shows a replay and puts you back at the last return point; Enter turns the key again.
 
 | Key | Action |
 |---|---|
 | Arrows / WASD | steer, throttle, brake |
-| 1-4 (1-7 in the V8), N, R | gears (R only when stopped) |
+| 1-4 (up to 1-7, by the car), N, R | gears (R only when stopped) |
 | E / Q | shift up / down |
 | Shift | clutch (only in *stick + clutch* mode: you can stall) |
 | Enter | turn the ignition key (start, and after every crash) |
@@ -95,7 +100,7 @@ Rules, from the cabinet's own operator options: 90 s on the clock, +45 s at the 
 10 s off road and you are put back, wrong way does not count, traffic is solid. The stunt route wants about
 60-80 mph for the open drawbridge and at least 60 for the loop. A hard left at the start line takes you
 to the skid pad, as in the original; donuts there cost nothing. Cows and signs only complain when you hit them; a barn,
-a tree, a sawhorse or the train at the level crossing is a crash.
+a tree, a sawhorse, a bridge pier or the train at the level crossing is a crash, and the replay shows the damage.
 
 **Grudge match.** Your best lap is recorded pose by pose and saved. From then on its ghost drives every lap
 with you; beat it and the new lap becomes the ghost.
@@ -125,7 +130,8 @@ best lap's ghost out of the picture.
 ## How it is made
 
 - `physics/` — the simulation: raycast-wheel rigid body at 240 Hz, Pacejka-style tyres, torque-curve
-  engines (flat-twelve and V8 specs), clutch lock/slip with a launch assist, gearboxes, the track as a graph
+  engines (flat-twelve, V8, two-litre four, five-cylinder and turbo four specs, the turbo with its boost lag),
+  front- or rear-wheel drive, clutch lock/slip with a launch assist, gearboxes, the track as a graph
   of road frames built by a turtle API (loop, drawbridge, banked curve, overpass, dips), the wear of the road
   (a slow undulation and potholes in the wheel tracks that the wheels feel and the view draws), a ground
   field that gives the terrain its embankments and cuttings, traffic drones, the rules of a credit, the
@@ -134,7 +140,8 @@ best lap's ghost out of the picture.
   `glp_*` functions in `include/grudgelap_physics.h`), for the Unreal Engine version: `dotnet publish
   physics.native -c Release -r win-x64 -o artifacts/physics-native` builds `GrudgeLap.Physics.Native.dll`,
   which needs no .NET where it runs.
-- `physics.tests/` — the feel checklist as numbers: 0-60, top speed, braking, stall, launch, the loop's
+- `physics.tests/` — the feel checklist as numbers: 0-60, top speed (every car against its published figures),
+  braking, stall, launch, the loop's
   minimum speed, the drawbridge window, the banked 180, the spin, grass, jumps in top gear, scripted laps on
   both routes with and without traffic and at any frame rate from 20 to 144 fps, drone collisions, the ghost,
   the skid pad, the ground and the props.
@@ -149,10 +156,13 @@ best lap's ghost out of the picture.
   the fork hill and in the cuttings, bridges with guardrails, the loop in its
   steel lattice, the drawbridge's white A-frame towers with cables, pad, grass tufts, trees from leaf cards,
   a wood beyond the fields, fields, textured buildings, the green fork gantry with its traffic light, the
-  red checkpoint banner, signs, the train), lofted car bodies
-  with rounded character lines, panel seams and a lined cabin behind tinted glass (leather dashboard,
-  binnacle with live dials, a three-spoke wheel that turns with the steering, seats, slim A-pillars, a
-  rear-view mirror with its own camera), a driver's-eye cockpit camera whose head sways with the car and
+  red checkpoint banner, signs, the train on its railway), lofted car bodies
+  with rounded character lines, panel seams, the hatchbacks' lamps, grilles and tail lamps laid on the skin,
+  and a lined cabin behind tinted glass (leather dashboard, binnacle with live dials, a centre stack with its
+  radio and heater knobs, gear lever and handbrake, sun visors, a three-spoke wheel that turns with the steering,
+  seats and a rear bench, slim A-pillars, a rear-view mirror with its own camera), crash damage in the instant
+  replay (dents pressed into the shell, lamps and trim flying off, cracked glass, sparks, steam; repaired for the
+  restart), a driver's-eye cockpit camera whose head sways with the car and
   a chase camera, HUD, engine, tyre (road roar, squeal, howl, screech, gravel) and V8 overrun-pop sounds
   from recordings over synthesised wind and bump thumps, the drones' engines and the train's steam and
   whistle placed in the world with Doppler shift (through the glass from the driver's seat), the shifter's
@@ -162,7 +172,8 @@ best lap's ghost out of the picture.
   of initials, updater. Design notes in [docs/design.md](docs/design.md), the checklist in
   [docs/feel-checklist.md](docs/feel-checklist.md), what the research found in
   [docs/research-notes.md](docs/research-notes.md).
-- `unreal/` — the Unreal Engine 5 version: the same track and both cars, exported from the game, dressed
+- `unreal/` — the Unreal Engine 5 version: the same track and the first two cars (the hatchbacks await their
+  export), exported from the game, dressed
   with CC0 photoscans (Poly Haven) under Lumen, Nanite and a physical sky, and the whole game on the
   simulation through `physics.native`: title screen, gearboxes, keyboard and gamepad, traffic, ghost, train,
   HUD, instruments, mirrors, the high-score table and the same sound. Scripts rebuild the level, play it, drive it for tests, render stills and

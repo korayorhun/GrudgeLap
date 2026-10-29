@@ -146,14 +146,16 @@ public sealed class VehicleSim
 
         SteerAngle = MathUtil.Clamp(input.Steer, -1f, 1f) * MaxSteerAngleAt(speed);
 
-        // Drivetrain first: it needs the rear axle speed from the previous step. Traction control, where the car
-        // has it, eases the throttle as the driven wheels spin up (slip ratio from the previous step).
-        var axleSpeed = 0.5f * (Wheels[2].AngularVelocity + Wheels[3].AngularVelocity);
+        // Drivetrain first: it needs the driven axle's speed from the previous step (the rear wheels, 2 and 3, or on a
+        // front-wheel-drive car the front ones, 0 and 1). Traction control, where the car has it, eases the throttle as
+        // the driven wheels spin up (slip ratio from the previous step).
+        var (driven0, driven1) = _spec.FrontWheelDrive ? (Wheels[0], Wheels[1]) : (Wheels[2], Wheels[3]);
+        var axleSpeed = 0.5f * (driven0.AngularVelocity + driven1.AngularVelocity);
         var drive = input;
         if (_spec.TractionControl && Drivetrain.Gear > 0 && input.Throttle > 0f)
         {
-            var rearSlip = MathF.Max(Wheels[2].SlipRatio, Wheels[3].SlipRatio);
-            drive.Throttle = input.Throttle * (1f - MathUtil.Clamp01((rearSlip - 0.12f) / 0.25f));
+            var slip = MathF.Max(driven0.SlipRatio, driven1.SlipRatio);
+            drive.Throttle = input.Throttle * (1f - MathUtil.Clamp01((slip - 0.12f) / 0.25f));
         }
         Drivetrain.Step(drive, axleSpeed, speed, dt);
 
@@ -236,9 +238,10 @@ public sealed class VehicleSim
                         w.SlipAngle += (targetSlipAngle - w.SlipAngle) * relax;
                         var (fx, fy) = TireModel.Forces(w.SlipRatio, w.SlipAngle, fs, TireModel.FrictionFor(hit.Surface) * _spec.TireGrip);
 
-                        // Rolling resistance (much higher on grass: the original's off-road "mud" feel) acts on the body
-                        // only. Feeding it back into the wheel spin would just make the wheel wind up to cancel it.
-                        var rolling = (hit.Surface == SurfaceType.Grass ? 0.16f : _spec.RollingResistance) * fs;
+                        // Rolling resistance (much higher on grass: the original's off-road "mud" feel, eased in 0.9 from
+                        // 0.16 with the grass grip raised from 0.55, players found the car hard to bring back) acts on the
+                        // body only. Feeding it back into the wheel spin would just make the wheel wind up to cancel it.
+                        var rolling = (hit.Surface == SurfaceType.Grass ? 0.11f : _spec.RollingResistance) * fs;
                         var drag = MathF.Sign(vLong) * MathF.Min(rolling, MathF.Abs(vLong) * 400f);
 
                         var tireForce = fwd * (fx - drag) + side * fy;
@@ -299,7 +302,7 @@ public sealed class VehicleSim
     {
         var inertia = _spec.WheelInertia;
         var driveTorque = 0f;
-        if (!w.IsFront)
+        if (w.IsFront == _spec.FrontWheelDrive)
         {
             driveTorque = Drivetrain.AxleTorque * 0.5f;
             inertia += Drivetrain.ReflectedInertia * 0.5f;

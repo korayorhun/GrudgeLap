@@ -1,6 +1,6 @@
 # Recordings
 
-## Engines (`flat12/engine_*`, `v8/engine_*`)
+## Engines (`flat12/engine_*`, `v8/engine_*`, `hothatch/engine_*`, `five/engine_*`, `turbohatch/engine_*`)
 
 Each car has two grain banks: a recording of the engine at idle and one running up through a gear, cut into
 its firing pulses by `tools/make-engine-bank.py` (a 16-bit mono WAV at 44.1 kHz and, beside it, a JSON file
@@ -17,6 +17,15 @@ overlap-adds them; nothing loops and nothing is pitch-shifted.
 | `flat12/engine_drive` | `15 Lamborghini Countach.mp3` from the Internet Archive item "Car Engine Sounds" (below) | 0.08@2.75@262@220@800, 3.3@5.6@556@450@820 |
 | `v8/engine_overrun` | `3 Ferrari 458.mp3` (the stretches with the throttle shut and the revs falling) | 15.0@16.3@436@380@480, 19.0@20.0@377@300@420 |
 | `flat12/engine_overrun` | `15 Lamborghini Countach.mp3` (the throttle shut at the end of the run) | 8.65@9.65@290@200@320 |
+| `hothatch/engine_idle` | `honda civic type r.mp3` from the Internet Archive item "Car Engine Sounds" (below) | 2.7@3.4@42@30@46, 10.3@11.9@35@27@42 |
+| `hothatch/engine_drive` | `honda civic type r.mp3` | 14.2@16.3@60@45@235, 17.4@19.6@150@125@240 |
+| `hothatch/engine_overrun` | `honda civic type r.mp3` (the throttle shut, revs falling) | 0.6@2.2@112@45@130, 4.5@6.2@110@40@125, 8.5@10.0@91@35@100 |
+| `five/engine_idle` | Freesound #95838 "RG Volvo Engine.wav" by cmusounddesign (a 2.4-litre five under the bonnet, at idle), https://freesound.org/s/95838/ (CC BY 4.0) | 6.0@23.0@42.5@36@50 |
+| `five/engine_drive` | `honda s2000.mp3` from the Internet Archive item "Car Engine Sounds" (below), played as a five (see the note) | 12.0@15.6@57@45@215, 2.9@5.6@205@180@300 |
+| `five/engine_overrun` | `honda s2000.mp3` (the throttle shut, revs falling) | 6.0@8.6@224@60@260 |
+| `turbohatch/engine_idle` | `25 Nissan Pulsar.mp3` from the Internet Archive item "Car Engine Sounds" (below) | 0.4@2.4@33@22@48 |
+| `turbohatch/engine_drive` | `25 Nissan Pulsar.mp3` | 6.0@8.7@94@80@175, 21.3@24.5@109@90@210, 25.0@27.9@127@110@200 |
+| `turbohatch/engine_overrun` | `25 Nissan Pulsar.mp3` (the throttle shut, revs falling) | 13.0@15.3@130@60@140, 16.5@19.2@94@28@100 |
 
 The overrun banks play in place of the run-up as the throttle closes (`GranularEngine`): off the throttle a real
 engine stops firing and what is left is the exhaust's rasp, which no filter on the run-up gave.
@@ -35,6 +44,14 @@ samples; a compressed import would not give them back.
 No recording of a flat-twelve with a usable licence was found; the twelve-cylinder banks of the 1984 car are a
 Lamborghini V12 at idle and the Countach track, the closest in era and sound. Swap the files (same names, made
 with the script) to use other recordings.
+
+The five-cylinder hatch (0.9) idles on a real five (the CC BY Volvo recording above; credit cmusounddesign) but
+no run-up of a five under load with a usable licence was found (the Freesound ramps of a Volvo S60 by el-bee are
+CC BY-NC and were not used): its drive and overrun banks are cut from the S2000 track, a high-revving four,
+laid down at the five's firing frequency (rpm x 5 / 120), and `GranularEngine` weights every fifth pulse in a
+fixed pattern (`FivePattern`) to give the five's warble back. The hot hatch and the turbo hatch are cut from
+the Civic Type R and the Pulsar tracks of the same CC0 item; the turbo's whistle and blow-off valve are
+synthesised (`EngineAudio.Turbo`).
 
 ## Tyres and road (`tyres/`)
 

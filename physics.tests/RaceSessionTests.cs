@@ -102,6 +102,31 @@ public sealed class RaceSessionTests
         Assert.DoesNotContain(RaceEvent.LeftRoad, events);
     }
 
+    /// <summary>
+    /// The hatchbacks round both routes: 147 hp and front-wheel drive still make the drawbridge's 60-80 mph and the
+    /// loop's 60 at the speeds the scripted driver plans.
+    /// </summary>
+    [Theory]
+    [InlineData(2, true)]
+    [InlineData(2, false)]
+    [InlineData(3, true)]
+    [InlineData(3, false)]
+    [InlineData(4, true)]
+    [InlineData(4, false)]
+    public void Every_hatchback_laps_both_routes(int car, bool stunt)
+    {
+        var spec = VehicleSpec.Catalogue[car];
+        var track = OriginalInspiredTrack.Build();
+        var session = new RaceSession(track, spec, RaceOptions.MediumNoTraffic);
+        var driver = new ScriptedDriver { PreferStunt = stunt };
+        session.ChooseTransmission(TransmissionMode.ManualAutoClutch);
+
+        var events = DriveLap(session, driver, $"{spec.Name} {(stunt ? "stunt" : "speed")} route");
+        Assert.Contains(RaceEvent.CheckpointPassed, events);
+        Assert.Contains(RaceEvent.LapCompleted, events);
+        Assert.True(session.CrashCount == 0, $"crashes {session.CrashCount} (last {session.LastCrash})");
+    }
+
     [Fact]
     public void Scripted_driver_threads_the_traffic_on_the_speed_route()
     {
@@ -214,6 +239,37 @@ public sealed class RaceSessionTests
         }
         Assert.True(seen, "ghost never appeared");
         Assert.Contains("GRUDGE MATCH", next.Message);
+    }
+
+    /// <summary>A pier under the jump's ramps stops the car like a building (until 0.9 the car drove through them).</summary>
+    [Fact]
+    public void Running_into_a_bridge_pier_crashes()
+    {
+        var track = OriginalInspiredTrack.Build();
+        var pier = track.Props.First(p => p.Kind == PropKind.Pier && p.Label == "pier");
+        var session = new RaceSession(track, new VehicleSpec(), RaceOptions.MediumNoTraffic);
+        session.ChooseTransmission(TransmissionMode.Automatic);
+        session.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Ignition = true }, Dt);
+
+        // Set the car down on the road nearest the pier, 35 m back along it, and drive at the pier off the road.
+        var (road, index) = track.Paths.SelectMany(p => p.Frames.Select((f, i) => (Path: p, Index: i, Frame: f)))
+            .Where(c => c.Frame.Origin.Y < pier.Position.Y + 0.5f)
+            .OrderBy(c => Vector3.DistanceSquared(c.Frame.Origin with { Y = 0f }, pier.Position with { Y = 0f }))
+            .Select(c => (c.Path, c.Index)).First();
+        var start = road.FrameIndexAt(MathF.Max(road.Frames[index].Distance - 35f, 0f));
+        session.Car.Reset(road.Frames[start], new PathCursor(road, start));
+        session.Car.LaunchAt(12f);
+        var crashed = false;
+        for (var i = 0; i < 60 * 8 && !crashed; i++)
+        {
+            var to = pier.Position - session.Car.Position;
+            var angle = MathF.Atan2(Vector3.Dot(to, session.Car.Right), MathF.Max(Vector3.Dot(to, session.Car.Forward), 0.1f));
+            var steer = MathUtil.Clamp(angle / session.Car.MaxSteerAngleAt(session.Car.Speed), -1f, 1f);
+            session.Step(new DriverInputs { Steer = steer, Throttle = 0.4f, Gear = DriverInputs.NoGearChange }, Dt);
+            if (session.Events.Contains(RaceEvent.Crashed)) crashed = true;
+        }
+        Assert.True(crashed, "expected to crash into the pier");
+        Assert.Equal(CrashReason.HitBuilding, session.LastCrash);
     }
 
     [Fact]

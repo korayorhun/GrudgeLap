@@ -50,6 +50,12 @@ internal sealed partial class EngineAudio : Node
     private SampledEngine _sampled = null!;
     private TyreAudio _tyres = null!;
     private CarStyle _style = CarStyle.FlatTwelve;
+    private bool _turbo;
+    private float _boost;
+    private float _whistlePhase;
+    private float _blowOff;
+    private float _blowLp;
+    private float _hissLp;
     private float _wind, _thump, _thumpPhase, _windLp;
     private float _lastLoad;
     private readonly float[] _lastCompression = new float[4];
@@ -64,11 +70,12 @@ internal sealed partial class EngineAudio : Node
     /// <summary>Heard from the driver's seat: the engine comes through the cabin's bulkhead.</summary>
     public bool Interior { get; set; }
 
-    /// <summary>Selects the recordings of the chosen car.</summary>
-    public void SetCar(CarStyle style)
+    /// <summary>Selects the recordings of the chosen car's engine, and its turbo if it has one.</summary>
+    public void SetCar(VehicleSpec spec)
     {
-        _style = style;
-        _sampled.Load(style);
+        _style = spec.Style;
+        _turbo = spec.Engine.BoostShare > 0f;
+        _sampled.Load(spec.Engine);
     }
 
     /// <summary>
@@ -294,6 +301,14 @@ internal sealed partial class EngineAudio : Node
         return player;
     }
 
+    /// <summary>The crash heard again when the instant replay reaches the blow (<see cref="CrashScene"/>).</summary>
+    public void ReplayCrash()
+    {
+        if (Retro || _crashTakes is null) _crash = 1f;
+        else _crashTakes.Play();
+        _thump = 1f;
+    }
+
     public void Update(RaceSession session, float dt)
     {
         var car = session.Car;
@@ -331,6 +346,10 @@ internal sealed partial class EngineAudio : Node
                 case RaceEvent.SignHit: _clang = 1f; break;
             }
         }
+        // A turbo: its whistle follows the boost; shutting the throttle on boost vents it through the blow-off valve.
+        var boost = _turbo && _running ? car.Drivetrain.Engine.Boost : 0f;
+        if (_turbo && _running && _boost > 0.55f && load < 0.1f && _blowOff <= 0.05f) _blowOff = _boost;
+        _boost += (boost - _boost) * MathUtil.Clamp01(dt * 10f);
         // The credit's end: the tune of the original's high-score screen, once.
         if (session.Phase == SessionPhase.Finished && _lastPhase != SessionPhase.Finished) PlayJingle(Jingle.GameOver);
         // The instant replay has its tune; skipped or over, it fades out in a third of a second.
@@ -440,7 +459,7 @@ internal sealed partial class EngineAudio : Node
                 _bleep -= 1f / MixRate;
             }
 
-            var music = Song() + ChimeSample() + Starter(noise);
+            var music = Song() + ChimeSample() + Starter(noise) + Turbo(noise);
             var extras = Moo() + Clang(noise) + Clunk(noise) + (Retro ? TrainClack(noise) : Road(noise));
             var sample = MathF.Tanh((engine + squeal + crash + bleep + music + extras) * Volume);
             buffer[i] = new Vector2(sample, sample);
@@ -515,6 +534,33 @@ internal sealed partial class EngineAudio : Node
         var phase = _trainClock % 0.42f;
         var burst = MathF.Exp(-phase * 60f) + 0.5f * MathF.Exp(-MathF.Max(phase - 0.11f, 0f) * 60f) * (phase > 0.11f ? 1f : 0f);
         return noise * burst * 0.5f * _trainLevel + noise * 0.04f * _trainLevel;
+    }
+
+    /// <summary>
+    /// The turbo: a whistle that climbs with the boost (the compressor wheel, two to four kilohertz here) over a
+    /// breath of rushing air, and the blow-off valve's hiss when the throttle shuts on boost, which decays in about
+    /// half a second. Silent in 1989 mode, which had no turbo.
+    /// </summary>
+    private float Turbo(float noise)
+    {
+        if (!_turbo || Retro) return 0f;
+        var sample = 0f;
+        if (_boost > 0.02f)
+        {
+            _whistlePhase += (2000f + 2000f * _boost) / MixRate;
+            if (_whistlePhase >= 1f) _whistlePhase -= 1f;
+            _hissLp += (noise - _hissLp) * 0.35f;
+            var rush = (noise - _hissLp) * 0.05f * _boost;
+            sample += MathF.Sin(_whistlePhase * MathF.Tau) * 0.028f * _boost * _boost + rush;
+        }
+        if (_blowOff > 0.01f)
+        {
+            // High-passed noise: the valve's psssh.
+            _blowLp += (noise - _blowLp) * 0.25f;
+            sample += (noise - _blowLp) * 0.22f * _blowOff;
+            _blowOff -= _blowOff * 4.5f / MixRate;
+        }
+        return sample;
     }
 
     /// <summary>One sample of the jingle playing, if any: notes start on their beat and sound through their voice's envelope.</summary>
