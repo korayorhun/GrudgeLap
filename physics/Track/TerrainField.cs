@@ -24,10 +24,22 @@ public sealed class TerrainField
     /// where a cutting began right at the shoulder edge, the triangles across that crease bulged through it.
     /// </summary>
     private const float Verge = 2f;
+    /// <summary>
+    /// Metres along the road the pull of the last earthwork frame of a run reaches past it, where a bridge, a ramp
+    /// or the loop takes over (the frames lie half a metre apart, so inside a run every point is within a quarter of
+    /// a metre of one). Beyond that the pull fades out over the falloff instead of running on along the tangent:
+    /// until 0.9.1 the embankment continued as a shelf under the bridge decks and the ramps. Only a run's ends are
+    /// clamped: the fork hill is the projection of the three roads that meet on its crest, and clamping every frame
+    /// cut a seven-metre notch between the branches.
+    /// </summary>
+    private const float AlongReach = 0.75f;
+    private const byte ClampAhead = 1;    // the run ends after this frame
+    private const byte ClampBehind = 2;   // the run starts with this frame
 
     private readonly Dictionary<(int, int), List<int>> _cells = new();
     private readonly List<RoadFrame> _frames = new();
     private readonly List<int> _pathOfFrame = new();
+    private readonly List<byte> _clampOfFrame = new();
     private readonly List<SkidPad> _pads;
     private readonly int _seed;
     private readonly Vector3 _centre;
@@ -41,8 +53,10 @@ public sealed class TerrainField
         var count = 0;
         for (var p = 0; p < paths.Count; p++)
         {
-            foreach (var f in paths[p].Frames)
+            var frames = paths[p].Frames;
+            for (var i = 0; i < frames.Count; i++)
             {
+                var f = frames[i];
                 sum += f.Origin;
                 count++;
                 _minX = MathF.Min(_minX, f.Origin.X); _maxX = MathF.Max(_maxX, f.Origin.X);
@@ -51,6 +65,12 @@ public sealed class TerrainField
                 var index = _frames.Count;
                 _frames.Add(f);
                 _pathOfFrame.Add(p);
+                // A run of earthwork ends where a structure follows or precedes it on the same path; a path's own
+                // ends join other paths and keep projecting (the fork hill, the merge).
+                byte clamp = 0;
+                if (i + 1 < frames.Count && !IsEarthwork(frames[i + 1])) clamp |= ClampAhead;
+                if (i > 0 && !IsEarthwork(frames[i - 1])) clamp |= ClampBehind;
+                _clampOfFrame.Add(clamp);
                 var key = CellOf(f.Origin.X, f.Origin.Z);
                 if (!_cells.TryGetValue(key, out var list)) _cells[key] = list = new List<int>();
                 list.Add(index);
@@ -137,6 +157,14 @@ public sealed class TerrainField
             var clamped = MathUtil.Clamp(lateral, -halfExtent, halfExtent);
             var edgeHeight = f.Origin.Y + clamped * f.Lateral.Y / flatLength;
             var beyond = MathF.Max(MathF.Abs(lateral) - halfExtent, 0f);
+            var clamp = _clampOfFrame[bestFrame[p]];
+            if (clamp != 0)
+            {
+                var flatTangent = new Vector3(f.Tangent.X, 0f, f.Tangent.Z);
+                var along = flatTangent.LengthSquared() > 1e-6f ? Vector3.Dot(delta, Vector3.Normalize(flatTangent)) : 0f;
+                if ((clamp & ClampAhead) != 0) beyond = MathF.Max(beyond, along - AlongReach);
+                if ((clamp & ClampBehind) != 0) beyond = MathF.Max(beyond, -along - AlongReach);
+            }
             ceiling = MathF.Min(ceiling, edgeHeight + beyond);
             var falloff = MathF.Max(MinFalloff, FalloffPerMetre * MathF.Abs(edgeHeight - baseHeight));
             var w = 1f - MathUtil.SmoothStep(beyond / falloff);

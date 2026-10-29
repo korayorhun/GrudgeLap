@@ -40,6 +40,7 @@ internal sealed partial class CarView
         public float HandleZ;                 // the front door's handle
         public float HandleY;
         public float MirrorZ;                 // where the door mirror stands on the beltline
+        public bool PaintedMirrors;           // mirror housings in body colour; black plastic otherwise
 
         /// <summary>
         /// The hot hatch of 2001, a three-door on the lines of the second-generation Clio: 3.77 m long and 1.66 m
@@ -252,6 +253,7 @@ internal sealed partial class CarView
             HandleZ = 0.40f,
             HandleY = 0.93f,
             MirrorZ = -0.45f,
+            PaintedMirrors = true,
         };
     }
 
@@ -602,10 +604,12 @@ internal sealed partial class CarView
             Box(outside, new Vector3(0.03f, 0.032f, 0.15f), new Vector3(side * (x + 0.008f), style.HandleY, style.HandleZ), trim);
         }
 
-        // Door mirrors at the front corner of the side glass: a black foot on the door's top, a rounded housing in
-        // paint and the glass on its rear face, towards the driver. About 0.97 m out from the centre line, as wide
-        // as the published widths with mirrors.
+        // Door mirrors at the front corner of the side glass: a black foot on the door's top, a rounded housing (black
+        // plastic on the older cars, paint on the turbo hatch) and the glass on its rear face, towards the driver.
+        // About 0.97 m out from the centre line, as wide as the published widths with mirrors. From the driver's seat
+        // the housing's back is what shows through the side glass: in paint, with a highlight, it read as a red ball.
         var mirrorGlass = new StandardMaterial3D { AlbedoColor = new Color(0.75f, 0.77f, 0.8f), Metallic = 1f, Roughness = 0.04f };
+        var housingMaterial = style.PaintedMirrors ? paint : new StandardMaterial3D { AlbedoColor = new Color(0.05f, 0.05f, 0.055f), Roughness = 0.6f };
         foreach (var side in new[] { -1f, 1f })
         {
             var z = style.MirrorZ;
@@ -614,7 +618,7 @@ internal sealed partial class CarView
             _mirrorParts.Add(Box(body, new Vector3(0.07f, 0.05f, 0.09f), new Vector3(side * (glassX + 0.03f), belt + 0.025f, z), trim));
             var housing = new MeshInstance3D
             {
-                Mesh = new SphereMesh { Radius = 0.5f, Height = 1f, Material = paint, RadialSegments = 20, Rings = 10 },
+                Mesh = new SphereMesh { Radius = 0.5f, Height = 1f, Material = housingMaterial, RadialSegments = 20, Rings = 10 },
                 Position = new Vector3(side * (glassX + 0.125f), belt + 0.065f, z),
                 Scale = new Vector3(0.19f, 0.115f, 0.075f),
             };

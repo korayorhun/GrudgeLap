@@ -172,8 +172,7 @@ best lap's ghost out of the picture.
   of initials, updater. Design notes in [docs/design.md](docs/design.md), the checklist in
   [docs/feel-checklist.md](docs/feel-checklist.md), what the research found in
   [docs/research-notes.md](docs/research-notes.md).
-- `unreal/` — the Unreal Engine 5 version: the same track and the first two cars (the hatchbacks await their
-  export), exported from the game, dressed
+- `unreal/` — the Unreal Engine 5 version: the same track and all five cars, exported from the game, dressed
   with CC0 photoscans (Poly Haven) under Lumen, Nanite and a physical sky, and the whole game on the
   simulation through `physics.native`: title screen, gearboxes, keyboard and gamepad, traffic, ghost, train,
   HUD, instruments, mirrors, the high-score table and the same sound. Scripts rebuild the level, play it, drive it for tests, render stills and

@@ -166,8 +166,14 @@ public sealed class ScriptedDriver
             }
             else if (stillBehind && oncomingGap < AbortClearance)
             {
+                // Alongside the drone (our nose within a car's length of its tail), moving back over would put us
+                // into its side: brake behind it first, in the passing lane, and drop back once it is clear ahead.
+                if (passedBy > loop - 6f)
+                {
+                    laneTarget = -Lane;
+                    return MathF.Max(_passing.Speed - 3f, 5f);
+                }
                 _passing = null;
-                slower ??= null;
             }
             else
             {

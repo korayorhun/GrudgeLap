@@ -119,24 +119,18 @@ internal sealed partial class TrainView : Node3D
         gravel.CullMode = BaseMaterial3D.CullModeEnum.Disabled;
         root.AddChild(new MeshInstance3D { Mesh = bed.Commit(), MaterialOverride = gravel, Name = "Ballast" });
 
-        // Sleepers on the bed, one mesh for all of them.
-        var transforms = new List<Transform3D>();
-        var yaw = -MathF.Atan2(direction.X, direction.Z);
+        // Sleepers on the bed, merged into one mesh: as a multimesh the world export took them for grass tufts.
+        var sleepers = new MeshBuilder();
+        var across = Convert.ToGodot(right).Normalized();
+        var ahead = Convert.ToGodot(direction).Normalized();
         for (var s = 0f; s < (count - 1) * step; s += 0.65f)
         {
             var i = (int)(s / step);
             if (paved[i] || paved[Math.Min(i + 1, count - 1)]) continue;
-            var p = SN.Vector3.Lerp(points[i], points[Math.Min(i + 1, count - 1)], s / step - i);
-            transforms.Add(new Transform3D(new Basis(Vector3.Up, yaw), Convert.ToGodot(p + SN.Vector3.UnitY * 0.06f)));
+            var p = Convert.ToGodot(SN.Vector3.Lerp(points[i], points[Math.Min(i + 1, count - 1)], s / step - i));
+            Block(sleepers, p + Vector3.Up * 0.06f, across * 1.25f, Vector3.Up * 0.035f, ahead * 0.12f);
         }
-        var sleepers = new MultiMesh
-        {
-            TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
-            Mesh = new BoxMesh { Size = new Vector3(2.5f, 0.07f, 0.24f), Material = WorldBuilder.PropMaterial("bark", new Color(0.42f, 0.36f, 0.30f), 1f) },
-            InstanceCount = transforms.Count,
-        };
-        for (var i = 0; i < transforms.Count; i++) sleepers.SetInstanceTransform(i, transforms[i]);
-        root.AddChild(new MultiMeshInstance3D { Multimesh = sleepers, Name = "Sleepers" });
+        root.AddChild(new MeshInstance3D { Mesh = sleepers.Commit(), MaterialOverride = WorldBuilder.PropMaterial("bark", new Color(0.42f, 0.36f, 0.30f), 1f), Name = "Sleepers" });
 
         // The rails: their top 14 cm over the ground, or flush with the asphalt across a road.
         var rails = new MeshBuilder();
@@ -166,6 +160,22 @@ internal sealed partial class TrainView : Node3D
         var steel = new StandardMaterial3D { AlbedoColor = new Color(0.55f, 0.53f, 0.50f), Metallic = 0.9f, Roughness = 0.35f, CullMode = BaseMaterial3D.CullModeEnum.Disabled };
         root.AddChild(new MeshInstance3D { Mesh = rails.Commit(), MaterialOverride = steel, Name = "Rails" });
         return root;
+    }
+
+    /// <summary>A box from its centre and three half-extent vectors (square to each other), its faces wound outwards.</summary>
+    private static void Block(MeshBuilder st, Vector3 centre, Vector3 x, Vector3 y, Vector3 z)
+    {
+        foreach (var (normal, u, v) in new[] { (x, y, z), (-x, z, y), (y, z, x), (-y, x, z), (z, x, y), (-z, y, x) })
+        {
+            var c = centre + normal;
+            var n = normal.Normalized();
+            Vector3[] corners = [c - u - v, c + u - v, c + u + v, c - u + v];
+            foreach (var k in new[] { 0, 1, 2, 0, 2, 3 })
+            {
+                st.SetNormal(n);
+                st.AddVertex(corners[k]);
+            }
+        }
     }
 
     /// <summary>True when the point is on a road or its shoulders (within 1.5 m of the edge of a frame beside it).</summary>

@@ -9,10 +9,12 @@ set CONTENT=%~dp0..\Content
 if exist "%CONTENT%\Maps\Feasibility.umap" del /q "%CONTENT%\Maps\Feasibility.umap"
 for %%d in (Track Cars GrudgeLap\Materials GrudgeLap\Render) do if exist "%CONTENT%\%%d" rmdir /s /q "%CONTENT%\%%d"
 python "%~dp0clean_glb.py" "%~dp0..\Import\track.glb" "%~dp0..\Import\track_ue.glb" || exit /b 1
-rem The second car comes from the game's export with --car=v8; only its car is kept (extract_car.py).
-if exist "%~dp0..\Import\track_v8.glb" (
-    python "%~dp0clean_glb.py" "%~dp0..\Import\track_v8.glb" "%~dp0..\Import\track_v8_ue.glb" || exit /b 1
-    python "%~dp0extract_car.py" "%~dp0..\Import\track_v8_ue.glb" "%~dp0..\Import\car_v8.glb" PlayerCar || exit /b 1
+rem The other cars come from the game's exports with --car=<name>; only their car is kept (extract_car.py).
+for %%c in (v8 hothatch five turbohatch) do (
+    if exist "%~dp0..\Import\track_%%c.glb" (
+        python "%~dp0clean_glb.py" "%~dp0..\Import\track_%%c.glb" "%~dp0..\Import\track_%%c_ue.glb" || exit /b 1
+        python "%~dp0extract_car.py" "%~dp0..\Import\track_%%c_ue.glb" "%~dp0..\Import\car_%%c.glb" PlayerCar || exit /b 1
+    )
 )
 python "%~dp0prepare_scatter.py" "%~dp0..\Import\track.glb" "%~dp0..\Import\track.json" "%~dp0..\Import\scatter.json" || exit /b 1
 python "%~dp0prepare_foliage.py" "%~dp0..\Import\PolyHaven" || exit /b 1

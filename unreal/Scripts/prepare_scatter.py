@@ -20,7 +20,7 @@ BAND = 40.0          # metres either side of every road that get grass beyond th
 BAND_DENSITY = 0.35  # tufts per square metre there, as the meadow's outer ring
 BAND_LIMIT = 260000
 NO_GRASS = ("Road-", "Shoulder-", "Lines-", "Field-", "SkidPad", "Pillars-", "Railings-", "House-", "Barn-",
-            "Shop-", "Hut-", "Gate-", "Barrier-", "Pump-")
+            "Shop-", "Hut-", "Gate-", "Barrier-", "Pump-", "Pier-", "Railway", "Towers")
 rng = np.random.default_rng(11)
 
 

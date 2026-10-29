@@ -20,7 +20,11 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
 - **Ground** — `TerrainField`: value-noise rolling ground (half a metre on the default circuit, the flat green
   plain of the original; it was 2.2 m) pulled to the edge height of every road built on
   earth (straights, curves, hills, dips, banked curves, splines), so hills get embankments and dips get
-  cuttings; bridges, ramps and the loop are structures and leave the ground alone. The road, its shoulders
+  cuttings; bridges, ramps and the loop are structures and leave the ground alone: where a run of earthwork
+  meets one, the run's last frame pulls the ground no further than three quarters of a metre past itself
+  along the road (0.9.1; before, its pull ran on along the tangent and left a shelf of embankment under the
+  low bridge over the speed route's cutting, up to 0.7 m high). The ends of a path, where it joins another
+  at the fork and the merge, keep projecting: the fork hill is the three roads' pull together. The road, its shoulders
   and a 2 m verge form one plane across the ground (tilted on a banked curve), and the ground never rises
   over a road it runs beside, then climbs no steeper than 1 in 1: where two routes run close at different
   heights, blending alone had lifted it 2.6 m through the lower road. Skid pads are flat
@@ -117,7 +121,8 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   the pedals past 8°, keeps the wheel still in the air, and times its lane changes by the session clock, so a
   lap looks the same at 20 fps as at 144 (the game asks it once a frame); traffic sense (follow a slower
   drone, pass with 480 m of empty opposite lane, hurry back when one comes within 250 m, abort a pass when
-  something comes); shared by the tests and the game's attract mode.
+  something comes, and if it is already alongside the drone then, brake behind it in the passing lane before
+  moving back over: until 0.9.1 it dropped straight back into the drone's side); shared by the tests and the game's attract mode.
 
 - Road wear (`RoadWear`): a deterministic function of the place on the road, shared by the probe and the view
   so that what is felt is also seen. Settled earthworks undulate by a centimetre over a dozen metres; potholes
@@ -323,6 +328,10 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   to rest, the first second in slow motion. When the replay is over (`Repair`) the original meshes are put
   back, the parts re-parented and the debris freed, and the session sets the car down. 1989 mode keeps the
   cabinet's replay: the recording from the crane, no damage.
+- Materials: the road and the shoulders are drawn from both faces, because on the bridges, the ramps and the
+  loop the ribbon is the whole deck and is seen from below; the centre line and the far ground only from above.
+  The hot hatch's and the five's mirror housings are black plastic, the turbo hatch's in paint: from the seat
+  the housing's back shows through the side glass, and in red paint it read as a ball beside the screen.
 - Off the road (0.9): the grass tufts are 0.45 m tall (0.75 before, a metre with the scale: a car on the verge
   drove under the grass) and start 4.5 m past the shoulder, a mown verge. The drones' and the ghost's wheels
   are drawn at rest, one radius over the road: set at the hub mounts they hung 16 cm up and the cars floated.
@@ -416,7 +425,11 @@ runs the tests, exports, builds the installer and the portable zip with their SH
 pushes, creates the GitHub release, updates the Scoop bucket and submits the winget manifest. CI
 (`.github/workflows/build.yml`) repeats tests, export and installer on every push. Since 0.6.0 every
 version goes out as a GitHub release again (`-NoStores`), because the game updates itself from there at
-start-up; Scoop and winget wait for the stable 1.0, which will be the first winget submission (the earlier
+start-up; the installer script is written UTF-8 with a byte-order mark (`release.ps1` stamps the version that
+way), because Inno Setup reads a script without one in the system's ANSI code page and the Turkish screens of
+the installers from 0.6.0 to 0.9.0 showed their letters double-encoded. The updater clears packages more than a
+day old from its download folder before it fetches a new one (an update that was never applied left its 80 MB
+behind). Scoop and winget wait for the stable 1.0, which will be the first winget submission (the earlier
 new-package requests were withdrawn).
 
 ## Roadmap

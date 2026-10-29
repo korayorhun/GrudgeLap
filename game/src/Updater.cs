@@ -159,6 +159,18 @@ internal sealed partial class Updater : Node
         }
         var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "GrudgeLap-Update");
         System.IO.Directory.CreateDirectory(dir);
+        // Packages of updates that never got applied (the game closed first) stayed in the folder, 80 MB each.
+        foreach (var stale in System.IO.Directory.EnumerateFiles(dir))
+        {
+            try
+            {
+                if (System.IO.File.GetLastWriteTimeUtc(stale) < DateTime.UtcNow.AddDays(-1)) System.IO.File.Delete(stale);
+            }
+            catch (Exception)
+            {
+                // In use or not ours to delete: left for next time.
+            }
+        }
         _downloadPath = System.IO.Path.Combine(dir, System.IO.Path.GetFileName(new Uri(url).AbsolutePath));
         _shaPath = _downloadPath + ".sha256";
         _stage = UpdateStage.DownloadingPackage;

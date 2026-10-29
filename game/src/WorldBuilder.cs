@@ -261,6 +261,7 @@ internal static class WorldBuilder
                 VertexColorUseAsAlbedo = true,
                 Roughness = 1f,
                 Uv1Scale = new Vector3(2f, 0.18f, 1f),      // u spans the 11 m width, v is metres along: a 5.5 m tile
+                // Both faces: on the bridges, the ramps and the loop this ribbon is the whole deck, seen from below too.
                 CullMode = BaseMaterial3D.CullModeEnum.Disabled,
             }, Photo("asphalt_color") ?? Noise(9f, 4, new[] { (0f, new Color(0.82f, 0.82f, 0.82f)), (0.5f, new Color(0.98f, 0.98f, 0.98f)), (1f, new Color(1.15f, 1.15f, 1.15f)) }, seed: 5),
                Photo("asphalt_normal") ?? Noise(16f, 4, null, seed: 17, asNormal: true), normalScale: 0.5f, Photo("asphalt_roughness"));
@@ -309,6 +310,7 @@ internal static class WorldBuilder
         VertexColorUseAsAlbedo = true,
         Roughness = 1f,
         Uv1Scale = new Vector3(1f, 0.45f, 1f),
+        // Both faces: the shoulders run along the bridge decks too, seen from below.
         CullMode = BaseMaterial3D.CullModeEnum.Disabled,
     }, Photo("dirt_color") ?? Noise(4f, 3, new[] { (0f, new Color(0.7f, 0.65f, 0.55f)), (1f, new Color(1f, 0.95f, 0.85f)) }, seed: 41),
        Photo("dirt_normal"), 0.6f, Photo("dirt_roughness"));
@@ -674,7 +676,7 @@ internal static class WorldBuilder
                 st.AddIndex(b); st.AddIndex(d); st.AddIndex(c);
             }
         }
-        var material = new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 1f, CullMode = BaseMaterial3D.CullModeEnum.Disabled };
+        var material = new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 1f, CullMode = BaseMaterial3D.CullModeEnum.Back };
         return new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = material, Name = "Mountains", CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
     }
 
@@ -1187,7 +1189,7 @@ internal static class WorldBuilder
                     a.Normal, b.Normal, (yellow * dashTone) with { A = 1f }, a.Distance, b.Distance);
             }
         }
-        var material = new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 0.6f, CullMode = BaseMaterial3D.CullModeEnum.Disabled };
+        var material = new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 0.6f, CullMode = BaseMaterial3D.CullModeEnum.Back };
         return new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = material, Name = $"Lines-{path.Kind}" };
     }
 

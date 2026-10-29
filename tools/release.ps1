@@ -23,7 +23,8 @@ $text = $text -replace '<Version>[\d\.]+</Version>', "<Version>$Version</Version
 $text = $text -replace '<FileVersion>[\d\.]+</FileVersion>', "<FileVersion>$Version.0</FileVersion>"
 Set-Content $csproj $text -Encoding UTF8 -NoNewline
 $iss = Join-Path $root 'installer\GrudgeLap.iss'
-(Get-Content $iss -Raw) -replace '#define MyAppVersion "[\d\.]+"', ('#define MyAppVersion "' + $Version + '"') | Set-Content $iss -Encoding UTF8 -NoNewline
+# UTF-8 with a BOM: Inno Setup reads a script without one in the system's ANSI code page, and the Turkish strings broke.
+(Get-Content $iss -Raw) -replace '#define MyAppVersion "[\d\.]+"', ('#define MyAppVersion "' + $Version + '"') | Set-Content $iss -Encoding utf8BOM -NoNewline
 
 # ---- tests, export, installer, portable zip --------------------------------------------------------
 & (Join-Path $PSScriptRoot 'build.ps1')

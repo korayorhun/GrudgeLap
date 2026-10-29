@@ -1309,10 +1309,14 @@ def main():
         raise RuntimeError("the export has no PlayerCar")
     dress_car(car, materials)
     rig_car(car, "GLP.Car")
-    v8 = import_car("v8")
-    if v8 is not None:
-        dress_car(v8, materials)
-        rig_car(v8, "GLP.Car1")
+    # The other catalogue cars, in the catalogue's order (VehicleSpec.Catalogue): GLP.Car1 the V8, GLP.Car2 the hot
+    # hatch, GLP.Car3 the five, GLP.Car4 the turbo hatch; a missing export leaves its slot empty and the title screen
+    # skips it.
+    for index, name in enumerate(["v8", "hothatch", "five", "turbohatch"], start=1):
+        other = import_car(name)
+        if other is not None:
+            dress_car(other, materials)
+            rig_car(other, f"GLP.Car{index}")
     rig_world(actors)
     place_game(car, game_materials(materials["paint"]))
     scatter(placements, extra, actors)
