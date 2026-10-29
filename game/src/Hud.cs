@@ -31,6 +31,8 @@ internal sealed partial class Hud : Control
     public ScoreBoard? Scores { get; set; }
     public bool ShowHelp { get; set; } = true;
     public bool Retro { get; set; }
+    /// <summary>The menu Esc opens (<see cref="PauseMenu"/>), drawn over everything while it is open.</summary>
+    public PauseMenu? Menu { get; set; }
     /// <summary>The frame rate, top left (F6).</summary>
     public bool ShowFps { get; set; }
 
@@ -139,7 +141,7 @@ internal sealed partial class Hud : Control
             var pulse = 0.7f + 0.3f * MathF.Sin(_flash * 4f);
             Centred(font, "PRESS ENTER OR A TO START", y + 258f, 38, new Color(1f, 0.85f, 0.3f, pulse));
             Centred(font, s.GrudgeMatch ? $"grudge match: the ghost of your best lap, {RaceSession.FormatLapTime(s.BestLapTime)}, is waiting" : "finish a lap and its ghost will race you next time", y + 312f, 18, new Color(0.6f, 0.9f, 1f));
-            Centred(font, $"v{Updater.CurrentVersionText}   F6 fps   F7 graphics   F8 1989 mode   F10 check for updates   F11 full screen", y + 346f, 15, grey);
+            Centred(font, $"v{Updater.CurrentVersionText}   ESC menu and quit   F6 fps   F7 graphics   F8 1989 mode   F10 check for updates   F11 full screen", y + 346f, 15, grey);
         }
         else if (s.Phase == SessionPhase.Finished)
         {
@@ -147,6 +149,29 @@ internal sealed partial class Hud : Control
         }
 
         DrawHelp(font, size, car, s, bandTop);
+        if (Menu is { Open: true } menu) DrawMenu(font, size, menu);
+    }
+
+    /// <summary>The menu: a dark panel over a dimmed game, the line under the cursor lit.</summary>
+    private void DrawMenu(Font font, Vector2 size, PauseMenu menu)
+    {
+        var gold = new Color(1f, 0.85f, 0.3f);
+        var grey = new Color(0.72f, 0.75f, 0.8f);
+        DrawRect(new Rect2(Vector2.Zero, size), new Color(0f, 0f, 0f, 0.45f));
+        var panel = PauseMenu.Panel(size);
+        DrawRect(panel, new Color(0.03f, 0.03f, 0.04f, 0.92f));
+        DrawString(font, new Vector2(panel.Position.X, panel.Position.Y + 62f), "PAUSED", HorizontalAlignment.Center, panel.Size.X, 40, new Color(1f, 1f, 1f));
+        for (var i = 0; i < PauseMenu.Items.Length; i++)
+        {
+            var line = PauseMenu.ItemRect(size, i);
+            var current = i == menu.Cursor;
+            if (current) DrawRect(line, new Color(1f, 0.85f, 0.3f, 0.16f));
+            var label = menu.Labels[i] ?? PauseMenu.Items[i].ToString();
+            DrawString(font, new Vector2(line.Position.X, line.Position.Y + 30f), label, HorizontalAlignment.Center, line.Size.X, 24, current ? gold : grey);
+        }
+        DrawString(font, new Vector2(panel.Position.X, panel.End.Y - 22f),
+            "up / down: choose     ENTER or A: take it     left / right: change     ESC, SPACE or B: back",
+            HorizontalAlignment.Center, panel.Size.X, 14, grey);
     }
 
     /// <summary>The end of the credit: the score, the entry of the initials when it made the table, and the table.</summary>
@@ -194,7 +219,7 @@ internal sealed partial class Hud : Control
                 DrawString(font, new Vector2(x0 + 620f, row), e.Car, HorizontalAlignment.Left, 220f, 15, colour);
             }
         }
-        Centred(font, "F5 or BACK: new game", panel.End.Y - 34f, 20, grey);
+        Centred(font, "F5: new game     ESC or BACK: menu and quit", panel.End.Y - 34f, 20, grey);
     }
 
     private void DrawHelp(Font font, Vector2 size, VehicleSim car, RaceSession s, float bandTop)
@@ -206,7 +231,7 @@ internal sealed partial class Hud : Control
             var y = bandTop < size.Y ? bandTop + 18f : size.Y - 8f;
             if (bandTop >= size.Y) DrawRect(new Rect2(0f, size.Y - 26f, size.X, 26f), new Color(0.05f, 0.05f, 0.06f, 0.55f));
             DrawString(font, new Vector2(20f, y),
-                $"arrows/WASD drive   E/Q or 1-{car.Spec.ForwardGearCount} gears   N neutral   shift = clutch   ENTER key   SPACE abort/skip   C camera   U units   F8 1989   F11 fullscreen",
+                $"arrows/WASD drive   E/Q or 1-{car.Spec.ForwardGearCount} gears   N neutral   shift = clutch   ENTER key   SPACE abort/skip   C camera   ESC menu",
                 HorizontalAlignment.Left, size.X - 40f, 13, new Color(0.8f, 0.8f, 0.8f, 0.8f));
         }
     }

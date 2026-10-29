@@ -39,6 +39,9 @@ internal sealed partial class EngineAudio : Node
     private float _clunk, _clunkPhase, _clunkLp;
     private int _lastGear;
     private Note[]? _song;
+    private float _songFade = 1f;
+    private float _songGain = 1f;
+    private bool _songFading;
     private double _songTime;
     private int _songNext;
     private readonly List<Voice> _voices = new();
@@ -70,12 +73,15 @@ internal sealed partial class EngineAudio : Node
 
     /// <summary>
     /// The cabinet's jingles, in its spirit: it drove in silence and sang only at the moments that mattered. A
-    /// brass fanfare when a lap beats the record (the original's "qualified" moment) and an FM tune when the credit
-    /// is over (its high-score screen). The notes are ours; the timbres are the FM chips of the day.
+    /// brass fanfare when a lap beats the record (the original's "qualified" moment), a driving tune under the
+    /// instant replay (the original's most remembered piece of music) and an FM tune when the credit is over (its
+    /// high-score screen). The notes are ours, not the original's: its music is Atari's. The timbres are the FM
+    /// and pulse chips of the day.
     /// </summary>
     public enum Jingle
     {
         Fanfare,
+        Replay,
         GameOver,
     }
 
@@ -92,7 +98,7 @@ internal sealed partial class EngineAudio : Node
         public float Lowpass;
     }
 
-    private const int Brass = 0, Lead = 1, Bass = 2, Hat = 3, Snare = 4;
+    private const int Brass = 0, Lead = 1, Bass = 2, Hat = 3, Snare = 4, Pulse = 5, Kick = 6;
 
     private static Note N(float beat, float beats, int midi, int voice, float level, float bpm) =>
         new(beat * 60f / bpm, beats * 60f / bpm, midi, voice, level);
@@ -115,6 +121,65 @@ internal sealed partial class EngineAudio : Node
         for (var i = 0; i < answer.Length; i++) notes.Add(N(answerBeats[i], answerLength[i], answer[i], Brass, 0.55f, bpm));
         foreach (var midi in new[] { 70, 74, 77, 82 }) notes.Add(N(8f, 4f, midi, Brass, 0.42f, bpm));
         foreach (var beat in new[] { 0f, 2f, 4f, 6f, 8f, 10f }) notes.Add(N(beat, 1.5f, 46, Bass, 0.5f, bpm));
+        return [.. notes];
+    }
+
+    /// <summary>
+    /// Eleven seconds under the instant replay, about as long as the replay itself: a pulse lead climbing the
+    /// chords of D major (D, B minor, G, A, then up an octave, E minor and A to land on D), a bass driving the
+    /// eighths in octaves, brass stabs on the off-beats, a kick on one and three and the snare on two and four.
+    /// </summary>
+    private static readonly Note[] ReplaySong = BuildReplay();
+
+    private static Note[] BuildReplay()
+    {
+        const float bpm = 168f;
+        var notes = new List<Note>();
+        (float Beat, float Length, int Midi)[] melody =
+        [
+            (0f, 0.5f, 69), (0.5f, 0.5f, 74), (1f, 0.5f, 78), (1.5f, 0.5f, 81), (2f, 1f, 78), (3f, 1f, 74),
+            (4f, 0.5f, 71), (4.5f, 0.5f, 74), (5f, 0.5f, 78), (5.5f, 0.5f, 83), (6f, 1f, 81), (7f, 1f, 78),
+            (8f, 0.5f, 79), (8.5f, 0.5f, 78), (9f, 0.5f, 76), (9.5f, 0.5f, 74), (10f, 1f, 71), (11f, 0.5f, 74), (11.5f, 0.5f, 76),
+            (12f, 1.5f, 78), (13.5f, 0.5f, 76), (14f, 1f, 73), (15f, 1f, 69),
+            (16f, 0.5f, 74), (16.5f, 0.5f, 78), (17f, 0.5f, 81), (17.5f, 0.5f, 86), (18f, 1f, 85), (19f, 1f, 81),
+            (20f, 0.5f, 83), (20.5f, 0.5f, 81), (21f, 0.5f, 78), (21.5f, 0.5f, 74), (22f, 1f, 78), (23f, 1f, 81),
+            (24f, 0.5f, 79), (24.5f, 0.5f, 78), (25f, 0.5f, 76), (25.5f, 0.5f, 79), (26f, 0.5f, 78), (26.5f, 0.5f, 76), (27f, 0.5f, 73), (27.5f, 0.5f, 76),
+            (28f, 2.5f, 74),
+        ];
+        foreach (var (beat, length, midi) in melody) notes.Add(N(beat, length, midi, Pulse, 0.42f, bpm));
+        // The bass on every eighth, root and octave: D, Bm, G, A, D, Bm, then Em and A for half a bar each.
+        (float Beat, int Root)[] changes = [(0f, 38), (4f, 35), (8f, 43), (12f, 45), (16f, 38), (20f, 35), (24f, 40), (26f, 45)];
+        for (var eighth = 0; eighth < 56; eighth++)
+        {
+            var beat = eighth * 0.5f;
+            var root = changes.Last(c => c.Beat <= beat).Root;
+            notes.Add(N(beat, 0.42f, root + (eighth % 2 == 0 ? 0 : 12), Bass, eighth % 2 == 0 ? 0.55f : 0.4f, bpm));
+        }
+        notes.Add(N(28f, 2.5f, 38, Bass, 0.6f, bpm));
+        // Brass stabs of the chord on the off-beats of two and four, and the last chord held.
+        (float Beat, int[] Chord)[] stabs =
+        [
+            (0f, [62, 66, 69]), (4f, [59, 62, 66]), (8f, [59, 62, 67]), (12f, [61, 64, 69]),
+            (16f, [62, 66, 69]), (20f, [59, 62, 66]), (24f, [59, 64, 67]), (26f, [61, 64, 69]),
+        ];
+        foreach (var (beat, chord) in stabs)
+        {
+            foreach (var offset in beat >= 24f ? new[] { 1.5f } : new[] { 1.5f, 3.5f })
+            {
+                foreach (var midi in chord) notes.Add(N(beat + offset, 0.3f, midi, Brass, 0.16f, bpm));
+            }
+        }
+        foreach (var midi in new[] { 62, 66, 69, 74 }) notes.Add(N(28f, 2.5f, midi, Brass, 0.22f, bpm));
+        for (var bar = 0; bar < 7; bar++)
+        {
+            notes.Add(N(bar * 4f, 0.3f, 0, Kick, 0.7f, bpm));
+            notes.Add(N(bar * 4f + 2f, 0.3f, 0, Kick, 0.7f, bpm));
+            notes.Add(N(bar * 4f + 1f, 0.2f, 0, Snare, 0.32f, bpm));
+            notes.Add(N(bar * 4f + 3f, 0.2f, 0, Snare, 0.32f, bpm));
+        }
+        notes.Add(N(28f, 0.4f, 0, Kick, 0.8f, bpm));
+        for (var eighth = 0; eighth < 56; eighth++) notes.Add(N(eighth * 0.5f, 0.1f, 0, Hat, eighth % 2 == 0 ? 0.16f : 0.1f, bpm));
+        notes.Sort((a, b) => a.Start.CompareTo(b.Start));
         return [.. notes];
     }
 
@@ -161,7 +226,11 @@ internal sealed partial class EngineAudio : Node
     /// <summary>Starts a jingle from its first note, cutting one still playing.</summary>
     public void PlayJingle(Jingle jingle)
     {
-        _song = jingle == Jingle.Fanfare ? FanfareSong : GameOverSong;
+        _song = jingle switch { Jingle.Fanfare => FanfareSong, Jingle.Replay => ReplaySong, _ => GameOverSong };
+        // The replay's tune plays alone (the engine is silent then): 9 dB up, a little under a car being driven.
+        _songGain = jingle == Jingle.Replay ? 2.8f : 1f;
+        _songFade = 1f;
+        _songFading = false;
         _songTime = 0.0;
         _songNext = 0;
         _voices.Clear();
@@ -264,6 +333,9 @@ internal sealed partial class EngineAudio : Node
         }
         // The credit's end: the tune of the original's high-score screen, once.
         if (session.Phase == SessionPhase.Finished && _lastPhase != SessionPhase.Finished) PlayJingle(Jingle.GameOver);
+        // The instant replay has its tune; skipped or over, it fades out in a third of a second.
+        if (session.Phase == SessionPhase.Replay && _lastPhase != SessionPhase.Replay) PlayJingle(Jingle.Replay);
+        else if (session.Phase != SessionPhase.Replay && _lastPhase == SessionPhase.Replay && ReferenceEquals(_song, ReplaySong)) _songFading = true;
         _lastPhase = session.Phase;
         // The shifter: a clunk on every change of gear while the car is driven (the automatic's too).
         var gear = car.Drivetrain.Gear;
@@ -449,6 +521,16 @@ internal sealed partial class EngineAudio : Node
     private float Song()
     {
         if (_song is null) return 0f;
+        if (_songFading)
+        {
+            _songFade -= 3f / MixRate;
+            if (_songFade <= 0f)
+            {
+                _song = null;
+                _voices.Clear();
+                return 0f;
+            }
+        }
         _songTime += 1.0 / MixRate;
         while (_songNext < _song.Length && _song[_songNext].Start <= _songTime)
         {
@@ -504,6 +586,25 @@ internal sealed partial class EngineAudio : Node
                 case Hat:
                     value = (float)(_random.NextDouble() * 2.0 - 1.0) * MathF.Exp(-v.Age * 60f);
                     break;
+                case Pulse:
+                {
+                    // A quarter-duty pulse, softened a little, with a vibrato that comes in on the held notes: the
+                    // arcade lead of the late eighties.
+                    var vibrato = 1f + 0.005f * MathF.Sin(v.Age * MathF.Tau * 5.5f) * MathUtil.Clamp01((v.Age - 0.12f) / 0.1f);
+                    v.Phase += frequency * vibrato / MixRate;
+                    if (v.Phase >= 1.0) v.Phase -= 1.0;
+                    var pulse = v.Phase < 0.25 ? 1f : -0.33f;
+                    v.Lowpass += (pulse - v.Lowpass) * 0.45f;
+                    value = v.Lowpass * MathF.Min(v.Age / 0.004f, 1f) * (0.75f + 0.25f * MathF.Exp(-v.Age * 6f)) * release;
+                    break;
+                }
+                case Kick:
+                {
+                    // A sine falling from 140 to 50 Hz in a few hundredths of a second.
+                    v.Phase += (50f + 90f * MathF.Exp(-v.Age * 30f)) / MixRate;
+                    value = MathF.Sin((float)(v.Phase * MathF.Tau)) * MathF.Exp(-v.Age * 9f);
+                    break;
+                }
                 default:
                 {
                     v.Phase += 185f / MixRate;
@@ -514,7 +615,7 @@ internal sealed partial class EngineAudio : Node
             sum += value * note.Level;
         }
         if (_songNext >= _song.Length && _voices.Count == 0) _song = null;
-        return sum * 0.35f;
+        return sum * 0.35f * _songGain * _songFade;
     }
 
     /// <summary>The title screen's chime: a bell of two partials that rings for half a second.</summary>

@@ -1067,7 +1067,19 @@ internal sealed partial class CarView : Node3D
         var stretch = longScreen ? MathF.Max(0f, style.EyeZ - 0.50f - style.CowlZ - 0.237f) : 0f;
         var dashHalf = longScreen ? MathF.Min(0.88f, style.Sample(style.EdgeW, style.CowlZ) - 0.03f) : 0.88f;
         var swept = dashProfile.Select((p, i) => new Vector2(style.CowlZ + p.X + (i >= 2 ? stretch : 0f), cowlH + p.Y)).ToArray();
-        body.AddChild(new MeshInstance3D { Mesh = SweepAcross(swept, dashHalf), MaterialOverride = dash, Name = "Dashboard" });
+        // In front of the driver the top drops into a pocket under the binnacle, as in a car: across the dashboard's
+        // flat top the dials sat behind its lip, and from the seat their lower halves were hidden (until 0.8.1).
+        Vector2[] pocketProfile =
+        [
+            new(-0.03f, -0.004f), new(0.06f, -0.020f), new(0.12f, -0.085f), new(0.16f, -0.095f), new(0.20f, -0.105f),
+            new(0.225f, -0.115f), new(0.237f, -0.130f), new(0.230f, -0.150f), new(0.212f, -0.180f), new(0.200f, -0.280f),
+            new(0.190f, -0.400f), new(0.100f, -0.430f),
+        ];
+        var pocket = pocketProfile.Select((p, i) => new Vector2(style.CowlZ + p.X + (i >= 2 ? stretch : 0f), cowlH + p.Y)).ToArray();
+        const float pocketHalf = 0.235f;
+        body.AddChild(new MeshInstance3D { Mesh = SweepAcross(swept, -dashHalf, DriverX - pocketHalf), MaterialOverride = dash, Name = "Dashboard" });
+        body.AddChild(new MeshInstance3D { Mesh = SweepAcross(pocket, DriverX - pocketHalf, DriverX + pocketHalf), MaterialOverride = dash, Name = "DashboardPocket" });
+        body.AddChild(new MeshInstance3D { Mesh = SweepAcross(swept, DriverX + pocketHalf, dashHalf), MaterialOverride = dash, Name = "DashboardRight" });
         if (!float.IsNaN(style.IntakeFrom))
         {
             // Below the door trim the intake's recess is not lined: a leather panel inside it keeps the road from
@@ -1078,19 +1090,30 @@ internal sealed partial class CarView : Node3D
             foreach (var side in new[] { -1f, 1f }) Box(body, new Vector3(0.02f, 0.36f, to - from), new Vector3(side * x, 0.54f, (from + to) * 0.5f), leather);
         }
 
-        // Binnacle: its face 0.62 m ahead of the eyes and 17 degrees below them, turned to face them, in a pod
-        // under a curved visor whose top stays 9 degrees below the eyes, under the line of sight to the road.
-        var binnacle = new Node3D { Name = "Binnacle", Position = eye + new Vector3(0f, -0.19f, -0.62f), Rotation = new Vector3(-MathF.Atan2(0.19f, 0.62f), 0f, 0f) };
+        // Binnacle: its face 0.62 m ahead of the eyes, turned to face them, in a pod under a curved visor. It sits as
+        // low as it can with the whole of the dials above the line of sight over the pocket's lip (a centimetre
+        // spare), and never higher than keeps the visor 8 degrees under the eyes, under the line of sight to the road.
+        var faceSize = new Vector2(0.36f, 0.36f * InstrumentCluster.PanelSize.Y / InstrumentCluster.PanelSize.X);
+        const float faceDistance = 0.62f;
+        var lipLine = float.MinValue;
+        foreach (var p in pocket)
+        {
+            var ahead = eye.Z - p.X;
+            if (ahead <= 0.05f || ahead >= faceDistance) continue;
+            lipLine = MathF.Max(lipLine, eye.Y - (eye.Y - p.Y) * faceDistance / ahead);
+        }
+        var faceDrop = eye.Y - (lipLine + 0.01f + faceSize.Y * 0.5f);
+        faceDrop = MathF.Max(faceDrop, faceDistance * MathF.Tan(Mathf.DegToRad(8f)) + faceSize.Y * 0.5f + 0.02f);
+        var binnacle = new Node3D { Name = "Binnacle", Position = eye + new Vector3(0f, -faceDrop, -faceDistance), Rotation = new Vector3(-MathF.Atan2(faceDrop, faceDistance), 0f, 0f) };
         body.AddChild(binnacle);
         Box(binnacle, new Vector3(0.42f, 0.16f, 0.12f), new Vector3(0f, -0.01f, -0.065f), dash);
         // (z towards the driver, y up) in the binnacle's frame, from behind the pod over the top to the lip.
         Vector2[] visor =
         [
-            new(-0.13f, 0.0f), new(-0.13f, 0.06f), new(-0.10f, 0.095f), new(-0.04f, 0.11f), new(0.03f, 0.105f),
-            new(0.08f, 0.092f), new(0.10f, 0.078f), new(0.098f, 0.064f),
+            new(-0.13f, 0.0f), new(-0.13f, 0.05f), new(-0.10f, 0.080f), new(-0.04f, 0.092f), new(0.03f, 0.090f),
+            new(0.08f, 0.083f), new(0.10f, 0.074f), new(0.098f, 0.064f),
         ];
         binnacle.AddChild(new MeshInstance3D { Mesh = SweepAcross(visor, 0.215f), MaterialOverride = dash, Name = "Visor" });
-        var faceSize = new Vector2(0.36f, 0.36f * InstrumentCluster.PanelSize.Y / InstrumentCluster.PanelSize.X);
         _gaugeFace = new MeshInstance3D { Mesh = new QuadMesh { Size = faceSize }, MaterialOverride = dark, Position = new Vector3(0f, 0f, 0.002f), Name = "Dials" };
         binnacle.AddChild(_gaugeFace);
 
@@ -1153,7 +1176,10 @@ internal sealed partial class CarView : Node3D
     /// edge catch a highlight. The profile's outside is on its left when walked in order: up when it runs
     /// towards +z, towards the driver (+z) when it runs down.
     /// </summary>
-    private static ArrayMesh SweepAcross(Vector2[] profile, float half)
+    private static ArrayMesh SweepAcross(Vector2[] profile, float half) => SweepAcross(profile, -half, half);
+
+    /// <summary>The same sweep between two x positions, both ends closed.</summary>
+    private static ArrayMesh SweepAcross(Vector2[] profile, float from, float to)
     {
         Vector3 At(int i, float x) => new(x, profile[i].Y, profile[i].X);
         // Along the profile (z, y) turned a quarter counter-clockwise points out of the shape.
@@ -1167,18 +1193,18 @@ internal sealed partial class CarView : Node3D
         for (var i = 0; i < profile.Length - 1; i++)
         {
             var outward = (normals[i] + normals[i + 1]).Normalized();
-            Tri(st, At(i, -half), normals[i], At(i + 1, -half), normals[i + 1], At(i, half), normals[i], Colors.White, outward);
-            Tri(st, At(i, half), normals[i], At(i + 1, -half), normals[i + 1], At(i + 1, half), normals[i + 1], Colors.White, outward);
+            Tri(st, At(i, from), normals[i], At(i + 1, from), normals[i + 1], At(i, to), normals[i], Colors.White, outward);
+            Tri(st, At(i, to), normals[i], At(i + 1, from), normals[i + 1], At(i + 1, to), normals[i + 1], Colors.White, outward);
         }
-        foreach (var side in new[] { -1f, 1f })
+        foreach (var (side, x) in new[] { (-1f, from), (1f, to) })
         {
             var normal = new Vector3(side, 0f, 0f);
             var centre = Vector3.Zero;
-            for (var i = 0; i < profile.Length; i++) centre += At(i, side * half);
+            for (var i = 0; i < profile.Length; i++) centre += At(i, x);
             centre /= profile.Length;
             for (var i = 0; i < profile.Length; i++)
             {
-                Tri(st, centre, normal, At(i, side * half), normal, At((i + 1) % profile.Length, side * half), normal, Colors.White, normal);
+                Tri(st, centre, normal, At(i, x), normal, At((i + 1) % profile.Length, x), normal, Colors.White, normal);
             }
         }
         return st.Commit();

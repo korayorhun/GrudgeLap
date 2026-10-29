@@ -68,6 +68,12 @@ internal sealed partial class WorldAudio : Node
         _drones.Add((player, car, 0.94f + 0.12f * (float)_random.NextDouble()));
     }
 
+    /// <summary>
+    /// Forgets the drones of the last credit: their views, and the players on them, are freed with the session. Kept
+    /// (until 0.8.1), the next update touched a disposed player and threw every frame from then on.
+    /// </summary>
+    public void DetachDrones() => _drones.Clear();
+
     /// <summary>Puts the locomotive's running sound and its whistle on the locomotive's node.</summary>
     public void AttachTrain(Node3D locomotive, Train train)
     {
@@ -116,6 +122,7 @@ internal sealed partial class WorldAudio : Node
         var moving = session.Phase is SessionPhase.Driving or SessionPhase.StartEngine;
         foreach (var (player, car, tune) in _drones)
         {
+            if (!IsInstanceValid(player)) continue;
             // The drones cruise in one gear: the note follows their speed a little, each car a touch off the others.
             var velocity = moving ? Convert.ToGodot(car.Forward * car.Speed) : Vector3.Zero;
             player.PitchScale = tune * (0.9f + 0.2f * MathUtil.Clamp01((car.Speed - 18f) / 10f)) * Doppler(player.GlobalPosition, velocity, listener, listenerVelocity);

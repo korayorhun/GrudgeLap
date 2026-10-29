@@ -192,7 +192,9 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   three-spoke wheel on a column leaning back 22 degrees that turns twelve times the road wheels' angle;
   seats, tapered A-pillars, wipers, outside mirrors with glass, and on the player's car a rear-view mirror
   (below). The wheel and the binnacle are placed from the driver's eyes, so the dials sit inside the upper
-  half of the wheel and the visor stays under the line of sight to the road. From the driver's seat the
+  half of the wheel and the visor stays 8 degrees under the line of sight to the road. In front of the driver
+  the dashboard's top drops into a pocket, and the binnacle sits as low as keeps the whole of the dials over
+  the line of sight across its lip: on the flat top of 0.8.0 the lip hid their lower halves. From the driver's seat the
   shell, the wheels and the outside details are not drawn but still cast shadows (`ShadowsOnly`), so the
   roof shades the cabin; the glass is not drawn and never casts a shadow. Drones reuse the loft in other
   paints; the ghost is the same loft in one translucent glowing material without shadows.
@@ -240,11 +242,23 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   low-pass and 7 dB of glass from the driver's seat; the engine silent through the instant replay (the
   simulation holds its last revs through it, which played as a frozen note); checkpoint bleep, a cow's moo
   (formants on a sagging pitch), the clang of a sign going over, and the cabinet's own moments: a chime at every choice on the title screen, the starter at the turn of the key, a brass fanfare
-  when a lap beats the record and an FM tune when the credit is over (our notes in the timbres of the FM
-  chips; the arcade had no music while driving, so neither does this). The overrun recordings take the
+  when a lap beats the record, a driving tune under the instant replay (eleven seconds at 168 bpm in D major:
+  a quarter-duty pulse lead, a bass on the eighths in octaves, brass stabs, kick, snare and hats; 9 dB over the
+  other jingles because the engine is silent then, faded out in a third of a second when the replay is over or
+  skipped) and an FM tune when the credit is over. The notes are ours in the timbres of the FM and pulse chips:
+  the original's replay music is Atari's and is not copied. The arcade had no music while driving, so neither
+  does this. The overrun recordings take the
   run-up's place as the throttle closes. A limiter on the master bus. Loops imported compressed (QOA) must end
   at `GetLength() × MixRate` frames, not at the data's byte count: that once cut every loop to its first
   fifth, with a click at each turn.
+- The menu (`PauseMenu`, Esc or the pad's Back): carry on, new game, camera, graphics, 1989 mode, units, full
+  screen and quit, with the keys, the d-pad or the mouse. While it is open the session does not step, no input
+  reaches the car and the master bus is muted. Until 0.8.1 the game could only be left by closing its window,
+  which a full-screen window does not offer.
+- A fault in the sound update is logged once and the frame carries on (`Bootstrap._Process`). In 0.8.0 the
+  world sound kept the players of the last credit's drones, freed with their views, and threw on every frame of
+  the next credit: the view stopped following the car, which stood at the line while the engine revved and the
+  clock ran. `WorldAudio.DetachDrones` now forgets them with the views.
 - Graphics presets (F7, remembered): High is everything; Medium drops SSIL and screen-space reflections; Low
   also drops SSAO, glow, the volumetric haze, the sun's shadows and the far wood, renders at three quarters of
   the window with FXAA instead of MSAA and TAA (`WorldBuilder.SetQuality`, `Bootstrap.ApplyGraphics`);
@@ -278,7 +292,9 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   `--screenshot=<file>`, `--at=<s>`, `--quit-after=<s>`, `--park` (the car waits at the start with its
   engine off while the traffic and the train go by: checks of the placed sounds), `--time=<s>` (a credit
   of that length), `--try-table` (the attract driver's credit is offered to the high-score table: pictures
-  of the entry screen), `--quality=low|medium|high`,
+  of the entry screen), `--new-game-after=<s>` (a second credit, as F5 starts one: the check for the car that
+  stood at the line in 0.8.0), `--menu-after=<s>` (the menu opened, for a picture of it), `--jingle=<fanfare|replay|gameover>`
+  (a jingle a second in, to check the synth with `--park`), `--quality=low|medium|high`,
   `--orbit=<yaw>,<pitch>,<distance>` (degrees and metres, 0 = from behind), `--show-all` (whole car from
   the driver's seat, for checking the body), `--save-best` (an attract lap may become the saved best lap),
   `--export-world=<file.glb>` (writes the generated terrain, roads, bridges, props and the player's car to

@@ -34,6 +34,8 @@ internal static class InputSetup
     public const string Screenshot = "screenshot";
     public const string Units = "units";
     public const string NewGame = "new_game";
+    /// <summary>Opens and closes the menu (<see cref="PauseMenu"/>): Esc, or the pad's Back.</summary>
+    public const string Menu = "menu";
     public const string SelectAuto = "select_auto";
     public const string SelectManual = "select_manual";
     public const string SelectClutch = "select_clutch";
@@ -73,6 +75,7 @@ internal static class InputSetup
         Bind(Screenshot, Key.F12);
         Bind(Units, Key.U);
         Bind(NewGame, Key.F5);
+        Bind(Menu, Key.Escape);
         Bind(SelectAuto, Key.Key1);
         Bind(SelectManual, Key.Key2);
         Bind(SelectClutch, Key.Key3);
@@ -100,7 +103,8 @@ internal static class InputSetup
         Button(Camera, JoyButton.Y);
         Button(Neutral, JoyButton.LeftStick);
         Button(Reverse, JoyButton.RightStick);
-        Button(NewGame, JoyButton.Back);
+        // Back opens the menu, which has the new game in it: a pad has no Esc.
+        Button(Menu, JoyButton.Back);
         // A stick half over before an axis counts as the key pressed: the title screen's car choice and the
         // d-pad fallbacks should not fire on a nudge.
         foreach (var action in new[] { SteerLeft, SteerRight, Throttle, Brake }) InputMap.ActionSetDeadzone(action, 0.4f);

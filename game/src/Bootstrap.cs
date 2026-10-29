@@ -48,6 +48,12 @@ public sealed partial class Bootstrap : Node3D
     private bool _park;
     private bool _tryTable;
     private float _creditSeconds = -1f;
+    private float _newGameAt = -1f;   // automation: a second credit, as F5 starts one (--new-game-after)
+    private float _menuAt = -1f;      // automation: the menu opened for a picture of it (--menu-after)
+    private string? _jingle;          // automation: a jingle played a second in, to check the synth (--jingle)
+    private readonly HashSet<string> _soundFaults = new();
+    private readonly PauseMenu _menu = new();
+    private bool _menuClick;
     private bool _startChase;
     private bool _retro;
     private GraphicsQuality _quality = GraphicsQuality.High;
@@ -128,6 +134,7 @@ public sealed partial class Bootstrap : Node3D
         _hud = new Hud { Gearbox = _gearbox, ShowFps = LoadChoice("fps", 0) != 0 };
         _scores = new ScoreBoard();
         _hud.Scores = _scores;
+        _hud.Menu = _menu;
         var layer = new CanvasLayer { Visible = !_noHud };
         layer.AddChild(_hud);
         AddChild(layer);
@@ -211,6 +218,9 @@ public sealed partial class Bootstrap : Node3D
             else if (arg.StartsWith("--screenshot=", System.StringComparison.Ordinal)) _screenshotPath = arg["--screenshot=".Length..];
             else if (arg.StartsWith("--at=", System.StringComparison.Ordinal)) float.TryParse(arg["--at=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _screenshotAt);
             else if (arg.StartsWith("--quit-after=", System.StringComparison.Ordinal)) float.TryParse(arg["--quit-after=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _quitAfter);
+            else if (arg.StartsWith("--new-game-after=", System.StringComparison.Ordinal)) float.TryParse(arg["--new-game-after=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _newGameAt);
+            else if (arg.StartsWith("--menu-after=", System.StringComparison.Ordinal)) float.TryParse(arg["--menu-after=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _menuAt);
+            else if (arg.StartsWith("--jingle=", System.StringComparison.Ordinal)) _jingle = arg["--jingle=".Length..];
             else if (arg == "--auto") _attractMode = TransmissionMode.Automatic;
             else if (arg == "--show-all") _showAll = true;
             else if (arg == "--save-best") _saveBest = true;   // debug: let an attract lap become the saved best lap
@@ -265,6 +275,7 @@ public sealed partial class Bootstrap : Node3D
 
     private void BuildDroneViews()
     {
+        _world.DetachDrones();
         foreach (var view in _droneViews) view.QueueFree();
         _droneViews.Clear();
         if (_session.Traffic is null) return;
@@ -347,12 +358,37 @@ public sealed partial class Bootstrap : Node3D
         _elapsed += dt;
         if (SingleInstance.ActivationRequested()) BringToFront();
         HandleGlobalKeys();
+        if (Input.IsActionJustPressed(InputSetup.Menu)) ShowMenu(!_menu.Open);
+        if (_menu.Open)
+        {
+            // The race stands still under the menu: no input reaches the car, the session does not step.
+            HandleMenu();
+            FillMenuLabels();
+            SyncView();
+            AutomationAfterFrame();
+            return;
+        }
         WorldBuilder.Tick(dt);
         if (_elapsed >= _frameCapCheckAt)
         {
             // The window may have moved to a screen with another refresh rate.
             _frameCapCheckAt = _elapsed + 2f;
             ApplyFrameCap();
+        }
+        if (_menuAt > 0f && _elapsed >= _menuAt)
+        {
+            _menuAt = -1f;
+            ShowMenu(true);
+        }
+        if (_jingle is not null && _elapsed >= 1f)
+        {
+            if (System.Enum.TryParse<EngineAudio.Jingle>(_jingle, ignoreCase: true, out var jingle)) _audio.PlayJingle(jingle);
+            _jingle = null;
+        }
+        if (_newGameAt > 0f && _elapsed >= _newGameAt)
+        {
+            _newGameAt = -1f;
+            NewSession();
         }
         if (_overlayUntil >= 0f && _elapsed >= _overlayUntil)
         {
@@ -392,19 +428,38 @@ public sealed partial class Bootstrap : Node3D
             }
             _scores.Update(dt);
         }
-        _audio.Update(_session, dt);
-        _world.Update(_session, _cameraRig.Listener, dt);
+        // The sound may fail without the race noticing: a fault there is logged once and the rest of the frame (the
+        // picture, the clock, quitting) carries on. In 0.8.0 the world sound threw on every frame of a second credit
+        // and the view stopped following the car: it stood at the line while the engine revved and the clock ran.
+        try
+        {
+            _audio.Update(_session, dt);
+            _world.Update(_session, _cameraRig.Listener, dt);
+        }
+        catch (System.Exception e)
+        {
+            if (_soundFaults.Add($"{e.GetType().Name}: {e.Message}")) GD.PushError($"sound update failed (logged once): {e}");
+        }
         _hud.Notice = _updater.Status;
         SyncView();
 
+        AutomationAfterFrame();
+        // A downloaded update restarts the game only between credits: on the title screen or once the time is up.
+        _updater.ApplyWhenIdle(_session.Phase is SessionPhase.SelectTransmission or SessionPhase.Finished);
+    }
+
+    /// <summary>
+    /// The automation's picture (--screenshot) and its end (--quit-after), checked at the end of every frame, the
+    /// menu's included: a run that opened the menu never reached them and recorded on for ever.
+    /// </summary>
+    private void AutomationAfterFrame()
+    {
         if (_screenshotPath is not null && !_screenshotTaken && _elapsed >= _screenshotAt)
         {
             _screenshotTaken = true;
             CallDeferred(nameof(TakeScreenshot), _screenshotPath);
         }
         if (_quitAfter > 0f && _elapsed >= _quitAfter) Shutdown();
-        // A downloaded update restarts the game only between credits: on the title screen or once the time is up.
-        _updater.ApplyWhenIdle(_session.Phase is SessionPhase.SelectTransmission or SessionPhase.Finished);
     }
 
     public override void _Notification(int what)
@@ -573,29 +628,117 @@ public sealed partial class Bootstrap : Node3D
 
     public override void _UnhandledInput(InputEvent @event)
     {
+        if (_menu.Open && @event is InputEventMouse mouse)
+        {
+            var line = PauseMenu.HitTest(GetViewport().GetVisibleRect().Size, mouse.Position);
+            if (line >= 0) _menu.Select(line);
+            if (line >= 0 && mouse is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left }) _menuClick = true;
+            return;
+        }
         if (@event is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left }) _clicked = true;
+    }
+
+    /// <summary>Opens or closes the menu; the race and its sound stand still while it is open.</summary>
+    private void ShowMenu(bool open)
+    {
+        if (open == _menu.Open) return;
+        if (open) _menu.Show();
+        else _menu.Hide();
+        AudioServer.SetBusMute(0, open);
+        _keyboard.Reset();
+    }
+
+    /// <summary>The menu's keys: up and down move, Enter or A takes the line, left and right turn a setting, Space or B goes back.</summary>
+    private void HandleMenu()
+    {
+        if (Input.IsActionJustPressed(InputSetup.Throttle)) _menu.Move(-1);
+        if (Input.IsActionJustPressed(InputSetup.Brake)) _menu.Move(1);
+        if (Input.IsActionJustPressed(InputSetup.Abort))
+        {
+            ShowMenu(false);
+            return;
+        }
+        var left = Input.IsActionJustPressed(InputSetup.SteerLeft);
+        var right = Input.IsActionJustPressed(InputSetup.SteerRight);
+        var take = Input.IsActionJustPressed(InputSetup.Ignition) || _menuClick;
+        _menuClick = false;
+        if (!take && !left && !right) return;
+        switch (_menu.Current)
+        {
+            case PauseMenu.Item.Continue when take:
+                ShowMenu(false);
+                break;
+            case PauseMenu.Item.NewGame when take:
+                ShowMenu(false);
+                NewSession();
+                break;
+            case PauseMenu.Item.Camera:
+                ToggleCamera();
+                break;
+            case PauseMenu.Item.Graphics:
+                CycleQuality(left ? -1 : 1);
+                break;
+            case PauseMenu.Item.Retro:
+                SetRetro(!_retro);
+                break;
+            case PauseMenu.Item.Units:
+                _instruments.UseKmh = !_instruments.UseKmh;
+                break;
+            case PauseMenu.Item.Fullscreen:
+                ToggleFullscreen();
+                break;
+            case PauseMenu.Item.Quit when take:
+                Shutdown();
+                break;
+        }
+    }
+
+    private void FillMenuLabels()
+    {
+        var labels = _menu.Labels;
+        labels[(int)PauseMenu.Item.Continue] = "CONTINUE";
+        labels[(int)PauseMenu.Item.NewGame] = "NEW GAME";
+        labels[(int)PauseMenu.Item.Camera] = $"CAMERA:  {(_cameraRig.Mode == CameraMode.Cockpit ? "DRIVER'S SEAT" : "BEHIND THE CAR")}";
+        labels[(int)PauseMenu.Item.Graphics] = $"GRAPHICS:  {_quality.ToString().ToUpperInvariant()}";
+        labels[(int)PauseMenu.Item.Retro] = $"1989 MODE:  {(_retro ? "ON" : "OFF")}";
+        labels[(int)PauseMenu.Item.Units] = $"UNITS:  {(_instruments.UseKmh ? "KM/H" : "MPH")}";
+        labels[(int)PauseMenu.Item.Fullscreen] = $"FULL SCREEN:  {(GetWindow().Mode == Window.ModeEnum.Fullscreen ? "ON" : "OFF")}";
+        labels[(int)PauseMenu.Item.Quit] = "QUIT GAME";
+    }
+
+    private void ToggleFullscreen()
+    {
+        var window = GetWindow();
+        window.Mode = window.Mode == Window.ModeEnum.Fullscreen ? Window.ModeEnum.Windowed : Window.ModeEnum.Fullscreen;
+    }
+
+    private void ToggleCamera()
+    {
+        _cameraRig.Mode = _cameraRig.Mode == CameraMode.Chase ? CameraMode.Cockpit : CameraMode.Chase;
+        _cameraRig.ResetChase();
+    }
+
+    private void CycleQuality(int step)
+    {
+        _quality = (GraphicsQuality)(((int)_quality + step + 3) % 3);
+        SaveChoice("quality", (int)_quality);
+        if (!_retro) ApplyGraphics();
     }
 
     private void HandleGlobalKeys()
     {
-        if (Input.IsActionJustPressed(InputSetup.Fullscreen))
-        {
-            var window = GetWindow();
-            window.Mode = window.Mode == Window.ModeEnum.Fullscreen ? Window.ModeEnum.Windowed : Window.ModeEnum.Fullscreen;
-        }
-        if (Input.IsActionJustPressed(InputSetup.Camera))
-        {
-            _cameraRig.Mode = _cameraRig.Mode == CameraMode.Chase ? CameraMode.Cockpit : CameraMode.Chase;
-            _cameraRig.ResetChase();
-        }
+        if (Input.IsActionJustPressed(InputSetup.Fullscreen)) ToggleFullscreen();
+        if (Input.IsActionJustPressed(InputSetup.Camera)) ToggleCamera();
         if (Input.IsActionJustPressed(InputSetup.Units)) _instruments.UseKmh = !_instruments.UseKmh;
-        if (Input.IsActionJustPressed(InputSetup.NewGame)) NewSession();
+        if (Input.IsActionJustPressed(InputSetup.NewGame))
+        {
+            ShowMenu(false);
+            NewSession();
+        }
         if (Input.IsActionJustPressed(InputSetup.Retro)) SetRetro(!_retro);
         if (Input.IsActionJustPressed(InputSetup.Quality))
         {
-            _quality = (GraphicsQuality)(((int)_quality + 1) % 3);
-            SaveChoice("quality", (int)_quality);
-            if (!_retro) ApplyGraphics();
+            CycleQuality(1);
             Notice($"GRAPHICS: {_quality.ToString().ToUpperInvariant()}");
         }
         if (Input.IsActionJustPressed(InputSetup.FpsCounter))

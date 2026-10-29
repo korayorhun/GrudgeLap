@@ -85,10 +85,11 @@ shows a replay and puts you back at the last return point; Enter turns the key a
 | F7 | graphics preset: high, medium, low (remembered) |
 | F6 | frame-rate counter |
 | F5 | new game |
+| Esc | the menu: carry on, new game, camera, graphics, 1989 mode, units, full screen, **quit** (the race stands still while it is open) |
 
 A gamepad works too: the left stick steers, the right trigger is the throttle and the left the brake, RB / LB
 shift (on the title screen they step through the gearboxes), X is the clutch, A starts, B skips, Y switches
-the camera, Back starts a new game, and the d-pad stands in for the stick and the pedals.
+the camera, Back opens the menu, and the d-pad stands in for the stick and the pedals.
 
 Rules, from the cabinet's own operator options: 90 s on the clock, +45 s at the checkpoint and at the lap,
 10 s off road and you are put back, wrong way does not count, traffic is solid. The stunt route wants about
