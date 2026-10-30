@@ -71,6 +71,10 @@ public static unsafe class Exports
     public static int Train(nint session, NativeBody* output, int capacity) =>
         Guarded(() => NativeApi.Train(Resolve(session), new Span<NativeBody>(output, Math.Max(capacity, 0))));
 
+    [UnmanagedCallersOnly(EntryPoint = "glp_cows", CallConvs = [typeof(CallConvCdecl)])]
+    public static int Cows(nint session, NativeBody* output, int capacity) =>
+        Guarded(() => NativeApi.Cows(Resolve(session), new Span<NativeBody>(output, Math.Max(capacity, 0))));
+
     [UnmanagedCallersOnly(EntryPoint = "glp_props", CallConvs = [typeof(CallConvCdecl)])]
     public static int Props(nint session, NativeProp* output, int capacity) =>
         Guarded(() => NativeApi.Props(Resolve(session), new Span<NativeProp>(output, Math.Max(capacity, 0))));

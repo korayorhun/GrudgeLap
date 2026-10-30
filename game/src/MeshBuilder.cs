@@ -28,6 +28,9 @@ internal sealed class MeshBuilder
     private bool _hasTangent;
     private bool _tangents;
 
+    /// <summary>Vertices added so far: the index the next one gets.</summary>
+    public int VertexCount => _vertices.Count;
+
     public void SetNormal(Vector3 normal) => _normal = normal;
     public void SetColor(Color colour) => _colour = colour;
 

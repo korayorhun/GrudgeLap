@@ -169,7 +169,7 @@ public sealed unsafe class NativeApiTests
                 NativeState state;
                 Assert.Equal(0, getState(session, &state));
                 var expected = NativeApi.State(managed);
-                Assert.Equal(360, sizeof(NativeState));
+                Assert.Equal(400, sizeof(NativeState));
                 Assert.Equal(36, sizeof(NativeBody));
                 Assert.Equal(36, sizeof(NativeProp));
                 Assert.True(new ReadOnlySpan<byte>(&state, sizeof(NativeState)).SequenceEqual(new ReadOnlySpan<byte>(&expected, sizeof(NativeState))),

@@ -22,7 +22,7 @@ internal sealed class NativeSession(RaceSession session, int car)
 /// </summary>
 internal static class NativeApi
 {
-    public const int AbiVersion = 5;
+    public const int AbiVersion = 6;
     public const int TrafficFlag = 1;
     public const int SpeedRouteFlag = 2;
 
@@ -134,7 +134,14 @@ internal static class NativeApi
             TrainRunning = session.Track.Train is { Running: true } ? 1 : 0,
             CreditBestLap = session.CreditBestLap,
             CreditBestRoute = (int)session.CreditBestRoute,
+            Damage = session.Damage,
+            KnockKind = (int)session.LastKnock.Kind,
+            KnockSpeed = session.LastKnock.Speed,
+            KnockIndex = session.LastKnock.Index,
+            CowMooed = session.Herd.Mooed,
         };
+        Write(state.KnockPoint, session.LastKnock.Point);
+        Write(state.KnockNormal, session.LastKnock.Normal);
         foreach (var e in session.Events) state.Events |= 1u << (int)e;
         Write(state.Position, car.Position);
         Write(state.Orientation, car.Orientation);
@@ -202,6 +209,24 @@ internal static class NativeApi
             }
         }
         return train.Cars.Length;
+    }
+
+    /// <summary>The cows as they stand now: on the ground, turned by their yaw (the head along +x), the prop index as the colour.</summary>
+    public static unsafe int Cows(NativeSession native, Span<NativeBody> output)
+    {
+        var cows = native.Session.Herd.Cows;
+        for (var i = 0; i < cows.Count && i < output.Length; i++)
+        {
+            var cow = cows[i];
+            fixed (NativeBody* body = &output[i])
+            {
+                Write(body->Position, cow.Position);
+                Write(body->Orientation, Quaternion.CreateFromAxisAngle(Vector3.UnitY, cow.YawDeg * MathUtil.Deg2Rad));
+                body->Speed = cow.Velocity.Length();
+                body->Colour = cow.Prop;
+            }
+        }
+        return cows.Count;
     }
 
     public static unsafe int Props(NativeSession native, Span<NativeProp> output)

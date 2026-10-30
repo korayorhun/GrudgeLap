@@ -36,7 +36,8 @@ namespace
 		float Height;
 		float Back;
 	};
-	const FEyePoint EyePoints[] = { { 0.98f, 0.15f }, { 1.02f, 0.12f }, { 1.14f, 0.42f }, { 1.13f, 0.55f }, { 1.17f, 0.45f } };
+	const FEyePoint EyePoints[] = { { 0.98f, 0.15f }, { 1.02f, 0.12f }, { 1.14f, 0.42f }, { 1.13f, 0.55f }, { 1.17f, 0.45f },
+		{ 1.18f, 0.22f }, { 1.16f, 0.50f }, { 1.17f, 0.48f } };
 
 	void HideTree(AActor* Actor, bool bHidden)
 	{

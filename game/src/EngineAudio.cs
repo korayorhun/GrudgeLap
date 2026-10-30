@@ -42,6 +42,11 @@ internal sealed partial class EngineAudio : Node
     private float _songFade = 1f;
     private float _songGain = 1f;
     private bool _songFading;
+    // The instant replay's music (0.9.1): eleven seconds of a CC0 FM tune (assets/audio/SOURCES.md), played from its
+    // recording; 1989 mode keeps the synthesised one (ReplaySong). It fades out in a third of a second when the
+    // replay ends or is skipped, as the synthesised one does.
+    private AudioStreamPlayer? _replayMusic;
+    private float _replayMusicFade;
     private double _songTime;
     private int _songNext;
     private readonly List<Voice> _voices = new();
@@ -62,6 +67,7 @@ internal sealed partial class EngineAudio : Node
     private readonly List<float> _popsPending = new();   // seconds until each scheduled pop
     private AudioStreamPlayer? _pops;
     private AudioStreamPlayer? _crashTakes;
+    private AudioStreamPlayer? _knockTakes;
     private static readonly string[] PopFiles = ["pop1.wav", "pop2.wav", "pop3.wav", "pop4.wav", "pop5.wav", "crackle.wav"];
 
     public float Volume { get; set; } = 0.8f;
@@ -238,10 +244,22 @@ internal sealed partial class EngineAudio : Node
         _songGain = jingle == Jingle.Replay ? 2.8f : 1f;
         _songFade = 1f;
         _songFading = false;
+        if (jingle == Jingle.Replay && !Retro && _replayMusic is not null)
+        {
+            // The recording instead of the notes.
+            _song = null;
+            _replayMusicFade = 0f;
+            _replayMusic.VolumeDb = ReplayMusicDb;
+            _replayMusic.Play();
+            return;
+        }
         _songTime = 0.0;
         _songNext = 0;
         _voices.Clear();
     }
+
+    /// <summary>The replay music's level: it plays alone (the engine is silent in the replay), a little under a car being driven.</summary>
+    private const float ReplayMusicDb = -5f;
 
     /// <summary>The cabinet's chime for a choice made on the title screen.</summary>
     public void Chime()
@@ -263,6 +281,12 @@ internal sealed partial class EngineAudio : Node
         AddChild(_tyres);
         _pops = PopPlayer();
         _crashTakes = CrashPlayer();
+        _knockTakes = CrashPlayer();
+        if (ResourceLoader.Exists("res://assets/audio/music/replay.ogg"))
+        {
+            _replayMusic = new AudioStreamPlayer { Stream = GD.Load<AudioStream>("res://assets/audio/music/replay.ogg"), VolumeDb = ReplayMusicDb };
+            AddChild(_replayMusic);
+        }
         // The engine, tyres, pops and these layers add up on the master bus: a limiter there instead of the output's clipping.
         if (AudioServer.GetBusEffectCount(0) == 0) AudioServer.AddBusEffect(0, new AudioEffectHardLimiter { CeilingDb = -0.5f });
     }
@@ -299,6 +323,20 @@ internal sealed partial class EngineAudio : Node
         var player = new AudioStreamPlayer { Stream = takes, MaxPolyphony = 2, VolumeDb = -1f };
         AddChild(player);
         return player;
+    }
+
+    /// <summary>
+    /// A knock the car survived: the crash recordings cut short and lighter (quieter and a little higher for a light
+    /// one), with the thump under them; a cow is only the thump, a landing the thump and a scrape of the sump.
+    /// </summary>
+    private void Knock(KnockInfo knock)
+    {
+        var hard = MathUtil.Clamp01(knock.Speed / 13f);
+        _thump = MathF.Max(_thump, 0.35f + 0.65f * hard);
+        if (Retro || _knockTakes is null || knock.Kind == KnockKind.Cow) return;
+        _knockTakes.VolumeDb = Mathf.Lerp(-18f, -3f, hard);
+        _knockTakes.PitchScale = Mathf.Lerp(1.25f, 1.0f, hard);
+        _knockTakes.Play();
     }
 
     /// <summary>The crash heard again when the instant replay reaches the blow (<see cref="CrashScene"/>).</summary>
@@ -342,8 +380,10 @@ internal sealed partial class EngineAudio : Node
                 case RaceEvent.LapCompleted: _bleep = 0.35f; break;
                 case RaceEvent.EngineStarted: _starter = 1f; _starterPhase = 0f; break;
                 case RaceEvent.NewBestLap: PlayJingle(Jingle.Fanfare); break;
-                case RaceEvent.CowHit: _moo = 1f; _mooPhase = 0f; _mooPitch = 0.9f + 0.2f * (float)_random.NextDouble(); break;
+                // The recorded moos come from the cows themselves (WorldAudio); 1989 mode keeps the cabinet's synthesised one.
+                case RaceEvent.CowHit when Retro: _moo = 1f; _mooPhase = 0f; _mooPitch = 0.9f + 0.2f * (float)_random.NextDouble(); break;
                 case RaceEvent.SignHit: _clang = 1f; break;
+                case RaceEvent.Knocked: Knock(session.LastKnock); break;
             }
         }
         // A turbo: its whistle follows the boost; shutting the throttle on boost vents it through the blow-off valve.
@@ -355,6 +395,13 @@ internal sealed partial class EngineAudio : Node
         // The instant replay has its tune; skipped or over, it fades out in a third of a second.
         if (session.Phase == SessionPhase.Replay && _lastPhase != SessionPhase.Replay) PlayJingle(Jingle.Replay);
         else if (session.Phase != SessionPhase.Replay && _lastPhase == SessionPhase.Replay && ReferenceEquals(_song, ReplaySong)) _songFading = true;
+        if (session.Phase != SessionPhase.Replay && _lastPhase == SessionPhase.Replay && _replayMusic is { Playing: true }) _replayMusicFade = 1f;
+        if (_replayMusicFade > 0f && _replayMusic is not null)
+        {
+            _replayMusicFade = MathF.Max(_replayMusicFade - dt * 3f, 0f);
+            _replayMusic.VolumeDb = ReplayMusicDb + Mathf.LinearToDb(MathF.Max(_replayMusicFade, 0.001f));
+            if (_replayMusicFade <= 0f) _replayMusic.Stop();
+        }
         _lastPhase = session.Phase;
         // The shifter: a clunk on every change of gear while the car is driven (the automatic's too).
         var gear = car.Drivetrain.Gear;

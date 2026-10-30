@@ -94,7 +94,7 @@ internal sealed partial class CarView
             EyeH = 1.14f,
             LeatherTint = new(0.30f, 0.32f, 0.40f),
             CarpetTint = new(0.12f, 0.12f, 0.13f),
-            HeadlinerTint = new(0.50f, 0.50f, 0.52f),
+            HeadlinerTint = new(0.66f, 0.66f, 0.68f),
             Hatchback = true,
             RunStep = 0.10f,
             RearSeatZ = 1.0f,
@@ -112,6 +112,7 @@ internal sealed partial class CarView
             HandleZ = 0.70f,
             HandleY = 0.855f,
             MirrorZ = -0.40f,
+            ClothSeats = true,
         };
 
         /// <summary>
@@ -182,6 +183,7 @@ internal sealed partial class CarView
             HandleZ = 0.62f,
             HandleY = 0.86f,
             MirrorZ = -0.38f,
+            ClothSeats = true,
         };
 
         /// <summary>
@@ -234,7 +236,7 @@ internal sealed partial class CarView
             EyeH = 1.17f,
             LeatherTint = BlackLeather,
             CarpetTint = new(0.10f, 0.10f, 0.11f),
-            HeadlinerTint = new(0.25f, 0.25f, 0.27f),
+            HeadlinerTint = new(0.36f, 0.36f, 0.38f),
             Hatchback = true,
             RunStep = 0.10f,
             RearSeatZ = 1.18f,
@@ -254,6 +256,8 @@ internal sealed partial class CarView
             HandleY = 0.93f,
             MirrorZ = -0.45f,
             PaintedMirrors = true,
+            SatinStrip = true,
+            ClothSeats = true,
         };
     }
 
@@ -513,13 +517,14 @@ internal sealed partial class CarView
             var minX = style.Headlamp.Min(p => p.X);
             var maxX = style.Headlamp.Max(p => p.X);
             var midY = (style.Headlamp.Min(p => p.Y) + style.Headlamp.Max(p => p.Y)) * 0.5f;
-            var radius = MathF.Min(0.045f, (style.Headlamp.Max(p => p.Y) - style.Headlamp.Min(p => p.Y)) * 0.32f);
+            var radius = float.IsNaN(style.HeadlampBulbRadius) ? MathF.Min(0.045f, (style.Headlamp.Max(p => p.Y) - style.Headlamp.Min(p => p.Y)) * 0.32f) : style.HeadlampBulbRadius;
             foreach (var mirror in new[] { false, true })
             {
                 Add(outside, SkinMesh(grid, true, Vector3.Forward, 0.002f, mirror), reflector, "Headlamp");
                 Add(outside, SkinMesh(grid, true, Vector3.Forward, 0.008f, mirror), lens, "HeadlampLens");
-                foreach (var along in new[] { 0.3f, 0.7f })
+                for (var lampIndex = 0; lampIndex < style.HeadlampBulbs; lampIndex++)
                 {
+                    var along = style.HeadlampBulbs == 1 ? 0.5f : 0.3f + 0.4f * lampIndex / (style.HeadlampBulbs - 1);
                     var x = Mathf.Lerp(minX, maxX, along);
                     var z = SkinZ(spec, x, midY, true);
                     outside.AddChild(new MeshInstance3D
@@ -579,12 +584,39 @@ internal sealed partial class CarView
             var spoiler = Box(outside, new Vector3(width, 0.025f, style.SpoilerLength), new Vector3(0f, style.Sample(style.CentreH, from) + 0.006f, from + style.SpoilerLength * 0.5f - 0.03f), paint);
             spoiler.Rotation = new Vector3(0.12f, 0f, 0f);
         }
-        // Rear wiper parked along the foot of the rear window.
+        // Rear wiper parked along the foot of the rear window (not on a saloon's).
+        if (style.RearWiper)
         {
             var z = style.RearGlassTo - 0.05f;
             var fall = (style.Sample(style.CentreH, z - 0.05f) - style.Sample(style.CentreH, z + 0.05f)) / 0.1f;
             var blade = Box(outside, new Vector3(0.36f, 0.012f, 0.02f), new Vector3(-0.10f, style.Sample(style.CentreH, z) + 0.012f, z), trim);
             blade.Rotation = new Vector3(MathF.Atan(fall), 0f, 0f);
+        }
+
+        // Roof rails along the roof's edges on the estate: a bar on a foot at each end and one in the middle.
+        if (style.RoofRails)
+        {
+            var from = style.CabinFrom + 0.20f;
+            var to = style.RearGlassFrom - 0.10f;
+            var satinRail = new StandardMaterial3D { AlbedoColor = new Color(0.62f, 0.63f, 0.65f), Metallic = 0.8f, Roughness = 0.35f };
+            foreach (var side in new[] { -1f, 1f })
+            {
+                const int pieces = 8;
+                for (var p = 0; p < pieces; p++)
+                {
+                    var z0 = from + (to - from) * p / pieces;
+                    var z1 = from + (to - from) * (p + 1) / pieces;
+                    var y0 = style.Sample(style.CrestH, z0) + 0.055f;
+                    var y1 = style.Sample(style.CrestH, z1) + 0.055f;
+                    var x = side * (style.Sample(style.CrestW, (z0 + z1) * 0.5f) - 0.04f);
+                    var rail = Box(outside, new Vector3(0.03f, 0.025f, MathF.Sqrt((z1 - z0) * (z1 - z0) + (y1 - y0) * (y1 - y0)) + 0.002f), new Vector3(x, (y0 + y1) * 0.5f, (z0 + z1) * 0.5f), satinRail);
+                    rail.Rotation = new Vector3(-MathF.Atan2(y1 - y0, z1 - z0), 0f, 0f);
+                }
+                foreach (var z in new[] { from + 0.02f, (from + to) * 0.5f, to - 0.02f })
+                {
+                    Box(outside, new Vector3(0.04f, 0.06f, 0.07f), new Vector3(side * (style.Sample(style.CrestW, z) - 0.04f), style.Sample(style.CrestH, z) + 0.028f, z), trim);
+                }
+            }
         }
 
         // Along the flanks: the rubbing strip between the arches, the black pillars over the side glass, the handles.

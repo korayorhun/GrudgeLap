@@ -15,7 +15,7 @@
 extern "C" {
 #endif
 
-#define GLP_ABI_VERSION 5
+#define GLP_ABI_VERSION 6
 
 typedef intptr_t glp_session; /* 0 is no session */
 typedef intptr_t glp_engine;  /* 0 is no engine voice */
@@ -48,11 +48,14 @@ enum { GLP_ROUTE_UNDECIDED, GLP_ROUTE_SPEED, GLP_ROUTE_STUNT };
 enum { GLP_SURFACE_NONE, GLP_SURFACE_ROAD, GLP_SURFACE_GRASS, GLP_SURFACE_CHASM, GLP_SURFACE_PAD };
 /* CrashReason */
 enum { GLP_CRASH_NONE, GLP_CRASH_HARD_LANDING, GLP_CRASH_ROLLED_OVER, GLP_CRASH_FELL_OFF_BRIDGE, GLP_CRASH_HIT_TREE,
-       GLP_CRASH_HIT_BUILDING, GLP_CRASH_HIT_TRAIN, GLP_CRASH_HIT_TRAFFIC };
+       GLP_CRASH_HIT_BUILDING, GLP_CRASH_HIT_TRAIN, GLP_CRASH_HIT_TRAFFIC, GLP_CRASH_HIT_COW };
 /* RaceEvent: glp_state.events has bit (1 << event) set for each event of the last step. */
 enum { GLP_EVENT_ENGINE_STARTED, GLP_EVENT_ENGINE_STALLED, GLP_EVENT_ROUTE_CHOSEN, GLP_EVENT_CHECKPOINT_PASSED,
        GLP_EVENT_LAP_COMPLETED, GLP_EVENT_NEW_BEST_LAP, GLP_EVENT_LEFT_ROAD, GLP_EVENT_OFF_ROAD_TIMEOUT,
-       GLP_EVENT_WRONG_WAY, GLP_EVENT_CRASHED, GLP_EVENT_TIME_OUT, GLP_EVENT_COW_HIT, GLP_EVENT_SIGN_HIT };
+       GLP_EVENT_WRONG_WAY, GLP_EVENT_CRASHED, GLP_EVENT_TIME_OUT, GLP_EVENT_COW_HIT, GLP_EVENT_SIGN_HIT,
+       GLP_EVENT_KNOCKED, GLP_EVENT_COW_MOOED };
+/* KnockKind: what the car knocked into (glp_state.knock_kind). */
+enum { GLP_KNOCK_SOLID, GLP_KNOCK_DRONE, GLP_KNOCK_COW, GLP_KNOCK_LANDING };
 /* PropKind */
 enum { GLP_PROP_BARN, GLP_PROP_HOUSE, GLP_PROP_SHOP, GLP_PROP_HUT, GLP_PROP_TREE, GLP_PROP_COW, GLP_PROP_SIGN,
        GLP_PROP_SIGNPOST, GLP_PROP_TOWER, GLP_PROP_BARRIER, GLP_PROP_TRAIN, GLP_PROP_FLOWERS, GLP_PROP_FIELD,
@@ -115,12 +118,20 @@ typedef struct glp_state
     /* ABI 5 */
     float credit_best_lap;    /* s, the best lap of this credit alone (a loaded ghost's does not count); +inf before one */
     int32_t credit_best_route; /* GLP_ROUTE_* of that lap */
+    /* ABI 6: knocks the car survives (below the crash speed it bounces off, dented) and the cows */
+    float damage;             /* 0 sound .. 1 a write-off (a crash); repaired after the replay */
+    int32_t knock_kind;       /* GLP_KNOCK_* of the last knock (GLP_EVENT_KNOCKED) */
+    float knock_point[3];     /* where it struck, in the car's frame (x right, y up, z forward, from the centre of gravity) */
+    float knock_normal[3];    /* the way the blow pushed in, car's frame: from the car towards what it hit */
+    float knock_speed;        /* closing speed, m/s */
+    int32_t knock_index;      /* prop, drone or cow index by knock_kind; -1 for a landing */
+    int32_t cow_mooed;        /* index into glp_cows of a cow that mooed on its own in the last step (GLP_EVENT_COW_MOOED), or -1 */
 } glp_state;
 
 /* The catalogue's static facts about a car: what instruments and a car body need. */
 typedef struct glp_car_spec
 {
-    int32_t style;            /* 0 flat-12, 1 V8, 2 hot hatch, 3 five-cylinder, 4 turbo hatch (CarStyle) */
+    int32_t style;            /* 0 flat-12, 1 V8, 2 hot hatch, 3 five-cylinder, 4 turbo hatch, 5 saloon, 6 estate, 7 fleet saloon (CarStyle) */
     int32_t forward_gears;
     float speedo_max_mph;
     float redline_rpm;
@@ -133,7 +144,8 @@ typedef struct glp_car_spec
     float cg_height;          /* m, the centre of gravity over the road at rest, with the static sag */
 } glp_car_spec;
 
-/* A moving body: a traffic car (colour: paint index) or a car of the train (colour: 0 locomotive, 1 wagon). */
+/* A moving body: a traffic car (colour: paint index), a car of the train (colour: 0 locomotive, 1 wagon) or a cow
+ * (glp_cows; colour: the cow's prop index in glp_props, position on the ground under its middle, its head along +x). */
 typedef struct glp_body
 {
     float position[3];        /* traffic: centre of gravity; train: on the ground, mid-car */
@@ -173,6 +185,8 @@ int32_t glp_message(glp_session session, char* buffer, int32_t capacity);
 int32_t glp_traffic(glp_session session, glp_body* out, int32_t capacity);
 int32_t glp_train(glp_session session, glp_body* out, int32_t capacity);
 int32_t glp_props(glp_session session, glp_prop* out, int32_t capacity);
+/* ABI 6: the cows as they stand now (they are shoved, stagger and trot off). */
+int32_t glp_cows(glp_session session, glp_body* out, int32_t capacity);
 /* The best lap (the ghost's recording) serialized; returns its size, 0 when there is none. */
 int32_t glp_best_lap(glp_session session, uint8_t* buffer, int32_t capacity);
 /* Installs a best lap from glp_best_lap's bytes before the start: its ghost races. */

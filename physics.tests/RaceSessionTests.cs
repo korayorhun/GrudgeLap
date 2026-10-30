@@ -189,7 +189,9 @@ public sealed class RaceSessionTests
             var steer = MathUtil.Clamp(angle / session.Car.MaxSteerAngleAt(session.Car.Speed), -1f, 1f);
             session.Step(new DriverInputs { Throttle = 1f, Gear = DriverInputs.NoGearChange, Steer = steer }, Dt);
             if (session.Events.Contains(RaceEvent.Crashed)) crashed = true;
+            if (i % 15 == 0) _out.WriteLine($"t={i * Dt:F2} gap {Vector3.Distance(drone.Position, session.Car.Position):F1} side {Vector3.Dot(drone.Position - session.Car.Position, session.Car.Right):F2} up {Vector3.Dot(drone.Position - session.Car.Position, session.Car.Up):F2} car {session.Car.Speed:F1} drone {drone.Speed:F1} events {string.Join(',', session.Events)}");
         }
+        _out.WriteLine($"crashed {crashed}: {session.LastCrash}, damage {session.Damage:F2}, knock {session.LastKnock}");
         Assert.True(crashed, "expected to run into the drone");
         Assert.Equal(CrashReason.HitTraffic, session.LastCrash);
         Assert.Equal(SessionPhase.Replay, session.Phase);
@@ -241,35 +243,54 @@ public sealed class RaceSessionTests
         Assert.Contains("GRUDGE MATCH", next.Message);
     }
 
-    /// <summary>A pier under the jump's ramps stops the car like a building (until 0.9 the car drove through them).</summary>
+    /// <summary>
+    /// A pier under a bridge stops the car like a building (until 0.9 the car drove through them): driven at from the
+    /// field beside the bridge, under the deck's edge, it knocks the car back.
+    /// </summary>
     [Fact]
-    public void Running_into_a_bridge_pier_crashes()
+    public void Running_into_a_bridge_pier_knocks_the_car_back()
     {
         var track = OriginalInspiredTrack.Build();
-        var pier = track.Props.First(p => p.Kind == PropKind.Pier && p.Label == "pier");
+        var pier = track.Props.Where(p => p.Kind == PropKind.Pier && p.Label == "pier").MaxBy(p => p.Size.Y)!;
         var session = new RaceSession(track, new VehicleSpec(), RaceOptions.MediumNoTraffic);
         session.ChooseTransmission(TransmissionMode.Automatic);
         session.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Ignition = true }, Dt);
 
-        // Set the car down on the road nearest the pier, 35 m back along it, and drive at the pier off the road.
-        var (road, index) = track.Paths.SelectMany(p => p.Frames.Select((f, i) => (Path: p, Index: i, Frame: f)))
-            .Where(c => c.Frame.Origin.Y < pier.Position.Y + 0.5f)
-            .OrderBy(c => Vector3.DistanceSquared(c.Frame.Origin with { Y = 0f }, pier.Position with { Y = 0f }))
-            .Select(c => (c.Path, c.Index)).First();
-        var start = road.FrameIndexAt(MathF.Max(road.Frames[index].Distance - 35f, 0f));
-        session.Car.Reset(road.Frames[start], new PathCursor(road, start));
-        session.Car.LaunchAt(12f);
-        var crashed = false;
-        for (var i = 0; i < 60 * 8 && !crashed; i++)
+        // Out from the bridge's centre line through the pier, and 18 m on: the car comes back in along that line.
+        var deck = track.Paths.SelectMany(p => p.Frames).OrderBy(f => Vector3.DistanceSquared(f.Origin with { Y = 0f }, pier.Position with { Y = 0f })).First();
+        var outward = Vector3.Normalize((pier.Position - deck.Origin) with { Y = 0f });
+        var from = pier.Position + outward * 18f;
+        from.Y = track.Terrain.Height(from.X, from.Z);
+        var start = new RoadFrame(from, -outward, MathUtil.Up, Vector3.Cross(MathUtil.Up, -outward), 0f, 5.5f, SurfaceType.Road, SegmentKind.Straight, 0);
+        session.Car.Reset(start, track.StartCursor);
+        session.Car.LaunchAt(9f);
+        var knocked = false;
+        var events = new List<RaceEvent>();
+        for (var i = 0; i < 60 * 6 && !knocked && session.Phase == SessionPhase.Driving; i++)
         {
-            var to = pier.Position - session.Car.Position;
-            var angle = MathF.Atan2(Vector3.Dot(to, session.Car.Right), MathF.Max(Vector3.Dot(to, session.Car.Forward), 0.1f));
-            var steer = MathUtil.Clamp(angle / session.Car.MaxSteerAngleAt(session.Car.Speed), -1f, 1f);
-            session.Step(new DriverInputs { Steer = steer, Throttle = 0.4f, Gear = DriverInputs.NoGearChange }, Dt);
-            if (session.Events.Contains(RaceEvent.Crashed)) crashed = true;
+            session.Step(new DriverInputs { Throttle = 0.25f, Gear = DriverInputs.NoGearChange }, Dt);
+            events.AddRange(session.Events);
+            knocked = session.Events.Contains(RaceEvent.Knocked) && session.LastKnock.Kind == KnockKind.Solid;
         }
-        Assert.True(crashed, "expected to crash into the pier");
-        Assert.Equal(CrashReason.HitBuilding, session.LastCrash);
+        _out.WriteLine($"pier {pier.Size.Y:F1} m tall: phase {session.Phase} ({session.LastCrash}), knock {session.LastKnock}, damage {session.Damage:F2}");
+        Assert.True(knocked, "expected to knock into the pier");
+        Assert.DoesNotContain(RaceEvent.Crashed, events);
+        Assert.Equal(PropKind.Pier, track.Props[session.LastKnock.Index].Kind);
+        for (var i = 0; i < 30; i++) session.Step(new DriverInputs { Gear = DriverInputs.NoGearChange }, Dt);
+        Assert.True(Vector3.Dot(session.Car.Velocity, -outward) < 1f, "the car should have been stopped by the pier");
+    }
+
+    /// <summary>Over the crash speed a knock is a crash: a tree at 65 km/h.</summary>
+    [Fact]
+    public void A_knock_over_the_crash_speed_crashes()
+    {
+        var (_, session, _) = TreeAhead(15f);
+        var events = new List<RaceEvent>();
+        RollInto(session, 18f, events);
+        Assert.Contains(RaceEvent.Crashed, events);
+        Assert.DoesNotContain(RaceEvent.Knocked, events);
+        Assert.Equal(CrashReason.HitTree, session.LastCrash);
+        Assert.Equal(SessionPhase.Replay, session.Phase);
     }
 
     [Fact]
@@ -307,7 +328,7 @@ public sealed class RaceSessionTests
     }
 
     [Fact]
-    public void Train_at_the_crossing_is_a_crash_and_signs_and_cows_are_not()
+    public void Train_at_the_crossing_is_a_crash_and_signs_are_not()
     {
         var track = OriginalInspiredTrack.Build();
         var session = new RaceSession(track, new VehicleSpec(), RaceOptions.MediumNoTraffic);
@@ -331,12 +352,12 @@ public sealed class RaceSessionTests
         Assert.Equal(CrashReason.HitTrain, session.LastCrash);
         _out.WriteLine($"train arrived after {waited:F1} s");
 
-        // Soft props: drive through a sign and a cow, nothing but events.
+        // Soft props: drive through a sign, nothing but an event (cows are bodies since 0.9.1: see the cow's test).
         var fresh = new RaceSession(track, new VehicleSpec(), RaceOptions.MediumNoTraffic);
         fresh.ChooseTransmission(TransmissionMode.Automatic);
         fresh.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Ignition = true }, Dt);
         var events = new List<RaceEvent>();
-        foreach (var kind in new[] { PropKind.Sign, PropKind.Cow })
+        foreach (var kind in new[] { PropKind.Sign })
         {
             // A specimen with nothing solid within 25 m, so the run-through ends on open ground.
             var prop = track.Props.First(p => p.Kind == kind && !track.Props.Any(o => o.Solid && Vector3.Distance(o.Position, p.Position) < 25f));
@@ -353,9 +374,140 @@ public sealed class RaceSessionTests
             Assert.True(fresh.Phase == SessionPhase.Driving, $"driving through the {kind} '{prop.Label}' at ({prop.Position.X:F0}, {prop.Position.Z:F0}) ended in {fresh.Phase} ({fresh.LastCrash}); car at ({fresh.Car.Position.X:F0}, {fresh.Car.Position.Y:F1}, {fresh.Car.Position.Z:F0})");
         }
         Assert.Contains(RaceEvent.SignHit, events);
-        Assert.Contains(RaceEvent.CowHit, events);
         Assert.DoesNotContain(RaceEvent.Crashed, events);
         Assert.Single(fresh.KnockedSigns);
+    }
+
+    /// <summary>A tree planted on the start straight, <paramref name="ahead"/> metres on, for the knock tests.</summary>
+    private static (TrackGeometry Track, RaceSession Session, TrackProp Tree) TreeAhead(float ahead)
+    {
+        var track = OriginalInspiredTrack.Build();
+        var spot = track.StartCursor.Path.FrameAt(track.StartFrame.Distance + ahead);
+        var tree = new TrackProp(PropKind.Tree, spot.Origin, 0f, new Vector3(1.0f, 7f, 1.0f), "knock-test");
+        track.Props.Add(tree);
+        var session = new RaceSession(track, new VehicleSpec(), RaceOptions.MediumNoTraffic);
+        session.ChooseTransmission(TransmissionMode.Automatic);
+        session.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Ignition = true }, Dt);
+        Assert.Equal(SessionPhase.Driving, session.Phase);
+        return (track, session, tree);
+    }
+
+    /// <summary>Rolls the car at the tree at <paramref name="speed"/> with the throttle shut until it knocks or crashes; returns the speed along the road after.</summary>
+    private float RollInto(RaceSession session, float speed, List<RaceEvent> events)
+    {
+        session.Car.Reset(session.Track.StartFrame, session.Track.StartCursor);
+        session.Car.LaunchAt(speed);
+        for (var i = 0; i < 60 * 12; i++)
+        {
+            session.Step(new DriverInputs { Gear = DriverInputs.NoGearChange }, Dt);
+            events.AddRange(session.Events);
+            if (session.Events.Contains(RaceEvent.Knocked) || session.Phase != SessionPhase.Driving) break;
+        }
+        // A few frames on for the bounce.
+        for (var i = 0; i < 20 && session.Phase == SessionPhase.Driving; i++) session.Step(new DriverInputs { Gear = DriverInputs.NoGearChange }, Dt);
+        return session.Car.Speed;
+    }
+
+    /// <summary>Under the crash speed a tree bounces the car off with a dent and no replay (0.9.1; before, any touch was a crash).</summary>
+    [Fact]
+    public void A_knock_under_the_crash_speed_bounces_the_car_off_and_dents_it()
+    {
+        var (_, session, tree) = TreeAhead(15f);
+        var events = new List<RaceEvent>();
+        var after = RollInto(session, 10f, events);
+        _out.WriteLine($"knock at {session.LastKnock.Speed:F1} m/s: damage {session.Damage:F2}, speed after {after:F1} m/s, power {session.Car.Drivetrain.Engine.PowerFactor:F2}");
+        Assert.Equal(SessionPhase.Driving, session.Phase);
+        Assert.Contains(RaceEvent.Knocked, events);
+        Assert.DoesNotContain(RaceEvent.Crashed, events);
+        Assert.Equal(KnockKind.Solid, session.LastKnock.Kind);
+        Assert.True(session.LastKnock.Point.Z > 1f, $"struck at {session.LastKnock.Point}: the nose should take it");
+        Assert.InRange(session.Damage, 0.1f, 0.4f);
+        Assert.True(after < 1f, $"the car should bounce back off the tree, not run on at {after:F1} m/s");
+        // Clear of the trunk: the car's nose is not inside the tree's box.
+        var nose = session.Car.Position + session.Car.Forward * session.Car.Spec.BodyFront;
+        Assert.True(Vector3.Dot(tree.Position - nose, session.Car.Forward) > 0.4f, "the nose sank into the tree");
+    }
+
+    /// <summary>Knock after knock the damage adds up to a write-off: the third knock just under the crash speed is the crash.</summary>
+    [Fact]
+    public void Repeated_knocks_wreck_the_car_and_the_crash_repairs_it()
+    {
+        var (_, session, _) = TreeAhead(15f);
+        var events = new List<RaceEvent>();
+        var knocks = 0;
+        for (var i = 0; i < 6 && session.Phase == SessionPhase.Driving; i++)
+        {
+            RollInto(session, 13.5f, events);
+            if (session.Phase == SessionPhase.Driving) knocks++;
+            _out.WriteLine($"run {i + 1}: phase {session.Phase}, damage {session.Damage:F2}");
+        }
+        Assert.Equal(SessionPhase.Replay, session.Phase);
+        Assert.Equal(CrashReason.HitTree, session.LastCrash);
+        Assert.InRange(knocks, 2, 4);
+        for (var i = 0; i < 60 * 11; i++) session.Step(DriverInputs.Idle, Dt);
+        Assert.Equal(SessionPhase.StartEngine, session.Phase);
+        Assert.Equal(0f, session.Damage);
+        Assert.Equal(1f, session.Car.Drivetrain.Engine.PowerFactor);
+    }
+
+    /// <summary>A cow is a body: the car shoves it aside and does not pass through it, and it moos (0.9.1).</summary>
+    [Fact]
+    public void A_cow_is_shoved_aside_not_driven_through()
+    {
+        var track = OriginalInspiredTrack.Build();
+        var session = new RaceSession(track, new VehicleSpec(), RaceOptions.MediumNoTraffic);
+        session.ChooseTransmission(TransmissionMode.Automatic);
+        session.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Ignition = true }, Dt);
+        var cow = session.Herd.Cows.First(c => !track.Props.Any(o => o.Solid && Vector3.Distance(o.Position, c.Position) < 25f));
+        var home = cow.Position;
+        // Come at its side from 15 m at 7 m/s (25 km/h): under the speed that makes it shy.
+        var heading = Herd.Heading(cow);
+        var across = Vector3.Normalize(new Vector3(heading.Y, 0f, -heading.X));
+        var start = new RoadFrame(cow.Position - across * 15f, across, MathUtil.Up, Vector3.Cross(MathUtil.Up, across), 0f, 5.5f, SurfaceType.Road, SegmentKind.Straight, 0);
+        session.Car.Reset(start, track.StartCursor);
+        session.Car.LaunchAt(7f);
+        var events = new List<RaceEvent>();
+        var deepest = 0f;
+        for (var i = 0; i < 60 * 5; i++)
+        {
+            session.Step(new DriverInputs { Throttle = 0.2f, Gear = DriverInputs.NoGearChange }, Dt);
+            events.AddRange(session.Events);
+            var car = Footprint.Of(session.Car.Position, session.Car.Forward, session.Car.Spec.BodyFront, session.Car.Spec.BodyRear, session.Car.Spec.BodyHalfWidth);
+            if (car.Overlaps(Herd.Plan(cow), out _, out var depth, out _)) deepest = MathF.Max(deepest, depth);
+        }
+        _out.WriteLine($"cow moved {Vector3.Distance(home, cow.Position):F1} m; deepest overlap {deepest:F2} m; damage {session.Damage:F2}");
+        Assert.Equal(SessionPhase.Driving, session.Phase);
+        Assert.Contains(RaceEvent.CowHit, events);
+        Assert.True(Vector3.Distance(home, cow.Position) > 1f, "the cow should have been shoved");
+        Assert.True(deepest < 0.35f, $"the car sank {deepest:F2} m into the cow");
+    }
+
+    /// <summary>Drones keep their distance: one coming up behind a car stopped in its lane stops behind it (0.9.1).</summary>
+    [Fact]
+    public void A_drone_stops_behind_a_car_stopped_in_its_lane()
+    {
+        var track = OriginalInspiredTrack.Build();
+        var session = new RaceSession(track, new VehicleSpec(), RaceOptions.Medium);
+        session.ChooseTransmission(TransmissionMode.Automatic);
+        session.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Ignition = true }, Dt);
+        var drone = session.Traffic!.Cars.First(c => !c.Oncoming && c.Path.Kind == PathKind.Speed && c.Distance > 60f && c.Distance < c.Path.Length - 400f);
+        var at = drone.Distance + 120f;
+        session.Car.Reset(drone.Path.FrameAt(at), new PathCursor(drone.Path, drone.Path.FrameIndexAt(at)));
+        session.Car.Displace(drone.Path.FrameAt(at).Lateral * drone.LaneOffset);
+        session.Car.Drivetrain.Engine.Start();
+        var events = new List<RaceEvent>();
+        for (var i = 0; i < 60 * 15; i++)
+        {
+            session.Step(new DriverInputs { Brake = 1f, Gear = DriverInputs.NoGearChange }, Dt);
+            events.AddRange(session.Events);
+            if (i % 30 == 0) _out.WriteLine($"t={i * Dt:F1} gap {Vector3.Distance(drone.Position, session.Car.Position) - Traffic.HalfLength - session.Car.Spec.BodyRear:F1} drone {drone.Speed:F1} car {session.Car.Speed:F1}");
+        }
+        var gap = Vector3.Distance(drone.Position, session.Car.Position) - Traffic.HalfLength - session.Car.Spec.BodyRear;
+        _out.WriteLine($"drone at {drone.Speed:F1} m/s, gap {gap:F1} m");
+        Assert.DoesNotContain(RaceEvent.Crashed, events);
+        Assert.DoesNotContain(RaceEvent.Knocked, events);
+        Assert.True(drone.Speed < 0.5f, $"the drone still rolls at {drone.Speed:F1} m/s");
+        Assert.InRange(gap, 2f, 12f);
     }
 
     [Fact]

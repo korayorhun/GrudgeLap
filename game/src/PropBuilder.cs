@@ -6,9 +6,9 @@ using SN = System.Numerics;
 namespace GrudgeLap.Game;
 
 /// <summary>
-/// Roadside props built from primitives and the CC0 photo materials: the red barn with its "33" door at
-/// the back, wood-sided houses, the shop with its canopy and pumps, the camouflaged rubble hut, cows with
-/// patches, yellow and white road signs, arrow signs, the level-crossing crossbuck, the green start gantry,
+/// Roadside props built from primitives and the CC0 photo materials: the red barn with its "33" at the back and
+/// the wood-sided houses (<see cref="BuildingBuilder"/>), the shop with its canopy and pumps, the camouflaged rubble hut, the cows
+/// (<see cref="CowBuilder"/>), yellow and white road signs, arrow signs, the level-crossing crossbuck, the green start gantry,
 /// sawhorse barriers, the skid-pad column and flower beds. Trees and fields are built by
 /// <see cref="FoliageBuilder"/>.
 /// </summary>
@@ -20,6 +20,15 @@ internal static class PropBuilder
     {
         if (prop.Kind == PropKind.Tree) return FoliageBuilder.BuildTree(prop, Rng).With(prop);
         if (prop.Kind == PropKind.Field) return FoliageBuilder.BuildField(prop, terrain);
+        if (prop.Kind == PropKind.Cow)
+        {
+            // A cow of its own (patches drawn from where it stands); the herd moves it from then on (CowRig.Pose).
+            var cow = CowBuilder.Build((int)(prop.Position.X * 13f + prop.Position.Z * 7f));
+            cow.Name = $"{prop.Kind}-{prop.Label}";
+            cow.Position = Convert.ToGodot(prop.Position);
+            cow.RotationDegrees = new Vector3(0f, -prop.YawDeg, 0f);
+            return cow;
+        }
 
         var node = new Node3D { Name = $"{prop.Kind}-{prop.Label}" };
         node.Position = Convert.ToGodot(prop.Position);
@@ -29,48 +38,19 @@ internal static class PropBuilder
         switch (prop.Kind)
         {
             case PropKind.Barn:
-                Box(node, size, WorldBuilder.PropMaterial("siding", new Color(0.70f, 0.14f, 0.10f), 0.45f), y: size.Y * 0.5f);
-                Roof(node, size, WorldBuilder.PropMaterial("roof", new Color(0.55f, 0.55f, 0.58f), 0.6f));
-                Box(node, new SN.Vector3(size.X * 0.35f, size.Y * 0.62f, 0.15f), Plain(new Color(0.16f, 0.45f, 0.18f)), y: size.Y * 0.31f, z: -size.Z * 0.5f - 0.05f);
-                Label(node, prop.Label == "33" ? "33" : "", new Vector3(0f, size.Y * 0.4f, -size.Z * 0.5f - 0.15f), 96, new Color(0.95f, 0.95f, 0.9f), flip: true);
-                // Doors at the front and a hay-loft window.
-                Box(node, new SN.Vector3(size.X * 0.3f, size.Y * 0.55f, 0.12f), Plain(new Color(0.35f, 0.22f, 0.14f)), y: size.Y * 0.275f, z: size.Z * 0.5f + 0.04f);
-                Box(node, new SN.Vector3(1.4f, 1.1f, 0.1f), Plain(new Color(0.08f, 0.08f, 0.1f)), y: size.Y * 0.82f, z: size.Z * 0.5f + 0.04f);
+                BuildingBuilder.Barn(node, prop, (parent, text, at, fontSize, colour, flip) => Label(parent, text, at, fontSize, colour, flip));
                 break;
 
             case PropKind.House:
-                var wall = prop.Label == "orange" ? new Color(0.92f, 0.56f, 0.22f) : new Color(0.96f, 0.95f, 0.88f);
-                Box(node, size, WorldBuilder.PropMaterial("siding", wall, 0.5f), y: size.Y * 0.5f);
-                Roof(node, size, WorldBuilder.PropMaterial("roof", new Color(0.5f, 0.28f, 0.2f), 0.6f));
-                Box(node, new SN.Vector3(1.1f, 2.2f, 0.1f), Plain(new Color(0.3f, 0.18f, 0.1f)), y: 1.1f, z: size.Z * 0.5f + 0.04f);
-                foreach (var x in new[] { -size.X * 0.3f, size.X * 0.3f })
-                {
-                    Box(node, new SN.Vector3(1.3f, 1.3f, 0.1f), Glass(), y: size.Y * 0.55f, x: x, z: size.Z * 0.5f + 0.04f);
-                    Box(node, new SN.Vector3(1.3f, 1.3f, 0.1f), Glass(), y: size.Y * 0.55f, x: x, z: -size.Z * 0.5f - 0.04f);
-                }
-                // Chimney.
-                Box(node, new SN.Vector3(0.9f, 2.2f, 0.9f), WorldBuilder.PropMaterial("bricks", new Color(0.8f, 0.7f, 0.65f), 1f), y: size.Y + size.Y * 0.35f, x: size.X * 0.3f);
+                BuildingBuilder.House(node, prop);
                 break;
 
             case PropKind.Shop:
-                Box(node, size, WorldBuilder.PropMaterial("concrete", new Color(0.85f, 0.83f, 0.78f), 0.5f), y: size.Y * 0.5f);
-                Box(node, new SN.Vector3(size.X + 1f, 0.5f, size.Z + 1f), WorldBuilder.PropMaterial("metal", new Color(0.4f, 0.4f, 0.42f), 0.5f), y: size.Y + 0.25f);
-                // Big window along the front, the canopy over the pumps, the GAS sign on a pole.
-                Box(node, new SN.Vector3(size.X * 0.7f, size.Y * 0.45f, 0.1f), Glass(), y: size.Y * 0.5f, z: size.Z * 0.5f + 0.04f);
-                Box(node, new SN.Vector3(size.X * 0.8f, 0.4f, 7f), WorldBuilder.PropMaterial("metal", new Color(0.85f, 0.85f, 0.88f), 0.5f), y: size.Y - 0.2f, z: size.Z * 0.5f + 4.5f);
-                foreach (var x in new[] { -size.X * 0.32f, size.X * 0.32f })
-                {
-                    Cylinder(node, 0.18f, size.Y - 0.4f, Plain(new Color(0.75f, 0.75f, 0.78f)), y: (size.Y - 0.4f) * 0.5f, x: x, z: size.Z * 0.5f + 7.5f);
-                }
-                Cylinder(node, 0.14f, 7f, Plain(new Color(0.5f, 0.5f, 0.52f)), y: 3.5f, x: size.X * 0.5f + 1.5f, z: size.Z * 0.5f + 2f);
-                Box(node, new SN.Vector3(2.6f, 1.2f, 0.15f), Plain(new Color(0.92f, 0.12f, 0.12f)), y: 7.2f, x: size.X * 0.5f + 1.5f, z: size.Z * 0.5f + 2f);
-                Label(node, "GAS", new Vector3(size.X * 0.5f + 1.5f, 7.2f, size.Z * 0.5f + 2.1f), 72, new Color(1f, 1f, 1f));
-                Label(node, "GAS", new Vector3(size.X * 0.5f + 1.5f, 7.2f, size.Z * 0.5f + 1.9f), 72, new Color(1f, 1f, 1f), flip: true);
+                BuildingBuilder.Shop(node, prop, (parent, text, at, fontSize, colour, flip) => Label(parent, text, at, fontSize, colour, flip));
                 break;
 
             case PropKind.Pump:
-                Box(node, size, Plain(new Color(0.85f, 0.15f, 0.12f)), y: size.Y * 0.5f);
-                Box(node, new SN.Vector3(size.X * 0.8f, size.Y * 0.3f, 0.1f), Plain(new Color(0.1f, 0.1f, 0.12f)), y: size.Y * 0.65f, z: size.Z * 0.5f + 0.04f);
+                BuildingBuilder.Pump(node, prop);
                 break;
 
             case PropKind.Hut:
@@ -82,20 +62,6 @@ internal static class PropBuilder
                 }
                 Roof(node, size, Plain(new Color(0.22f, 0.3f, 0.18f)));
                 Label(node, "THE HUT", new Vector3(0f, size.Y + 0.6f, -size.Z * 0.5f - 0.1f), 48, flip: true);
-                break;
-
-            case PropKind.Cow:
-                var hide = Plain(new Color(0.95f, 0.95f, 0.92f));
-                var patch = Plain(new Color(0.12f, 0.1f, 0.1f));
-                Box(node, new SN.Vector3(size.X, 0.9f, size.Z), hide, y: 1.05f);
-                Box(node, new SN.Vector3(size.X * 0.35f, 0.5f, size.Z + 0.04f), patch, y: 1.2f, x: -size.X * 0.2f);
-                Box(node, new SN.Vector3(size.X * 0.25f, 0.6f, size.Z + 0.04f), patch, y: 1.0f, x: size.X * 0.28f);
-                Box(node, new SN.Vector3(0.7f, 0.6f, 0.6f), hide, y: 1.3f, x: size.X * 0.5f + 0.25f);
-                Box(node, new SN.Vector3(0.3f, 0.3f, 0.62f), patch, y: 1.2f, x: size.X * 0.5f + 0.5f);
-                foreach (var (x, z) in new[] { (-0.55f, 0.55f), (0.55f, 0.55f), (-0.55f, -0.55f), (0.55f, -0.55f) })
-                {
-                    Box(node, new SN.Vector3(0.2f, 0.65f, 0.2f), Plain(new Color(0.3f, 0.28f, 0.26f)), y: 0.32f, x: x * size.X * 0.8f, z: z * size.Z * 0.7f);
-                }
                 break;
 
             case PropKind.Sign:
@@ -337,5 +303,9 @@ internal static class PropBuilder
 
     private static StandardMaterial3D Glass() => Plain(new Color(0.12f, 0.16f, 0.22f));
 
-    public static void ReleaseShared() => Plains.Clear();
+    public static void ReleaseShared()
+    {
+        Plains.Clear();
+        BuildingBuilder.ReleaseShared();
+    }
 }

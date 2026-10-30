@@ -35,6 +35,19 @@ internal sealed partial class CameraRig : Node3D
     public Vector2 Acceleration { get; set; }
     private readonly Random _rng = new(3);
     private Vector3 _head;
+    // A knock's jolt: an offset of the eye in the car's frame on a stiff, well-damped spring (Jolt).
+    private Vector3 _jolt;
+    private Vector3 _joltVelocity;
+
+    /// <summary>
+    /// A knock felt in the seat: the head is thrown along <paramref name="push"/> (the car's frame, Godot axes) by a
+    /// few centimetres for a hard one, and springs back within half a second.
+    /// </summary>
+    public void Jolt(Vector3 push, float speed)
+    {
+        if (push.LengthSquared() < 1e-6f) return;
+        _joltVelocity += push.Normalized() * Mathf.Clamp(speed * 0.06f, 0.04f, 0.9f);
+    }
 
     public override void _Ready()
     {
@@ -44,6 +57,13 @@ internal sealed partial class CameraRig : Node3D
 
     public void FollowCar(Transform3D car, float speedMps, float dt)
     {
+        // The jolt's spring, sub-stepped: at 20 fps (1989 mode) one step of it would overshoot.
+        for (var left = dt; left > 0f; left -= 1f / 120f)
+        {
+            var h = MathF.Min(left, 1f / 120f);
+            _joltVelocity += (-_jolt * 160f - _joltVelocity * 16f) * h;
+            _jolt += _joltVelocity * h;
+        }
         if (Mode == CameraMode.Cockpit)
         {
             // Driver's eyes over the seat (the car says where), the view aimed 3 degrees down; a touch of forward
@@ -59,7 +79,7 @@ internal sealed partial class CameraRig : Node3D
                 Mathf.Clamp(-Acceleration.X * 0.0035f, -0.045f, 0.045f), 0f,
                 Mathf.Clamp(Acceleration.Y * 0.0028f, -0.04f, 0.03f));
             _head += (headTarget - _head) * MathUtil.Clamp01(dt * 6f);
-            var eye = car * (Eye + _head + new Vector3(0f, 0f, -lean) + shake);
+            var eye = car * (Eye + _head + _jolt + new Vector3(0f, 0f, -lean) + shake);
             var look = car * (Eye + new Vector3(_head.X * 0.5f, -0.70f, -14f));
             _camera.GlobalTransform = new Transform3D(Basis.LookingAt(look - eye, car.Basis.Y), eye);
             // 62 degrees vertical is about what a windscreen frames; a little more at speed.
@@ -87,7 +107,8 @@ internal sealed partial class CameraRig : Node3D
         }
         _chasePosition = _chasePosition.Lerp(target, MathUtil.Clamp01(dt * 6f));
         var focus = car * new Vector3(0f, 0.7f - CgHeight, -2.0f);
-        _camera.GlobalTransform = new Transform3D(Basis.LookingAt(focus - _chasePosition, Vector3.Up), _chasePosition);
+        var chase = _chasePosition + car.Basis * (_jolt * 2.5f);
+        _camera.GlobalTransform = new Transform3D(Basis.LookingAt(focus - chase, Vector3.Up), chase);
         _camera.Fov = 62f;
     }
 
@@ -105,6 +126,13 @@ internal sealed partial class CameraRig : Node3D
     }
 
     public void ResetChase() => _chaseInitialised = false;
+
+    /// <summary>Points the camera from <paramref name="eye"/> at <paramref name="target"/> (the --look= inspection shots).</summary>
+    public void Look(Vector3 eye, Vector3 target, float fov)
+    {
+        _camera.GlobalTransform = new Transform3D(Basis.LookingAt(target - eye, Vector3.Up), eye);
+        _camera.Fov = fov;
+    }
 
     /// <summary>Where the camera is: the listener of the placed sounds (<see cref="WorldAudio"/>).</summary>
     public Vector3 Listener => _camera.GlobalPosition;

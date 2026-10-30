@@ -6,11 +6,11 @@ namespace GrudgeLap.Physics.Race;
 
 /// <summary>
 /// The rules of a single credit: engine start, countdown, route choice at the fork, checkpoints and
-/// lap bonuses, off-road and wrong-way handling, traffic, crashes with an instant replay, return points,
-/// and the grudge match against the ghost of the best lap. Engine-agnostic so the whole rule set can be
-/// driven headless in tests.
+/// lap bonuses, off-road and wrong-way handling, traffic, knocks and damage, crashes with an instant replay,
+/// return points, and the grudge match against the ghost of the best lap. Engine-agnostic so the whole rule
+/// set can be driven headless in tests. The knocks are in RaceSession.Knocks.cs.
 /// </summary>
-public sealed class RaceSession
+public sealed partial class RaceSession
 {
     private const float ReplayRecordHz = 30f;
     private const float WrongWayGrace = 1.6f;
@@ -50,6 +50,7 @@ public sealed class RaceSession
         {
             Traffic = new Traffic(track, Options.TrafficSameDirection, Options.TrafficOncoming);
         }
+        Herd = new Herd(track);
     }
 
     public TrackGeometry Track { get; }
@@ -57,6 +58,8 @@ public sealed class RaceSession
     public RaceOptions Options { get; }
     /// <summary>Drone cars, or null when the options ask for an empty road.</summary>
     public Traffic? Traffic { get; }
+    /// <summary>The cows in the fields.</summary>
+    public Herd Herd { get; }
 
     public SessionPhase Phase { get; private set; }
     public float TimeRemaining { get; private set; }
@@ -136,8 +139,9 @@ public sealed class RaceSession
                 return;
 
             case SessionPhase.StartEngine:
-                Traffic?.Step(dt);
+                Traffic?.Step(dt, PlayerOnRoad());
                 Track.Train?.Step(dt);
+                Herd.Step(dt, Elapsed, Car.Position, Car.Velocity);
                 if (input.Ignition)
                 {
                     var starting = new DriverInputs { Gear = DriverInputs.NoGearChange, Ignition = true, Clutch = 1f };
@@ -161,8 +165,10 @@ public sealed class RaceSession
 
     private void StepDriving(DriverInputs input, float dt)
     {
-        Traffic?.Step(dt);
+        Traffic?.Step(dt, PlayerOnRoad());
         Track.Train?.Step(dt);
+        Herd.Step(dt, Elapsed, Car.Position, Car.Velocity);
+        if (Herd.Mooed >= 0) _events.Add(RaceEvent.CowMooed);
         LastSoftHit = -1;
         var wasRunning = Car.Drivetrain.Engine.Running;
         Car.Step(input, dt);
@@ -196,6 +202,13 @@ public sealed class RaceSession
             SetMessage("OUT OF TIME", float.PositiveInfinity);
             _events.Add(RaceEvent.TimeOut);
         }
+    }
+
+    /// <summary>The car as the drones see it (<see cref="RoadUser"/>), or null when it is off every road.</summary>
+    private RoadUser? PlayerOnRoad()
+    {
+        var hit = Car.BodyHit;
+        return hit.HasSurface && hit.Path is not null ? new RoadUser(hit.Path, hit.Frame.Distance, hit.Lateral, Car.Velocity) : null;
     }
 
     private void TickClock(float dt)
@@ -425,14 +438,9 @@ public sealed class RaceSession
         else if (Car.BodyHit.Surface == SurfaceType.Chasm && Car.Position.Y < Car.BodyHit.Frame.Origin.Y - 2.5f) reason = CrashReason.FellOffBridge;
         else if (Car.Position.Y < Track.Terrain.Height(Car.Position.X, Car.Position.Z) - 6f) reason = CrashReason.FellOffBridge;
         else if (HitBridgeEdge()) reason = CrashReason.FellOffBridge;
-        else if (HitTraffic()) reason = CrashReason.HitTraffic;
         else if (HitTrain()) reason = CrashReason.HitTrain;
-        else if (HitSolidProp(out var propKind)) reason = propKind switch
-        {
-            PropKind.Tree => CrashReason.HitTree,
-            PropKind.Train => CrashReason.HitTrain,
-            _ => CrashReason.HitBuilding,
-        };
+        else if (LandedHard()) reason = CrashReason.HardLanding;
+        else reason = Knocks();
 
         if (reason == CrashReason.None) return;
         Crash(reason);
@@ -462,7 +470,7 @@ public sealed class RaceSession
         return train.Hits(Car.Position, ground) || train.Hits(Car.Position + forward * 2.2f, ground) || train.Hits(Car.Position - forward * 2.2f, ground);
     }
 
-    /// <summary>Cows moo and signs tip over when the car runs into them; nothing else happens.</summary>
+    /// <summary>Signs and crossbucks tip over when the car runs into them; nothing else happens. (Cows are bodies: see <see cref="Knocks"/>.)</summary>
     private void CheckSoftProps()
     {
         var p = Car.Position;
@@ -470,19 +478,11 @@ public sealed class RaceSession
         for (var i = 0; i < props.Count; i++)
         {
             var prop = props[i];
-            if (!prop.Soft) continue;
+            if (!prop.Soft || prop.Kind == PropKind.Cow) continue;
             var dx = prop.Position.X - p.X;
             var dz = prop.Position.Z - p.Z;
-            var reach = prop.Kind == PropKind.Cow ? 2.2f : 1.5f;
-            if (dx * dx + dz * dz > reach * reach || MathF.Abs(prop.Position.Y - p.Y) > 2.5f) continue;
-            if (prop.Kind == PropKind.Cow)
-            {
-                if (_softHitTimes.TryGetValue(i, out var last) && Elapsed - last < 2.5f) continue;
-                _softHitTimes[i] = Elapsed;
-                LastSoftHit = i;
-                _events.Add(RaceEvent.CowHit);
-            }
-            else if (_knockedSigns.Add(i))
+            if (dx * dx + dz * dz > 1.5f * 1.5f || MathF.Abs(prop.Position.Y - p.Y) > 2.5f) continue;
+            if (_knockedSigns.Add(i))
             {
                 LastSoftHit = i;
                 _events.Add(RaceEvent.SignHit);
@@ -490,57 +490,10 @@ public sealed class RaceSession
         }
     }
 
-    /// <summary>Box overlap with a drone in the car's own frame; both are about 2 m by 4.5 m.</summary>
-    private bool HitTraffic()
-    {
-        if (Traffic is null) return false;
-        var position = Car.Position;
-        var right = Car.Right;
-        var up = Car.Up;
-        var forward = Car.Forward;
-        foreach (var drone in Traffic.Cars)
-        {
-            var d = drone.Position - position;
-            if (d.LengthSquared() > 49f) continue;
-            if (MathF.Abs(Vector3.Dot(d, right)) < 1.9f && MathF.Abs(Vector3.Dot(d, forward)) < 4.3f && MathF.Abs(Vector3.Dot(d, up)) < 1.6f)
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private bool HitSolidProp(out PropKind kind)
-    {
-        kind = PropKind.Tree;
-        var p = Car.Position;
-        var forward = Car.Forward;
-        Span<Vector3> probes = [p + forward * 2.2f, p, p - forward * 2.2f];
-        foreach (var prop in Track.Props)
-        {
-            if (!prop.Solid) continue;
-            if (p.Y > prop.Position.Y + prop.Size.Y) continue;
-            var yaw = prop.YawDeg * MathUtil.Deg2Rad;
-            var axisX = new Vector3(MathF.Cos(yaw), 0f, -MathF.Sin(yaw));
-            var axisZ = new Vector3(MathF.Sin(yaw), 0f, MathF.Cos(yaw));
-            foreach (var q in probes)
-            {
-                var d = q - prop.Position;
-                var lx = Vector3.Dot(d, axisX);
-                var lz = Vector3.Dot(d, axisZ);
-                const float carRadius = 0.9f;
-                if (MathF.Abs(lx) <= prop.Size.X * 0.5f + carRadius && MathF.Abs(lz) <= prop.Size.Z * 0.5f + carRadius)
-                {
-                    kind = prop.Kind;
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
     private void Crash(CrashReason reason)
     {
+        // A crash wrecks the car whatever it had taken before; it is repaired when it is set down again.
+        Damage = 1f;
         LastCrash = reason;
         CrashCount++;
         Phase = SessionPhase.Replay;
@@ -553,6 +506,7 @@ public sealed class RaceSession
     private void EndReplay()
     {
         ReturnToLastPoint(resetTimer: false);
+        Repair();
         Phase = SessionPhase.StartEngine;
         SetMessage("TURN KEY TO START ENGINE", float.PositiveInfinity);
     }
@@ -607,6 +561,8 @@ public enum CrashReason
     HitBuilding,
     HitTrain,
     HitTraffic,
+    /// <summary>Ran into a cow too fast for it to be shoved aside.</summary>
+    HitCow,
 }
 
 public enum RaceEvent
@@ -626,6 +582,10 @@ public enum RaceEvent
     CowHit,
     /// <summary>The car knocked a road sign over (a clang; no crash).</summary>
     SignHit,
+    /// <summary>The car took a knock it survived (<see cref="RaceSession.LastKnock"/>): a crunch, a dent.</summary>
+    Knocked,
+    /// <summary>A cow mooed on its own (<see cref="Herd.Mooed"/>).</summary>
+    CowMooed,
 }
 
 /// <summary>Difficulty table from the cabinet's custom game options (seconds). Medium is the factory setting.</summary>
@@ -637,8 +597,22 @@ public sealed record RaceOptions
     public float ReplaySeconds { get; init; } = 10f;
     public float OffRoadSeconds { get; init; } = 10f;
     public float PointsPerMetre { get; init; } = 10f;
-    /// <summary>Normal approach speed (m/s) above which a landing wrecks the car.</summary>
-    public float LandingCrashSpeed { get; init; } = 7.5f;
+    /// <summary>
+    /// Normal approach speed (m/s) above which a landing wrecks the car: a drop of 5 m. Until 0.9.1 it was 7.5 m/s and
+    /// every landing past it a crash; now the landings between <see cref="LandingDamageSpeed"/> and it bottom the car
+    /// out and dent it instead.
+    /// </summary>
+    public float LandingCrashSpeed { get; init; } = 10f;
+    /// <summary>Normal approach speed (m/s) above which a landing damages the car: a drop of a little over 2 m.</summary>
+    public float LandingDamageSpeed { get; init; } = 6.5f;
+    /// <summary>
+    /// Closing speed (m/s) into a solid obstacle (a tree, a wall, a pier, a drone) above which the car is wrecked and
+    /// the replay runs: 54 km/h, about where a real car's front end is crushed past driving home. Slower knocks bounce
+    /// the car off with a dent (<see cref="RaceSession.Damage"/>); until 0.9.1 any touch was a crash.
+    /// </summary>
+    public float ImpactCrashSpeed { get; init; } = 15f;
+    /// <summary>The same for a cow (72 km/h): it gives way, and below this the car shoves it aside.</summary>
+    public float CowCrashSpeed { get; init; } = 20f;
     /// <summary>Drone cars driving the player's way on the start straight and the speed route.</summary>
     public int TrafficSameDirection { get; init; } = 5;
     /// <summary>Drone cars coming the other way in the other lane.</summary>

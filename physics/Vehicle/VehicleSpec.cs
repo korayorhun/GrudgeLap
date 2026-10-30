@@ -4,7 +4,9 @@ namespace GrudgeLap.Physics.Vehicle;
 /// Tunable description of a car. The default is a late-80s rear-wheel-drive flat-twelve sports car with the
 /// original game's four-speed gearbox; <see cref="V8Evo"/> is a 2010s mid-engined V8 with a seven-speed box; three
 /// front-wheel-drive hatchbacks follow the hot hatches of 1997-2008 (<see cref="HotHatch"/>, <see cref="FiveHatch"/>,
-/// <see cref="TurboHatch"/>). The numbers are game numbers, tuned for feel from the published figures of the cars
+/// <see cref="TurboHatch"/>); and three everyday cars of Turkey's roads (0.9.1): the 1.6 rear-wheel-drive saloon of the
+/// 1990s (<see cref="Saloon"/>), the 1.4 estate of the same years (<see cref="Estate"/>) and the 1.4 fleet saloon of
+/// today (<see cref="Fleet"/>). The numbers are game numbers, tuned for feel from the published figures of the cars
 /// they follow (power, torque, mass, wheelbase, track, tyres, gearing), not a manufacturer datasheet.
 /// </summary>
 public sealed record VehicleSpec
@@ -26,6 +28,13 @@ public sealed record VehicleSpec
     public float FrontAxle { get; init; } = 1.27f;           // m, CG to front hubs
     public float RearAxle { get; init; } = 1.28f;            // m, CG to rear hubs
     public float HubHeight { get; init; } = -0.12f;          // m, hub plane below the CG
+    /// <summary>
+    /// The body's footprint for knocks against obstacles: centre of gravity to the front and the rear bumper and half
+    /// the widest width (m), as the view draws the body (its nose and tail keys and widest half width).
+    /// </summary>
+    public float BodyFront { get; init; } = 2.355f;
+    public float BodyRear { get; init; } = 2.13f;
+    public float BodyHalfWidth { get; init; } = 0.99f;
     public float DragCoefficient { get; init; } = 0.36f;
     public float FrontalArea { get; init; } = 1.95f;         // m^2
     public float RollingResistance { get; init; } = 0.015f;
@@ -80,6 +89,9 @@ public sealed record VehicleSpec
         HalfTrack = 0.80f,
         FrontAxle = 1.32f,
         RearAxle = 1.33f,
+        BodyFront = 2.27f,
+        BodyRear = 2.26f,
+        BodyHalfWidth = 0.97f,
         DragCoefficient = 0.33f,
         FrontalArea = 1.98f,
         TireGrip = 1.25f,
@@ -112,6 +124,9 @@ public sealed record VehicleSpec
         HalfTrack = 0.73f,
         FrontAxle = 0.95f,
         RearAxle = 1.52f,
+        BodyFront = 1.664f,
+        BodyRear = 2.109f,
+        BodyHalfWidth = 0.83f,
         HubHeight = -0.20f,
         DragCoefficient = 0.34f,
         FrontalArea = 1.95f,
@@ -150,6 +165,9 @@ public sealed record VehicleSpec
         HalfTrack = 0.73f,
         FrontAxle = 0.95f,
         RearAxle = 1.59f,
+        BodyFront = 1.825f,
+        BodyRear = 2.204f,
+        BodyHalfWidth = 0.875f,
         HubHeight = -0.20f,
         DragCoefficient = 0.32f,
         FrontalArea = 2.0f,
@@ -188,6 +206,9 @@ public sealed record VehicleSpec
         HalfTrack = 0.765f,
         FrontAxle = 0.98f,
         RearAxle = 1.60f,
+        BodyFront = 1.92f,
+        BodyRear = 2.395f,
+        BodyHalfWidth = 0.884f,
         HubHeight = -0.20f,
         DragCoefficient = 0.33f,
         FrontalArea = 2.15f,
@@ -210,8 +231,138 @@ public sealed record VehicleSpec
         FrontWheelDrive = true,
     };
 
+    /// <summary>
+    /// The 1.6 saloon of 1991, after the Tofas Sahin (the Turkish-built Fiat 131 of 1985-2002): the 131's 1,585 cc
+    /// pushrod four with its twin-choke carburettor, 75 PS DIN at 5400 and 123 N m at 3000 (FIA form 5608), 960 kg
+    /// at the kerb, the five-speed box of 1990 (3.667 / 2.100 / 1.361 / 1.000 / 0.881, final drive 4.10) to a live rear
+    /// axle, 175/70 R13 tyres, discs in front and drums behind, no servo-free luxuries. 160 km/h, 0-100 in 13.9 s.
+    /// </summary>
+    public static VehicleSpec Saloon => new()
+    {
+        Name = "SALOON 1.6 '91",
+        Style = CarStyle.Saloon,
+        Engine = EngineSpec.SaloonFour,
+        SpeedoMaxMph = 112f,
+        MassKg = 1050f,
+        InertiaRoll = 380f,
+        InertiaYaw = 1650f,
+        InertiaPitch = 1600f,
+        HalfTrack = 0.678f,
+        FrontAxle = 1.17f,
+        RearAxle = 1.32f,
+        BodyFront = 1.89f,
+        BodyRear = 2.426f,
+        BodyHalfWidth = 0.821f,
+        HubHeight = -0.20f,
+        DragCoefficient = 0.43f,
+        FrontalArea = 1.90f,
+        TireGrip = 0.86f,
+        WheelRadius = 0.2875f,
+        SuspensionRest = 0.25f,
+        SuspensionStiffness = 24000f,
+        SuspensionDamping = 2300f,
+        MaxCompression = 0.15f,
+        MaxSteerLowSpeedDeg = 33f,
+        MaxSteerHighSpeedDeg = 7f,
+        FrontBrakeTorque = 1500f,
+        RearBrakeTorque = 700f,
+        GearRatios = [-3.526f, 0f, 3.667f, 2.100f, 1.361f, 1.000f, 0.881f],
+        FinalDrive = 4.10f,
+        ClutchMaxTorque = 220f,
+        EngineInertia = 0.13f,
+        WheelInertia = 0.75f,
+    };
+
+    /// <summary>
+    /// The 1.4 estate of 1993, after the Renault 12 Toros (Oyak-Renault's R12 of 1989-2000): the Cleon-Fonte pushrod
+    /// four of 1,397 cc with one single-choke carburettor, 61.5 PS DIN and about 102 N m at 3000, set ahead of the
+    /// front axle (FIA form 5396), driving the front wheels through the five-speed box from the Renault 18 (3.818 /
+    /// 2.235 / 1.478 / 1.036 / 0.852, final drive 3.777); 950 kg, 155 R13 tyres, soft springs. About 150 km/h.
+    /// </summary>
+    public static VehicleSpec Estate => new()
+    {
+        Name = "ESTATE 1.4 '93",
+        Style = CarStyle.Estate,
+        Engine = EngineSpec.EstateFour,
+        SpeedoMaxMph = 112f,
+        MassKg = 1045f,
+        InertiaRoll = 370f,
+        InertiaYaw = 1700f,
+        InertiaPitch = 1650f,
+        HalfTrack = 0.656f,
+        FrontAxle = 1.00f,
+        RearAxle = 1.441f,
+        BodyFront = 1.85f,
+        BodyRear = 2.53f,
+        BodyHalfWidth = 0.81f,
+        HubHeight = -0.20f,
+        DragCoefficient = 0.46f,
+        FrontalArea = 1.95f,
+        TireGrip = 0.82f,
+        WheelRadius = 0.289f,
+        SuspensionRest = 0.26f,
+        SuspensionStiffness = 22000f,
+        SuspensionDamping = 2100f,
+        MaxCompression = 0.16f,
+        MaxSteerLowSpeedDeg = 32f,
+        MaxSteerHighSpeedDeg = 7f,
+        FrontBrakeTorque = 1450f,
+        RearBrakeTorque = 600f,
+        GearRatios = [-3.083f, 0f, 3.818f, 2.235f, 1.478f, 1.036f, 0.852f],
+        FinalDrive = 3.777f,
+        ClutchMaxTorque = 190f,
+        EngineInertia = 0.12f,
+        WheelInertia = 0.7f,
+        FrontWheelDrive = true,
+    };
+
+    /// <summary>
+    /// The 1.4 fleet saloon of 2017, after the Fiat Egea (the Tipo saloon built in Bursa): the sixteen-valve 1,368 cc
+    /// Fire, 95 PS at 6000 and 127 N m at 4500 (Fiat's handbook), 1,150 kg, six gears (3.545 / 2.158 / 1.480 / 1.121 /
+    /// 0.921 / 0.766, final drive 4.071), 195/65 R15 tyres on steel wheels, ESC. Slippery (Cd 0.29): 185 km/h, 0-100
+    /// in 11.5 s.
+    /// </summary>
+    public static VehicleSpec Fleet => new()
+    {
+        Name = "SALOON 1.4 16V '17",
+        Style = CarStyle.Fleet,
+        Engine = EngineSpec.FleetFour,
+        SpeedoMaxMph = 143f,
+        // The 1,150 kg is the EU kerb weight, which counts a 75 kg driver and most of a tank already.
+        MassKg = 1170f,
+        InertiaRoll = 450f,
+        InertiaYaw = 2050f,
+        InertiaPitch = 2000f,
+        HalfTrack = 0.771f,
+        FrontAxle = 1.028f,
+        RearAxle = 1.608f,
+        BodyFront = 1.921f,
+        BodyRear = 2.611f,
+        BodyHalfWidth = 0.896f,
+        HubHeight = -0.20f,
+        DragCoefficient = 0.30f,
+        FrontalArea = 2.20f,
+        TireGrip = 1.0f,
+        TractionControl = true,
+        WheelRadius = 0.317f,
+        SuspensionRest = 0.24f,
+        SuspensionStiffness = 30000f,
+        SuspensionDamping = 2900f,
+        MaxCompression = 0.14f,
+        MaxSteerLowSpeedDeg = 34f,
+        MaxSteerHighSpeedDeg = 7f,
+        FrontBrakeTorque = 2100f,
+        RearBrakeTorque = 750f,
+        GearRatios = [-3.818f, 0f, 3.545f, 2.158f, 1.480f, 1.121f, 0.921f, 0.766f],
+        FinalDrive = 4.071f,
+        ClutchMaxTorque = 260f,
+        EngineInertia = 0.11f,
+        WheelInertia = 0.9f,
+        FrontWheelDrive = true,
+    };
+
     /// <summary>The cars the player can choose from, in menu order.</summary>
-    public static VehicleSpec[] Catalogue => [FlatTwelve, V8Evo, HotHatch, FiveHatch, TurboHatch];
+    public static VehicleSpec[] Catalogue => [FlatTwelve, V8Evo, HotHatch, FiveHatch, TurboHatch, Saloon, Estate, Fleet];
 }
 
 public enum CarStyle
@@ -221,4 +372,10 @@ public enum CarStyle
     HotHatch,
     FiveHatch,
     TurboHatch,
+    /// <summary>The 1.6 rear-wheel-drive saloon of the 1990s (after the Tofas Sahin).</summary>
+    Saloon,
+    /// <summary>The 1.4 front-wheel-drive estate of the 1990s (after the Renault 12 Toros).</summary>
+    Estate,
+    /// <summary>The 1.4 front-wheel-drive fleet saloon of today (after the Fiat Egea).</summary>
+    Fleet,
 }

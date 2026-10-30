@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace GrudgeLap.Physics.Native;
 
 // Mirror include/grudgelap_physics.h field for field. Sequential layout pads like C: the int64 score follows
-// four bytes of padding at offset 88, and glp_state ends padded to 360 bytes. Change both together and bump
+// four bytes of padding at offset 88, and glp_state is 400 bytes (a multiple of the int64 alignment). Change both together and bump
 // NativeApi.AbiVersion.
 
 /// <summary>glp_inputs: the driver's controls as the C side sends them.</summary>
@@ -78,6 +78,14 @@ public unsafe struct NativeState
     // ABI 5
     public float CreditBestLap;
     public int CreditBestRoute;
+    // ABI 6
+    public float Damage;
+    public int KnockKind;
+    public fixed float KnockPoint[3];
+    public fixed float KnockNormal[3];
+    public float KnockSpeed;
+    public int KnockIndex;
+    public int CowMooed;
 }
 
 /// <summary>glp_car_spec: the catalogue's static facts about a car.</summary>
@@ -97,7 +105,7 @@ public struct NativeCarSpec
     public float CgHeight;
 }
 
-/// <summary>glp_body: a traffic car or a car of the train.</summary>
+/// <summary>glp_body: a traffic car, a car of the train or a cow.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct NativeBody
 {

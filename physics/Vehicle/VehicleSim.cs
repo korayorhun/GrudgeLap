@@ -125,6 +125,39 @@ public sealed class VehicleSim
         BodyHit = Track.Probe(Position, ref Cursor, true);
     }
 
+    /// <summary>Velocity of a point fixed to the body (world space).</summary>
+    public Vector3 VelocityAt(Vector3 point) => Velocity + Vector3.Cross(AngularVelocity, point - Position);
+
+    /// <summary>
+    /// Inverse of the mass the body presents to an impulse along <paramref name="direction"/> at
+    /// <paramref name="point"/>: 1/m plus the share that goes into turning the body about its centre of gravity.
+    /// </summary>
+    public float InverseMassAlong(Vector3 point, Vector3 direction)
+    {
+        var inv = Quaternion.Inverse(Orientation);
+        var r = Vector3.Transform(point - Position, inv);
+        var n = Vector3.Transform(direction, inv);
+        var turn = Vector3.Cross(r, n) / BodyInertia;
+        return 1f / _spec.MassKg + Vector3.Dot(n, Vector3.Cross(turn, r));
+    }
+
+    /// <summary>
+    /// A knock: an instantaneous impulse (N s) at a world point, from an obstacle the car ran into. It changes the
+    /// velocity and, off the centre of gravity, the spin; the wheels catch up through the tyres over the next steps.
+    /// </summary>
+    public void ApplyImpulse(Vector3 point, Vector3 impulse)
+    {
+        Velocity += impulse / _spec.MassKg;
+        var inv = Quaternion.Inverse(Orientation);
+        var angular = Vector3.Transform(Vector3.Cross(point - Position, impulse), inv) / BodyInertia;
+        AngularVelocity += Vector3.Transform(angular, Orientation);
+    }
+
+    /// <summary>Moves the car without changing its motion: out of an obstacle it has sunk into.</summary>
+    public void Displace(Vector3 offset) => Position += offset;
+
+    private Vector3 BodyInertia => new(_spec.InertiaPitch, _spec.InertiaYaw, _spec.InertiaRoll);
+
     /// <summary>Advances the simulation by <paramref name="dt"/> seconds using fixed sub-steps.</summary>
     public void Step(in DriverInputs input, float dt)
     {
@@ -270,7 +303,7 @@ public sealed class VehicleSim
         var inv = Quaternion.Inverse(Orientation);
         var omegaBody = Vector3.Transform(AngularVelocity, inv);
         var torqueBody = Vector3.Transform(torque, inv);
-        var inertia = new Vector3(_spec.InertiaPitch, _spec.InertiaYaw, _spec.InertiaRoll);
+        var inertia = BodyInertia;
         var angularMomentum = omegaBody * inertia;
         var gyro = Vector3.Cross(omegaBody, angularMomentum);
         var alphaBody = (torqueBody - gyro) / inertia;

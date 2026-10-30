@@ -27,6 +27,11 @@ public sealed partial class Bootstrap : Node3D
     private TrackGeometry _track = null!;
     private CarView _carView = null!;
     private CrashScene? _crash;
+    /// <summary>--ram-speed=: the speed (m/s) the ramming run holds, 0 for flat out.</summary>
+    private float _ramSpeed;
+    /// <summary>--look=kind[:n[:distance[:bearing]]]: the camera on the n-th prop of a kind (House, Barn, Cow...), for inspection shots.</summary>
+    private string? _look;
+    private readonly KnockSmoke _knockSmoke = new() { Name = "KnockSmoke" };
     private string? _ram;
     private SN.Vector3? _ramTarget;
     private CarView? _ghostView;
@@ -113,6 +118,7 @@ public sealed partial class Bootstrap : Node3D
             _track.Props.Add(new TrackProp(PropKind.Tree, spot.Origin, 0f, new SN.Vector3(1.0f, 7f, 1.0f), "crash-test"));
         }
         WorldBuilder.Build(this, _track);
+        AddChild(_knockSmoke);
         // Before the train and the drones: they hand their nodes to it for their sounds.
         _world = new WorldAudio();
         AddChild(_world);
@@ -121,6 +127,7 @@ public sealed partial class Bootstrap : Node3D
             var node = PropBuilder.Build(_track.Props[i], _track.Terrain);
             _propNodes[i] = node;
             AddChild(node);
+            if (_track.Props[i].Kind == PropKind.Cow) _world.AttachCow(node, i);
         }
         if (_track.Train is { } train)
         {
@@ -203,7 +210,7 @@ public sealed partial class Bootstrap : Node3D
         {
             if (arg == "--attract") _attract = true;
             else if (arg == "--park") _park = true;
-            else if (arg.StartsWith("--ram", System.StringComparison.Ordinal)) _ram = arg.StartsWith("--ram=", System.StringComparison.Ordinal) ? arg["--ram=".Length..] : "tree";   // automated runs: drive into a tree, a building or a drone for the crash replay
+            else if (arg == "--ram" || arg.StartsWith("--ram=", System.StringComparison.Ordinal)) _ram = arg.StartsWith("--ram=", System.StringComparison.Ordinal) ? arg["--ram=".Length..] : "tree";   // automated runs: drive into a tree, a building or a drone for the crash replay
             else if (arg == "--try-table") _tryTable = true;
             else if (arg.StartsWith("--quality=", System.StringComparison.Ordinal) && Enum.TryParse<GraphicsQuality>(arg["--quality=".Length..], ignoreCase: true, out var quality)) _quality = quality;   // this run only
             else if (arg.StartsWith("--time=", System.StringComparison.Ordinal)) float.TryParse(arg["--time=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _creditSeconds);
@@ -237,14 +244,19 @@ public sealed partial class Bootstrap : Node3D
             else if (arg == "--save-best") _saveBest = true;   // debug: let an attract lap become the saved best lap
             else if (arg.StartsWith("--export-world=", System.StringComparison.Ordinal)) _exportWorld = arg["--export-world=".Length..];
             else if (arg.StartsWith("--car=", System.StringComparison.Ordinal)) _carIndex = CarIndex(arg["--car=".Length..], _carIndex);
+            else if (arg.StartsWith("--look=", System.StringComparison.Ordinal)) _look = arg["--look=".Length..];
+            else if (arg.StartsWith("--ram-speed=", System.StringComparison.Ordinal)) float.TryParse(arg["--ram-speed=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _ramSpeed);
         }
     }
 
     /// <summary>The car a --car= switch names: its index in the catalogue or one of the short names; otherwise the current one.</summary>
     private static int CarIndex(string name, int current)
     {
-        string[] names = ["flat12", "v8", "hothatch", "five", "turbohatch"];
+        string[] names = ["flat12", "v8", "hothatch", "five", "turbohatch", "saloon", "estate", "fleet"];
+        // The everyday cars answer to the names of the cars they follow too.
+        string[] aliases = ["", "", "", "", "", "sahin", "toros", "egea"];
         var index = System.Array.IndexOf(names, name.ToLowerInvariant());
+        if (index < 0) index = System.Array.IndexOf(aliases, name.ToLowerInvariant());
         if (index < 0 && int.TryParse(name, out var number)) index = number;
         return index >= 0 && index < VehicleSpec.Catalogue.Length ? index : current;
     }
@@ -268,6 +280,8 @@ public sealed partial class Bootstrap : Node3D
         var spec = VehicleSpec.Catalogue[_carIndex];
         _session = new RaceSession(_track, spec, options);
         EndCrash();
+        // A car kept from the last credit (the same body) takes its dents with it otherwise.
+        _carView.Repair();
         if (_carView.IsInsideTree() && _carView.Name != $"Car-{spec.Style}")
         {
             _carView.QueueFree();
@@ -299,10 +313,13 @@ public sealed partial class Bootstrap : Node3D
         foreach (var view in _droneViews) view.QueueFree();
         _droneViews.Clear();
         if (_session.Traffic is null) return;
+        var index = 0;
         foreach (var drone in _session.Traffic.Cars)
         {
-            // The drones are the period cars of the original, whatever the player drives.
-            var view = CarView.Create(VehicleSpec.FlatTwelve, CarView.DronePaints[drone.Colour % CarView.DronePaints.Length]);
+            // The traffic is the everyday cars of the road (0.9.1; until then every drone was the period sports car of
+            // the original): the 1990s saloon, the estate and the fleet saloon in turn.
+            VehicleSpec[] everyday = [VehicleSpec.Saloon, VehicleSpec.Estate, VehicleSpec.Fleet];
+            var view = CarView.Create(everyday[index++ % everyday.Length], CarView.DronePaints[drone.Colour % CarView.DronePaints.Length]);
             view.Name = "Drone";
             view.SetViewpoint(false);
             AddChild(view);
@@ -428,6 +445,7 @@ public sealed partial class Bootstrap : Node3D
             SaveBestLap(_session.BestLap);
             if (_ghostView is null) BuildGhostView();
         }
+        if (_session.Events.Contains(RaceEvent.Knocked)) ShowKnock();
         if (_session.Events.Contains(RaceEvent.SignHit) && _propNodes.TryGetValue(_session.LastSoftHit, out var sign))
         {
             // Knock the sign over: it tips away from the car over the next third of a second.
@@ -550,6 +568,7 @@ public sealed partial class Bootstrap : Node3D
         _world.Interior = cockpit;
         _mirror?.SetActive(cockpit);
         SyncTraffic(dt);
+        SyncCows(dt);
         SyncGhost();
         _trainView?.Sync();
         if (_session.Phase == SessionPhase.Replay && _session.Replay.Count > 1)
@@ -563,17 +582,44 @@ public sealed partial class Bootstrap : Node3D
             return;
         }
         EndCrash();
+        _knockSmoke.Follow(_carView, _session.Damage, _retro || _session.Phase == SessionPhase.Finished);
         _carView.SetPose(car.Position, car.Orientation);
         _carView.SetWheels(car.Wheels, car.SteerAngle, car.Spec);
         _cameraRig.Roughness = car.Wheels.Any(w => w.InContact && w.Surface != SurfaceType.Road) ? 1f : 0f;
         _cameraRig.Acceleration = new Vector2(car.LateralAcceleration, car.LongitudinalAcceleration);
         _cameraRig.FollowCar(_carView.GlobalTransform, MathF.Abs(car.Speed), dt);
+        if (_look is not null) LookAtProp(_look);
     }
 
     /// <summary>
-    /// For the crash replay in automated runs (--ram=tree, --ram=building, --ram=traffic, --ram=test with a tree
-    /// planted on the start straight): the course is driven as in the attract mode until a thing of that kind comes
-    /// up within 50 m ahead and 25 degrees of the nose, and then the car is driven flat out into it.
+    /// The --look= shot: from <c>distance</c> metres (default two and a half times the prop's size) off its front
+    /// corner (<c>bearing</c> degrees round from straight ahead, default 35), at eye height, at the n-th prop of the kind.
+    /// </summary>
+    private void LookAtProp(string look)
+    {
+        var parts = look.Split(':');
+        if (!System.Enum.TryParse<PropKind>(parts[0], ignoreCase: true, out var kind)) return;
+        var n = parts.Length > 1 && int.TryParse(parts[1], out var index) ? index : 0;
+        var props = _track.Props.Select((p, i) => (Prop: p, Index: i)).Where(p => p.Prop.Kind == kind).ToList();
+        if (props.Count == 0) return;
+        var (prop, at) = props[System.Math.Clamp(n, 0, props.Count - 1)];
+        if (!_propNodes.TryGetValue(at, out var node)) return;
+        var reach = MathF.Max(prop.Size.X, MathF.Max(prop.Size.Y, prop.Size.Z));
+        var distance = parts.Length > 2 && float.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : reach * 2.5f;
+        var bearing = parts.Length > 3 && float.TryParse(parts[3], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var b) ? b : 35f;
+        var basis = node.GlobalTransform.Basis.Orthonormalized();
+        var front = basis.Z.Rotated(Vector3.Up, Mathf.DegToRad(bearing));
+        var centre = node.GlobalPosition + Vector3.Up * MathF.Min(prop.Size.Y * 0.45f, 3f);
+        var eye = node.GlobalPosition + front * distance;
+        eye.Y = _track.Terrain.Height(eye.X, -eye.Z) + 1.7f + distance * 0.08f;
+        _cameraRig.Look(eye, centre, 50f);
+    }
+
+    /// <summary>
+    /// For the crash replay and the knocks in automated runs (--ram=tree, --ram=building, --ram=traffic, --ram=cow,
+    /// --ram=test with a tree planted on the start straight): the course is driven as in the attract mode until a thing
+    /// of that kind comes up within 50 m ahead and 25 degrees of the nose, and then the car is driven into it, flat out
+    /// or at the speed --ram-speed= holds.
     /// </summary>
     private DriverInputs RamInputs()
     {
@@ -599,6 +645,10 @@ public sealed partial class Bootstrap : Node3D
         {
             foreach (var drone in _session.Traffic.Cars) Consider(drone.Position);
         }
+        else if (_ram == "cow")
+        {
+            foreach (var cow in _session.Herd.Cows) Consider(cow.Position);
+        }
         else
         {
             foreach (var prop in _session.Track.Props)
@@ -606,15 +656,40 @@ public sealed partial class Bootstrap : Node3D
                 if (prop.Solid && (_ram is "tree" or "test") == (prop.Kind == PropKind.Tree)) Consider(prop.Position);
             }
         }
-        // Once a target is taken it is held (a drone's is followed as it moves).
-        if (found is { } point && (_ramTarget is null || _ram == "traffic")) _ramTarget = point;
+        // Once a target is taken it is held (a drone's or a cow's is followed as it moves).
+        if (found is { } point && (_ramTarget is null || _ram is "traffic" or "cow")) _ramTarget = point;
         if (_ramTarget is not { } target) return input;
         var toTarget = target - car.Position;
         var angle = MathF.Atan2(SN.Vector3.Dot(toTarget, car.Right), MathF.Max(SN.Vector3.Dot(toTarget, car.Forward), 0.1f));
-        input.Throttle = 1f;
-        input.Brake = 0f;
+        // Flat out, or held at --ram-speed= (m/s) to see a knock below the crash speed.
+        var over = _ramSpeed > 0f ? car.Speed - _ramSpeed : -1f;
+        input.Throttle = over < 0f ? 1f : 0f;
+        input.Brake = over > 1f ? 0.6f : 0f;
         input.Steer = MathUtil.Clamp(angle / car.MaxSteerAngleAt(car.Speed), -1f, 1f);
         return input;
+    }
+
+    /// <summary>
+    /// A knock the car survived (RaceSession.LastKnock): the dent where it struck, sparks off a hard one, and the jolt
+    /// in the seat. The steam of a badly knocked car is <see cref="KnockSmoke"/>'s.
+    /// </summary>
+    private void ShowKnock()
+    {
+        var knock = _session.LastKnock;
+        var point = Convert.ToGodot(knock.Point);
+        var push = -Convert.ToGodot(knock.Normal);
+        _carView.Knock(point, push, knock.Speed);
+        _cameraRig.Jolt(-push, knock.Speed);
+        if (!_retro && knock.Speed > 4f && knock.Kind != KnockKind.Cow) _knockSmoke.Sparks(_carView.GlobalTransform * point, _carView.GlobalTransform.Basis * push, knock.Speed);
+    }
+
+    /// <summary>The cows where the herd has them, each posed for what it is doing (CowRig).</summary>
+    private void SyncCows(float dt)
+    {
+        foreach (var cow in _session.Herd.Cows)
+        {
+            if (_propNodes.TryGetValue(cow.Prop, out var node) && node is CowRig rig) rig.Pose(cow, _elapsed, dt);
+        }
     }
 
     /// <summary>The replay is over or cut short: the car is repaired and the debris cleared.</summary>

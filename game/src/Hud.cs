@@ -17,6 +17,7 @@ internal sealed partial class Hud : Control
     private float _dashOffset;
     private float _flash;
     private float _drivingTime;
+    private float _knockFlash;
 
     /// <summary>The instrument panel (<see cref="InstrumentCluster"/>) drawn at the foot of the screen outside the cockpit.</summary>
     public Texture2D? Instruments { get; set; }
@@ -57,6 +58,8 @@ internal sealed partial class Hud : Control
         _dashOffset += (target - _dashOffset) * MathUtil.Clamp01(dt * 5f);
         _flash += dt;
         if (_session.Phase == SessionPhase.Driving) _drivingTime += dt;
+        if (_session.Events.Contains(RaceEvent.Knocked)) _knockFlash = MathUtil.Clamp01(_session.LastKnock.Speed / 10f) * 0.5f + 0.25f;
+        _knockFlash = MathF.Max(_knockFlash - dt * 2.2f, 0f);
         QueueRedraw();
     }
 
@@ -96,8 +99,30 @@ internal sealed partial class Hud : Control
             DrawString(font, new Vector2(size.X - 320f, 84f), $"{ghost}BEST {RaceSession.FormatLapTime(s.BestLapTime)}", HorizontalAlignment.Right, 300f, 16, new Color(0.6f, 0.9f, 1f));
         }
         if (Notice != "") DrawString(font, new Vector2(size.X - 520f, 104f), Notice, HorizontalAlignment.Right, 500f, 14, new Color(1f, 0.85f, 0.4f));
-        if (Retro) DrawString(font, new Vector2(20f, 84f), "1989 MODE", HorizontalAlignment.Left, -1f, 16, new Color(1f, 0.6f, 0.3f));
-        if (ShowFps) DrawString(font, new Vector2(20f, Retro ? 104f : 84f), $"{Engine.GetFramesPerSecond():0} FPS", HorizontalAlignment.Left, -1f, 16, new Color(0.7f, 0.9f, 0.7f));
+        var leftLine = 84f;
+        if (s.Damage > 0.004f && s.Phase is SessionPhase.Driving or SessionPhase.StartEngine)
+        {
+            // The damage gauge: green to amber to red as the car is knocked about; full is a write-off (a crash).
+            var gauge = new Rect2(20f, 76f, 170f, 9f);
+            var fill = MathUtil.Clamp01(s.Damage);
+            var tone = fill < 0.5f ? new Color(0.35f, 0.85f, 0.3f).Lerp(new Color(1f, 0.75f, 0.15f), fill * 2f) : new Color(1f, 0.75f, 0.15f).Lerp(new Color(1f, 0.2f, 0.12f), (fill - 0.5f) * 2f);
+            DrawRect(gauge, new Color(0f, 0f, 0f, 0.55f));
+            DrawRect(new Rect2(gauge.Position, new Vector2(gauge.Size.X * fill, gauge.Size.Y)), tone);
+            DrawString(font, new Vector2(198f, 86f), "DAMAGE", HorizontalAlignment.Left, -1f, 13, new Color(0.92f, 0.92f, 0.92f));
+            leftLine = 106f;
+        }
+        if (Retro) DrawString(font, new Vector2(20f, leftLine), "1989 MODE", HorizontalAlignment.Left, -1f, 16, new Color(1f, 0.6f, 0.3f));
+        if (ShowFps) DrawString(font, new Vector2(20f, Retro ? leftLine + 20f : leftLine), $"{Engine.GetFramesPerSecond():0} FPS", HorizontalAlignment.Left, -1f, 16, new Color(0.7f, 0.9f, 0.7f));
+        if (_knockFlash > 0f)
+        {
+            // A knock: the screen's edges flash red for a moment, brighter the harder it was.
+            var edge = new Color(0.9f, 0.08f, 0.05f, _knockFlash * 0.45f);
+            const float band = 18f;
+            DrawRect(new Rect2(0f, 0f, size.X, band), edge);
+            DrawRect(new Rect2(0f, size.Y - band, size.X, band), edge);
+            DrawRect(new Rect2(0f, band, band, size.Y - 2f * band), edge);
+            DrawRect(new Rect2(size.X - band, band, band, size.Y - 2f * band), edge);
+        }
 
         // ---- centre messages ------------------------------------------------------------------------
         // The game-over panel says it all; the session's OUT OF TIME would print over the table.

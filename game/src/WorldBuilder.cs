@@ -36,6 +36,15 @@ internal static class WorldBuilder
     private static StandardMaterial3D? _concrete;
     private static StandardMaterial3D? _gravel;
     private static StandardMaterial3D? _earth;
+    // The road furniture of today (edge lines, marker posts): hidden in 1989 mode, the cabinet's road had neither.
+    private static readonly List<Node3D> _modernRoad = [];
+    private static StandardMaterial3D? _edgeLines;
+    // 1989 mode's orange for the shoulders and the earthworks; otherwise the shoulders are grey-brown gravel and the
+    // cuttings' earth a natural brown (0.9.1; before, the orange of the original was kept in both).
+    private static readonly Color OrangeShoulder = new(0.95f, 0.46f, 0.12f);
+    private static readonly Color OrangeEarth = new(0.86f, 0.50f, 0.27f);
+    private static readonly Color GravelTint = new(0.98f, 0.95f, 0.90f);
+    private static readonly Color SoilTint = new(0.72f, 0.58f, 0.46f);
     private static Godot.Environment? _environment;
     private static Godot.Environment? _mirrorEnvironment;
     private static DirectionalLight3D? _sun;
@@ -72,6 +81,8 @@ internal static class WorldBuilder
         _concrete = null;
         _gravel = null;
         _earth = null;
+        _edgeLines = null;
+        _modernRoad.Clear();
         _environment = null;
         _mirrorEnvironment = null;
         _sun = null;
@@ -97,6 +108,8 @@ internal static class WorldBuilder
             root.AddChild(BuildRoad(track, path));
             root.AddChild(BuildShoulders(track, path));
             root.AddChild(BuildCentreLine(track, path));
+            root.AddChild(BuildEdgeLines(track, path));
+            if (BuildMarkerPosts(track, path) is { } posts) root.AddChild(posts);
             foreach (var node in BuildBridges(path)) root.AddChild(node);
             if (BuildLoopFrame(path, track.Terrain) is { } frame) root.AddChild(frame);
         }
@@ -191,8 +204,14 @@ internal static class WorldBuilder
             material.TextureFilter = retro ? BaseMaterial3D.TextureFilterEnum.Nearest : BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic;
         }
         if (_asphalt is not null) _asphalt.DetailEnabled = !retro && _asphalt.DetailAlbedo is not null;
-        // The shoulders' orange is their vertex colour; with the textures off it shows as it is.
-        if (_gravel is not null) _gravel.AlbedoColor = retro ? new Color(1f, 1f, 1f) : new Color(1.0f, 0.82f, 0.62f);
+        // The shoulders and the earthworks take the cabinet's orange back with the textures off; the edge lines and the
+        // marker posts go.
+        if (_gravel is not null) _gravel.AlbedoColor = retro ? OrangeShoulder : GravelTint;
+        if (_earth is not null) _earth.AlbedoColor = retro ? OrangeEarth : SoilTint;
+        foreach (var node in _modernRoad)
+        {
+            if (GodotObject.IsInstanceValid(node)) node.Visible = !retro;
+        }
         ApplyQuality();
         if (_environment is null) return;
         RetroLook(_environment, retro);
@@ -294,26 +313,28 @@ internal static class WorldBuilder
     /// </summary>
     private static StandardMaterial3D Earth => _earth ??= Textured(new StandardMaterial3D
     {
-        // The red-brown earth of the original's hill and the orange of its cuttings, from the dirt photo.
-        AlbedoColor = new Color(0.86f, 0.50f, 0.27f),
+        // Brown soil from the dirt photo; 1989 mode turns it to the red-brown and orange of the original (SetRetro).
+        AlbedoColor = _retro ? OrangeEarth : SoilTint,
         Roughness = 1f,
         Uv1Scale = new Vector3(1150f, 1150f, 1f),
         VertexColorUseAsAlbedo = true,
     }, Photo("dirt_color") ?? Noise(4f, 3, new[] { (0f, new Color(0.7f, 0.65f, 0.55f)), (1f, new Color(1f, 0.95f, 0.85f)) }, seed: 43),
        Photo("dirt_normal"), 0.6f, Photo("dirt_roughness"));
 
-    /// <summary>Shoulders: orange earth along the road, as on the whole 1989 circuit (u across, v in metres along).</summary>
+    /// <summary>
+    /// Shoulders: compacted grey-brown gravel along the road (u across, v in metres along); the vertex colour only
+    /// varies the shade every couple of metres. 1989 mode shows them in the cabinet's flat orange (SetRetro).
+    /// </summary>
     private static StandardMaterial3D Gravel => _gravel ??= Textured(new StandardMaterial3D
     {
-        // A pale base under the orange vertex colour: the dirt photo comes out as the original's orange shoulders.
-        AlbedoColor = new Color(1.0f, 0.82f, 0.62f),
+        AlbedoColor = _retro ? OrangeShoulder : GravelTint,
         VertexColorUseAsAlbedo = true,
         Roughness = 1f,
-        Uv1Scale = new Vector3(1f, 0.45f, 1f),
+        Uv1Scale = new Vector3(0.9f, 0.45f, 1f),
         // Both faces: the shoulders run along the bridge decks too, seen from below.
         CullMode = BaseMaterial3D.CullModeEnum.Disabled,
-    }, Photo("dirt_color") ?? Noise(4f, 3, new[] { (0f, new Color(0.7f, 0.65f, 0.55f)), (1f, new Color(1f, 0.95f, 0.85f)) }, seed: 41),
-       Photo("dirt_normal"), 0.6f, Photo("dirt_roughness"));
+    }, Photo("shoulder_color") ?? Photo("dirt_color") ?? Noise(4f, 3, new[] { (0f, new Color(0.7f, 0.65f, 0.55f)), (1f, new Color(1f, 0.95f, 0.85f)) }, seed: 41),
+       Photo("shoulder_normal") ?? Photo("dirt_normal"), 0.8f, Photo("shoulder_roughness") ?? Photo("dirt_roughness"));
 
     /// <summary>
     /// A photo material for props and foliage, cached by texture, tint and scale and tracked for the retro
@@ -1139,7 +1160,6 @@ internal static class WorldBuilder
     {
         var st = new MeshBuilder();
         var frames = path.Frames;
-        var orange = new Color(0.95f, 0.46f, 0.12f);
         // As wide as the original's dirt shoulders; the ground field keeps its plane out past this (TerrainField.Verge).
         const float width = 2.2f;
         for (var i = 0; i < frames.Count - 1; i++)
@@ -1147,8 +1167,8 @@ internal static class WorldBuilder
             var a = frames[i];
             var b = frames[i + 1];
             if (a.Surface == SurfaceType.Chasm || b.Surface == SurfaceType.Chasm) continue;
-            // Earth is never one colour: every couple of metres the shoulder is a little paler or darker.
-            var colour = orange * (1f + 0.14f * (RoadWear.Hash((int)(a.Distance / 2f), 0, 23) - 0.5f));
+            // Gravel is never one shade: every couple of metres the shoulder is a little paler or darker.
+            var colour = Colors.White * (0.93f + 0.14f * (RoadWear.Hash((int)(a.Distance / 2f), 0, 23) - 0.5f));
             colour.A = 1f;
             var shared = SiblingSide(track, path, a);
             foreach (var side in new[] { -1f, 1f })
@@ -1191,6 +1211,133 @@ internal static class WorldBuilder
         }
         var material = new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 0.6f, CullMode = BaseMaterial3D.CullModeEnum.Back };
         return new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = material, Name = $"Lines-{path.Kind}" };
+    }
+
+    /// <summary>
+    /// White edge lines, 15 cm wide and 25 cm in from the asphalt's edge, as on a rural road of today (the 1989 circuit
+    /// had only the yellow centre line, and 1989 mode hides them). Where the branches share the road at the fork and
+    /// the merge, the inner side's line is left out, like the shoulder there.
+    /// </summary>
+    private static MeshInstance3D BuildEdgeLines(TrackGeometry track, TrackPath path)
+    {
+        var st = new MeshBuilder();
+        var frames = path.Frames;
+        for (var i = 0; i < frames.Count - 1; i++)
+        {
+            var a = frames[i];
+            var b = frames[i + 1];
+            if (a.Surface == SurfaceType.Chasm || b.Surface == SurfaceType.Chasm) continue;
+            var shared = SiblingSide(track, path, a);
+            // The paint wears in patches.
+            var tone = 0.78f + 0.22f * RoadWear.Hash((int)(a.Distance / 7f), (int)path.Kind, 47);
+            var white = new Color(0.92f * tone, 0.92f * tone, 0.90f * tone);
+            foreach (var side in new[] { -1f, 1f })
+            {
+                if ((int)side == shared) continue;
+                var aOut = a.Origin + a.Lateral * (side * (a.HalfWidth - 0.25f)) + a.Normal * 0.012f;
+                var bOut = b.Origin + b.Lateral * (side * (b.HalfWidth - 0.25f)) + b.Normal * 0.012f;
+                var aIn = aOut - a.Lateral * (side * 0.15f);
+                var bIn = bOut - b.Lateral * (side * 0.15f);
+                if (side > 0) Quad(st, aIn, aOut, bIn, bOut, a.Normal, b.Normal, white, a.Distance, b.Distance);
+                else Quad(st, aOut, aIn, bOut, bIn, a.Normal, b.Normal, white, a.Distance, b.Distance);
+            }
+        }
+        _edgeLines ??= new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 0.55f, CullMode = BaseMaterial3D.CullModeEnum.Back };
+        var lines = new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = _edgeLines, Name = $"EdgeLines-{path.Kind}", Visible = !_retro };
+        _modernRoad.Add(lines);
+        return lines;
+    }
+
+    /// <summary>
+    /// Marker posts (delineators) along both sides every 50 m on open road: white posts a metre high at the shoulder's
+    /// outer edge, a black band near the top and a reflector facing the traffic, amber on the right and white on the
+    /// left, as on rural roads. None on the bridges, the ramps and the loop (railings there), on the skid pad or in a
+    /// shared stretch at the fork. Hidden in 1989 mode.
+    /// </summary>
+    private static Node3D? BuildMarkerPosts(TrackGeometry track, TrackPath path)
+    {
+        var placements = new List<(Transform3D At, bool Right)>();
+        var frames = path.Frames;
+        var last = -100f;
+        foreach (var f in frames)
+        {
+            if (f.Distance - last < 50f) continue;
+            if (f.Kind is not (SegmentKind.Straight or SegmentKind.Curve) || f.Surface != SurfaceType.Road || f.Origin.Y > 0.4f) continue;
+            if (SiblingSide(track, path, f) != 0) continue;
+            last = f.Distance;
+            foreach (var side in new[] { -1f, 1f })
+            {
+                var foot = f.Origin + f.Lateral * (side * (f.HalfWidth + 2.0f));
+                var ground = track.Terrain.Height(foot.X, foot.Z);
+                if (MathF.Abs(ground - f.Origin.Y) > 0.6f) continue;
+                // The reflector faces the traffic of the nearer lane: back along the road on the right, ahead on the left.
+                var facing = Convert.ToGodot(f.Tangent * (side > 0 ? -1f : 1f));
+                facing.Y = 0f;
+                var basis = Basis.LookingAt(facing.Normalized(), Vector3.Up);
+                placements.Add((new Transform3D(basis, Convert.ToGodot(foot with { Y = ground })), side > 0));
+            }
+        }
+        if (placements.Count == 0) return null;
+        var group = new Node3D { Name = $"MarkerPosts-{path.Kind}", Visible = !_retro };
+        var posts = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = MarkerPostMesh(false), InstanceCount = placements.Count };
+        var reflectors = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, UseColors = true, Mesh = MarkerPostMesh(true), InstanceCount = placements.Count };
+        for (var i = 0; i < placements.Count; i++)
+        {
+            posts.SetInstanceTransform(i, placements[i].At);
+            reflectors.SetInstanceTransform(i, placements[i].At);
+            reflectors.SetInstanceColor(i, placements[i].Right ? new Color(1f, 0.55f, 0.08f) : new Color(0.95f, 0.95f, 0.95f));
+        }
+        group.AddChild(new MultiMeshInstance3D { Multimesh = posts, Name = "Posts" });
+        group.AddChild(new MultiMeshInstance3D { Multimesh = reflectors, Name = "Reflectors" });
+        _modernRoad.Add(group);
+        return group;
+    }
+
+    /// <summary>
+    /// A marker post: a white post 1.05 m tall, 10 cm by 12 cm, with a black band under its top; or, with
+    /// <paramref name="reflector"/>, the reflector plate on the band's front (-z, Godot's forward), white for the
+    /// instance colour to tint.
+    /// </summary>
+    private static ArrayMesh MarkerPostMesh(bool reflector)
+    {
+        var st = new MeshBuilder();
+        var white = new Color(0.93f, 0.93f, 0.91f);
+        var black = new Color(0.04f, 0.04f, 0.045f);
+        void Block(Vector3 min, Vector3 max, Color colour)
+        {
+            Vector3[] normals = [Vector3.Right, Vector3.Left, Vector3.Up, Vector3.Down, Vector3.Back, Vector3.Forward];
+            var half = (max - min) * 0.5f;
+            var middle = (min + max) * 0.5f;
+            foreach (var normal in normals)
+            {
+                // The face's corners, wound clockwise seen from outside (v = normal x u keeps every face the same way round).
+                var u = MathF.Abs(normal.Y) > 0.5f ? Vector3.Right : Vector3.Up;
+                var v = normal.Cross(u);
+                var centre = middle + normal * half.Dot(normal.Abs());
+                var hu = half.Dot(u.Abs());
+                var hv = half.Dot(v.Abs());
+                var c0 = centre - u * hu - v * hv;
+                var c1 = centre + u * hu - v * hv;
+                var c2 = centre + u * hu + v * hv;
+                var c3 = centre - u * hu + v * hv;
+                st.SetNormal(normal);
+                st.SetColor(colour);
+                foreach (var p in new[] { c0, c2, c1, c0, c3, c2 }) st.AddVertex(p);
+            }
+        }
+        if (reflector)
+        {
+            Block(new Vector3(-0.03f, 0.86f, -0.068f), new Vector3(0.03f, 0.96f, -0.061f), new Color(1f, 1f, 1f));
+        }
+        else
+        {
+            Block(new Vector3(-0.05f, 0f, -0.06f), new Vector3(0.05f, 0.82f, 0.06f), white);
+            Block(new Vector3(-0.051f, 0.82f, -0.061f), new Vector3(0.051f, 1.0f, 0.061f), black);
+            Block(new Vector3(-0.05f, 1.0f, -0.06f), new Vector3(0.05f, 1.05f, 0.06f), white);
+        }
+        var mesh = st.Commit();
+        mesh.SurfaceSetMaterial(0, new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = reflector ? 0.25f : 0.55f, Metallic = reflector ? 0.4f : 0f });
+        return mesh;
     }
 
     /// <summary>Overpass decks and drawbridge ramps get concrete pillars (down to the ground) and railings.</summary>

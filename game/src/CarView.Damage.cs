@@ -64,6 +64,27 @@ internal sealed partial class CarView
         return _dents.Count - 1;
     }
 
+    /// <summary>
+    /// A knock the car drove away from (the simulation's, at <paramref name="point"/> in this node's frame, the blow
+    /// pushing along <paramref name="push"/> at <paramref name="speed"/> m/s): a dent as deep as the speed made it, a
+    /// centimetre for a parking knock and up to fifteen near the crash speed. A knock within 30 cm of an earlier dent
+    /// deepens and widens that one instead of adding another, so scraping along a wall does not stack dents.
+    /// </summary>
+    public void Knock(Vector3 point, Vector3 push, float speed)
+    {
+        var depth = Math.Clamp(speed * 0.011f, 0.01f, 0.15f);
+        var radius = Math.Clamp(0.28f + speed * 0.025f, 0.30f, 0.65f);
+        var centre = point + new Vector3(0f, _cgHeight, 0f);
+        for (var i = 0; i < _dents.Count; i++)
+        {
+            if (_dents[i].Centre.DistanceTo(centre) > 0.3f) continue;
+            _dents[i] = _dents[i] with { Depth = MathF.Min(_dents[i].Depth + depth * 0.6f, 0.2f), Radius = MathF.Max(_dents[i].Radius, radius) };
+            ApplyDents();
+            return;
+        }
+        Dent(point, push, depth, radius);
+    }
+
     /// <summary>Sets the depths of several dents at once and rebuilds the meshes once (a negative index is skipped).</summary>
     public void SetDentDepths(params (int Dent, float Depth)[] depths)
     {

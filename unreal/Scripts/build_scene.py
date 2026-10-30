@@ -399,17 +399,23 @@ def rig_car(car, root_tag):
 
 
 def rig_world(actors):
-    """Tags the train's cars (GLP.Train0..3) and the signs and crossbucks the car can knock over (GLP.Prop), and
-    makes them movable."""
+    """Tags the train's cars (GLP.Train0..n: the locomotive, then Wagon1, Wagon2... as TrainView names them) and the
+    signs and crossbucks the car can knock over (GLP.Prop), and makes them movable."""
     train = actors.get("Train")
     cars = 0
     if train is not None:
         movable(train)
-        for index, label in enumerate(("Locomotive", "Wagon1", "Wagon2", "Wagon3")):
-            wagon = next((a for a in descendants(train) if a.get_actor_label() == label), None)
-            if wagon is not None:
-                tag(wagon, f"GLP.Train{index}")
-                cars += 1
+        labels = {a.get_actor_label(): a for a in descendants(train)}
+        # Every car the game exported, however many the train has (six since 0.8): a car left untagged is never
+        # hidden or moved and stood where the export left it, across the road in front of the start gantry.
+        index = 0
+        while True:
+            wagon = labels.get("Locomotive" if index == 0 else f"Wagon{index}")
+            if wagon is None:
+                break
+            tag(wagon, f"GLP.Train{index}")
+            cars += 1
+            index += 1
     props = 0
     for label, actor in actors.items():
         if label.startswith("Sign-") or label.startswith("Crossbuck-"):

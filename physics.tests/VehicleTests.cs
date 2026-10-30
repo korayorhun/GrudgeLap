@@ -164,6 +164,34 @@ public sealed class VehicleTests
         Assert.True(top.OnRoad);
     }
 
+    /// <summary>
+    /// The everyday cars of Turkey's roads against their published figures: 0-60 mph and top speed, driven flat out
+    /// from a standing start with the shifts at the redline. They take their time, so the runs are longer.
+    /// </summary>
+    [Theory]
+    [InlineData(5, false, 11.8f, 15.5f, 94f, 104f)]   // 1.6 saloon: 13.9 s to 62 mph, 160 km/h
+    [InlineData(6, true, 13.5f, 18.0f, 87f, 97f)]     // 1.4 estate: about 16 s to 62 mph, about 150 km/h
+    [InlineData(7, true, 9.6f, 12.6f, 110f, 120f)]    // 1.4 fleet saloon: 11.5 s to 62 mph, 185 km/h
+    public void Everyday_cars_match_their_published_figures(int car, bool frontWheelDrive, float zeroToSixtyMin, float zeroToSixtyMax, float topMin, float topMax)
+    {
+        var spec = VehicleSpec.Catalogue[car];
+        Assert.Equal(frontWheelDrive, spec.FrontWheelDrive);
+        var sprint = StartedCar(DragStrip(), spec: spec);
+        var t = 0f;
+        var reached = -1f;
+        DriveFlatOut(sprint, 25f, c =>
+        {
+            t += Dt;
+            if (reached < 0f && c.SpeedMph >= 60f) reached = t;
+        });
+        var top = StartedCar(DragStrip(9000f), spec: spec);
+        DriveFlatOut(top, 150f);
+        _out.WriteLine($"{spec.Name}: 0-60 mph {reached:F2} s, top speed {top.SpeedMph:F0} mph in gear {top.Drivetrain.Gear} at {top.Drivetrain.Engine.Rpm:F0} rpm");
+        Assert.InRange(reached, zeroToSixtyMin, zeroToSixtyMax);
+        Assert.InRange(top.SpeedMph, topMin, topMax);
+        Assert.True(top.OnRoad);
+    }
+
     [Fact]
     public void Top_speed_lands_in_the_150_mph_class()
     {
@@ -282,8 +310,11 @@ public sealed class VehicleTests
     [InlineData(76f, true)]
     [InlineData(62f, true)]
     [InlineData(48f, false)]
-    [InlineData(90f, false)]
-    public void Drawbridge_wants_a_60_to_80_mph_run_up(float entryMph, bool shouldSurvive)
+    [InlineData(90f, true)]
+    [InlineData(100f, true)]
+    [InlineData(110f, true)]
+    [InlineData(125f, false)]
+    public void Drawbridge_wants_a_60_mph_run_up_and_wrecks_a_car_landing_past_120(float entryMph, bool shouldSurvive)
     {
         var track = WithFeature(b => b.Drawbridge(30f, 7f, 18f, 34f));
         var car = new VehicleSim(new VehicleSpec(), track);
@@ -305,7 +336,7 @@ public sealed class VehicleTests
             hardest = MathF.Max(hardest, car.LandingImpact);
             var frame = car.BodyHit.Frame;
             if (frame.Kind == SegmentKind.RampDown && frame.Distance - landingStart < 3f && car.BodyHit.Height < RaceOptions.BridgeEdgeClearance) { crashed = "hit the bridge edge"; break; }
-            if (car.LandingImpact > 7.5f) { crashed = $"hard landing {car.LandingImpact:F1} m/s"; break; }
+            if (car.LandingImpact > RaceOptions.Medium.LandingCrashSpeed) { crashed = $"hard landing {car.LandingImpact:F1} m/s"; break; }
             if (car.Position.Y < -2.5f) { crashed = "fell into the gap"; break; }
             if (car.Cursor.Distance > landingEnd + 15f && car.OnRoad && !car.Airborne) { landed = true; break; }
         }

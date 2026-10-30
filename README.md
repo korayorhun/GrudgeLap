@@ -1,31 +1,38 @@
 # GrudgeLap
 
-**EN** · A homage to the 1989 arcade driving simulators. Five cars — a four-speed flat-twelve of 1984, a
-seven-speed V8 of 2012 with a sports exhaust and three front-wheel-drive hot hatches of 1997-2008 (a
-sixteen-valve two-litre, a five-cylinder and a two-litre turbo), all with real engine recordings — a fork between a long
+**EN** · A homage to the 1989 arcade driving simulators. Eight cars — a four-speed flat-twelve of 1984, a
+seven-speed V8 of 2012 with a sports exhaust, three front-wheel-drive hot hatches of 1997-2008 (a
+sixteen-valve two-litre, a five-cylinder and a two-litre turbo) and three everyday cars of Turkey's roads (a 1.6
+rear-wheel-drive saloon of the 1990s, a 1.4 estate of the same years and a 1.4 fleet saloon of today, with their
+published weights, gearing and power), all with real engine recordings — a fork between a long
 *speed* route and a short *stunt* route with an open drawbridge, a vertical loop and a banked 180, dips,
-traffic in both directions, checkpoints against the clock, an instant replay after every crash in which the car
-crumples where it hit and sheds its lamps and trim, a hidden
+traffic in both directions that keeps its distance, checkpoints against the clock, knocks that dent the car and bounce
+it off (only a hard hit, or one too many, is a crash), an instant replay with its own music after every crash in which
+the car crumples where it hit and sheds its lamps and trim, a hidden
 skid pad, a "1989 mode" and the *grudge match*: the ghost of your best lap races you on every lap after.
 The track follows the original's plan: the start at the foot of a bare hill with the fork on its crest, a
 speed route that sweeps round the east side and passes under the open drawbridge, a stunt route that jumps
-the speed route on that drawbridge, runs the loop and the banked 180 and crosses over itself, and orange
-shoulders all the way round. The scenery is the one you remember: a red barn with "33" on its door, cows in
-the fields, a farmhouse after the curve, a gas station, a camouflaged hut, yellow signs that tip over when you clip them, sawhorses before
+the speed route on that drawbridge, runs the loop and the banked 180 and crosses over itself, with gravel
+shoulders, white edge lines and marker posts (orange shoulders in 1989 mode). The scenery is the one you remember: a
+red barn with "33" on its door, Holstein cows grazing in the fields (they moo, shy away and can be shoved), a
+farmhouse with its porch after the curve, a gas station, a camouflaged hut, yellow signs that tip over when you clip them, sawhorses before
 the stunts and a level crossing with its railway, where a train really does come through. You sit in a leather-lined cabin,
 reading working dials through a steering wheel that turns as you steer, with the road behind you in the
 mirror, and the tyres squeal, howl and scrabble on gravel from real recordings. Keyboard-playable on Windows,
 windowed or full screen. Free, open source, no assets copied from anywhere.
 
 **TR** · 1989'un arcade sürüş simülatörlerine saygı duruşu. Beş araba (1984 flat-12, 4 vites; 2012 V8, 7
-vites, spor egzoz; 1997-2008'den üç önden çekişli hot hatch: 2.0 16V, beş silindirli ve 2.0 turbo; hepsinde
-gerçek motor kayıtları), uzun *speed* ve kısa *stunt* (açık köprü, dikey loop, eğimli
+vites, spor egzoz; 1997-2008'den üç önden çekişli hot hatch: 2.0 16V, beş silindirli ve 2.0 turbo; Türkiye
+yollarının üç gündelik arabası: 1990'ların 1.6 arkadan itişli sedanı, aynı yılların 1.4 station'ı ve bugünün 1.4
+filo sedanı, yayımlanmış ağırlık, vites ve güç değerleriyle; hepsinde gerçek motor kayıtları), uzun *speed* ve kısa *stunt* (açık köprü, dikey loop, eğimli
 180°) rotaları, çukurlar, iki yönlü trafik, süreye karşı kontrol noktaları, her kazadan sonra arabanın çarptığı
 yerden ezildiği ve parçalarının uçuştuğu anlık tekrar,
 gizli skid pad, "1989 modu" ve *grudge match*: en iyi turunuzun hayaleti sonraki her turda sizinle yarışır.
 Pist orijinalin planında: başlangıç, tepesinde çatal olan çıplak bir tepenin eteğinde; speed rotası doğuyu
 dolanıp açık köprünün altından geçer; stunt rotası o köprüden speed rotasının üstünden atlar, loop'u ve eğimli
-180°'yi geçip kendi üstünden aşar; yol kenarları baştan sona turuncu. Manzara hatırladığınız gibi: kapısında "33" yazan kırmızı ahır, tarlalarda inekler, virajdan sonra çiftlik
+180°'yi geçip kendi üstünden aşar; yol kenarlarında çakıllı banket, beyaz kenar çizgileri ve reflektör direkleri
+(1989 modunda turuncu banket). Hafif çarpmalar arabayı ezip geri sektirir; yalnız sert çarpma ya da birikmiş hasar kaza
+sayılır; trafik mesafesini korur; inekler otlar, möler, kaçar ve itilebilir. Manzara hatırladığınız gibi: kapısında "33" yazan kırmızı ahır, tarlalarda inekler, virajdan sonra çiftlik
 evi, benzin istasyonu, kamuflajlı kulübe, çarpınca devrilen sarı levhalar, stunt öncesi tahta bariyerler ve
 raylı hemzemin geçitten gerçekten geçen bir tren. Deri kaplı bir kabinde oturur, çalışan göstergeleri siz
 çevirdikçe dönen direksiyonun içinden okur, arkanızdaki yolu dikiz aynasında görürsünüz; lastik
@@ -172,7 +179,7 @@ best lap's ghost out of the picture.
   of initials, updater. Design notes in [docs/design.md](docs/design.md), the checklist in
   [docs/feel-checklist.md](docs/feel-checklist.md), what the research found in
   [docs/research-notes.md](docs/research-notes.md).
-- `unreal/` — the Unreal Engine 5 version: the same track and all five cars, exported from the game, dressed
+- `unreal/` — the Unreal Engine 5 version: the same track and the first five cars (the everyday cars of 0.10.0 await their export), exported from the game, dressed
   with CC0 photoscans (Poly Haven) under Lumen, Nanite and a physical sky, and the whole game on the
   simulation through `physics.native`: title screen, gearboxes, keyboard and gamepad, traffic, ghost, train,
   HUD, instruments, mirrors, the high-score table and the same sound. Scripts rebuild the level, play it, drive it for tests, render stills and

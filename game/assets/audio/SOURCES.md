@@ -53,6 +53,49 @@ fixed pattern (`FivePattern`) to give the five's warble back. The hot hatch and 
 the Civic Type R and the Pulsar tracks of the same CC0 item; the turbo's whistle and blow-off valve are
 synthesised (`EngineAudio.Turbo`).
 
+## The everyday cars (`saloon/`, `estate/`, `fleet/`, 0.10.0)
+
+| Bank | Source | Segments (start@end s @ firing Hz at start @ search band Hz) |
+|---|---|---|
+| `saloon/engine_idle` | Freesound #187029 "car Niva.wav" by dobrymolodec (the Lada Niva's 1.6, of the Fiat-124 family the 1.6 saloon's pushrod four belongs to), https://freesound.org/s/187029/ (CC0 1.0) | 0.3@6.4@27@20@36, 19.6@25.0@27@20@36 |
+| `saloon/engine_drive` | Freesound #255122 "A car pulling away on asphalt, Lada 1500 Combi 1981" by YleArkisto, https://freesound.org/s/255122/ (CC BY 4.0) | 11.2@14.8@66@55@140, 17.4@19.2@118@100@150 |
+| `saloon/engine_overrun` | Freesound #255126 "A car approaching, stopping, shutting down, Lada 1500 Combi" by YleArkisto, https://freesound.org/s/255126/ (CC BY 4.0) | 10.8@18.0@130@65@150 |
+| `estate/engine_idle` | Freesound #141240 "Renault 19 underhood acceleration" and #141245 "Reault 19 driving 2" by lovretta (the carburetted Cleon 1.4 of the same family as the estate's), https://freesound.org/s/141240/ (CC0 1.0) | 141240: 0.6@2.9@27@20@36; 141245: 3.0@7.2@36@28@44 |
+| `estate/engine_drive` | Freesound #141245, as above | 10.8@16.2@50@40@105, 25.5@33.3@92@80@160, 121.2@126.8@91@80@170 |
+| `estate/engine_overrun` | Freesound #141245, as above | 133.2@139.4@194@95@215 |
+| `fleet/engine_idle` | Wikimedia Commons "Fiat Grande Punto 1.4 T-Jet - engine and exhaust sound (YouTube -1zYK0ORqWg)" by Adri Drives (the 1.4 Fire family), CC BY 3.0 | 19.2@27.0@27@20@36 |
+| `fleet/engine_drive` | the same, and "Fiat Bravo 1.4 T-Jet - engine and exhaust sound (YouTube TYdDRfp-LdY)" by michael maurice, CC BY 3.0 | Punto 64.0@70.2@64@55@115, 72.4@77.4@91@80@130; Bravo 10.0@14.4@156@140@220 |
+| `fleet/engine_overrun` | the Bravo recording | 57.6@61.6@167@130@190 |
+
+No CC0 or CC BY recording of the cars themselves was found (a phone clip of a Renault 12 was too short); the banks
+are their engines' closest siblings: the Lada's Fiat-124 four for the saloon's Fiat 131 pushrod four, the Renault 19's
+carburetted Cleon 1.4 for the estate's, the Punto's and the Bravo's 1.4 Fire for the fleet saloon's (turbocharged
+there, which shows little through the pulses the voice uses). The two Commons files come from YouTube uploads marked
+with YouTube's Creative Commons Attribution licence; their licence review was pending on Commons on 29 October 2026.
+
+## Cows (`cow/moo1.wav` ... `cow/moo5.wav`)
+
+Five moos of one cow recorded by Joseph Sardin (BigSoundBank #2382-#2386 "Cow moos #2"-"#6",
+https://bigsoundbank.com/cow-moos-2-s2382.html, CC0 1.0), cut from the FLAC originals with `tools/make-oneshot.py`
+(0.35 s fade-out, peak 0.85): 2382 at 0.55 s + 2.0 s, 2383 at 0.45 + 2.3, 2384 at 0.55 + 2.1, 2385 at 0.95 + 2.4, 2386
+at 0.35 + 2.1. `WorldAudio` places them on the cows: loud when the car shoves one, softer now and then from one grazing
+within 70 m. 1989 mode keeps the cabinet's synthesised moo.
+
+## Instant replay music (`music/replay.ogg`, `music/replay.wav`)
+
+Eleven seconds of "Horizon Surfer" by congusbongus (OpenGameArt, https://opengameart.org/content/horizon-surfer,
+CC0 1.0; FM, made in BambooTracker on the YM2608 chip), from 14.2 s (where the full arrangement comes in) with a
+20 ms fade-in and a 1.4 s fade-out, loudness-normalised (-14 LUFS); `replay.wav` is the same, mono 22.05 kHz, for the
+Unreal version's reader (the Godot export leaves it out). The original game's replay music is Atari's and is not
+used; 1989 mode keeps our synthesised tune.
+
+## References (not shipped)
+
+Photographs looked at for the everyday cars' proportions and details, from Wikimedia Commons: "Tofaş Şahin.jpg"
+(public domain), "Tofaş Şahin (late), Firüzağa.jpg" (Mr.choppers, CC BY-SA 3.0), "Renault 12TSW Toros front.jpg"
+(CC BY-SA 3.0), "Renault 12 Break rear Turkey.JPG" (CC BY-SA 3.0), "2019 Fiat Tipo berlina 4-porte.jpg" (CC BY-SA 4.0),
+"2017 Fiat Tipo Sedan on Mt. Tabor, Israel.jpg" (CC BY-SA 4.0), "2018 Fiat Tipo SW S-Design interior.jpg" (CC BY-SA 4.0).
+
 ## Tyres and road (`tyres/`)
 
 | Loop | Source | Slice | License |

@@ -9,7 +9,9 @@ namespace GrudgeLap.Game;
 /// The sounds of the world around the car, placed in it: every drone's engine on the drone and the train's
 /// locomotive on the locomotive, each attenuated by its distance and shifted by the Doppler effect between it and
 /// the listener (the camera), so that a drone coming the other way drops its note as it passes, and the train is
-/// heard before it is seen and whistles for the crossing. The shift is computed here from the simulation's
+/// heard before it is seen and whistles for the crossing; and the cows, each mooing from where it stands, now and
+/// then while the car is about and loudly when it is shoved (recordings of one cow, assets/audio/SOURCES.md). The
+/// shift is computed here from the simulation's
 /// velocities rather than left to the engine's tracking, which measures motion against the wall clock and so gives
 /// nothing in a fixed-rate (recorded) run and the wrong amount whenever the frame rate drifts. From the driver's seat they come through the glass: a low-pass on their
 /// bus closes and the level drops (<see cref="Interior"/>). 1989 mode mutes them; the cabinet had only the
@@ -26,6 +28,8 @@ internal sealed partial class WorldAudio : Node
     private AudioStreamWav? _whistleClip;
     private AudioStreamPlayer3D? _steam;
     private AudioStreamPlayer3D? _whistle;
+    private AudioStreamRandomizer? _moos;
+    private readonly Dictionary<int, AudioStreamPlayer3D> _cows = new();
     private Train? _train;
     private int _blasts;
     private float _glassMix;   // 0 in the open, 1 from the driver's seat, smoothed
@@ -53,6 +57,19 @@ internal sealed partial class WorldAudio : Node
         _droneLoop = AudioClips.Loop("traffic/drone.wav");
         _steamLoop = AudioClips.Loop("train/steam.wav");
         _whistleClip = AudioClips.OneShot("train/whistle.wav");
+        _moos = AudioClips.Takes(1.07f, 2f, "cow/moo1.wav", "cow/moo2.wav", "cow/moo3.wav", "cow/moo4.wav", "cow/moo5.wav");
+    }
+
+    /// <summary>
+    /// Puts a moo on a cow's node (the prop at <paramref name="prop"/>): a cow is heard over a field, full within ten
+    /// metres of its head and still there at three hundred.
+    /// </summary>
+    public void AttachCow(Node3D cow, int prop)
+    {
+        if (_moos is null) return;
+        var player = Placed(_moos, unitSize: 10f, maxDb: 6f, maxDistance: 320f, new Vector3(1.1f, 1.2f, 0f));
+        cow.AddChild(player);
+        _cows[prop] = player;
     }
 
     /// <summary>
@@ -129,6 +146,18 @@ internal sealed partial class WorldAudio : Node
             player.VolumeDb = moving ? -3f : -80f;
         }
         UpdateTrain(moving, listener, listenerVelocity);
+        // The cows: a loud moo from one the car shoves, a quieter one now and then from one that is just grazing.
+        if (session.Events.Contains(RaceEvent.CowHit) && _cows.TryGetValue(session.LastSoftHit, out var hit))
+        {
+            hit.VolumeDb = 2f;
+            hit.Play();
+        }
+        if (session.Events.Contains(RaceEvent.CowMooed) && session.Herd.Mooed >= 0
+            && _cows.TryGetValue(session.Herd.Cows[session.Herd.Mooed].Prop, out var grazing) && !grazing.Playing)
+        {
+            grazing.VolumeDb = -4f;
+            grazing.Play();
+        }
     }
 
     /// <summary>The Doppler factor of a source heard by a listener, both moving: the pitch rises as they close and falls as they part.</summary>

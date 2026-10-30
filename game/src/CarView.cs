@@ -32,7 +32,7 @@ internal sealed partial class CarView : Node3D
 
     public static readonly Color DefaultPaint = new(0.76f, 0.03f, 0.05f);
     /// <summary>Paints for the drone cars, by their colour index.</summary>
-    public static readonly Color[] DronePaints = [new(0.12f, 0.25f, 0.70f), new(0.88f, 0.88f, 0.84f), new(0.90f, 0.72f, 0.10f)];
+    public static readonly Color[] DronePaints = [new(0.12f, 0.25f, 0.70f), new(0.90f, 0.90f, 0.87f), new(0.56f, 0.07f, 0.08f)];
     private static readonly Color Trim = new(0.06f, 0.06f, 0.065f);
     private static readonly Color Amber = new(1f, 0.55f, 0.08f);
     /// <summary>Tint that turns the brown leather photo into the black leather of the dashboard.</summary>
@@ -69,6 +69,9 @@ internal sealed partial class CarView : Node3D
                 CarStyle.HotHatch => BodyStyle.HotHatch,
                 CarStyle.FiveHatch => BodyStyle.FiveHatch,
                 CarStyle.TurboHatch => BodyStyle.TurboHatch,
+                CarStyle.Saloon => BodyStyle.Saloon,
+                CarStyle.Estate => BodyStyle.Estate,
+                CarStyle.Fleet => BodyStyle.Fleet,
                 _ => BodyStyle.FlatTwelve,
             },
         };
@@ -1091,9 +1094,9 @@ internal sealed partial class CarView : Node3D
     }
 
     /// <summary>
-    /// The cabin: a carpeted floor, a leather dashboard swept across the car, a hooded binnacle whose face shows
+    /// The cabin: a carpeted floor, a two-tone dashboard swept across the car, a hooded binnacle whose face shows
     /// the instrument panel (<see cref="MountInstruments"/>), a three-spoke wheel on a column leaning back 22
-    /// degrees that turns with the steering, two seats, the A-pillars and the wipers. The wheel and the binnacle
+    /// degrees that turns with the steering, two shaped seats, the trimmed A-pillars, the door trims, the daylight in the cabin and the wipers. The wheel and the binnacle
     /// are placed from the driver's eyes (<see cref="BodyStyle.EyeZ"/>): from the seat the dials sit inside the
     /// upper half of the wheel, and the hood stays below the line of sight to the road.
     /// </summary>
@@ -1101,7 +1104,11 @@ internal sealed partial class CarView : Node3D
     {
         var style = _style;
         var leather = WorldBuilder.PropMaterial("leather", style.LeatherTint, 4f);
-        var dash = WorldBuilder.PropMaterial("leather", BlackLeather, 5f, matte: true);
+        // Two tones: the top pad dark, the fascia under it lighter, both the grained leather photo (as moulded plastic).
+        var dash = WorldBuilder.PropMaterial("leather", style.DashTint, 5f, matte: true);
+        var fasciaMaterial = WorldBuilder.PropMaterial("leather", style.FasciaTint, 5f, matte: true);
+        var seatCover = style.ClothSeats ? WorldBuilder.PropMaterial("fabric", style.LeatherTint, 2.5f) : leather;
+        var pillarTrim = WorldBuilder.PropMaterial("fabric", style.HeadlinerTint * 0.85f, 3f);
         var carpet = WorldBuilder.PropMaterial("carpet", style.CarpetTint, 3f);
         var satin = new StandardMaterial3D { AlbedoColor = new Color(0.55f, 0.55f, 0.57f), Metallic = 0.85f, Roughness = 0.38f };
         var dark = new StandardMaterial3D { AlbedoColor = new Color(0.035f, 0.035f, 0.04f), Roughness = 0.85f };
@@ -1144,9 +1151,15 @@ internal sealed partial class CarView : Node3D
         ];
         var pocket = pocketProfile.Select((p, i) => new Vector2(style.CowlZ + p.X + (i >= 2 ? stretch : 0f), cowlH + p.Y)).ToArray();
         const float pocketHalf = 0.235f;
-        body.AddChild(new MeshInstance3D { Mesh = SweepAcross(swept, -dashHalf, DriverX - pocketHalf), MaterialOverride = dash, Name = "Dashboard" });
-        body.AddChild(new MeshInstance3D { Mesh = SweepAcross(pocket, DriverX - pocketHalf, DriverX + pocketHalf), MaterialOverride = dash, Name = "DashboardPocket" });
-        body.AddChild(new MeshInstance3D { Mesh = SweepAcross(swept, DriverX + pocketHalf, dashHalf), MaterialOverride = dash, Name = "DashboardRight" });
+        // The top pad as far as the rolled lip, the fascia from the lip down (the profiles' sixth and seventh points).
+        void Dashboard(Vector2[] profile, int lip, float from, float to, string name)
+        {
+            body.AddChild(new MeshInstance3D { Mesh = SweepAcross(profile[..(lip + 1)], from, to), MaterialOverride = dash, Name = name });
+            body.AddChild(new MeshInstance3D { Mesh = SweepAcross(profile[lip..], from, to), MaterialOverride = fasciaMaterial, Name = name + "Fascia" });
+        }
+        Dashboard(swept, 5, -dashHalf, DriverX - pocketHalf, "Dashboard");
+        Dashboard(pocket, 6, DriverX - pocketHalf, DriverX + pocketHalf, "DashboardPocket");
+        Dashboard(swept, 5, DriverX + pocketHalf, dashHalf, "DashboardRight");
         if (!float.IsNaN(style.IntakeFrom))
         {
             // Below the door trim the intake's recess is not lined: a leather panel inside it keeps the road from
@@ -1197,16 +1210,28 @@ internal sealed partial class CarView : Node3D
         // The modern cars carry the airbag in a padded hub and leather spokes; the 1984 car has a small horn push and
         // satin spokes. The pad sits a little below the column (local +Z is down) and no wider than keeps the gear
         // readout between the dials in view.
-        var airbag = style.Hatchback || ReferenceEquals(style, BodyStyle.V8);
+        var airbag = style.Airbag ?? (style.Hatchback || ReferenceEquals(style, BodyStyle.V8));
         var hubRadius = airbag ? 0.058f : 0.045f;
-        spin.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = hubRadius, BottomRadius = hubRadius + 0.005f, Height = airbag ? 0.05f : 0.035f, Material = dark, RadialSegments = 24 }, Position = new Vector3(0f, airbag ? 0.012f : 0f, airbag ? 0.022f : 0f) });
+        if (airbag)
+        {
+            // The airbag's cover: a padded cushion, wider than tall, filling the middle of the wheel.
+            spin.AddChild(new MeshInstance3D
+            {
+                Mesh = new SphereMesh { Radius = 1f, Height = 2f, RadialSegments = 24, Rings = 10, Material = dash },
+                Transform = new Transform3D(Basis.FromScale(new Vector3(0.085f, 0.03f, 0.068f)), new Vector3(0f, 0.018f, 0.018f)),
+            });
+        }
+        else
+        {
+            spin.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = hubRadius, BottomRadius = hubRadius + 0.005f, Height = 0.035f, Material = dark, RadialSegments = 24 } });
+        }
         foreach (var angle in new[] { 0f, 90f, -90f })
         {
             // Local +Z of the tilted column points down, so the spoke at 0 degrees is the bottom one.
             var a = Mathf.DegToRad(angle);
             spin.AddChild(new MeshInstance3D
             {
-                Mesh = new BoxMesh { Size = new Vector3(airbag ? 0.04f : 0.026f, airbag ? 0.012f : 0.007f, 0.13f), Material = airbag ? dash : satin },
+                Mesh = new BoxMesh { Size = new Vector3(airbag ? 0.04f : 0.03f, airbag ? 0.012f : 0.009f, 0.13f), Material = airbag || style.Hatchback ? dash : satin },
                 Position = new Vector3(MathF.Sin(a) * 0.105f, 0.004f, MathF.Cos(a) * 0.105f),
                 Rotation = new Vector3(0f, a, 0f),
             });
@@ -1216,29 +1241,16 @@ internal sealed partial class CarView : Node3D
         // sit upright on a base above the floor, the cushion 0.62 m under the eyes.
         var seatZ = style.Hatchback ? style.EyeZ + 0.07f : 0.22f;
         var seatY = style.Hatchback ? style.EyeH - 0.62f : 0.47f;
-        foreach (var x in new[] { DriverX, -DriverX })
-        {
-            Box(body, new Vector3(0.50f, 0.14f, 0.52f), new Vector3(x, seatY, seatZ), leather);
-            var backrest = Box(body, new Vector3(0.50f, 0.52f, 0.12f), new Vector3(x, seatY + 0.25f, seatZ + 0.28f), leather);
-            // A positive pitch tips the top towards +z, the tail: the backrest reclines from the cushion onto the headrest.
-            backrest.Rotation = new Vector3(0.22f, 0f, 0f);
-            Box(body, new Vector3(0.26f, 0.12f, 0.10f), new Vector3(x, seatY + 0.52f, seatZ + 0.32f), leather);
-            if (style.Hatchback) Box(body, new Vector3(0.40f, seatY - 0.45f, 0.40f), new Vector3(x, (seatY + 0.31f) * 0.5f, seatZ), dark);
-        }
-        if (style.Hatchback) BuildRearSeats(body, leather, carpet);
+        foreach (var x in new[] { DriverX, -DriverX }) BuildSeat(body, x, seatY, seatZ, seatCover, dark, style.Hatchback);
+        if (style.Hatchback) BuildRearSeats(body, seatCover, carpet);
 
-        // A-pillars from the cowl corners to the roof corners above the screen. The eyes are twice as far from the
-        // foot of the left one as from its top, so a pillar of even section looks twice as wide where it meets
-        // the roof (a 45 mm square bar read as a black band across the view); it narrows towards the roof
-        // instead and stays a slim, even line framing the screen. From outside it is seen through the tinted
-        // glass, where the taper does not show.
+        // The A-pillars from the screen's foot to the header, the cabin's daylight, the door trims and the dashboard's
+        // furniture (CarView.Cabin.cs). The header is the first design station past the side glass's front.
         var roofZ = style.Keys.First(k => k > style.CabinFrom);
-        foreach (var side in new[] { -1f, 1f })
-        {
-            var a = new Vector3(side * style.Sample(style.CrestW, style.CowlZ), style.Sample(style.CrestH, style.CowlZ) - 0.015f, style.CowlZ);
-            var b = new Vector3(side * style.Sample(style.CrestW, roofZ), style.Sample(style.CrestH, roofZ) - 0.015f, roofZ);
-            Pillar(body, a, b, 0.020f, 0.013f, dash);
-        }
+        BuildPillarTrim(body, pillarTrim, eye, roofZ);
+        BuildCabinLight(body);
+        BuildDoorTrim(body, fasciaMaterial, dark, satin);
+        BuildDashDetails(body, fasciaMaterial, dark, satin, stretch, dashHalf);
 
         BuildCentreStack(body, dash, dark, satin, stretch);
 
@@ -1353,15 +1365,6 @@ internal sealed partial class CarView : Node3D
         return st.Commit();
     }
 
-    /// <summary>A round bar from <paramref name="a"/> to <paramref name="b"/> that narrows from <paramref name="radiusA"/> to <paramref name="radiusB"/>.</summary>
-    private static void Pillar(Node3D parent, Vector3 a, Vector3 b, float radiusA, float radiusB, Material material)
-    {
-        // A cylinder runs along local +Y with its top radius there: turned so +Y becomes -Z, then looking from a to b, its top lands on b.
-        var mesh = new CylinderMesh { BottomRadius = radiusA, TopRadius = radiusB, Height = a.DistanceTo(b), RadialSegments = 12, Rings = 1, Material = material };
-        var basis = Basis.LookingAt(b - a, Vector3.Up) * new Basis(Vector3.Right, -Mathf.Pi / 2f);
-        parent.AddChild(new MeshInstance3D { Mesh = mesh, Transform = new Transform3D(basis, (a + b) * 0.5f) });
-    }
-
     // ---- wheels --------------------------------------------------------------------------------------
 
     private void BuildWheels(VehicleSpec spec)
@@ -1407,8 +1410,15 @@ internal sealed partial class CarView : Node3D
             var inset = (isFront ? style.FrontTyreWidth : style.RearTyreWidth) / 0.27f;
             var rim = style.RimRadius;
 
-            // Five-spoke star rim on the outer face of the wheel.
             var side = MathF.Sign(hubs[i].X);
+            if (style.Hubcap is { } cover)
+            {
+                SteelWheel(spinner, side, rim, inset, cover);
+                _wheelPivots[i] = pivot;
+                _wheelSpinners[i] = spinner;
+                continue;
+            }
+            // Five-spoke star rim on the outer face of the wheel.
             // Brake disc on the spinner and a red caliper on the pivot (it steers but does not spin), behind the spokes.
             spinner.AddChild(new MeshInstance3D
             {
@@ -1451,6 +1461,62 @@ internal sealed partial class CarView : Node3D
             }
             _wheelPivots[i] = pivot;
             _wheelSpinners[i] = spinner;
+        }
+    }
+
+    /// <summary>
+    /// A steel wheel under a plastic cover, as the everyday cars run on: the dark steel dish behind, the silver cover
+    /// over the whole rim with a domed centre, and its pattern: four round holes on a "plain" cover (the 1990s saloon),
+    /// a ring of slots on a "vented" one (the estate's, the fleet saloon's).
+    /// </summary>
+    private static void SteelWheel(Node3D spinner, float side, float rim, float inset, string cover)
+    {
+        var steelDish = new StandardMaterial3D { AlbedoColor = new Color(0.10f, 0.10f, 0.11f), Metallic = 0.4f, Roughness = 0.6f };
+        var plastic = new StandardMaterial3D { AlbedoColor = new Color(0.70f, 0.71f, 0.73f), Metallic = 0.35f, Roughness = 0.32f };
+        var hole = new StandardMaterial3D { AlbedoColor = new Color(0.04f, 0.04f, 0.045f), Roughness = 0.9f };
+        var face = side * 0.115f * inset;
+        spinner.AddChild(new MeshInstance3D
+        {
+            Mesh = new CylinderMesh { TopRadius = rim - 0.01f, BottomRadius = rim - 0.01f, Height = 0.02f, Material = steelDish, RadialSegments = 24 },
+            Position = new Vector3(side * 0.07f * inset, 0f, 0f),
+            RotationDegrees = new Vector3(0f, 0f, 90f),
+        });
+        spinner.AddChild(new MeshInstance3D
+        {
+            Mesh = new CylinderMesh { TopRadius = rim + 0.006f, BottomRadius = rim + 0.012f, Height = 0.018f, Material = plastic, RadialSegments = 36 },
+            Position = new Vector3(face, 0f, 0f),
+            RotationDegrees = new Vector3(0f, 0f, 90f),
+        });
+        // The cover's dished centre, standing a little proud.
+        spinner.AddChild(new MeshInstance3D
+        {
+            Mesh = new SphereMesh { Radius = 1f, Height = 2f, RadialSegments = 20, Rings = 8, Material = plastic },
+            Transform = new Transform3D(Basis.FromScale(new Vector3(0.02f, 0.075f, 0.075f)), new Vector3(face + side * 0.008f, 0f, 0f)),
+        });
+        if (cover == "plain")
+        {
+            for (var h = 0; h < 4; h++)
+            {
+                var a = h * Mathf.Tau / 4f + 0.4f;
+                spinner.AddChild(new MeshInstance3D
+                {
+                    Mesh = new CylinderMesh { TopRadius = 0.016f, BottomRadius = 0.016f, Height = 0.02f, Material = hole, RadialSegments = 12 },
+                    Position = new Vector3(face + side * 0.002f, rim * 0.62f * Mathf.Cos(a), rim * 0.62f * Mathf.Sin(a)),
+                    RotationDegrees = new Vector3(0f, 0f, 90f),
+                });
+            }
+            return;
+        }
+        for (var s = 0; s < 18; s++)
+        {
+            var a = s * Mathf.Tau / 18f;
+            var r = rim * 0.70f;
+            spinner.AddChild(new MeshInstance3D
+            {
+                Mesh = new BoxMesh { Size = new Vector3(0.02f, rim * 0.30f, 0.014f), Material = hole },
+                Position = new Vector3(face + side * 0.002f, r * Mathf.Cos(a), r * Mathf.Sin(a)),
+                Rotation = new Vector3(a, 0f, 0f),
+            });
         }
     }
 

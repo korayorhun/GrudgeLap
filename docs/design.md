@@ -446,3 +446,35 @@ new-package requests were withdrawn).
    step past textured primitives. A reflection probe riding with the car was tried in 0.5 and left out:
    with SDFGI and screen-space reflections already on the paint the difference was hard to see, while a
    real-time probe renders the scene six more times a frame.
+
+## 0.10.0: knocks, cows, everyday cars, roads, buildings, the cabin
+
+- Knocks (`RaceSession.Knocks.cs`): the car's plan (a rectangle from `VehicleSpec.BodyFront`/`BodyRear`/`BodyHalfWidth`)
+  is tested against the solid props', the drones' and the cows' with the separating-axis test (`Footprint`). Below
+  the crash speed (15 m/s closing, 54 km/h; 20 m/s for a cow) the car is pushed out of the overlap and bounced off
+  with an impulse (restitution 0.3 to 0.08, friction 0.35 along the face) that also turns it; the damage grows with
+  the square of the closing speed (0.4 at the crash speed) and past a third of the way costs up to 30 % of the
+  engine's torque; at 1 the knock is a crash. Landings between 6.5 and 10 m/s dent the car instead of wrecking it.
+  The view dents the car where it was struck, sparks off hard knocks, steams past 60 % and flashes the screen's
+  edges; the HUD shows a damage gauge. A crash repairs the car after its replay.
+- Drones keep their distance along the road (measured as distance along the traffic loop, so a bend does not hide a
+  car): no faster than they can stop from at 4 m/s^2 before a 3 m gap, settling to a 1.2 s time gap; they brake at up
+  to 7 m/s^2. A knock changes a drone's speed by its share of the impulse along its way.
+- Cows (`Herd`): 650 kg bodies 2.45 by 0.75 m; shoved, they skid at 4.5 m/s^2 and turn, then trot off at 2.6 m/s for
+  3.5 s; a car closing faster than 8 m/s within 14 m makes one shy aside. Each moos every 12-35 s while the car is
+  within 70 m. The model (`CowBuilder`) is lofted to a Holstein's measure with patches painted from 3-D noise, and
+  grazes, walks, staggers and swishes its tail (`CowRig`).
+- Everyday cars: `VehicleSpec.Saloon` (after the Tofas Sahin: FIA form 5608 for the engine, the Tofas five-speed
+  ratios), `Estate` (after the Renault 12 Toros: FIA form 5396) and `Fleet` (after the Fiat Egea: Fiat's handbook);
+  0-60 mph 13.1 / 16.2 / 12.1 s and 99 / 89 / 115 mph in the tests. Bodies in `CarView.Everyday.cs`, steel wheels under
+  plastic covers; the traffic is these three in turn.
+- Roads: grey-brown gravel shoulders (ambientCG Ground110) and brown soil on the earthworks, white edge lines and
+  marker posts every 50 m; 1989 mode restores the orange and hides the lines and posts.
+- Buildings (`BuildingBuilder`): the farmhouse (plinth, corner boards, shingled gable roof of real thickness, framed
+  windows with shutters, porch, chimney, gutters), the gambrel-roofed barn with its braced doors and cupola, the filling
+  station with its canopy and price sign, and the pumps.
+- The cabin (`CarView.Cabin.cs`): two shadowless fill lights stand in for the light bouncing round a cabin (seen from
+  the seat only), the A-pillars are trimmed panels, the dashboard has a top pad and a lighter fascia with vents,
+  glovebox and trim strip, the doors have their trims, the seats bolsters and headrests, and the airbag cars a padded hub.
+- Instant replay music: eleven seconds of a CC0 FM tune; 1989 mode keeps the synthesised one.
+

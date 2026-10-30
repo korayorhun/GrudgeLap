@@ -29,6 +29,11 @@ public sealed class EngineModel
     public float LastTorque { get; private set; }
     /// <summary>The turbo's boost, 0 to 1 (always 0 without a turbo): it builds with the throttle above the threshold revs.</summary>
     public float Boost { get; private set; }
+    /// <summary>
+    /// Share of the full-throttle torque the engine still makes, 1 when sound: a car knocked about badly enough loses
+    /// some (a cracked radiator, a bent intake), set by the race from the damage it has taken.
+    /// </summary>
+    public float PowerFactor { get; set; } = 1f;
 
     public void Start()
     {
@@ -67,7 +72,7 @@ public sealed class EngineModel
 
         _lastThrottle = throttle;
         // A turbo's share of the torque comes with the boost, which lags the throttle (see Tick).
-        var full = SampleCurve(rpm) * (1f - _spec.BoostShare * (1f - Boost));
+        var full = SampleCurve(rpm) * (1f - _spec.BoostShare * (1f - Boost)) * PowerFactor;
         var braking = -(_spec.BrakingTorque + _spec.BrakingPerRpm * rpm);
         LastTorque = MathUtil.Lerp(braking, full, throttle);
         return LastTorque;
@@ -172,6 +177,27 @@ public sealed record EngineSpec
         (6000f, 282f), (6300f, 270f), (6700f, 236f), (7000f, 180f),
     ];
 
+    /// <summary>The 1.6 pushrod four of the 1990s saloon: 123 N m at 3000, 75 PS DIN at 5400, out of breath past 6000.</summary>
+    private static readonly (float Rpm, float Torque)[] SaloonCurve =
+    [
+        (0f, 0f), (600f, 72f), (1000f, 92f), (1500f, 105f), (2000f, 113f), (2500f, 119f), (3000f, 123f),
+        (3500f, 121f), (4000f, 117f), (4500f, 111f), (5000f, 104f), (5400f, 97.6f), (5800f, 88f), (6200f, 74f), (6500f, 58f),
+    ];
+
+    /// <summary>The 1.4 Cleon-Fonte of the estate: about 102 N m at 3000, 61.5 PS DIN at 5250.</summary>
+    private static readonly (float Rpm, float Torque)[] EstateCurve =
+    [
+        (0f, 0f), (600f, 62f), (1000f, 78f), (1500f, 88f), (2000f, 95f), (2500f, 100f), (3000f, 102f),
+        (3500f, 100f), (4000f, 96f), (4500f, 90f), (5000f, 85f), (5250f, 82f), (5600f, 74f), (6000f, 60f),
+    ];
+
+    /// <summary>The 1.4 sixteen-valve Fire of the fleet saloon: 127 N m at 4500, 95 PS at 6000.</summary>
+    private static readonly (float Rpm, float Torque)[] FleetCurve =
+    [
+        (0f, 0f), (600f, 68f), (1000f, 90f), (1500f, 100f), (2000f, 108f), (2500f, 114f), (3000f, 119f),
+        (3500f, 123f), (4000f, 126f), (4500f, 127f), (5000f, 124f), (5500f, 119f), (6000f, 111.4f), (6500f, 98f), (7000f, 76f),
+    ];
+
     public static EngineSpec FlatTwelve => new();
 
     public static EngineSpec V8 => new()
@@ -207,6 +233,42 @@ public sealed record EngineSpec
         FullThrottleCurve = FiveCurve,
         Cylinders = 5,
         SoundFolder = "five",
+    };
+
+    public static EngineSpec SaloonFour => new()
+    {
+        IdleRpm = 850f,
+        RedlineRpm = 6000f,
+        StallRpm = 400f,
+        BrakingTorque = 11f,
+        BrakingPerRpm = 0.0032f,
+        FullThrottleCurve = SaloonCurve,
+        Cylinders = 4,
+        SoundFolder = "saloon",
+    };
+
+    public static EngineSpec EstateFour => new()
+    {
+        IdleRpm = 800f,
+        RedlineRpm = 5800f,
+        StallRpm = 380f,
+        BrakingTorque = 10f,
+        BrakingPerRpm = 0.003f,
+        FullThrottleCurve = EstateCurve,
+        Cylinders = 4,
+        SoundFolder = "estate",
+    };
+
+    public static EngineSpec FleetFour => new()
+    {
+        IdleRpm = 800f,
+        RedlineRpm = 6500f,
+        StallRpm = 380f,
+        BrakingTorque = 11f,
+        BrakingPerRpm = 0.0032f,
+        FullThrottleCurve = FleetCurve,
+        Cylinders = 4,
+        SoundFolder = "fleet",
     };
 
     public static EngineSpec TurboFour => new()

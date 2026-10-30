@@ -203,7 +203,8 @@ void UGlpAudio::SetCar(int32 Style)
 	// SampledEngine.Load: the grain banks of the car's engine, by its body style (CarStyle: the twelve, the V8, the
 	// hot hatch's four, the five, the turbo hatch's four), with the cylinders that turn revs into firing pulses.
 	struct FEngineBank { const TCHAR* Folder; int32 Cylinders; };
-	static const FEngineBank EngineBanks[] = { { TEXT("flat12"), 12 }, { TEXT("v8"), 8 }, { TEXT("hothatch"), 4 }, { TEXT("five"), 5 }, { TEXT("turbohatch"), 4 } };
+	static const FEngineBank EngineBanks[] = { { TEXT("flat12"), 12 }, { TEXT("v8"), 8 }, { TEXT("hothatch"), 4 }, { TEXT("five"), 5 }, { TEXT("turbohatch"), 4 },
+		{ TEXT("saloon"), 4 }, { TEXT("estate"), 4 }, { TEXT("fleet"), 4 } };
 	const FEngineBank& Bank = EngineBanks[FMath::Clamp(Style, 0, (int32)UE_ARRAY_COUNT(EngineBanks) - 1)];
 	if (const FGlpLibrary* Library = FGlpLibrary::Get())
 	{

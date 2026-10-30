@@ -140,6 +140,10 @@ internal sealed class CrashScene
             case CrashReason.HitTrain when session.Track.Train is not null:
                 foreach (var wagon in session.Track.Train.Cars) Consider(wagon, Train.CarHalfWidth);
                 break;
+            case CrashReason.HitCow:
+                // The cow's side, about half its width out from its middle, a metre off the ground.
+                foreach (var cow in session.Herd.Cows) Consider(cow.Position + new SN.Vector3(0f, 1f, 0f), Herd.Width * 0.5f);
+                break;
             default:
                 return (Vector3.Zero, null);
         }
@@ -261,6 +265,8 @@ internal sealed class CrashScene
                 CrashReason.HitTree => (0.40f, Math.Clamp(_closing * 0.020f, 0.06f, 0.55f)),
                 CrashReason.HitTrain => (0.95f, 0.45f),
                 CrashReason.HitTraffic => (0.65f, Math.Clamp(_closing * 0.016f, 0.05f, 0.42f)),
+                // A cow is soft and heavy: a wide, shallow dent in the front, and the glass above it.
+                CrashReason.HitCow => (0.85f, Math.Clamp(_closing * 0.010f, 0.05f, 0.28f)),
                 _ => (0.75f, Math.Clamp(_closing * 0.015f, 0.05f, 0.42f)),
             };
         }
