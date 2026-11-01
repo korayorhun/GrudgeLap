@@ -62,6 +62,8 @@ public sealed class VehicleSim
     public float Speed => Vector3.Dot(Velocity, Forward);
     public float SpeedMph => MathF.Abs(Speed) * MathUtil.MphPerMps;
     public bool OnRoad => BodyHit.Surface is SurfaceType.Road or SurfaceType.Pad;
+    /// <summary>The weather the car drives in: it scales every surface's grip (<see cref="WeatherModel.Grip"/>).</summary>
+    public Weather Weather { get; set; } = Weather.Dry;
 
     /// <summary>
     /// Road-wheel lock (radians) available at a given speed. The lock shrinks with speed, which is the
@@ -269,7 +271,7 @@ public sealed class VehicleSim
                         var relax = MathUtil.Clamp01(dt * MathF.Max(MathF.Abs(vLong), 1.5f) / 0.3f);
                         w.SlipRatio += (targetSlipRatio - w.SlipRatio) * relax;
                         w.SlipAngle += (targetSlipAngle - w.SlipAngle) * relax;
-                        var (fx, fy) = TireModel.Forces(w.SlipRatio, w.SlipAngle, fs, TireModel.FrictionFor(hit.Surface) * _spec.TireGrip);
+                        var (fx, fy) = TireModel.Forces(w.SlipRatio, w.SlipAngle, fs, TireModel.FrictionFor(hit.Surface) * _spec.TireGrip * WeatherModel.Grip(Weather, hit.Surface));
 
                         // Rolling resistance (much higher on grass: the original's off-road "mud" feel, eased in 0.9 from
                         // 0.16 with the grass grip raised from 0.55, players found the car hard to bring back) acts on the

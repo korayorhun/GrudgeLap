@@ -64,6 +64,18 @@ internal static class WorldBuilder
     private static float _carProbeMovedAt = -100f;
     private static GraphicsQuality _quality = GraphicsQuality.High;
     private static bool _retro;
+    // The credit's weather (0.12): the sky, the light and the wet ground (ApplyWeather); 1989 mode keeps its flat day.
+    private static Weather _weather = Weather.Dry;
+    private static Material? _clearSky;              // the photo sky, kept while the overcast one shows
+    private static ProceduralSkyMaterial? _overcastSky;
+    private static NoiseTexture2D? _puddles;
+    private static readonly Color DryAsphalt = new(0.33f, 0.33f, 0.34f);
+    private static readonly Color WetAsphalt = new(0.15f, 0.15f, 0.16f);
+    private static readonly Color DryGrass = new(0.56f, 0.66f, 0.39f);
+    private static readonly Color WetGrass = new(0.40f, 0.50f, 0.28f);
+    private static readonly Color DrySun = new(1f, 0.96f, 0.90f);
+    private static readonly Color CloudSun = new(0.84f, 0.87f, 0.93f);
+    private const float SunEnergy = 1.75f;
     /// <summary>How fast the cloud sheet drifts, in tiles per second: about five metres a second on a 2.8 km tile.</summary>
     private const float CloudDrift = 0.0018f;
     private static readonly List<(StandardMaterial3D Material, Texture2D? Albedo, Texture2D? Normal, Texture2D? Roughness)> _textured = new();
@@ -83,6 +95,9 @@ internal static class WorldBuilder
     public static void ReleaseShared()
     {
         _carProbe = null;
+        _clearSky = null;
+        _overcastSky = null;
+        _puddles = null;
         _grass = null;
         _asphalt = null;
         _concrete = null;
@@ -227,7 +242,84 @@ internal static class WorldBuilder
         _environment.SsrEnabled = high;
         _environment.GlowEnabled = medium;
         _environment.VolumetricFogEnabled = medium;
+        ApplyWeather();
     }
+
+    /// <summary>The weather of the credit: sets the sky, the light and the wet ground (<see cref="ApplyWeather"/>).</summary>
+    public static void SetWeather(Weather weather)
+    {
+        _weather = weather;
+        ApplyWeather();
+    }
+
+    /// <summary>
+    /// The look of the weather (0.12). Under any weather but a clear day the photo sky gives way to a grey procedural
+    /// one, the sun drops to a wide, soft source behind the cloud, the ambient light comes from the sky alone, the
+    /// air thickens and a camera opens up a little for the dim day. A wet road is dark and mirror-like with puddles
+    /// (a steep noise as the roughness map), the gravel and the grass darken and take a sheen, the paint of the lines
+    /// shines. 1989 mode keeps its flat day whatever the weather; the grip is the session's either way.
+    /// </summary>
+    private static void ApplyWeather()
+    {
+        var wet = _retro ? 0f : WeatherModel.Wetness(_weather);
+        if (_asphalt is not null)
+        {
+            _asphalt.AlbedoColor = DryAsphalt.Lerp(WetAsphalt, wet);
+            _asphalt.Roughness = Mathf.Lerp(0.95f, 0.30f, wet);
+            _asphalt.RoughnessTexture = wet > 0f ? Puddles : null;
+        }
+        if (_gravel is not null && !_retro)
+        {
+            _gravel.AlbedoColor = GravelTint * Mathf.Lerp(1f, 0.62f, wet);
+            _gravel.Roughness = Mathf.Lerp(1f, 0.6f, wet);
+        }
+        if (_grass is not null)
+        {
+            _grass.AlbedoColor = DryGrass.Lerp(WetGrass, wet);
+            _grass.Roughness = Mathf.Lerp(1f, 0.8f, wet);
+        }
+        if (_edgeLines is not null) _edgeLines.Roughness = Mathf.Lerp(0.65f, 0.25f, wet);
+        if (_environment is null || _sun is null || _retro) return;
+        var overcast = WeatherModel.Overcast(_weather);
+        if (_environment.Sky is { } sky)
+        {
+            _clearSky ??= sky.SkyMaterial;
+            sky.SkyMaterial = overcast ? OvercastSky : _clearSky;
+        }
+        if (_clouds is not null) _clouds.Visible = !overcast;   // the grey sky is its own cloud
+        _sun.LightEnergy = overcast ? 0.6f : SunEnergy;
+        _sun.LightColor = overcast ? CloudSun : DrySun;
+        _sun.LightAngularDistance = overcast ? 10f : 0.5f;   // behind cloud the sun is a wide source: shadows all but gone
+        foreach (var environment in new[] { _environment, _mirrorEnvironment })
+        {
+            if (environment is null) continue;
+            environment.AmbientLightSkyContribution = overcast ? 0.95f : SkyAmbientShare;
+            environment.AmbientLightEnergy = overcast ? 1.1f : AmbientEnergy;
+            environment.FogLightColor = overcast ? new Color(0.70f, 0.72f, 0.76f) : new Color(0.72f, 0.80f, 0.94f);
+            environment.FogDensity = !overcast ? 0.00006f : WeatherModel.Raining(_weather) ? 0.00032f : 0.00016f;
+            environment.FogAerialPerspective = overcast ? 0.8f : 0.5f;
+            environment.VolumetricFogDensity = overcast ? 0.00035f : 0.00012f;
+            environment.TonemapExposure = overcast ? 1.15f : 0.95f;
+        }
+    }
+
+    /// <summary>A grey, sunless sky for the overcast days: flat light from everywhere, as under a real overcast.</summary>
+    private static ProceduralSkyMaterial OvercastSky => _overcastSky ??= new ProceduralSkyMaterial
+    {
+        SkyTopColor = new Color(0.34f, 0.37f, 0.42f),
+        SkyHorizonColor = new Color(0.60f, 0.62f, 0.66f),
+        SkyCurve = 0.12f,
+        GroundBottomColor = new Color(0.18f, 0.19f, 0.18f),
+        GroundHorizonColor = new Color(0.52f, 0.54f, 0.55f),
+        SunAngleMax = 0f,
+        UseDebanding = true,
+    };
+
+    /// <summary>
+    /// The wet road's roughness map: a steep noise that leaves most of the asphalt at the material's roughness and
+    /// drops the puddles (a fifth of the surface, with soft rims) to a mirror, mapped on the road's 5.5 m tile.
+    /// </summary>
+    private static NoiseTexture2D Puddles => _puddles ??= Noise(0.9f, 2, new[] { (0f, new Color(0.12f, 0.12f, 0.12f)), (0.30f, new Color(0.12f, 0.12f, 0.12f)), (0.48f, new Color(0.75f, 0.75f, 0.75f)), (1f, new Color(1f, 1f, 1f)) }, seed: 101);
 
     /// <summary>
     /// The 1989 look: no textures, nearest filtering, no global illumination, ambient occlusion, reflections,
@@ -258,6 +350,7 @@ internal static class WorldBuilder
         if (_environment is null) return;
         RetroLook(_environment, retro);
         if (_mirrorEnvironment is not null) RetroLook(_mirrorEnvironment, retro);
+        ApplyWeather();
     }
 
     /// <summary>The part of the 1989 look the rear-view mirror shares with the main view: flat sky, flat ambient, no fog, linear tones.</summary>

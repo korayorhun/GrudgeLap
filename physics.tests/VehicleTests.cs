@@ -245,6 +245,32 @@ public sealed class VehicleTests
         Assert.InRange(distance, 30f, 70f);
     }
 
+    /// <summary>Rain (0.12): a wet road takes about a third of the grip, and the stop from 60 mph grows by a fifth or more.</summary>
+    [Fact]
+    public void A_wet_road_lengthens_the_stop_from_60_mph()
+    {
+        float Stop(Weather weather)
+        {
+            var car = StartedCar(DragStrip());
+            car.Weather = weather;
+            DriveFlatOut(car, 9f);
+            Assert.True(car.SpeedMph > 60f, $"{weather}: only {car.SpeedMph:F0} mph after 9 s");
+            while (car.SpeedMph > 60f) car.Step(new DriverInputs { Gear = DriverInputs.NoGearChange }, Dt);
+            var start = car.Position;
+            var t = 0f;
+            while (car.SpeedMph > 1f && t < 12f)
+            {
+                car.Step(new DriverInputs { Brake = 1f, Clutch = 1f, Gear = DriverInputs.NoGearChange }, Dt);
+                t += Dt;
+            }
+            return Vector3.Distance(start, car.Position);
+        }
+        var dry = Stop(Weather.Dry);
+        var rain = Stop(Weather.Rain);
+        _out.WriteLine($"60-0 mph: dry {dry:F1} m, rain {rain:F1} m");
+        Assert.True(rain > dry * 1.2f, $"rain {rain:F1} m should be well past dry {dry:F1} m");
+    }
+
     [Fact]
     public void Dumping_the_clutch_at_idle_stalls_the_engine()
     {

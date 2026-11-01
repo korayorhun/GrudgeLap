@@ -70,6 +70,7 @@ public sealed partial class Bootstrap : Node3D
     private bool _leaving;      // a second launch on its way out: nothing was built
     private bool _noGhost;
     private bool _noTraffic;
+    private Weather? _weather;   // --weather=: a fixed weather for automated runs; otherwise every credit draws one
     private bool _noHud;        // pictures of the 3D scene alone, e.g. to compare it with another engine's
     private Vector3? _orbit;
     private bool _showAll;      // debug: draw the whole car from the driver's seat too
@@ -221,6 +222,7 @@ public sealed partial class Bootstrap : Node3D
             else if (arg == "--invisible") _invisible = true;   // automated runs: no window on screen, no focus taken
             else if (arg == "--no-ghost") _noGhost = true;       // pictures of the car without the best lap's ghost over it
             else if (arg == "--no-traffic") _noTraffic = true;
+            else if (arg.StartsWith("--weather=", System.StringComparison.Ordinal)) _weather = WeatherModel.Parse(arg["--weather=".Length..]);
             else if (arg == "--no-hud") _noHud = true;
             else if (arg.StartsWith("--orbit=", System.StringComparison.Ordinal))
             {
@@ -279,8 +281,12 @@ public sealed partial class Bootstrap : Node3D
     {
         var options = _noTraffic ? RaceOptions.MediumNoTraffic : RaceOptions.Medium;
         if (_creditSeconds > 0f) options = options with { InitialTime = _creditSeconds };
+        // The weather of the credit (0.12): drawn for every credit unless --weather= fixes it for an automated run.
+        options = options with { Weather = _weather ?? WeatherModel.Draw(System.Random.Shared) };
         var spec = VehicleSpec.Catalogue[_carIndex];
         _session = new RaceSession(_track, spec, options);
+        WorldBuilder.SetWeather(_session.Weather);
+        ApplyRain();
         EndCrash();
         // A car kept from the last credit (the same body) takes its dents with it otherwise.
         _carView.Repair();
@@ -308,6 +314,14 @@ public sealed partial class Bootstrap : Node3D
             _session.ChooseTransmission(_attractMode);
         }
         SyncView();
+    }
+
+    /// <summary>Rain in the air and in the ears when the credit's weather is rain; none in 1989 mode, whose cabinet knew no weather.</summary>
+    private void ApplyRain()
+    {
+        var raining = _session is not null && !_retro && WeatherModel.Raining(_session.Weather);
+        _cameraRig?.SetRain(raining);
+        if (_audio is not null) _audio.Rain = raining ? 1f : 0f;
     }
 
     private void BuildDroneViews()
@@ -964,6 +978,7 @@ public sealed partial class Bootstrap : Node3D
         _audio.Retro = retro;
         _world.Retro = retro;
         _hud.Retro = retro;
+        ApplyRain();
     }
 
     private void TakeScreenshot(string path)

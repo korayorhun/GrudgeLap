@@ -21,6 +21,7 @@ internal sealed partial class CameraRig : Node3D
     private Camera3D _camera = null!;
     private Vector3 _chasePosition;
     private bool _chaseInitialised;
+    private GpuParticles3D? _rain;
 
     public CameraMode Mode { get; set; } = CameraMode.Cockpit;
     /// <summary>Orbit view: yaw around the car (0 = from behind, 90 = from its right), pitch above the horizon, distance; degrees and metres.</summary>
@@ -53,6 +54,59 @@ internal sealed partial class CameraRig : Node3D
     {
         _camera = new Camera3D { Fov = 72f, Near = 0.15f, Far = 9000f, Current = true };   // far enough for the mountains on the horizon
         AddChild(_camera);
+    }
+
+    /// <summary>
+    /// Rain in the air (0.12): a box of falling streaks that travels with the camera, 32 m across and 10 m above it,
+    /// the drops in world space so they fall straight past a moving car. Thin vertical quads turned to the camera
+    /// about their own axis (a billboard fixed on Y), unlit and faint, a few thousand at a time.
+    /// </summary>
+    public void SetRain(bool raining)
+    {
+        if (!raining)
+        {
+            if (_rain is not null) _rain.Emitting = false;
+            return;
+        }
+        if (_rain is null)
+        {
+            var process = new ParticleProcessMaterial
+            {
+                EmissionShape = ParticleProcessMaterial.EmissionShapeEnum.Box,
+                EmissionBoxExtents = new Vector3(16f, 0.5f, 16f),
+                Direction = new Vector3(0f, -1f, 0f),
+                Spread = 1.5f,
+                InitialVelocityMin = 9f,
+                InitialVelocityMax = 11f,
+                Gravity = new Vector3(0.7f, -1.5f, 0f),
+            };
+            var streak = new QuadMesh
+            {
+                Size = new Vector2(0.014f, 0.42f),
+                Material = new StandardMaterial3D
+                {
+                    ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+                    Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+                    AlbedoColor = new Color(0.78f, 0.82f, 0.90f, 0.30f),
+                    BillboardMode = BaseMaterial3D.BillboardModeEnum.FixedY,
+                    BillboardKeepScale = true,
+                    CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+                },
+            };
+            _rain = new GpuParticles3D
+            {
+                Name = "Rain",
+                Amount = 3600,
+                Lifetime = 1.7f,
+                ProcessMaterial = process,
+                DrawPass1 = streak,
+                VisibilityAabb = new Aabb(new Vector3(-40f, -40f, -40f), new Vector3(80f, 80f, 80f)),
+                Position = new Vector3(0f, 10f, -5f),
+                CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            };
+            _camera.AddChild(_rain);
+        }
+        _rain.Emitting = true;
     }
 
     public void FollowCar(Transform3D car, float speedMps, float dt)

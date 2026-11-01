@@ -22,9 +22,13 @@ internal sealed class NativeSession(RaceSession session, int car)
 /// </summary>
 internal static class NativeApi
 {
-    public const int AbiVersion = 6;
+    public const int AbiVersion = 7;
     public const int TrafficFlag = 1;
     public const int SpeedRouteFlag = 2;
+    /// <summary>Bits 4-5 of the flags: the credit's weather (0 dry, 1 overcast, 2 wet, 3 rain); <see cref="RandomWeatherFlag"/> draws one instead.</summary>
+    public const int WeatherShift = 4;
+    public const int WeatherMask = 0x30;
+    public const int RandomWeatherFlag = 0x40;
 
     public static int CarCount => VehicleSpec.Catalogue.Length;
 
@@ -69,10 +73,13 @@ internal static class NativeApi
     }
 
     /// <param name="flags">TrafficFlag for the drones of the original; without it the road is the player's.
-    /// SpeedRouteFlag sends the attract-mode driver down the speed route (past the level crossing) instead of the stunt route.</param>
+    /// SpeedRouteFlag sends the attract-mode driver down the speed route (past the level crossing) instead of the stunt route.
+    /// Bits 4-5 name the weather (WeatherShift), or RandomWeatherFlag has the core draw one as the Godot version does.</param>
     public static NativeSession Create(int car, int flags)
     {
-        var options = (flags & TrafficFlag) != 0 ? RaceOptions.Medium : RaceOptions.MediumNoTraffic;
+        var weather = (flags & RandomWeatherFlag) != 0 ? WeatherModel.Draw(Random.Shared) : (Weather)((flags & WeatherMask) >> WeatherShift);
+        if (!Enum.IsDefined(weather)) throw new ArgumentOutOfRangeException(nameof(flags), flags, "unknown weather");
+        var options = ((flags & TrafficFlag) != 0 ? RaceOptions.Medium : RaceOptions.MediumNoTraffic) with { Weather = weather };
         var native = new NativeSession(new RaceSession(OriginalInspiredTrack.Build(), Spec(car), options), car);
         native.Driver.PreferStunt = (flags & SpeedRouteFlag) == 0;
         return native;
@@ -139,6 +146,8 @@ internal static class NativeApi
             KnockSpeed = session.LastKnock.Speed,
             KnockIndex = session.LastKnock.Index,
             CowMooed = session.Herd.Mooed,
+            Weather = (int)session.Weather,
+            Wetness = WeatherModel.Wetness(session.Weather),
         };
         Write(state.KnockPoint, session.LastKnock.Point);
         Write(state.KnockNormal, session.LastKnock.Normal);

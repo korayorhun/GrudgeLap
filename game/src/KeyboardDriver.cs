@@ -37,9 +37,10 @@ internal sealed class KeyboardDriver
             var right = Input.IsActionPressed(InputSetup.SteerRight);
             var target = (right ? 1f : 0f) - (left ? 1f : 0f);
 
-            // Full lock takes ~0.35 s when parked and ~0.7 s at speed; centring is quicker, like a self-aligning wheel.
+            // Full lock takes ~0.45 s when parked and ~0.9 s at speed; centring is quicker, like a self-aligning wheel.
+            // A fifth slower since 0.12: at 0.35 s the keys turned the wheel faster than hands do.
             var speedFactor = MathUtil.Clamp01(speedMps / 50f);
-            var rate = target != 0f ? MathUtil.Lerp(2.8f, 1.4f, speedFactor) : 4.5f;
+            var rate = target != 0f ? MathUtil.Lerp(2.2f, 1.1f, speedFactor) : 3.6f;
             _steer = MathUtil.MoveToward(_steer, target, rate * dt);
         }
 

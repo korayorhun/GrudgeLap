@@ -121,6 +121,10 @@ ships with ten names to beat.
 plays it instead of the built-in tune; 1989 mode keeps its synthesised one. The game itself ships only CC0 music, so
 whatever you put there stays on your machine.
 
+**Weather.** Every credit draws its own: most days are clear, some overcast, and now and then the road is wet or it
+rains. A wet road is dark and mirror-like and takes about a third of the grip: brake earlier, turn in gentler, and
+mind the loop. The screen names the weather under the clock when it is not a clear day.
+
 ## Build from source
 
 Needs the .NET 8 SDK and [Godot 4.7.2 .NET](https://godotengine.org/download/windows/) with its export

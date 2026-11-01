@@ -62,6 +62,7 @@ internal sealed partial class EngineAudio : Node
     private float _blowLp;
     private float _hissLp;
     private float _wind, _thump, _thumpPhase, _windLp;
+    private float _rainLp, _rainLp2;
     private float _lastLoad;
     private readonly float[] _lastCompression = new float[4];
     private readonly List<float> _popsPending = new();   // seconds until each scheduled pop
@@ -75,6 +76,8 @@ internal sealed partial class EngineAudio : Node
     public bool Retro { get; set; }
     /// <summary>Heard from the driver's seat: the engine comes through the cabin's bulkhead.</summary>
     public bool Interior { get; set; }
+    /// <summary>How hard it rains, 0 to 1 (0.12): a steady hiss of low-passed noise, half as loud through the glass.</summary>
+    public float Rain { get; set; }
 
     /// <summary>Selects the recordings of the chosen car's engine, and its turbo if it has one.</summary>
     public void SetCar(VehicleSpec spec)
@@ -552,11 +555,20 @@ internal sealed partial class EngineAudio : Node
             }
 
             var music = Song() + ChimeSample() + Starter(noise) + Turbo(noise);
-            var extras = Moo() + Clang(noise) + Clunk(noise) + (Retro ? TrainClack(noise) : Road(noise));
+            var extras = Moo() + Clang(noise) + Clunk(noise) + (Retro ? TrainClack(noise) : Road(noise) + RainHiss(noise));
             var sample = MathF.Tanh((engine + squeal + crash + bleep + music + extras) * Volume);
             buffer[i] = new Vector2(sample, sample);
         }
         _playback.PushBuffer(buffer);
+    }
+
+    /// <summary>The rain on the car and the road: noise through two one-pole low-passes, a steady hiss.</summary>
+    private float RainHiss(float noise)
+    {
+        if (Rain <= 0f) return 0f;
+        _rainLp += (noise - _rainLp) * 0.3f;
+        _rainLp2 += (_rainLp - _rainLp2) * 0.3f;
+        return _rainLp2 * 1.8f * Rain * (Interior ? 0.07f : 0.14f);
     }
 
     /// <summary>Wind (one-pole low-passed noise) and the bump thump (a 48 Hz burst).</summary>

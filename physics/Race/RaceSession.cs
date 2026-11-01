@@ -40,7 +40,7 @@ public sealed partial class RaceSession
     {
         Track = track;
         Options = options ?? new RaceOptions();
-        Car = new VehicleSim(spec, track);
+        Car = new VehicleSim(spec, track) { Weather = Options.Weather };
         ReturnPath = track.Common;
         ReturnDistance = 0f;
         Phase = SessionPhase.SelectTransmission;
@@ -56,6 +56,8 @@ public sealed partial class RaceSession
     public TrackGeometry Track { get; }
     public VehicleSim Car { get; }
     public RaceOptions Options { get; }
+    /// <summary>The weather of this credit (<see cref="RaceOptions.Weather"/>).</summary>
+    public Weather Weather => Options.Weather;
     /// <summary>Drone cars, or null when the options ask for an empty road.</summary>
     public Traffic? Traffic { get; }
     /// <summary>The cows in the fields.</summary>
@@ -617,6 +619,12 @@ public sealed record RaceOptions
     public int TrafficSameDirection { get; init; } = 5;
     /// <summary>Drone cars coming the other way in the other lane.</summary>
     public int TrafficOncoming { get; init; } = 3;
+    /// <summary>
+    /// The weather of the credit (0.12): the grip of the road and the grass under it (<see cref="WeatherModel"/>) and
+    /// what the view draws. Dry by default, so the tests and the feel checklist run on the circuit as it always was;
+    /// the game draws one at random for every credit (<see cref="WeatherModel.Draw"/>).
+    /// </summary>
+    public Weather Weather { get; init; } = Weather.Dry;
     /// <summary>Minimum height of the car's centre above the landing deck at its leading edge; lower means the wheels hit the edge.</summary>
     public const float BridgeEdgeClearance = 0.42f;
 

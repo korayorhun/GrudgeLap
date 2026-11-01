@@ -113,6 +113,8 @@ internal sealed partial class Hud : Control
         }
         if (Retro) DrawString(font, new Vector2(20f, leftLine), "1989 MODE", HorizontalAlignment.Left, -1f, 16, new Color(1f, 0.6f, 0.3f));
         if (ShowFps) DrawString(font, new Vector2(20f, Retro ? leftLine + 20f : leftLine), $"{Engine.GetFramesPerSecond():0} FPS", HorizontalAlignment.Left, -1f, 16, new Color(0.7f, 0.9f, 0.7f));
+        // The weather of the credit (0.12), when it is not a clear day: the grip is down on a wet road.
+        if (s.Weather != Weather.Dry) DrawString(font, new Vector2(20f, leftLine + (Retro ? 20f : 0f) + (ShowFps ? 20f : 0f)), WeatherModel.Label(s.Weather), HorizontalAlignment.Left, -1f, 16, new Color(0.75f, 0.85f, 1f));
         if (_knockFlash > 0f)
         {
             // A knock: the screen's edges flash red for a moment, brighter the harder it was.

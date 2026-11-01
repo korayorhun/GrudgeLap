@@ -126,7 +126,7 @@ glp_inputs FGlpInput::Drive(float DeltaSeconds, float SpeedMps)
 		const float Target = (bRight ? 1.f : 0.f) - (bLeft ? 1.f : 0.f);
 		// Full lock takes about 0.35 s parked and 0.7 s at speed; centring is quicker, like a self-aligning wheel.
 		const float SpeedFactor = FMath::Clamp(SpeedMps / 50.f, 0.f, 1.f);
-		const float Rate = Target != 0.f ? FMath::Lerp(2.8f, 1.4f, SpeedFactor) : 4.5f;
+		const float Rate = Target != 0.f ? FMath::Lerp(2.2f, 1.1f, SpeedFactor) : 3.6f;   // KeyboardDriver's ramps: a fifth slower since 0.12
 		Steer = MoveToward(Steer, Target, Rate * DeltaSeconds);
 	}
 	// A pedal is the trigger's position while it is pressed at all, the key's ramp otherwise.

@@ -86,6 +86,9 @@ public unsafe struct NativeState
     public float KnockSpeed;
     public int KnockIndex;
     public int CowMooed;
+    // ABI 7
+    public int Weather;
+    public float Wetness;
 }
 
 /// <summary>glp_car_spec: the catalogue's static facts about a car.</summary>

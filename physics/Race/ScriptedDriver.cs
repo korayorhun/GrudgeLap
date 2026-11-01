@@ -214,7 +214,7 @@ public sealed class ScriptedDriver
         if (ahead < 0f) return float.MaxValue;   // already on it: keep going
         // Brake to a stop 14 m before the crossing.
         var stopIn = MathF.Max(ahead - 14f, 0f);
-        return MathF.Sqrt(2f * BrakingDecel * stopIn);
+        return MathF.Sqrt(2f * BrakingDecel * WeatherModel.Grip(session.Car.Weather, SurfaceType.Road) * stopIn);
     }
 
     /// <summary>Distance round the traffic loop (start straight, speed route, final stretch).</summary>
@@ -292,7 +292,7 @@ public sealed class ScriptedDriver
                     // Banking raises the limit: v^2 = g R (tan b + mu) / (1 - mu tan b).
                     var bank = MathF.Asin(MathUtil.Clamp(MathF.Abs(frame.Normal.X * frame.Tangent.Z - frame.Normal.Z * frame.Tangent.X), 0f, 1f));
                     var tanB = MathF.Tan(bank);
-                    var mu = RoadFriction * car.Spec.TireGrip * CornerMargin;
+                    var mu = RoadFriction * car.Spec.TireGrip * WeatherModel.Grip(car.Weather, SurfaceType.Road) * CornerMargin;
                     var k = (tanB + mu) / MathF.Max(1f - mu * tanB, 0.2f);
                     // Over a crest the road falls away under the car and takes weight off the tyres: with g reduced
                     // by v^2 times the vertical curvature, v^2 = g R k / (1 + crest R k). The stunt route's curve off
@@ -302,7 +302,7 @@ public sealed class ScriptedDriver
                 }
             }
             // What we may do now so that braking at BrakingDecel brings us to `limit` by that point.
-            var reachable = MathF.Sqrt(limit * limit + 2f * BrakingDecel * MathF.Max(d - 8f, 0f));
+            var reachable = MathF.Sqrt(limit * limit + 2f * BrakingDecel * WeatherModel.Grip(car.Weather, SurfaceType.Road) * MathF.Max(d - 8f, 0f));
             allowed = MathF.Min(allowed, reachable);
             previous = frame;
         }

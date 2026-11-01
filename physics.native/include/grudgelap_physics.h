@@ -15,7 +15,7 @@
 extern "C" {
 #endif
 
-#define GLP_ABI_VERSION 6
+#define GLP_ABI_VERSION 7
 
 typedef intptr_t glp_session; /* 0 is no session */
 typedef intptr_t glp_engine;  /* 0 is no engine voice */
@@ -23,6 +23,15 @@ typedef intptr_t glp_engine;  /* 0 is no engine voice */
 /* glp_create flags */
 #define GLP_TRAFFIC 1 /* the drones of the original: five cars ahead, three oncoming */
 #define GLP_SPEED_ROUTE 2 /* the attract-mode driver takes the speed route (past the level crossing), not the stunt route */
+/* The credit's weather (ABI 7): bits 4-5 hold a GLP_WEATHER_* value (0, dry, when left out); GLP_RANDOM_WEATHER has the core
+ * draw one as the Godot version does (dry 55 %, overcast 20 %, wet 12 %, rain 13 %). */
+#define GLP_WEATHER_SHIFT 4
+#define GLP_WEATHER_MASK 0x30
+#define GLP_RANDOM_WEATHER 0x40
+#define GLP_WEATHER_DRY 0      /* a clear day */
+#define GLP_WEATHER_OVERCAST 1 /* grey sky, soft light, dry road */
+#define GLP_WEATHER_WET 2      /* after rain: wet, dark, mirror-like road with puddles; grip 0.74 of dry (grass 0.80) */
+#define GLP_WEATHER_RAIN 3     /* raining: the wet road, rain in the air; grip 0.68 (grass 0.75) */
 
 /* DriverInputs. gear: -1 reverse, 0 neutral, 1..7, or GLP_NO_GEAR_CHANGE to keep the current one. */
 #define GLP_NO_GEAR_CHANGE 99
@@ -126,6 +135,9 @@ typedef struct glp_state
     float knock_speed;        /* closing speed, m/s */
     int32_t knock_index;      /* prop, drone or cow index by knock_kind; -1 for a landing */
     int32_t cow_mooed;        /* index into glp_cows of a cow that mooed on its own in the last step (GLP_EVENT_COW_MOOED), or -1 */
+    /* ABI 7: the weather of the credit */
+    int32_t weather;          /* GLP_WEATHER_* */
+    float wetness;            /* 0 dry .. 1 streaming: the view's darkening, roughness and puddles */
 } glp_state;
 
 /* The catalogue's static facts about a car: what instruments and a car body need. */

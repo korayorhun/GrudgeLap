@@ -103,6 +103,29 @@ public sealed class RaceSessionTests
     }
 
     /// <summary>
+    /// Rain (0.12): the road's grip is down by a third, and the scripted driver, which plans its corners and its
+    /// braking with the wet figures (WeatherModel), still laps both routes without leaving the road.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Scripted_driver_completes_a_lap_in_the_rain(bool stunt)
+    {
+        var track = OriginalInspiredTrack.Build();
+        var session = new RaceSession(track, new VehicleSpec(), RaceOptions.MediumNoTraffic with { Weather = Weather.Rain });
+        var driver = new ScriptedDriver { PreferStunt = stunt };
+        session.ChooseTransmission(TransmissionMode.ManualAutoClutch);
+        Assert.Equal(Weather.Rain, session.Weather);
+
+        var events = DriveLap(session, driver, $"{(stunt ? "stunt" : "speed")} route in the rain");
+        Assert.Contains(RaceEvent.CheckpointPassed, events);
+        Assert.Contains(RaceEvent.LapCompleted, events);
+        Assert.Equal(1, session.CompletedLaps);
+        Assert.True(session.CrashCount == 0, $"crashes {session.CrashCount} (last {session.LastCrash})");
+        Assert.DoesNotContain(RaceEvent.LeftRoad, events);
+    }
+
+    /// <summary>
     /// The hatchbacks round both routes: 147 hp and front-wheel drive still make the drawbridge's 60-80 mph and the
     /// loop's 60 at the speeds the scripted driver plans.
     /// </summary>

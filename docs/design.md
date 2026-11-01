@@ -358,7 +358,8 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   `--car=flat12|v8|hothatch|five|turbohatch` (or the car's index), `--ram=tree|building|traffic|test` (the
   scripted driver runs the course until a thing of that kind is near and drives into it, or into a tree planted
   on the start straight: the crash replay on film),
-  `--no-traffic`, `--no-ghost` (the saved best lap is not raced, for pictures of the car), `--no-hud` (no
+  `--no-traffic`, `--weather=dry|overcast|wet|rain` (the credit's weather; otherwise every credit draws one),
+  `--no-ghost` (the saved best lap is not raced, for pictures of the car), `--no-hud` (no
   overlay over the 3D scene, for comparing it with another engine's picture), `--retro`,
   `--screenshot=<file>`, `--at=<s>`, `--quit-after=<s>`, `--park` (the car waits at the start with its
   engine off while the traffic and the train go by: checks of the placed sounds), `--time=<s>` (a credit
@@ -488,6 +489,15 @@ new-package requests were withdrawn).
 - The cabin (`CarView.Cabin.cs`): two shadowless fill lights stand in for the light bouncing round a cabin (seen from
   the seat only), the A-pillars are trimmed panels, the dashboard has a top pad and a lighter fascia with vents,
   glovebox and trim strip, the doors have their trims, the seats bolsters and headrests, and the airbag cars a padded hub.
+- Weather (0.12, `physics/Race/Weather.cs`): every credit draws its weather (dry 55 %, overcast 20 %, wet 12 %,
+  rain 13 %; `--weather=` fixes it for automation, the native API's flags for the Unreal version). The simulation
+  scales every surface's peak friction by `WeatherModel.Grip` (wet asphalt 0.74, rain 0.68; grass 0.80 / 0.75), and
+  the scripted driver plans its corners and braking with the same figures, so the attract lap and the tests hold in
+  the rain. The view (`WorldBuilder.ApplyWeather`): a grey procedural sky in place of the photo one, the sun a wide
+  soft source behind the cloud, sky-only ambient, thicker air, a dark mirror-like road with puddles (a steep noise as
+  its roughness map), dark gravel and grass with a sheen, shining line paint; rain as a box of streaks travelling with
+  the camera (`CameraRig.SetRain`) and a hiss in the mix (`EngineAudio.RainHiss`). The HUD names any weather but a
+  clear day. 1989 mode keeps its flat day whatever the weather; the grip is the session's either way.
 - Instant replay music: eleven seconds of a CC0 FM tune; 1989 mode keeps the synthesised one. A file of the player's
   own under `user://music/replay.ogg|.mp3|.wav` takes its place (0.11, `EngineAudio.CustomReplayMusic`): nothing
   copyrighted ships with the game, but a copy can play what its owner remembers.
