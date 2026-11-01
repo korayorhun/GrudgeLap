@@ -260,17 +260,20 @@ public sealed class HandlingTests(ITestOutputHelper output)
     /// extra road-wheel angle the car needs per g of lateral acceleration beyond the geometric L / R. Front-heavy
     /// front-wheel-drive cars understeer (about 1 to 4 deg/g, the textbook range for such cars); the mid-engined cars,
     /// with their wide rear tyres and the roll stiffness set towards the front, stay close to neutral. Body roll per g
-    /// follows the cars too: little for the sports cars, a lot for the soft saloons of the 1990s.
+    /// follows the cars too: little for the sports cars, a lot for the soft saloons of the 1990s. Since 0.19 the steering
+    /// gives under the tyres' aligning torque (<see cref="VehicleSpec.SteeringCompliance"/>), which adds the half a degree
+    /// per g or so that steering compliance gives real cars: the hot hatch, at 0.8 deg/g before, below its class, now
+    /// understeers as front-heavy hatchbacks do (1.4).
     /// </summary>
     [Theory]
-    [InlineData(0, -0.3f, 1.2f, 1.2f, 2.8f)]
-    [InlineData(1, -0.3f, 1.0f, 0.8f, 2.0f)]
-    [InlineData(2, 0.5f, 3.5f, 2.0f, 3.6f)]
+    [InlineData(0, 0.3f, 1.5f, 1.2f, 2.8f)]
+    [InlineData(1, 0.2f, 1.2f, 0.8f, 2.0f)]
+    [InlineData(2, 1.0f, 3.5f, 2.0f, 3.6f)]
     [InlineData(3, 1.0f, 4.0f, 2.3f, 4.0f)]
-    [InlineData(4, 0.6f, 3.5f, 1.8f, 3.4f)]
-    [InlineData(5, 0.3f, 3.0f, 3.8f, 6.5f)]
-    [InlineData(6, 1.0f, 5.0f, 4.5f, 7.5f)]
-    [InlineData(7, 0.8f, 4.0f, 2.8f, 4.8f)]
+    [InlineData(4, 1.0f, 3.5f, 1.8f, 3.4f)]
+    [InlineData(5, 0.8f, 3.0f, 3.8f, 6.5f)]
+    [InlineData(6, 1.5f, 5.0f, 4.5f, 7.5f)]
+    [InlineData(7, 1.0f, 4.0f, 2.8f, 4.8f)]
     public void Understeer_and_roll_on_the_skid_pad(int car, float gradientMin, float gradientMax, float rollMin, float rollMax)
     {
         var spec = VehicleSpec.Catalogue[car];
@@ -283,6 +286,76 @@ public sealed class HandlingTests(ITestOutputHelper output)
         output.WriteLine($"{spec.Name}: understeer {gradient:F2} deg/g, roll {roll:F2} deg/g (at {brisk.LateralG:F2} g, body slip {brisk.BodySlipDeg:F1} deg)");
         Assert.InRange(gradient, gradientMin, gradientMax);
         Assert.InRange(roll, rollMin, rollMax);
+    }
+
+    /// <summary>
+    /// The steering goes light before the front tyres let go (0.19): turning the wheel in slowly at a steady 20 m/s, the
+    /// front tyres' aligning torque (side force times caster and pneumatic trail) first grows faster than the cornering
+    /// force, then peaks before the car reaches its greatest lateral acceleration, by when the torque per g has fallen to
+    /// well under three quarters of what it was at 0.3 g: the pneumatic trail shrinks to nothing as the contact patch
+    /// starts to slide, and only the caster trail is left (Milliken, ch. 2; Pacejka, ch. 3). A driver feels the rim
+    /// lighten there; here the steering's give under that torque fades with it.
+    /// </summary>
+    [Theory]
+    [InlineData(2)]
+    [InlineData(7)]
+    public void The_steering_goes_light_before_the_front_tyres_let_go(int car)
+    {
+        var spec = VehicleSpec.Catalogue[car];
+        var sim = HandlingRig.OnCircle(spec, HandlingRig.Proving(), 0f);
+        sim.LaunchAt(20f);
+        float peakTorque = 0f, ayAtPeak = 0f, mostAy = 0f, torqueAtMostAy = 0f, perGEarly = 0f;
+        for (var t = 0f; t < 7f; t += HandlingRig.Dt)
+        {
+            var steer = MathUtil.Clamp01(t / 7f) * 0.8f;
+            var throttle = MathUtil.Clamp01((20f - sim.Speed) * 0.5f + 0.25f);
+            sim.Step(new DriverInputs { Steer = steer, Throttle = throttle, Gear = DriverInputs.NoGearChange }, HandlingRig.Dt);
+            var ay = MathF.Abs(sim.LateralAcceleration) / MathUtil.Gravity;
+            if (perGEarly == 0f && ay >= 0.3f) perGEarly = sim.AligningTorque / ay;
+            if (sim.AligningTorque > peakTorque) { peakTorque = sim.AligningTorque; ayAtPeak = ay; }
+            if (ay > mostAy) { mostAy = ay; torqueAtMostAy = sim.AligningTorque; }
+        }
+        var perGAtLimit = torqueAtMostAy / mostAy;
+        output.WriteLine($"{spec.Name}: aligning torque {perGEarly:F0} N m per g at 0.3 g, peaks at {peakTorque:F0} N m at {ayAtPeak:F2} g; at the limit, {mostAy:F2} g, {torqueAtMostAy:F0} N m ({perGAtLimit:F0} per g)");
+        Assert.True(peakTorque > 100f, $"the front tyres should push the steering back ({peakTorque:F0} N m)");
+        Assert.True(ayAtPeak < mostAy, "the aligning torque should peak short of the limit");
+        Assert.True(perGAtLimit < 0.75f * perGEarly, "at the limit the steering should have gone light for the cornering force it carries");
+    }
+
+    /// <summary>
+    /// Ackermann steering (0.19): creeping round on full lock, the inner front wheel turns more than the outer one, so both
+    /// roll round the same centre with almost no slip angle; with parallel steer (both wheels at the same angle, as every
+    /// car had up to 0.18) the two fight each other with slip angles of opposite sign, scrubbing the tyres.
+    /// </summary>
+    [Fact]
+    public void Ackermann_lets_both_front_wheels_roll_round_at_parking_speed()
+    {
+        (float Inner, float Outer, float InnerAngle, float OuterAngle) Creep(VehicleSpec spec)
+        {
+            var sim = HandlingRig.OnCircle(spec, HandlingRig.Proving(), 0f);
+            sim.LaunchAt(3f);
+            float inner = 0f, outer = 0f, innerAngle = 0f, outerAngle = 0f;
+            var n = 0;
+            for (var t = 0f; t < 6f; t += HandlingRig.Dt)
+            {
+                var throttle = MathUtil.Clamp01((3f - sim.Speed) * 0.4f + 0.12f);
+                sim.Step(new DriverInputs { Steer = 1f, Throttle = throttle, Gear = DriverInputs.NoGearChange }, HandlingRig.Dt);
+                if (t < 4f) continue;
+                // Turning right, the right front (1) is the inner wheel.
+                inner += sim.Wheels[1].SlipAngle;
+                outer += sim.Wheels[0].SlipAngle;
+                innerAngle += sim.Wheels[1].SteerAngle;
+                outerAngle += sim.Wheels[0].SteerAngle;
+                n++;
+            }
+            return (inner / n * MathUtil.Rad2Deg, outer / n * MathUtil.Rad2Deg, innerAngle / n * MathUtil.Rad2Deg, outerAngle / n * MathUtil.Rad2Deg);
+        }
+        var ackermann = Creep(VehicleSpec.HotHatch);
+        var parallel = Creep(VehicleSpec.HotHatch with { AckermannShare = 0f });
+        output.WriteLine($"full lock at 3 m/s: Ackermann wheels at {ackermann.InnerAngle:F1}/{ackermann.OuterAngle:F1} deg, slip {ackermann.Inner:F2}/{ackermann.Outer:F2} deg; parallel at {parallel.InnerAngle:F1}/{parallel.OuterAngle:F1} deg, slip {parallel.Inner:F2}/{parallel.Outer:F2} deg (inner/outer)");
+        Assert.True(ackermann.InnerAngle > ackermann.OuterAngle + 3f);
+        Assert.True(MathF.Abs(ackermann.Inner - ackermann.Outer) < 1f, "with Ackermann the front wheels should not fight");
+        Assert.True(MathF.Abs(parallel.Inner - parallel.Outer) > 2f, "parallel steer should scrub the front tyres against each other");
     }
 
     /// <summary>

@@ -74,8 +74,18 @@ public sealed class VehicleSim
     public Vector3 CentreOfMass => _centreOfMass;
     /// <summary>World-space angular velocity, rad/s.</summary>
     public Vector3 AngularVelocity { get; private set; }
-    /// <summary>Road-wheel steering angle in radians, positive to the right.</summary>
+    /// <summary>
+    /// The steering's command in radians, positive to the right: the angle the steering wheel asks of the road wheels (what
+    /// the cockpit's wheel shows, times the steering ratio). Each front wheel's own angle, after the Ackermann geometry and
+    /// the give of the steering under the aligning torque, is <see cref="WheelState.SteerAngle"/>.
+    /// </summary>
     public float SteerAngle { get; private set; }
+    /// <summary>
+    /// Aligning torque of the two front tyres about their steering axes, N m (0.19): side force times caster and
+    /// pneumatic trail, positive when it turns the wheels to the left. It is what a steering wheel would push back with;
+    /// it builds with the cornering force and falls away as the front tyres reach their limit, before their grip does.
+    /// </summary>
+    public float AligningTorque { get; private set; }
     public PathCursor Cursor;
     /// <summary>Probe at the centre of gravity during the last step.</summary>
     public SurfaceHit BodyHit { get; private set; }
@@ -125,6 +135,7 @@ public sealed class VehicleSim
         Position = frame.Origin + up * (hubHeight - _spec.HubHeight);
         Velocity = Vector3.Zero;
         SteerAngle = 0f;
+        AligningTorque = 0f;
         Cursor = cursor;
         Airborne = false;
         AirborneTime = 0f;
@@ -214,6 +225,7 @@ public sealed class VehicleSim
         var speed = Vector3.Dot(_massVelocity, forward);
 
         SteerAngle = MathUtil.Clamp(input.Steer, -1f, 1f) * MaxSteerAngleAt(speed);
+        SteerFrontWheels(dt);
 
         // Drivetrain first: it needs the driven axle's speed from the previous step (the rear wheels, 2 and 3, or on a
         // front-wheel-drive car the front ones, 0 and 1). Traction control, where the car has it, eases the throttle as
@@ -297,7 +309,7 @@ public sealed class VehicleSim
         {
             var w = Wheels[i];
             ref var c = ref _contacts[i];
-            var steer = w.IsFront ? SteerAngle : 0f;
+            var steer = w.SteerAngle;
             // Rotating +Z about +Y by a positive angle swings it toward +X, i.e. a positive steer turns the wheel right.
             var wheelForward = MathUtil.RotateAround(forward, up, steer);
 
@@ -417,6 +429,44 @@ public sealed class VehicleSim
 
         Airborne = !anyContact;
         AirborneTime = Airborne ? AirborneTime + dt : 0f;
+    }
+
+    /// <summary>
+    /// Each front wheel's angle from the steering's command (0.19): the Ackermann linkage turns the inner wheel more (its
+    /// angle from the turning radius of the bicycle model, R = L / tan(steer), less or plus half the track), and the
+    /// steering gives under each tyre's aligning torque (side force times caster plus pneumatic trail, from the last
+    /// step), steering it out of the bend by <see cref="VehicleSpec.SteeringCompliance"/> per N m. The give follows within
+    /// a few hundredths of a second, as a steering system's does, which also keeps the loop through the tyre stable.
+    /// </summary>
+    private void SteerFrontWheels(float dt)
+    {
+        var wheelbase = _spec.FrontAxle + _spec.RearAxle;
+        var command = SteerAngle;
+        var aligning = 0f;
+        for (var i = 0; i < 2; i++)
+        {
+            var w = Wheels[i];
+            var angle = command;
+            if (MathF.Abs(command) > 1e-4f && _spec.AckermannShare > 0f)
+            {
+                var radius = wheelbase / MathF.Tan(MathF.Abs(command));
+                // Turning right (a positive command) the right wheel (+x) is the inner one.
+                var inner = (w.LocalPosition.X > 0f) == (command > 0f);
+                var ackermann = MathF.Atan(wheelbase / (radius + (inner ? -_spec.HalfTrack : _spec.HalfTrack)));
+                angle = MathF.CopySign(MathUtil.Lerp(MathF.Abs(command), ackermann, _spec.AckermannShare), command);
+            }
+            var torque = 0f;
+            if (w.InContact)
+            {
+                var trail = _spec.CasterTrail + TireModel.PneumaticTrail(w.SlipAngle, w.Load, w.Friction, _spec.FrontTire);
+                // A side force to the right acting behind the steering axis turns the wheel's nose to the left.
+                torque = w.LateralForce * trail;
+            }
+            aligning += torque;
+            w.Compliance += (-torque * _spec.SteeringCompliance - w.Compliance) * MathUtil.Clamp01(dt / 0.03f);
+            w.SteerAngle = angle + w.Compliance;
+        }
+        AligningTorque = aligning;
     }
 
     /// <summary>
@@ -647,6 +697,10 @@ public sealed class WheelState
     public float BrakePressure = 1f;
     /// <summary>Growth of the tyre's drag torque on the wheel with the wheel's speed this step, N m s/rad (never negative).</summary>
     public float SpinStiffness;
+    /// <summary>The wheel's own steering angle, rad, positive to the right: Ackermann and compliance included; zero at the rear.</summary>
+    public float SteerAngle;
+    /// <summary>How far the steering's give under the aligning torque has turned this wheel, rad (part of <see cref="SteerAngle"/>).</summary>
+    public float Compliance;
 
     public void Reset()
     {
@@ -664,6 +718,8 @@ public sealed class WheelState
         GroundSpeed = 0f;
         BrakePressure = 1f;
         SpinStiffness = 0f;
+        SteerAngle = 0f;
+        Compliance = 0f;
     }
 
     /// <summary>Slip magnitude used for skid audio and marks: 0 = gripping, 1 = fully sliding.</summary>

@@ -94,6 +94,23 @@ public sealed record VehicleSpec
     public float RearAntiRoll { get; init; } = 12000f;
 
     // Steering
+    /// <summary>
+    /// Share of Ackermann geometry in the steering linkage (0.19): 0 steers both front wheels by the same angle (parallel
+    /// steer, which until 0.18 every car had), 1 turns the inner wheel more, so that both wheels' axes meet on the line
+    /// of the rear axle and neither scrubs sideways at parking speed. Road cars are built close to it (Gillespie,
+    /// Fundamentals of Vehicle Dynamics, ch. 8); at speed the difference is a fraction of a degree.
+    /// </summary>
+    public float AckermannShare { get; init; } = 1f;
+    /// <summary>Caster (mechanical) trail, m: the steering axis meets the road this far ahead of the contact patch; 15-30 mm on road cars.</summary>
+    public float CasterTrail { get; init; } = 0.02f;
+    /// <summary>
+    /// Compliance of the steering at each front road wheel, rad per N m of aligning torque (0.19): the rack, the column,
+    /// the mounts and the tie-rod bushes give, so the aligning torque (side force times caster and pneumatic trail) steers
+    /// the wheel out of the bend a little. It is part of every road car's understeer, K_str = W_f (p + t) / K_ss in
+    /// Gillespie's ch. 6, and the share that falls off with the pneumatic trail at the limit; 1 / 14000 adds about half a
+    /// degree per g on the front-heavy hatchbacks and a little less on the mid-engined cars.
+    /// </summary>
+    public float SteeringCompliance { get; init; } = 1f / 14000f;
     public float MaxSteerLowSpeedDeg { get; init; } = 32f;
     public float MaxSteerHighSpeedDeg { get; init; } = 7f;
     public float SteerSpeedBlendMps { get; init; } = 55f;    // speed at which the high-speed limit applies
