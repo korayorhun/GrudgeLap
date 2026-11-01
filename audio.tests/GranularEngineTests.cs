@@ -157,7 +157,7 @@ public class GranularEngineTests
     [InlineData("flat12", 12, 7400f)]
     [InlineData("hothatch", 4, 7000f)]
     [InlineData("v6", 6, 6600f)]
-    [InlineData("turbohatch", 4, 6500f)]
+    [InlineData("turbohatch", 4, 6800f)]
     [InlineData("saloon", 4, 6000f)]
     [InlineData("estate", 4, 5800f)]
     [InlineData("fleet", 4, 6500f)]

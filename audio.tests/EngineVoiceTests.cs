@@ -14,11 +14,27 @@ public class EngineVoiceTests(ITestOutputHelper output)
     private const int Rate = 44100;
     private static readonly string Audio = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "game", "assets", "audio"));
 
-    /// <summary>The cars as the game voices them (SampledEngine.VoicingOf): sound folder, catalogue index and body.</summary>
-    public static readonly TheoryData<string, int> Cars = new()
+    /// <summary>
+    /// The cars as the game voices them (SampledEngine.VoicingOf): sound folder and catalogue index, taken from the
+    /// catalogue itself. Written out by index, the table went stale when the hatchbacks were respecified (cars3: the
+    /// turbo four moved from index 4 to 3 with the Delta, and index 4 became the V6 Golf).
+    /// </summary>
+    public static readonly TheoryData<string, int> Cars = CarsOfCatalogue();
+
+    private static TheoryData<string, int> CarsOfCatalogue()
     {
-        { "flat12", 0 }, { "v8", 1 }, { "hothatch", 2 }, { "turbohatch", 3 }, { "v6", 4 }, { "saloon", 5 }, { "estate", 6 }, { "fleet", 7 },
-    };
+        var cars = new TheoryData<string, int>();
+        for (var i = 0; i < VehicleSpec.Catalogue.Length; i++) cars.Add(VehicleSpec.Catalogue[i].Engine.SoundFolder, i);
+        return cars;
+    }
+
+    /// <summary>The catalogue's index of the car whose engine sounds from <paramref name="folder"/>.</summary>
+    private static int IndexOf(string folder)
+    {
+        var index = Array.FindIndex(VehicleSpec.Catalogue, c => c.Engine.SoundFolder == folder);
+        Assert.True(index >= 0, $"no car sounds from {folder}");
+        return index;
+    }
 
     private static EngineVoicing VoicingOf(string car) => car switch
     {
@@ -75,12 +91,18 @@ public class EngineVoiceTests(ITestOutputHelper output)
         }
         Assert.InRange(follower.Load, 0.99f, 1f);
         Assert.False(follower.Cut);
+        // All three at the follower's revs, so that only the load differs: the follower is still a rev or two short of
+        // the engine after 0.6 s, and a rev apart the voice strings other grains together, whose level varies by more than
+        // the 0.3 LU compared here (the rally hatch's run-up at 4,080 rpm: 0.7 LU between two holds 1 rpm apart).
         var heard = HeldLufs(Voice(car, index), follower.Rpm, follower.Load);
-        var full = HeldLufs(Voice(car, index), rpm, 1f);
-        var byTorque = HeldLufs(Voice(car, index), rpm, Math.Clamp(engine.LastTorque / 500f, 0f, 1f));
+        var full = HeldLufs(Voice(car, index), follower.Rpm, 1f);
+        var byTorque = HeldLufs(Voice(car, index), follower.Rpm, Math.Clamp(engine.LastTorque / 500f, 0f, 1f));
         output.WriteLine($"{car}: {heard:0.0} LUFS at the follower's load, {full:0.0} at full load, {byTorque:0.0} at the torque over 500 N m ({engine.LastTorque / 500f:0.00})");
         Assert.InRange(heard, full - 0.3, full + 0.3);
-        if (engine.LastTorque < 300f) Assert.True(byTorque < full - 3, "the old load would not have been quieter");
+        // The small cars: where the old load was under a half, the voice's level law alone (CutLevel at a shut throttle)
+        // takes 3 dB off. Picked by torque under 300 N m, the test came to hold the rally hatch to it too, whose turbo four
+        // makes 274 N m at 4,080 rpm: its old load of 0.55 is 2.6 dB down by the level law, and measured 2.7.
+        if (engine.LastTorque / 500f < 0.5f) Assert.True(byTorque < full - 3, "the old load would not have been quieter");
     }
 
     /// <summary>
@@ -123,11 +145,12 @@ public class EngineVoiceTests(ITestOutputHelper output)
     /// followed through the load, as in 0.19, swung by less and took tens of milliseconds to fall.
     /// </summary>
     [Theory]
-    [InlineData("turbohatch", 4)]
-    [InlineData("v8", 1)]
-    [InlineData("estate", 6)]
-    public void The_limiter_cuts_crisply(string car, int index)
+    [InlineData("turbohatch")]
+    [InlineData("v8")]
+    [InlineData("estate")]
+    public void The_limiter_cuts_crisply(string car)
     {
+        var index = IndexOf(car);
         var redline = VehicleSpec.Catalogue[index].Engine.RedlineRpm;
         var (depth, edge) = Swing(Stutter(Voice(car, index), redline, crisp: true));
         var (blurredDepth, blurredEdge) = Swing(Stutter(Voice(car, index), redline, crisp: false));
@@ -146,15 +169,17 @@ public class EngineVoiceTests(ITestOutputHelper output)
     /// dip of about 2 dB with the throttle's filter closing from 12 to about 7 kHz: 0.19's blurred dip back again).
     /// </summary>
     [Theory]
-    [InlineData(4, false)]
-    [InlineData(4, true)]
-    [InlineData(1, false)]
-    [InlineData(1, true)]
-    [InlineData(6, false)]
-    [InlineData(6, true)]
-    public void The_simulated_limiter_holds_the_load_through_its_cuts(int index, bool inGear)
+    [InlineData("turbohatch", false)]
+    [InlineData("turbohatch", true)]
+    [InlineData("v6", false)]
+    [InlineData("v6", true)]
+    [InlineData("v8", false)]
+    [InlineData("v8", true)]
+    [InlineData("estate", false)]
+    [InlineData("estate", true)]
+    public void The_simulated_limiter_holds_the_load_through_its_cuts(string folder, bool inGear)
     {
-        var car = VehicleSpec.Catalogue[index];
+        var car = VehicleSpec.Catalogue[IndexOf(folder)];
         var spec = car.Engine;
         var engine = new EngineModel(spec);
         engine.Start();
@@ -273,7 +298,7 @@ public class EngineVoiceTests(ITestOutputHelper output)
     /// fleet saloon peaked at +2.8 dBFS, the V8 at +1.2 and the turbo hatch at +1.1, and the mix's limiter ducked the
     /// whole mix with them. The trims are held under <see cref="GranularEngine.PeakCeiling"/> by their own renders' peaks;
     /// what those miss is rounded off above <see cref="GranularEngine.PeakKnee"/>, which must stay rare: at most one
-    /// sample in a thousand (measured: at most 5 in 10,000, the turbo hatch's cabin, and none at all on four of the cars).
+    /// sample in a thousand (measured: at most 3 in 10,000, the V8's cabin, and none at all on three of the cars).
     /// </summary>
     [Theory]
     [MemberData(nameof(Cars))]
@@ -340,18 +365,19 @@ public class EngineVoiceTests(ITestOutputHelper output)
     /// <summary>
     /// Rendered across the revs at full throttle, the voice's timbre (its energy above 1 kHz against below) follows the
     /// revs more evenly once its banks are evened, on the two engines whose run-ups join the most different segments:
-    /// the spread of the timbre about its trend falls from 3.7 to 3.0 dB on the turbo hatch (in 0.19 brighter at 3350
-    /// rpm than at 4700) and from 3.0 to 2.0 dB on the fleet saloon (the Punto's run-up joined to the Bravo's). On the
+    /// the spread of the timbre about its trend falls from 2.3 to 1.0 dB on the rally hatch's turbo four (in 0.19 brighter
+    /// at 3350 rpm than at 4700, most of that a compressor's flutter in one of its recordings, cut out of the bank since)
+    /// and from 3.0 to 2.0 dB on the fleet saloon (the Punto's run-up joined to the Bravo's). On the
     /// others it moves by a tenth of a decibel or less (the V8's spread is its recordings' own, not their joins').
     /// </summary>
     [Theory]
-    [InlineData("turbohatch", 4)]
-    [InlineData("fleet", 7)]
-    public void The_timbre_follows_the_revs_more_evenly(string car, int index)
+    [InlineData("turbohatch")]
+    [InlineData("fleet")]
+    public void The_timbre_follows_the_revs_more_evenly(string car)
     {
         double Spread(bool even)
         {
-            var spec = VehicleSpec.Catalogue[index].Engine;
+            var spec = VehicleSpec.Catalogue[IndexOf(car)].Engine;
             var voice = new GranularEngine(Bank(car, "engine_idle", even), Bank(car, "engine_drive", even)!, spec.Cylinders, VoicingOf(car));
             var revs = new List<double>();
             var timbre = new List<double>();

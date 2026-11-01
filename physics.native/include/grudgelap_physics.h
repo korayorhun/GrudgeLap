@@ -143,7 +143,7 @@ typedef struct glp_state
 /* The catalogue's static facts about a car: what instruments and a car body need. */
 typedef struct glp_car_spec
 {
-    int32_t style;            /* 0 flat-12, 1 V8, 2 hot hatch, 3 five-cylinder, 4 turbo hatch, 5 saloon, 6 estate, 7 fleet saloon (CarStyle) */
+    int32_t style;            /* 0 flat-12, 1 V8, 2 hot hatch, 3 rally hatch (turbo four), 4 V6 hatch, 5 saloon, 6 estate, 7 fleet saloon (CarStyle) */
     int32_t forward_gears;
     float speedo_max_mph;
     float redline_rpm;

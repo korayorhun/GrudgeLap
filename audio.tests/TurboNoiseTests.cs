@@ -15,7 +15,7 @@ public class TurboNoiseTests(ITestOutputHelper output)
     private const int Rate = 22050;
     private const float Dt = 1f / 60f;
 
-    /// <summary>The turbo four's figures (EngineSpec.TurboFour: 45 % of its torque from the boost).</summary>
+    /// <summary>A turbo four's figures: 45 % of its torque from the boost (the rally hatch's, EngineSpec.RallyTurboFour, is 48 %).</summary>
     private static TurboState State(float boost, float throttle, float revShare = 0.7f, bool valve = true) => new(boost, throttle, revShare, 0.45f, valve, Interior: false);
 
     /// <summary>Renders a sequence of frame states, one 1/60 s frame each.</summary>
@@ -33,6 +33,23 @@ public class TurboNoiseTests(ITestOutputHelper output)
     }
 
     private static IEnumerable<TurboState> Hold(TurboState state, float seconds) => Enumerable.Repeat(state, (int)(seconds * 60));
+
+    /// <summary>
+    /// Every car of the catalogue whose engine has a turbo (the game synthesises one for any engine with boost), heard
+    /// outside and in the cabin: found by its boost, not by its place in the catalogue, which the hatchbacks' respec
+    /// (cars3) changed under a test that named the turbo four by index.
+    /// </summary>
+    public static TheoryData<int, bool> BoostedCars()
+    {
+        var cars = new TheoryData<int, bool>();
+        for (var i = 0; i < VehicleSpec.Catalogue.Length; i++)
+        {
+            if (VehicleSpec.Catalogue[i].Engine.BoostShare <= 0f) continue;
+            cars.Add(i, false);
+            cars.Add(i, true);
+        }
+        return cars;
+    }
 
     /// <summary>
     /// The shaft follows the compressor's work: at no boost the exhaust alone turns it (a third of its speed at most),
@@ -136,7 +153,7 @@ public class TurboNoiseTests(ITestOutputHelper output)
 
     /// <summary>
     /// Subtle: on full boost the whole turbo (whistle, whine and rush) is at least 12 LU under the turbo four's engine
-    /// pulling at full throttle (measured: 14.0), at the gains the game mixes them at (EngineAudio's layers at 0.8 through
+    /// pulling at full throttle (measured: 12.8), at the gains the game mixes them at (EngineAudio's layers at 0.8 through
     /// a player at -6 dB, the engine voice at 0.9 trimmed to <see cref="GranularEngine.ReferenceLufs"/>); the vent's rush
     /// and the surge's flutter at their loudest are at least 8 LU under it. Heard all the same: its whine is level with
     /// the engine in its own band (<see cref="The_turbo_is_heard_on_boost"/>).
@@ -168,12 +185,10 @@ public class TurboNoiseTests(ITestOutputHelper output)
     /// outside (7.5 dB under at best, its rush at 6.4 kHz) and the whine 11 dB under in its own band.
     /// </summary>
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void The_turbo_is_heard_on_boost(bool interior)
+    [MemberData(nameof(BoostedCars))]
+    public void The_turbo_is_heard_on_boost(int index, bool interior)
     {
-        var spec = VehicleSpec.Catalogue[4].Engine;
-        Assert.Equal("turbohatch", spec.SoundFolder);
+        var spec = VehicleSpec.Catalogue[index].Engine;
         var engine = new EngineModel(spec);
         engine.Start();
         var rpm = 0.7f * spec.RedlineRpm;
@@ -185,7 +200,7 @@ public class TurboNoiseTests(ITestOutputHelper output)
         }
         Assert.InRange(engine.Boost, 0.99f, 1f);
 
-        var audio = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "game", "assets", "audio", "turbohatch"));
+        var audio = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "game", "assets", "audio", spec.SoundFolder));
         GrainBank Bank(string name) => GrainBank.FromFiles(Path.Combine(audio, name + ".wav"), Path.Combine(audio, name + ".json"));
         var voicing = new EngineVoicing(EnginePlacement.Front, 2.3f);
         var voice = new GranularEngine(Bank("engine_idle"), Bank("engine_drive"), spec.Cylinders, voicing, spec.RedlineRpm, overrun: Bank("engine_overrun"))
@@ -211,7 +226,7 @@ public class TurboNoiseTests(ITestOutputHelper output)
             var margin = Spectrum.BandDb(turbo, Rate, f * 0.891, f * 1.122) - Spectrum.BandDb(heard, voice.SampleRate, f * 0.891, f * 1.122);
             if (margin > best) (bestHz, best) = (f, margin);
         }
-        output.WriteLine($"{(interior ? "cabin" : "outside")}: boost {engine.Boost:0.00}, the whine at {whineHz:0} Hz {whine:+0.0;-0.0} dB against the engine in its band; the turbo stands out most at {bestHz:0} Hz by {best:+0.0;-0.0} dB");
+        output.WriteLine($"{spec.SoundFolder} {(interior ? "cabin" : "outside")}: boost {engine.Boost:0.00}, the whine at {whineHz:0} Hz {whine:+0.0;-0.0} dB against the engine in its band; the turbo stands out most at {bestHz:0} Hz by {best:+0.0;-0.0} dB");
         Assert.True(whine >= 0, $"the turbo's whine is {-whine:0.0} dB under the engine in its band on boost");
     }
 }

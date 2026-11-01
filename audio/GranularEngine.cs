@@ -268,7 +268,7 @@ public sealed class GranularEngine
             overrunGain = gain * _cutMatch;
         }
         drive -= overrun;
-        if (drive > 0.002f) Add(_drive, Pick(_drive, ref _drivePulse, firing), centre, drive * beat, gain);
+        if (drive > 0.002f) Add(_drive, Pick(_drive, ref _drivePulse, firing), centre, drive * beat, gain, firing);
         if (overrun > 0.002f) Add(_overrun!, Pick(_overrun!, ref _overrunPulse, firing), centre, overrun * beat, overrunGain);
         if (drive + overrun < 0.998f && _idle is not null) Add(_idle, Pick(_idle, ref _idlePulse, firing), centre, 1f - drive - overrun, gain * _idleGain);
     }
@@ -285,20 +285,31 @@ public sealed class GranularEngine
     /// Overlap-adds a grain: <paramref name="weight"/> is its share of the mix (the sum is normalised by the weights),
     /// <paramref name="gain"/> its level, which the normalisation leaves alone.
     /// </summary>
-    private void Add(GrainBank bank, int pulse, long centre, float weight, float gain)
+    /// <param name="runUpFiring">
+    /// For a grain of the run-up, the firing frequency it is laid at (0 for the idle's and the overrun's). Past the top of
+    /// the run-up's recording its pulses are laid closer together than they were recorded, and their windows overlap by
+    /// more than they sum to one: divided out by the normalisation, that overlap took each pulse down with it, by 4 to 5
+    /// dB at the V6 hatch's redline (its recording reaches about 4,000 rpm, its redline 6,600), where a real engine fires
+    /// as hard at the higher revs, only more often. There the grain's weight counts only for its share of the overlap.
+    /// The idle and the overrun keep the normalisation: their levels are set against the run-up's within their own
+    /// recordings (the idle's gain, a cut pulse's match), and the overrun is to stay the quieter past its top as well.
+    /// </param>
+    private void Add(GrainBank bank, int pulse, long centre, float weight, float gain, float runUpFiring = 0f)
     {
         var marks = bank.Marks;
         var samples = bank.Samples;
         var mark = marks[pulse];
         var left = mark - marks[pulse - 1];
         var right = marks[pulse + 1] - mark;
+        var squeeze = runUpFiring > bank.MaxFiring ? MathF.Max(0.5f * (left + right) * runUpFiring / SampleRate, 1f) : 1f;
+        var share = weight / squeeze;
         // Rising half of a Hann window over the period before the pulse, falling half over the one after.
         for (var j = -left; j < right; j++)
         {
             var w = j < 0 ? 0.5f - 0.5f * MathF.Cos(MathF.PI * (j + left) / left) : 0.5f + 0.5f * MathF.Cos(MathF.PI * j / right);
             var slot = (int)((centre + j) & Mask);
             _sum[slot] += weight * w * gain * samples[mark + j];
-            _weight[slot] += weight * w;
+            _weight[slot] += share * w;
         }
     }
 
@@ -357,8 +368,8 @@ public sealed class GranularEngine
     /// The gain that brings the idle to <see cref="IdleLufs"/> outside: a twin rendered at the idle recording's middle
     /// revs under the idle governor's tenth of throttle, its loudness taken with the outside trim. Held between a
     /// quarter and four times, low enough that the recording's sharpest edge stays under a step of 0.45 between samples at
-    /// the idle's level (the five's idle, recorded under the bonnet, has a valve's tick of nearly full scale that would
-    /// click), and low enough that the rendered idle peaks under <see cref="PeakCeiling"/> (but for its rarest samples).
+    /// the idle's level (the five-cylinder hatch's idle of 0.9-0.19, recorded under the bonnet, had a valve's tick of
+    /// nearly full scale that clicked), and low enough that the rendered idle peaks under <see cref="PeakCeiling"/> (but for its rarest samples).
     /// </summary>
     private float IdleGain(GrainBank idle)
     {

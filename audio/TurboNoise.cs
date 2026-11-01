@@ -40,7 +40,9 @@ public readonly record struct TurboState(
 /// whine is the tone that is heard on boost: the blade tone is then at 15 kHz, past what the game mixes (22.05 kHz), and
 /// with the whine at a third of <see cref="ShaftGain"/> the turbo four on full boost was under its engine in every
 /// third-octave band (0.20 review). It is now level with the engine in its own band, outside and in the cabin, a tone
-/// over its masked threshold, and the whole turbo is still some 15 LU under the engine.
+/// over its masked threshold, and the whole turbo is still some 13 LU under the engine. (Set against the rally hatch's
+/// run-up once the flutter in its recording was cut out of it: the voice had been held 1.5 LU under the common loudness
+/// by that stretch's peaks, and at the common loudness the whine at 0.085 sat a decibel under the engine in its band.)
 /// </para>
 /// <para>
 /// The cabin. The turbo sits in the engine bay and reaches the cabin through the same panels as the engine: low-passed
@@ -64,7 +66,7 @@ public sealed class TurboNoise
     /// <summary>Full blades of the compressor wheel (splitter blades between them are not counted).</summary>
     public const int Blades = 6;
     /// <summary>Peak of the blade tone, of the shaft's own tone, RMS of the air's rush at full boost, and of the vent and the surge's chuffs.</summary>
-    public const float WhistleGain = 0.012f, ShaftGain = 0.085f, RushGain = 0.02f, VentGain = 0.12f, SurgeGain = 0.3f;
+    public const float WhistleGain = 0.012f, ShaftGain = 0.1f, RushGain = 0.02f, VentGain = 0.12f, SurgeGain = 0.3f;
 
     private readonly float _rate;
     private uint _noise = 0x2545F491u;

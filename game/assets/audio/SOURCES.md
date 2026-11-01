@@ -21,11 +21,11 @@ overlap-adds them; nothing loops and nothing is pitch-shifted.
 | `hothatch/engine_drive` | `honda civic type r.mp3` | 14.2@16.3@60@45@235, 17.4@19.6@150@125@240 |
 | `hothatch/engine_overrun` | `honda civic type r.mp3` (the throttle shut, revs falling) | 0.6@2.2@112@45@130, 4.5@6.2@110@40@125, 8.5@10.0@91@35@100 |
 | `turbohatch/engine_idle` | `25 Nissan Pulsar.mp3` from the Internet Archive item "Car Engine Sounds" (below) | 0.4@2.4@33@22@48 |
-| `turbohatch/engine_drive` | `25 Nissan Pulsar.mp3` | 6.0@8.7@94@80@175, 21.3@24.5@109@90@210, 25.0@27.9@127@110@200 |
+| `turbohatch/engine_drive` | `25 Nissan Pulsar.mp3` | 6.0@8.7@94@80@175, 21.3@22.2@109@90@210, 23.1@24.5@129@90@210, 25.0@27.9@127@110@200 |
 | `turbohatch/engine_overrun` | `25 Nissan Pulsar.mp3` (the throttle shut, revs falling) | 13.0@15.3@130@60@140, 16.5@19.2@94@28@100 |
 | `v6/engine_idle` | `Jaguar f-type s.mp3` from the Internet Archive item "Car Engine Sounds" (below) | 13.0@14.4@32@25@40, 30.5@31.05@32@25@40 |
-| `v6/engine_drive` | `Jaguar f-type s.mp3` (the blips of the throttle, rising) | 14.77@15.1@59@45@110, 4.44@4.8@59@45@110, 1.09@1.85@43@36@130, 18.12@18.72@80@65@200, 20.49@21.17@75@60@230, 22.69@23.27@108@90@230, 25.34@26.06@70@55@170, 26.27@27.17@82@60@230 |
-| `v6/engine_overrun` | `Jaguar f-type s.mp3` (the revs falling after each blip, the throttle shut) | 21.80@22.66@156@95@175, 24.0@25.32@156@65@175, 27.8@29.9@156@44@175 |
+| `v6/engine_drive` | `Jaguar f-type s.mp3` (the blips of the throttle, rising, each up to where its recording overloads) | 14.80@15.1@60@45@110, 4.46@4.8@60@45@110, 1.12@1.85@44@36@130, 18.15@18.70@82@65@200, 20.53@20.875@86@60@200, 22.73@23.005@106@90@200, 25.40@25.97@72@55@170, 26.57@26.815@124@60@200 |
+| `v6/engine_overrun` | `Jaguar f-type s.mp3` (the revs falling from the limiter after each blip, the throttle shut) | 21.42@22.66@186@95@210, 23.48@25.32@192@65@210, 27.25@29.9@191@44@210 |
 
 The overrun banks play in place of the run-up as the throttle closes (`GranularEngine`): off the throttle a real
 engine stops firing and what is left is the exhaust's rasp, which no filter on the run-up gave.
@@ -67,8 +67,27 @@ cut from the same CC0 item's `Jaguar f-type s.mp3`, the supercharged three-litre
 its six cylinders every 120 degrees of crank like any even-firing six, so the voice fires at rpm x 6 / 120 as
 the real engine does and the recording's pulses are those of a six; the V6's supercharger whine and its sharper
 note are the difference. The recording is the car revved at a standstill, so the run-up bank is cut from the
-throttle's blips (unloaded, up to about 4,200 rpm) and the overrun from the revs falling after them; above that the
-voice spaces the highest pulses closer, as every bank does past its top.
+throttle's blips (unloaded) and the overrun from the revs falling after them. Each blip runs up to the car's limiter at
+a standstill, about 4,000 rpm, and its recording overloads on the way, from about 3,600 rpm: the microphone crackles
+for 40 ms (steps of nearly full scale between samples, which the voice replayed as clicks wherever it picked those
+pulses), and the stretch at the limiter is the ignition cut every 150 ms with the throttle partly shut, 10 dB duller
+than the run-up. The run-up is cut from each blip's start to just before its crackle (up to about 3,600 rpm), the
+overrun from where the revs leave the limiter (from about 3,800 rpm; 1 November 2026). Past 3,600 rpm the voice lays
+the run-up's highest pulses closer, up to 1.8 times at the R32's 6,600 rpm, at their recorded strength
+(`GranularEngine`: past a bank's top the overlap of its grains is no longer divided out).
+
+The rally hatch's run-up leaves out 22.2-23.1 s of the Pulsar track: a compressor's flutter, a band at 1.3 kHz beating
+ten times a second with bursts of hiss, whose pulses were up to 30 dB brighter than their neighbours at 3,300-3,500
+rpm (the "brighter at 3350 rpm" of the 0.19 audit, finding 9, which the evening could not take out); the voice
+synthesises the turbo's own sounds (`audio/TurboNoise.cs`).
+
+The banks cut before the V6's re-cut (all but `v6/` and `turbohatch/engine_drive`) were cut with the tool seeking the
+MP3 decoder before its input: each of their segments begins with a few pulses of the decoder's silence (the V8's
+run-up and overrun 19 and 20, the flat-twelve's 34, the hot hatch's 7, the rally hatch's overrun 4), which the voice
+plays as a drop-out of a firing period when it picks one. The tool now seeks after the input, exact to the sample, and
+warns of crackles in a segment. Taking those pulses out moves the cars' balance (tried on 1 November 2026 by leaving
+them out at load: the V8's overrun came up to only 4.4 dB under its throttle at 5600 rpm, and its limiter's cut took
+20 ms to fall), so re-cutting them is left for a pass of its own.
 
 The five-cylinder hatch of 0.9-0.19 (a Volvo five at idle, credit cmusounddesign, CC BY 4.0, and the S2000 track
 laid at a five's firing frequency, `GranularEngine.FivePattern`) left the game with the car it voiced; its banks are
