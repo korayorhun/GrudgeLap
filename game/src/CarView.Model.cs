@@ -16,7 +16,8 @@ namespace GrudgeLap.Game;
 /// Mirror (the rear-view mirror's glass). A model without a cabin of its own has no Eye: the lofted cabin is built
 /// inside its shell instead. The paint, the windows and the clear lenses get the game's own materials by name
 /// (GLP_Paint, GLP_Glass, GLP_Lens); everything else keeps the model's, GLP_Lining too (the painted faces inside the
-/// cabin that tools/prepare_car_models.py gave a dark trim).
+/// cabin that tools/prepare_car_models.py gave a dark trim). A paint drawn from a texture (the 205's and the VAZ's
+/// atlases, the Delta's white) carries a paint mask and is recoloured where the mask says paint (TexturePaint).
 /// </remarks>
 internal sealed partial class CarView
 {
@@ -33,6 +34,9 @@ internal sealed partial class CarView
     private static StandardMaterial3D? _windowInside;
     private static StandardMaterial3D? _lens;
     private static Shader? _paintShader;
+    private static Shader? _texturePaintShader;
+    private static Shader? _texturePaintCulledShader;
+    private readonly List<PaintSurface> _paints = [];
     private readonly List<ModelDent> _modelDents = [];
     private readonly List<BaseMaterial3D> _brakeLamps = [];
     private bool _braking;
@@ -63,6 +67,12 @@ internal sealed partial class CarView
         public readonly Aabb Bounds = bounds;
         public Godot.Collections.Array[]? Arrays;
     }
+
+    /// <summary>
+    /// One paint material of the model, as the game draws it: its factory colour (the model's own: the flat paint's
+    /// colour, or the key colour a paint texture was masked by) and whether it is drawn from a texture.
+    /// </summary>
+    private readonly record struct PaintSurface(ShaderMaterial Material, Color Factory, bool Textured);
 
     private static string ModelKey(CarStyle style) => style switch
     {
@@ -220,13 +230,14 @@ internal sealed partial class CarView
 
     /// <summary>
     /// The game's own materials on the model: the paint in this car's colour (a coated dielectric, as the lofted
-    /// body's), the windows tinted as the lofted glass from outside and nearly clear from the seat, the lamp lenses
-    /// clear. Everything else keeps the model's own.
+    /// body's; the model's own colour when none is chosen), the windows tinted as the lofted glass from outside and
+    /// nearly clear from the seat, the lamp lenses clear. Everything else keeps the model's own.
     /// </summary>
     private void DressModel(Node3D model)
     {
-        var paint = ModelPaint(_paint);
-        _modelPaint = paint;
+        // One paint material per paint material of the model, shared by its surfaces: the cabin's frame is updated
+        // on each every frame (_Process), and a model has one to three.
+        var paints = new Dictionary<Material, ShaderMaterial>();
         _windowOutside ??= new StandardMaterial3D
         {
             AlbedoColor = new Color(0.05f, 0.08f, 0.11f, 0.80f),
@@ -260,7 +271,12 @@ internal sealed partial class CarView
             {
                 switch (mesh.Mesh.SurfaceGetMaterial(s)?.ResourceName)
                 {
-                    case "GLP_Paint":
+                    case "GLP_Paint" when mesh.Mesh.SurfaceGetMaterial(s) is { } source:
+                        if (!paints.TryGetValue(source, out var paint))
+                        {
+                            paint = PaintFor(source);
+                            paints[source] = paint;
+                        }
                         mesh.SetSurfaceOverrideMaterial(s, paint);
                         break;
                     case "GLP_Glass":
@@ -288,6 +304,8 @@ internal sealed partial class CarView
                 }
             }
         }
+        // The model's own colour, for what takes the car's colour from Paint (the debris of a crash).
+        if (_paintChoice is null && _paints.Count > 0) _paint = _paints[0].Factory;
     }
 
     /// <summary>The model materials already corrected: the imported scene is cached, so its materials are shared by every car drawn with it.</summary>
@@ -388,7 +406,159 @@ internal sealed partial class CarView
         return material;
     }
 
-    private ShaderMaterial? _modelPaint;
+    /// <summary>
+    /// The paint for one of the model's paint materials: the texture paint when it has a texture and the mask the
+    /// preparation made for it (emission slot), the flat paint otherwise, in the chosen colour or the model's own.
+    /// </summary>
+    private ShaderMaterial PaintFor(Material source)
+    {
+        PaintSurface surface;
+        if (source is BaseMaterial3D { AlbedoTexture: { } albedo, EmissionTexture: { } mask } own)
+        {
+            // The key colour the texture was masked by (linear, in the material's extras): the factory paint's colour.
+            var factory = DefaultPaint;
+            if (own.HasMeta("extras") && own.GetMeta("extras").AsGodotDictionary() is { } extras
+                && extras.TryGetValue("glp_paint_key", out var key) && key.AsFloat32Array() is { Length: 3 } k)
+            {
+                factory = new Color(k[0], k[1], k[2]).LinearToSrgb();
+            }
+            surface = new PaintSurface(TexturePaint(own, albedo, mask), factory, Textured: true);
+        }
+        else
+        {
+            // A flat paint's own colour; one with a texture but no mask (a model prepared before the masks) as before.
+            var factory = source is BaseMaterial3D flat ? flat.AlbedoColor : DefaultPaint;
+            surface = new PaintSurface(ModelPaint(factory), factory, Textured: false);
+        }
+        _paints.Add(surface);
+        ApplyPaint(surface);
+        return surface.Material;
+    }
+
+    /// <summary>
+    /// Car paint drawn from a texture (tools/prepare_car_models.py paint_mask): two of the models carry their paint in
+    /// a texture atlas with the lamps, the badges, the pinstripe, the trim and the chrome (the 205's, the VAZ's), and
+    /// the Delta's paint is a white texture with its Martini lettering and its grime. Where the mask's red says paint
+    /// the colour is the chosen paint times the texel's lightness against the key colour (the mask's green, halved),
+    /// so the texture's shading, panel lines, grime and lettering stay in any colour, under the flat paint's coat
+    /// (metallic 0.05, roughness 0.38, clearcoat); everything else is the model's own material (its texture,
+    /// roughness, metallic and normal maps) untouched. The factory paint is the texture itself under the coat. The
+    /// back face of a panel in the cabin is the lining, as ModelPaint's (the three models draw their paint from both
+    /// faces); a material drawn from its front only keeps that (the culled shader). Opaque: a paint texture has no
+    /// holes (the VAZ's exporter marked every material see-through, which the preparation undoes).
+    /// </summary>
+    private static ShaderMaterial TexturePaint(BaseMaterial3D own, Texture2D albedo, Texture2D mask)
+    {
+        static Shader Make(string cull) => new()
+        {
+            Code = $$"""
+                shader_type spatial;
+                render_mode {{cull}};
+                uniform vec3 paint : source_color = vec3(0.76, 0.03, 0.05);
+                uniform bool factory = false;
+                uniform sampler2D albedo_texture : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+                uniform vec4 albedo_tint : source_color = vec4(1.0);
+                uniform sampler2D paint_mask : hint_default_black, filter_linear_mipmap_anisotropic, repeat_enable;
+                uniform sampler2D roughness_texture : hint_default_white, filter_linear_mipmap_anisotropic, repeat_enable;
+                uniform vec4 roughness_channel = vec4(0.0, 1.0, 0.0, 0.0);
+                uniform float roughness = 1.0;
+                uniform sampler2D metallic_texture : hint_default_white, filter_linear_mipmap_anisotropic, repeat_enable;
+                uniform vec4 metallic_channel = vec4(0.0, 0.0, 1.0, 0.0);
+                uniform float metallic = 0.0;
+                uniform sampler2D normal_texture : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
+                uniform bool has_normal = false;
+                uniform float normal_scale = 1.0;
+                uniform vec3 lining : source_color = vec3(0.045, 0.045, 0.05);
+                uniform mat4 to_car = mat4(1.0);
+                uniform vec3 cabin_min = vec3(1.0);
+                uniform vec3 cabin_max = vec3(-1.0);
+                varying vec3 world_position;
+                void vertex() {
+                    world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+                }
+                void fragment() {
+                    vec3 local = (to_car * vec4(world_position, 1.0)).xyz;
+                    bool in_cabin = all(greaterThan(local, cabin_min)) && all(lessThan(local, cabin_max));
+                    if (FRONT_FACING || !in_cabin) {
+                        vec3 texel = texture(albedo_texture, UV).rgb * albedo_tint.rgb;
+                        vec2 mask = texture(paint_mask, UV).rg;
+                        float coat = mask.r;
+                        vec3 painted = factory ? texel : min(paint * (mask.g * 2.0), vec3(1.0));
+                        ALBEDO = mix(texel, painted, coat);
+                        float own_roughness = dot(texture(roughness_texture, UV), roughness_channel) * roughness;
+                        float own_metallic = dot(texture(metallic_texture, UV), metallic_channel) * metallic;
+                        ROUGHNESS = mix(own_roughness, 0.38, coat);
+                        METALLIC = mix(own_metallic, 0.05, coat);
+                        CLEARCOAT = coat;
+                        CLEARCOAT_ROUGHNESS = 0.04;
+                        if (has_normal) {
+                            NORMAL_MAP = texture(normal_texture, UV).rgb;
+                            NORMAL_MAP_DEPTH = normal_scale;
+                        }
+                    } else {
+                        ALBEDO = lining;
+                        ROUGHNESS = 0.9;
+                    }
+                }
+                """,
+        };
+        var culled = own.CullMode == BaseMaterial3D.CullModeEnum.Back;
+        var shader = culled ? _texturePaintCulledShader ??= Make("cull_back") : _texturePaintShader ??= Make("cull_disabled");
+        var material = new ShaderMaterial { Shader = shader };
+        material.SetShaderParameter("albedo_texture", albedo);
+        material.SetShaderParameter("albedo_tint", own.AlbedoColor);
+        material.SetShaderParameter("paint_mask", mask);
+        material.SetShaderParameter("roughness", own.Roughness);
+        material.SetShaderParameter("metallic", own.Metallic);
+        if (own.RoughnessTexture is { } roughnessTexture)
+        {
+            material.SetShaderParameter("roughness_texture", roughnessTexture);
+            material.SetShaderParameter("roughness_channel", Channel(own.RoughnessTextureChannel));
+        }
+        if (own.MetallicTexture is { } metallicTexture)
+        {
+            material.SetShaderParameter("metallic_texture", metallicTexture);
+            material.SetShaderParameter("metallic_channel", Channel(own.MetallicTextureChannel));
+        }
+        if (own.NormalEnabled && own.NormalTexture is { } normal)
+        {
+            material.SetShaderParameter("normal_texture", normal);
+            material.SetShaderParameter("has_normal", true);
+            material.SetShaderParameter("normal_scale", own.NormalScale);
+        }
+        return material;
+    }
+
+    /// <summary>A texture channel as the vector that picks it out of a texel (BaseMaterial3D's own convention).</summary>
+    private static Vector4 Channel(BaseMaterial3D.TextureChannel channel) => channel switch
+    {
+        BaseMaterial3D.TextureChannel.Red => new Vector4(1f, 0f, 0f, 0f),
+        BaseMaterial3D.TextureChannel.Green => new Vector4(0f, 1f, 0f, 0f),
+        BaseMaterial3D.TextureChannel.Blue => new Vector4(0f, 0f, 1f, 0f),
+        BaseMaterial3D.TextureChannel.Alpha => new Vector4(0f, 0f, 0f, 1f),
+        _ => new Vector4(1f / 3f, 1f / 3f, 1f / 3f, 0f),
+    };
+
+    /// <summary>The chosen colour, or the model's own, on one of its paints.</summary>
+    private void ApplyPaint(PaintSurface surface)
+    {
+        surface.Material.SetShaderParameter("paint", _paintChoice ?? surface.Factory);
+        // A paint texture's own colour is the texture itself, not its key's one hue.
+        if (surface.Textured) surface.Material.SetShaderParameter("factory", _paintChoice is null);
+    }
+
+    /// <summary>
+    /// Repaints the car in place (the menu's PAINT): a colour, or null for the model's own. A lofted body has its
+    /// colour built into its meshes and is not repainted here (false): the caller builds it again.
+    /// </summary>
+    public bool Repaint(Color? paint)
+    {
+        if (_paints.Count == 0) return false;
+        _paintChoice = paint;
+        _paint = paint ?? _paints[0].Factory;
+        foreach (var surface in _paints) ApplyPaint(surface);
+        return true;
+    }
 
     /// <summary>
     /// The cabin the paint lines from inside: from the eyes, a box over the seats and under the roof, from the
@@ -397,9 +567,12 @@ internal sealed partial class CarView
     /// </summary>
     private void SetPaintCabin()
     {
-        if (_modelPaint is null || _modelEye is not { } eye) return;
-        _modelPaint.SetShaderParameter("cabin_min", new Vector3(-0.86f, eye.Y - 0.55f, eye.Z - 1.1f));
-        _modelPaint.SetShaderParameter("cabin_max", new Vector3(0.86f, eye.Y + 0.6f, eye.Z + 0.75f));
+        if (_modelEye is not { } eye) return;
+        foreach (var surface in _paints)
+        {
+            surface.Material.SetShaderParameter("cabin_min", new Vector3(-0.86f, eye.Y - 0.55f, eye.Z - 1.1f));
+            surface.Material.SetShaderParameter("cabin_max", new Vector3(0.86f, eye.Y + 0.6f, eye.Z + 0.75f));
+        }
     }
 
     /// <summary>
@@ -443,7 +616,9 @@ internal sealed partial class CarView
     /// <summary>World to this car's frame, for the paint's cabin test: every frame the car moves.</summary>
     public override void _Process(double delta)
     {
-        if (_modelPaint is not null && IsInsideTree()) _modelPaint.SetShaderParameter("to_car", new Projection(GlobalTransform.AffineInverse()));
+        if (_paints.Count == 0 || !IsInsideTree()) return;
+        var toCar = new Projection(GlobalTransform.AffineInverse());
+        foreach (var surface in _paints) surface.Material.SetShaderParameter("to_car", toCar);
     }
 
     /// <summary>The model's box in this node's frame, for the contact shadow (MarkPlayer).</summary>

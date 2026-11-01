@@ -10,7 +10,8 @@ wheelbase, hubs at the rest height, origin at the centre of gravity), its scene:
 
   CarModel
     Body            every mesh that does not turn; the paint's materials renamed GLP_Paint, the windows' GLP_Glass
-                    and clear lamp lenses GLP_Lens, for CarView to give them the game's own
+                    and clear lamp lenses GLP_Lens, for CarView to give them the game's own (a paint drawn from a
+                    texture carries the mask CarView recolours it by in its emissive slot: paint_mask)
     Wheel0..3       at the hubs, in the simulation's order (front left, front right, rear left, rear right), the
                     tyre and what rolls with it centred on each (CarView hangs them on its spinning pivots)
     Steering        at the steering wheel's centre, its +Y the column pointing at the driver; its child Spin holds
@@ -24,6 +25,7 @@ A model without a cabin of its own ("interior": false) gets neither Steering, Ey
 builds its own cabin inside the model's shell. --inspect prints the meshes around the driver's seat with their
 boxes in the car frame, for writing a model's entry.
 """
+import io
 import json
 import math
 import os
@@ -34,6 +36,7 @@ import sys
 sys.path.append(site.getusersitepackages())
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
+from PIL import Image, ImageDraw, ImageFilter
 
 import car_models as cm
 
@@ -166,13 +169,139 @@ def append_accessor(model, blob, values, component_type, kind, target):
     return len(model["accessors"]) - 1
 
 
-def orient_paint(model, blob, nodes):
+def srgb_to_linear(c):
+    return np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
+
+
+def linear_to_srgb(c):
+    c = np.clip(c, 0.0, 1.0)
+    return np.where(c <= 0.0031308, c * 12.92, 1.055 * c ** (1.0 / 2.4) - 0.055)
+
+
+LUMA = np.array([0.2126, 0.7152, 0.0722])
+
+
+def texture_pixels(model, blob, texture_index):
+    """A texture's image as linear RGB floats, its rows top first (as glTF's texture coordinates count them)."""
+    image = model["images"][model["textures"][texture_index]["source"]]
+    view = model["bufferViews"][image["bufferView"]]
+    start = view.get("byteOffset", 0)
+    data = bytes(blob[start: start + view["byteLength"]])
+    return srgb_to_linear(np.asarray(Image.open(io.BytesIO(data)).convert("RGB"), dtype=np.float64) / 255.0)
+
+
+def uv_coverage(model, blob, primitives, size):
+    """The texels a set of primitives' triangles cover (TEXCOORD_0, wrapped into the unit square)."""
+    width, height = size
+    cover = Image.new("L", (width, height), 0)
+    draw = ImageDraw.Draw(cover)
+    for primitive in primitives:
+        if primitive.get("mode", 4) != 4 or "TEXCOORD_0" not in primitive["attributes"]:
+            continue
+        uv = cm.accessor_array(model, blob, primitive["attributes"]["TEXCOORD_0"])
+        if "indices" in primitive:
+            indices = cm.accessor_array(model, blob, primitive["indices"]).astype(np.int64).reshape(-1)
+        else:
+            indices = np.arange(len(uv))
+        triangles = np.mod(uv[indices[: len(indices) // 3 * 3].reshape(-1, 3)], 1.0) * [width, height]
+        for t in triangles:
+            draw.polygon([(float(t[0, 0]), float(t[0, 1])), (float(t[1, 0]), float(t[1, 1])), (float(t[2, 0]), float(t[2, 1]))], fill=255)
+    return np.asarray(cover) > 0
+
+
+def chromaticity(rgb):
+    return rgb / np.maximum(rgb.sum(axis=-1, keepdims=True), 1e-6)
+
+
+def paint_mask(model, blob, material, primitives, settings, label):
+    """Which texels of a paint texture are the body colour, and how light each is against it.
+
+    Two of the models carry their paint in a texture atlas with everything else (the 205's lamps, badges, pinstripe
+    and black trim; the VAZ's baked shading, grime and chrome), and the Delta's paint texture is white with the
+    Martini lettering and its grime on it. The game recolours them (CarView.TexturePaint) from this mask: R the
+    paint's weight (the texels of the key colour, the rest left as the model has them), G the texel's lightness
+    against the key, halved (a texel half as light as the key is 0.25: a panel line, baked shade or grime keeps its
+    depth in any colour). The key is the colour the entry names (paint_atlas), refined to the median of the texels
+    the paint's triangles cover that match it, or, with none named, the median of all they cover (a white paint
+    texture). Shading leaves a texel's chromaticity (r, g and b over their sum, in linear light) as it is, so that is
+    what the match is made on; a texel too dark to have a hue, or far lighter than the key (a white badge on it), is
+    not paint: black trim under a navy paint is nearly as light as the paint and told from it by its grey alone.
+    Returns the mask as an RGB image (8 bits a channel) and the key (linear RGB)."""
+    pbr = material["pbrMetallicRoughness"]
+    pixels = texture_pixels(model, blob, pbr["baseColorTexture"]["index"]) * np.array(pbr.get("baseColorFactor", [1.0, 1.0, 1.0, 1.0])[:3])
+    height, width = pixels.shape[:2]
+    covered = uv_coverage(model, blob, primitives, (width, height))
+    luma = pixels @ LUMA
+    tolerance = settings.get("tolerance", 0.06)
+    key = np.median(pixels[covered], axis=0) if covered.any() else np.median(pixels.reshape(-1, 3), axis=0)
+    if "key" in settings:
+        guess = srgb_to_linear(np.array(settings["key"], dtype=np.float64) / 255.0)
+        near = covered & (np.linalg.norm(chromaticity(pixels) - chromaticity(guess), axis=-1) < tolerance) \
+            & (luma > 0.3 * (guess @ LUMA)) & (luma < 3.0 * (guess @ LUMA))
+        key = np.median(pixels[near], axis=0) if near.sum() > 100 else guess
+    key_luma = float(key @ LUMA)
+    distance = np.linalg.norm(chromaticity(pixels) - chromaticity(key), axis=-1)
+    hue = 1.0 - np.clip((distance - tolerance) / tolerance, 0.0, 1.0)
+    lit = np.clip((luma / key_luma - 0.12) / 0.18, 0.0, 1.0)
+    not_badge = 1.0 - np.clip(luma / key_luma - 3.0, 0.0, 1.0)
+    weight = hue * lit * not_badge
+    # A median over 3 x 3 texels drops lone matches in the noise (a JPEG's blocks in a dark atlas) and keeps the
+    # edges of the paint sharp.
+    weight = np.asarray(Image.fromarray(np.round(weight * 255).astype(np.uint8)).filter(ImageFilter.MedianFilter(3)), dtype=np.float64) / 255.0
+    # The lightness, smoothed a little more where the key is dark: a JPEG's noise in a navy is a tenth of its light,
+    # which a light colour would show as mottling.
+    ratio = Image.fromarray(np.round(np.clip(luma / key_luma, 0.0, 2.0) * 127.5).astype(np.uint8))
+    shade = np.asarray(ratio.filter(ImageFilter.GaussianBlur(0.9 if key_luma < 0.05 else 0.4)), dtype=np.uint8)
+    image = np.zeros((height, width, 3), dtype=np.uint8)
+    image[..., 0] = np.round(weight * 255).astype(np.uint8)
+    image[..., 1] = shade
+    painted = covered & (weight > 0.5)
+    spread = (np.percentile(luma[painted] / key_luma, 5), np.percentile(luma[painted] / key_luma, 95)) if painted.any() else (0.0, 0.0)
+    print(f"  paint texture {label}: key {np.round(linear_to_srgb(key) * 255).astype(int).tolist()} (sRGB), "
+          f"{painted.sum() / max(covered.sum(), 1):.0%} of the texels its triangles cover are paint, "
+          f"{spread[0]:.2f}-{spread[1]:.2f} of the key's lightness")
+    return image, key
+
+
+def embed_paint_mask(model, blob, material, image, key):
+    """Puts a paint mask (paint_mask) in the material's emissive slot with a black emission factor, so that Godot's
+    importer extracts and mipmaps it with the model's other textures and CarView finds it on the imported material
+    (nothing glows if the material is drawn as it is); the key colour (linear RGB) goes in the material's extras, for
+    the game's factory paint (the colour of the debris of a crash)."""
+    buffer = io.BytesIO()
+    Image.fromarray(image).save(buffer, format="PNG", optimize=True)
+    data = buffer.getvalue()
+    offset = len(blob) + (-len(blob) % 4)
+    blob += b"\0" * (offset - len(blob))
+    blob += data
+    model["bufferViews"].append({"buffer": 0, "byteOffset": offset, "byteLength": len(data)})
+    model.setdefault("images", []).append({"name": "glp_paint_mask", "mimeType": "image/png", "bufferView": len(model["bufferViews"]) - 1})
+    source = model["textures"][material["pbrMetallicRoughness"]["baseColorTexture"]["index"]]
+    texture = {"source": len(model["images"]) - 1}
+    if "sampler" in source:
+        texture["sampler"] = source["sampler"]
+    model["textures"].append(texture)
+    material["emissiveTexture"] = {"index": len(model["textures"]) - 1}
+    material["emissiveFactor"] = [0.0, 0.0, 0.0]
+    material.setdefault("extras", {})["glp_paint_key"] = [round(float(v), 5) for v in key]
+
+
+def mask_weight(mask, uv):
+    """A paint mask's weight (0-1) at texture coordinates (wrapped), from the nearest texel."""
+    height, width = mask.shape[:2]
+    x = (np.mod(uv[:, 0], 1.0) * width).astype(np.int64).clip(0, width - 1)
+    y = (np.mod(uv[:, 1], 1.0) * height).astype(np.int64).clip(0, height - 1)
+    return mask[y, x, 0] / 255.0
+
+
+def orient_paint(model, blob, nodes, leave=()):
     """Turns painted parts that face into the car outwards: some models mirror a door or a wing without flipping
     it, and the paint, drawn from both faces with a dark lining behind (CarView.ModelPaint), showed that side's
     door as black. A part counts as turned when less than a third of its area faces away from the car's middle;
-    its triangles are wound the other way and its normals (and tangents) reversed."""
+    its triangles are wound the other way and its normals (and tangents) reversed. A paint atlas (leave) is left as
+    it is: its parts are anything the texture holds, a dashboard as well as a door, and are drawn from their front."""
     parents = {c: i for i, n in enumerate(nodes) for c in n.get("children", [])}
-    paint = {i for i, m in enumerate(model["materials"]) if m.get("name") == "GLP_Paint"}
+    paint = {i for i, m in enumerate(model["materials"]) if m.get("name") == "GLP_Paint" and i not in leave}
     middle = np.array([0.0, 0.1, 0.0])
     turned = []
     for index, node in enumerate(nodes):
@@ -224,11 +353,13 @@ def orient_paint(model, blob, nodes):
         print(f"  turned outwards: {turned}")
 
 
-def split_lining(model, blob, nodes, eye, wheel):
+def split_lining(model, blob, nodes, eye, wheel, masks=None):
     """The painted faces inside the cabin that face into it (the pillars' and the door frames' inner sides, the roof's
     underside, the screen header) take a dark trim, GLP_Lining: models paint whole shells, and from the seat the
     pillars showed in the body colour, with the sun's shadow flickering on them. A face counts when its centre is in
-    the glasshouse (over the beltline, between the dashboard and the seats' backs) and it faces the cabin."""
+    the glasshouse (over the beltline, between the dashboard and the seats' backs) and it faces the cabin; on a paint
+    texture (masks, by material) only where its texture is paint, so the trim and the seals the texture draws stay."""
+    masks = masks or {}
     parents = {c: i for i, n in enumerate(nodes) for c in n.get("children", [])}
     materials = model["materials"]
     paint = {i for i, m in enumerate(materials) if m.get("name") == "GLP_Paint"}
@@ -274,6 +405,9 @@ def split_lining(model, blob, nodes, eye, wheel):
             header = (fn[:, 2] > 0.5) & (c[:, 2] < eye[2] - 0.2) & (c[:, 1] > eye[1] - 0.1) & (fn[:, 1] < 0.3)
             bulkhead = (fn[:, 2] < -0.5) & (c[:, 2] > eye[2] + 0.1) & (fn[:, 1] < 0.3)
             inner = inside & (side | ceiling | header | bulkhead)
+            if primitive["material"] in masks and "TEXCOORD_0" in primitive["attributes"]:
+                uv = cm.accessor_array(model, blob, primitive["attributes"]["TEXCOORD_0"])
+                inner &= mask_weight(masks[primitive["material"]], uv[triangles].mean(axis=1)) > 0.5
             if not inner.any():
                 primitives.append(primitive)
                 continue
@@ -560,7 +694,10 @@ def prepare(car, entry, inspect=False, config=None):
 
     # Materials: the paint, the windows and the clear lenses get the game's own (CarView); the rest stays the model's.
     paint_words = [s.lower() for s in entry.get("paint", [])]
-    for material in model.get("materials", []):
+    # The paint atlases (paint_atlas): materials whose texture holds the paint with the rest of the car's details.
+    atlas = {k.lower(): v for k, v in entry.get("paint_atlas", {}).items()}
+    atlas_materials = {}
+    for index, material in enumerate(model.get("materials", [])):
         name = material.get("name", "")
         lower = name.lower()
         glassy = contains(lower, GLASS_WORDS) or "KHR_materials_transmission" in material.get("extensions", {})
@@ -575,6 +712,10 @@ def prepare(car, entry, inspect=False, config=None):
         if material.get("alphaMode") == "BLEND" and not glassy and not contains(lower, LAMP_WORDS) and (len(alpha) < 4 or alpha[3] >= 0.99):
             material["alphaMode"] = "MASK"
             material["alphaCutoff"] = 0.5
+        if lower in atlas:
+            material["name"] = "GLP_Paint"
+            atlas_materials[index] = name
+            continue
         # "==Name" names a paint material exactly, case and all (the Renault 12 has both "Material" and "material").
         # The rear lamps' lenses that light up when the car brakes (CarView.Braking), and materials left as the model
         # has them though their names say glass (the Testarossa's orange indicators, red_glass its tail lamps).
@@ -590,10 +731,31 @@ def prepare(car, entry, inspect=False, config=None):
             material["name"] = "GLP_Lens"
         elif glassy:
             material["name"] = "GLP_Glass"
+    for name in atlas:
+        if name not in {n.lower() for n in atlas_materials.values()}:
+            print(f"  paint_atlas names {name}, which the model has no material of")
 
-    orient_paint(model, blob, out_nodes)
+    # A paint drawn from a texture (an atlas, or a paint material with a texture of its own, as the Delta's white
+    # with its Martini lettering) gets the mask the game recolours it by: those the prepared scene draws (a borrowed
+    # cabin's donor brings materials of its body that nothing uses).
+    drawn = [q for n in out_nodes if "mesh" in n for q in model["meshes"][n["mesh"]]["primitives"]]
+    masks = {}
+    for index, material in enumerate(model.get("materials", [])):
+        texture = material.get("pbrMetallicRoughness", {}).get("baseColorTexture")
+        primitives = [q for q in drawn if q.get("material") == index]
+        if material.get("name") != "GLP_Paint" or texture is None or not primitives:
+            continue
+        if texture.get("texCoord", 0) != 0 or "KHR_texture_transform" in texture.get("extensions", {}):
+            print(f"  paint texture of material {index} is mapped by other coordinates: drawn in the flat paint")
+            continue
+        label = atlas_materials.get(index, f"of material {index}")
+        image, key = paint_mask(model, blob, material, primitives, atlas.get(label.lower(), {}), label)
+        embed_paint_mask(model, blob, material, image, key)
+        masks[index] = image
+
+    orient_paint(model, blob, out_nodes, leave=set(atlas_materials))
     if interior and (steering or entry.get("eye_at")):
-        split_lining(model, blob, out_nodes, eye, centre)
+        split_lining(model, blob, out_nodes, eye, centre, masks)
 
     model["nodes"] = out_nodes
     model["scenes"] = [{"nodes": [root]}]
