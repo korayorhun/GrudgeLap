@@ -118,9 +118,10 @@ ships with ten names to beat.
 
 **Your own replay music.** Put a file named `replay.ogg`, `replay.mp3` or `replay.wav` into
 `%APPDATA%\Godot\app_userdata\GrudgeLap\music\` (the menu's REPLAY MUSIC line opens the folder and shows what plays)
-and the instant replay plays it instead of the built-in tune; 1989 mode keeps its synthesised one. Easier still: drag
-the music file onto the game's window, and it is copied there and named in the menu. The game itself ships only CC0
-music, so whatever you put there stays on your machine. The Unreal version plays a `replay.wav` from its own
+and the instant replay plays it instead of the built-in tune; 1989 mode plays the built-in tune on its own
+synthesiser. Easier still: drag the music file onto the game's window, and it is copied there and named in the menu.
+The game itself ships only its own music (an original tune in the manner of late-eighties arcade music, made by
+`tools/make-replay-music.py`), so whatever you put there stays on your machine. The Unreal version plays a `replay.wav` from its own
 `Saved\GrudgeLap\music\` folder (M on its title screen opens it) or from the folder above.
 
 **Weather.** Clear by default. The menu's WEATHER line (Esc) picks clear, overcast, a wet road, rain, or random, which

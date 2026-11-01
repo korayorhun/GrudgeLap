@@ -83,12 +83,28 @@ within 70 m. 1989 mode keeps the cabinet's synthesised moo.
 
 ## Instant replay music (`music/replay.ogg`, `music/replay.wav`)
 
-Eleven seconds of "Horizon Surfer" by congusbongus (OpenGameArt, https://opengameart.org/content/horizon-surfer,
-CC0 1.0; FM, made in BambooTracker on the YM2608 chip), from 14.2 s (where the full arrangement comes in) with a
-20 ms fade-in and a 1.4 s fade-out, loudness-normalised (-14 LUFS); `replay.wav` is the same, mono 22.05 kHz, for the
-Unreal version's reader (the Godot export leaves it out). The original game's replay music is Atari's and is not
-used; 1989 mode keeps our synthesised tune. Since 0.11 a player can put a `replay.ogg`, `replay.mp3` or `replay.wav` of
-their own into the user folder (`user://music/`), which that copy plays instead; it is never part of the game.
+An original composition of this project, written for it in the style of late-1980s arcade music; it is not a
+transcription, an arrangement or a sample of any existing piece (the original game's replay music is Atari's and is
+neither copied nor used). Nothing in it is recorded: `tools/make-replay-music.py` composes and renders it from its
+score and writes both files (and `game/src/ReplayScore.cs`, the same score for the 1989 mode's synthesiser), so it is
+under the project's own licence like the code.
+
+Ten seconds in A mixolydian at 136 bpm with swung sixteenths: an intro hit of the band and a tom fill, a four-bar hook
+(a syncopated FM lead over slap bass, horn stabs and a clav comp: A, G to D/F#, A, then F and G as band hits) and a
+button on A with the brass falling off. The palette follows what is documented of the 1989 cabinet's sound board (a
+68000 and a TMS32010 DSP mixing sampled instruments at 20 kHz into a 12-bit AM6012 DAC, mono; MAME's
+`atari/harddriv_a.cpp`) and the studio sounds such samples were taken from: four-operator FM in the YM2151's layout for
+the brass, the lead, the slap bass and the clav, drum-machine drums rebuilt from oscillators and noise with gated
+reverb, an orchestra hit. The mix is then passed through the board as the script models it (20 kHz, truncated to 12
+bits, held between samples, the amplifier's low-pass): peak -1 dBFS, -17 LUFS integrated (mono). `replay.ogg` is
+Vorbis 44.1 kHz with two identical channels, `replay.wav` mono 22.05 kHz 16-bit for the Unreal version's reader (the
+Godot export leaves it out). Rebuild:
+
+    python -I tools/make-replay-music.py [--stems <folder>]
+
+It replaced eleven seconds of the CC0 "Horizon Surfer" by congusbongus (OpenGameArt). Since 0.11 a player
+can put a `replay.ogg`, `replay.mp3` or `replay.wav` of their own into the user folder (`user://music/`), which that
+copy plays instead; it is never part of the game.
 
 ## References (not shipped)
 
