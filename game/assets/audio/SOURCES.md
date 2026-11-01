@@ -1,6 +1,6 @@
 # Recordings
 
-## Engines (`flat12/engine_*`, `v8/engine_*`, `hothatch/engine_*`, `five/engine_*`, `turbohatch/engine_*`)
+## Engines (`flat12/engine_*`, `v8/engine_*`, `hothatch/engine_*`, `turbohatch/engine_*`, `v6/engine_*`)
 
 Each car has two grain banks: a recording of the engine at idle and one running up through a gear, cut into
 its firing pulses by `tools/make-engine-bank.py` (a 16-bit mono WAV at 44.1 kHz and, beside it, a JSON file
@@ -20,12 +20,12 @@ overlap-adds them; nothing loops and nothing is pitch-shifted.
 | `hothatch/engine_idle` | `honda civic type r.mp3` from the Internet Archive item "Car Engine Sounds" (below) | 2.7@3.4@42@30@46, 10.3@11.9@35@27@42 |
 | `hothatch/engine_drive` | `honda civic type r.mp3` | 14.2@16.3@60@45@235, 17.4@19.6@150@125@240 |
 | `hothatch/engine_overrun` | `honda civic type r.mp3` (the throttle shut, revs falling) | 0.6@2.2@112@45@130, 4.5@6.2@110@40@125, 8.5@10.0@91@35@100 |
-| `five/engine_idle` | Freesound #95838 "RG Volvo Engine.wav" by cmusounddesign (a 2.4-litre five under the bonnet, at idle), https://freesound.org/s/95838/ (CC BY 4.0) | 6.0@23.0@42.5@36@50 |
-| `five/engine_drive` | `honda s2000.mp3` from the Internet Archive item "Car Engine Sounds" (below), played as a five (see the note) | 12.0@15.6@57@45@215, 2.9@5.6@205@180@300 |
-| `five/engine_overrun` | `honda s2000.mp3` (the throttle shut, revs falling) | 6.0@8.6@224@60@260 |
 | `turbohatch/engine_idle` | `25 Nissan Pulsar.mp3` from the Internet Archive item "Car Engine Sounds" (below) | 0.4@2.4@33@22@48 |
 | `turbohatch/engine_drive` | `25 Nissan Pulsar.mp3` | 6.0@8.7@94@80@175, 21.3@24.5@109@90@210, 25.0@27.9@127@110@200 |
 | `turbohatch/engine_overrun` | `25 Nissan Pulsar.mp3` (the throttle shut, revs falling) | 13.0@15.3@130@60@140, 16.5@19.2@94@28@100 |
+| `v6/engine_idle` | `Jaguar f-type s.mp3` from the Internet Archive item "Car Engine Sounds" (below) | 13.0@14.4@32@25@40, 30.5@31.05@32@25@40 |
+| `v6/engine_drive` | `Jaguar f-type s.mp3` (the blips of the throttle, rising) | 14.77@15.1@59@45@110, 4.44@4.8@59@45@110, 1.09@1.85@43@36@130, 18.12@18.72@80@65@200, 20.49@21.17@75@60@230, 22.69@23.27@108@90@230, 25.34@26.06@70@55@170, 26.27@27.17@82@60@230 |
+| `v6/engine_overrun` | `Jaguar f-type s.mp3` (the revs falling after each blip, the throttle shut) | 21.80@22.66@156@95@175, 24.0@25.32@156@65@175, 27.8@29.9@156@44@175 |
 
 The overrun banks play in place of the run-up as the throttle closes (`GranularEngine`): off the throttle a real
 engine stops firing and what is left is the exhaust's rasp, which no filter on the run-up gave.
@@ -45,13 +45,29 @@ No recording of a flat-twelve with a usable licence was found; the twelve-cylind
 Lamborghini V12 at idle and the Countach track, the closest in era and sound. Swap the files (same names, made
 with the script) to use other recordings.
 
-The five-cylinder hatch (0.9) idles on a real five (the CC BY Volvo recording above; credit cmusounddesign) but
-no run-up of a five under load with a usable licence was found (the Freesound ramps of a Volvo S60 by el-bee are
-CC BY-NC and were not used): its drive and overrun banks are cut from the S2000 track, a high-revving four,
-laid down at the five's firing frequency (rpm x 5 / 120), and `GranularEngine` weights every fifth pulse in a
-fixed pattern (`FivePattern`) to give the five's warble back. The hot hatch and the turbo hatch are cut from
-the Civic Type R and the Pulsar tracks of the same CC0 item; the turbo's whistle and blow-off valve are
-synthesised (`EngineAudio.Turbo`).
+Which bank a car plays is its engine's `EngineSpec.SoundFolder` (physics/Vehicle/EngineModel.cs), with its
+`Cylinders` turning revs into firing pulses; the Unreal version's table in `GlpAudio.cpp` follows it.
+
+The three hatchbacks follow the cars the game draws (cars3). The hot hatch (the 205 GTi's eight-valve 1.9) plays the
+Civic Type R's four of the same CC0 item. The rally hatch (the Delta Integrale's two-litre turbo four) plays the
+turbo four of the `turbohatch` banks, the Pulsar track of the same item, with the whistle and the blow-off valve the
+view synthesises for any engine with boost (`EngineAudio.Turbo`). The same item holds a `Lancia Delta HF
+Integrale.mp3`; it is a 15-second drive-by, Doppler-shifted, with no idle and no steady run-up, and the voice could
+not be cut from it (its spectrogram and pitch track, 1 November 2026). A Commons recording of an Integrale ("Lancia
+Delta Integrale - engine and exhaust sound", Grzegorz Kalinecki, CC BY 3.0, its licence review pending) is left for a
+later pass.
+The V6 hatch (the Golf R32's 3.2 VR6) plays a six: no CC0 or CC BY recording of a VR6 was found (Freesound's and
+Wikimedia Commons' searches turned up none; the VR6 recordings on offer are commercial libraries), so its banks are
+cut from the same CC0 item's `Jaguar f-type s.mp3`, the supercharged three-litre V6 of the F-type S. A VR6 fires
+its six cylinders every 120 degrees of crank like any even-firing six, so the voice fires at rpm x 6 / 120 as
+the real engine does and the recording's pulses are those of a six; the V6's supercharger whine and its sharper
+note are the difference. The recording is the car revved at a standstill, so the run-up bank is cut from the
+throttle's blips (unloaded, up to about 4,200 rpm) and the overrun from the revs falling after them; above that the
+voice spaces the highest pulses closer, as every bank does past its top.
+
+The five-cylinder hatch of 0.9-0.19 (a Volvo five at idle, credit cmusounddesign, CC BY 4.0, and the S2000 track
+laid at a five's firing frequency, `GranularEngine.FivePattern`) left the game with the car it voiced; its banks are
+no longer shipped.
 
 ## The everyday cars (`saloon/`, `estate/`, `fleet/`, 0.10.0)
 

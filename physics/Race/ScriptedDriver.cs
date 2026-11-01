@@ -131,8 +131,14 @@ public sealed class ScriptedDriver
         };
     }
 
-    private static bool DrivenWheelsDown(VehicleSim car) =>
-        car.Spec.FrontWheelDrive ? car.Wheels[0].InContact && car.Wheels[1].InContact : car.Wheels[2].InContact && car.Wheels[3].InContact;
+    private static bool DrivenWheelsDown(VehicleSim car)
+    {
+        foreach (var w in car.Wheels)
+        {
+            if (car.Spec.Drives(w.IsFront) && !w.InContact) return false;
+        }
+        return true;
+    }
 
     /// <summary>
     /// The throttle a competent driver actually holds when asking for <paramref name="throttle"/>: eased in proportion
@@ -145,8 +151,11 @@ public sealed class ScriptedDriver
     public static float FeatherThrottle(VehicleSim car, float throttle)
     {
         var spec = car.Spec;
-        var (a, b) = spec.FrontWheelDrive ? (car.Wheels[0], car.Wheels[1]) : (car.Wheels[2], car.Wheels[3]);
-        var excess = MathF.Max(Excess(a), Excess(b));
+        var excess = 0f;
+        foreach (var w in car.Wheels)
+        {
+            if (spec.Drives(w.IsFront)) excess = MathF.Max(excess, Excess(w));
+        }
         return throttle * MathUtil.Clamp(1f - excess / (1.5f + 0.1f * MathF.Abs(car.Speed)), 0.2f, 1f);
 
         float Excess(WheelState w)

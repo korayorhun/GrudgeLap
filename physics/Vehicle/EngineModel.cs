@@ -195,25 +195,36 @@ public sealed record EngineSpec
         (6000f, 528f), (7000f, 520f), (8000f, 505f), (8600f, 478f), (9000f, 440f), (9400f, 330f),
     ];
 
-    /// <summary>A 2.0-litre sixteen-valve four: 200 N m at 5400, 172 hp at 6250, hard to 7200.</summary>
+    /// <summary>
+    /// The 205 GTi's 1.9 eight-valve four (XU9JA): 161 N m at 4750, 130 PS at 6000 (152 N m there), a broad, flat curve
+    /// that tails off past 6500.
+    /// </summary>
     private static readonly (float Rpm, float Torque)[] HotHatchCurve =
     [
-        (0f, 0f), (600f, 95f), (1000f, 135f), (2000f, 160f), (3000f, 172f), (4000f, 184f), (5000f, 196f),
-        (5400f, 200f), (6000f, 196f), (6250f, 193f), (6800f, 176f), (7200f, 152f), (7600f, 110f),
+        (0f, 0f), (600f, 85f), (1000f, 110f), (2000f, 135f), (3000f, 150f), (4000f, 158f), (4750f, 161f),
+        (5500f, 158f), (6000f, 152f), (6500f, 138f), (6800f, 122f), (7200f, 85f),
     ];
 
-    /// <summary>A 2.0-litre twenty-valve five: 186 N m at 4500, 147 hp at 6100.</summary>
-    private static readonly (float Rpm, float Torque)[] FiveCurve =
+    /// <summary>
+    /// The Delta Integrale Evoluzione's two-litre sixteen-valve turbo four with full boost: 304 N m at 3500, 210 PS at
+    /// 5750 (256.5 N m there); a big T3 on an 8:1 compression ratio, so off boost it makes little more than half.
+    /// </summary>
+    private static readonly (float Rpm, float Torque)[] RallyTurboCurve =
     [
-        (0f, 0f), (600f, 105f), (1000f, 138f), (2000f, 160f), (3000f, 172f), (4000f, 182f), (4500f, 186f),
-        (5000f, 184f), (6000f, 174f), (6100f, 172f), (6500f, 160f), (6800f, 146f), (7200f, 105f),
+        (0f, 0f), (600f, 110f), (1000f, 140f), (1500f, 180f), (2000f, 230f), (2500f, 270f), (3000f, 295f),
+        (3500f, 304f), (4000f, 300f), (4500f, 290f), (5000f, 277f), (5500f, 263f), (5750f, 256.5f), (6200f, 235f),
+        (6500f, 212f), (6800f, 180f), (7100f, 120f),
     ];
 
-    /// <summary>A 2.0-litre turbo four with full boost: 300 N m from 2200 to 5500, 240 hp near 6000.</summary>
-    private static readonly (float Rpm, float Torque)[] TurboFourCurve =
+    /// <summary>
+    /// The Golf R32's 3.2-litre VR6 (BFH): 320 N m from 2800 to 3200, 241 PS at 6250 (271 N m there), a long, even
+    /// curve of a big naturally aspirated six.
+    /// </summary>
+    private static readonly (float Rpm, float Torque)[] VrSixCurve =
     [
-        (0f, 0f), (600f, 120f), (1000f, 170f), (1500f, 230f), (2000f, 285f), (2200f, 300f), (5500f, 300f),
-        (6000f, 282f), (6300f, 270f), (6700f, 236f), (7000f, 180f),
+        (0f, 0f), (600f, 170f), (1000f, 220f), (1500f, 255f), (2000f, 285f), (2500f, 310f), (2800f, 320f),
+        (3200f, 320f), (4000f, 315f), (4500f, 310f), (5000f, 302f), (5500f, 293f), (6000f, 281f), (6250f, 271f),
+        (6500f, 255f), (6800f, 215f), (7100f, 150f),
     ];
 
     /// <summary>The 1.6 pushrod four of the 1990s saloon: 123 N m at 3000, 75 PS DIN at 5400, out of breath past 6000.</summary>
@@ -252,8 +263,8 @@ public sealed record EngineSpec
 
     public static EngineSpec HotHatch => new()
     {
-        IdleRpm = 850f,
-        RedlineRpm = 7200f,
+        IdleRpm = 900f,
+        RedlineRpm = 6700f,
         StallRpm = 380f,
         BrakingTorque = 12f,
         BrakingPerRpm = 0.0035f,
@@ -262,16 +273,37 @@ public sealed record EngineSpec
         SoundFolder = "hothatch",
     };
 
-    public static EngineSpec FiveCylinder => new()
+    /// <summary>
+    /// The Delta's turbo four. Its voice is the turbo four of the "turbohatch" recordings (the Pulsar's), with the
+    /// whistle and the blow-off valve the view synthesises for any engine with boost.
+    /// </summary>
+    public static EngineSpec RallyTurboFour => new()
     {
-        IdleRpm = 800f,
+        IdleRpm = 900f,
         RedlineRpm = 6800f,
         StallRpm = 380f,
         BrakingTorque = 13f,
         BrakingPerRpm = 0.0038f,
-        FullThrottleCurve = FiveCurve,
-        Cylinders = 5,
-        SoundFolder = "five",
+        FullThrottleCurve = RallyTurboCurve,
+        Cylinders = 4,
+        SoundFolder = "turbohatch",
+        // A large Garrett T3 on an 8:1 four: off boost about half the torque, and a turbo of 1991 spools slowly.
+        BoostShare = 0.48f,
+        BoostSeconds = 0.7f,
+        BoostThresholdRpm = 2000f,
+    };
+
+    /// <summary>The R32's VR6. Its voice is a six (the "v6" recordings: a supercharged V6 of the same 120-degree firing interval).</summary>
+    public static EngineSpec VrSix => new()
+    {
+        IdleRpm = 800f,
+        RedlineRpm = 6600f,
+        StallRpm = 380f,
+        BrakingTorque = 16f,
+        BrakingPerRpm = 0.004f,
+        FullThrottleCurve = VrSixCurve,
+        Cylinders = 6,
+        SoundFolder = "v6",
     };
 
     public static EngineSpec SaloonFour => new()
@@ -308,21 +340,5 @@ public sealed record EngineSpec
         FullThrottleCurve = FleetCurve,
         Cylinders = 4,
         SoundFolder = "fleet",
-    };
-
-    public static EngineSpec TurboFour => new()
-    {
-        IdleRpm = 800f,
-        RedlineRpm = 6700f,
-        StallRpm = 380f,
-        BrakingTorque = 13f,
-        BrakingPerRpm = 0.0035f,
-        FullThrottleCurve = TurboFourCurve,
-        Cylinders = 4,
-        SoundFolder = "turbohatch",
-        // Off boost the engine makes a little over half its torque: a small turbo on a 2.0 four spools fast.
-        BoostShare = 0.45f,
-        BoostSeconds = 0.55f,
-        BoostThresholdRpm = 1700f,
     };
 }

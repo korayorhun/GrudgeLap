@@ -25,6 +25,11 @@ pinned in `HandlingTests` against real-car ranges, and the figures there are the
 | Scripted laps at 20, 30, 90 and 144 fps (one driver call per frame, as in the game) | both routes, no crash, no run-off, no lap counted at the fork | 90 s and 102 s laps at every rate | `Scripted_driver_completes_a_lap_at_any_frame_rate` |
 | Scripted lap, speed route, 8 drones both ways | lap completed, at most one crash | 111 s, 0 crashes, follows and overtakes (0.19) | `Scripted_driver_threads_the_traffic_on_the_speed_route` |
 | A car without the pull for the loop (the 1.4 estate) | told before the fork, attract driver takes the speed route | warned, speed lap, 0 crashes (0.19) | `A_car_that_cannot_make_the_loop_is_told_and_takes_the_speed_route` |
+| 0-100 km/h, the three hatchbacks: 205 GTi 1.9 / Delta Integrale Evoluzione / Golf R32 (cars3) | a tenth either side of 7.8 / 5.7 / 6.6 s | 8.36 / 6.27 / 6.62 s (the Delta at the top of its 6.3 s bound) | `Sprints_and_stops_within_the_real_cars_ranges` |
+| Steady pull, four-wheel drive | the Delta about its epicyclic's 47 % in front; the R32 front-drive | 51 % / 100 % (cars3) | `A_steady_pull_splits_the_torque_as_the_centre_differential_does` |
+| Fronts on grass, the rears on asphalt, the same torque in (clutch held part-way) | the coupling hands the drive to the rear, which grips, and the car gains more | Delta: rear 59 % (open centre 53 %), fronts 0.26 m/s ahead (8.0), 2.50 m/s gained (2.26); R32: rear 59 % (none), 0.35 m/s ahead (14.3), 2.55 m/s (0.99) (cars3) | `The_centre_coupling_hands_the_drive_to_the_axle_that_grips` |
+| Launch assist, R32 with its fronts on grass | the Haldex closes and the rear drives | 3.38 m/s after 0.7 s, rear 48 % (open: 1.36 m/s) (cars3) | `The_launch_assist_counts_on_the_Haldex` |
+| Haldex under braking | open | passes nothing (cars3) | `The_Haldex_coupling_opens_under_braking` |
 | Fall off the loop, set down at the last return point | the run-up to make it from rest | 57-65 mph at the loop for the saloon, fleet, hot hatch and flat-twelve (0.19) | `A_car_set_down_after_falling_off_the_loop_has_the_run_up_to_make_it` |
 | Drones | keep their lane, never enter the stunt route | 300 s, every step | `Drones_keep_their_lane_and_never_enter_the_stunt_route` |
 | Ram a drone | crash → replay → return point clear of traffic | yes | `Hitting_a_drone_crashes_and_replays` |
@@ -42,4 +47,5 @@ the keyboard steering rates are a first guess; the scripted driver corners at 68
 
 Why these numbers: the 1989 cabinet's own figures are documented only loosely (operator's manual timers,
 the Lynx manual's "at least 60 mph for the loop", reviews of the bridge window); the rest is tuned to a
-late-80s flat-twelve sports car, a 2010s V8, and to what felt right. See `research-notes.md`.
+late-80s flat-twelve sports car, a 2010s V8, the published figures of the hatchbacks and everyday cars the game
+draws (design.md, vehicle dynamics audit, items 18-19), and to what felt right. See `research-notes.md`.

@@ -5,10 +5,9 @@
 | Godot Engine 4.7 (.NET edition) | game engine, shipped with the game | MIT — https://godotengine.org/license/ |
 | .NET 8 runtime | shipped next to the exe (`data_GrudgeLap_windows_x86_64`) | MIT |
 | Godot.NET.Sdk | build integration | MIT |
-| "Car Engine Sounds" (Internet Archive item `car-engines`) | the engines' run-up grain banks, cut from the `3 Ferrari 458`, `15 Lamborghini Countach`, `honda civic type r`, `honda s2000` and `25 Nissan Pulsar` tracks (see `game/assets/audio/SOURCES.md`) | CC0 1.0 Universal, as declared by the uploader — https://archive.org/details/car-engines |
+| "Car Engine Sounds" (Internet Archive item `car-engines`) | the engines' run-up grain banks, cut from the `3 Ferrari 458`, `15 Lamborghini Countach`, `honda civic type r`, `25 Nissan Pulsar` and `Jaguar f-type s` tracks (the last also the V6 hatch's idle and overrun, `v6/engine_*`) (see `game/assets/audio/SOURCES.md`) | CC0 1.0 Universal, as declared by the uploader — https://archive.org/details/car-engines |
 | Freesound #585215 "Car Engine: Maserati GranTurismo Switch to Sport Mode and Launch" by myeclecticself | the V8's idle grain bank (`v8/engine_idle`) | CC0 1.0 — https://freesound.org/s/585215/ |
 | Freesound #112075 "Lambo idle and rev.mp3" by cheesepuff | the twelve's idle grain bank (`flat12/engine_idle`) | CC0 1.0 — https://freesound.org/s/112075/ |
-| Freesound #95838 "RG Volvo Engine.wav" by cmusounddesign | the five-cylinder's idle grain bank (`five/engine_idle`) | CC BY 4.0 — https://freesound.org/s/95838/ (credit: cmusounddesign) |
 | getoutlines.com blueprints of a 1984 coupe, the 2000 Clio, the 1995 Bravo, the 2007 Leon, the 1980 Fiat 131 Mirafiori saloon and the 1969 Dacia 1300 Break | the measurements the car lofts are keyed on (`CarView.BodyStyle`); no drawing is shipped | CC BY 4.0 — https://getoutlines.com |
 | Wikimedia Commons photographs of the Tofas Sahin, the Renault 12 Toros and the Fiat Tipo saloon (by Mr.choppers, Emre Ayhan and others; listed in `game/assets/audio/SOURCES.md` under "References") | looked at for the proportions and the details of the everyday cars; no photograph is shipped | public domain / CC BY-SA, reference only |
 | BigSoundBank "Cow moos #2"-"#6" by Joseph Sardin | the cows' moos (`cow/moo1.wav` ... `moo5.wav`) | CC0 1.0 — https://bigsoundbank.com/cow-moos-2-s2382.html |
@@ -34,9 +33,9 @@
 | "Lotus Esprit Turbo 1983" by esprit3d.website (Shogos_esprit) | the flat-twelve's cabin (mirrored to left-hand drive) | CC BY 4.0 — https://sketchfab.com/3d-models/886bcf8ce52f46e3b36115e01319ec44; modified: re-scaled and re-rigged for GrudgeLap |
 | "Mclaren 570S Coupè" by MMC Works (mmcworks) | the V8's body and cabin | CC BY 4.0 — https://sketchfab.com/3d-models/869feee8011d4803894318f6f0ddf2c6; modified: re-scaled and re-rigged for GrudgeLap |
 | "Peugeot 205 Gti" by la_freizz | the hot hatch's body and cabin | CC BY 4.0 — https://sketchfab.com/3d-models/b52c8e5e8070463ab1485039246f527c; modified: re-scaled and re-rigged for GrudgeLap |
-| "FREE Lancia Delta HF Integrale evo 2" by TARANTULA (begemot.988888) | the five-cylinder hatch's body and cabin | CC BY 4.0 — https://sketchfab.com/3d-models/85614131e0dc4613a948472aaa935fc7; modified: re-scaled and re-rigged for GrudgeLap |
-| "Golf R32" by Nick Broad (nickbroad) | the turbo hatch's body (with the SAAB 9-5's cabin) | CC BY 4.0 — https://sketchfab.com/3d-models/8171332b39be45e896a7fdf3c3e66354; modified: re-scaled and re-rigged for GrudgeLap |
-| "SAAB 9-5 sedan 1997-2001" by blendffnike | the turbo hatch's cabin | CC BY 4.0 — https://sketchfab.com/3d-models/4db0bcbc183a452eb3ef692cce2fe36f; modified: re-scaled and re-rigged for GrudgeLap |
+| "FREE Lancia Delta HF Integrale evo 2" by TARANTULA (begemot.988888) | the rally hatch's body and cabin | CC BY 4.0 — https://sketchfab.com/3d-models/85614131e0dc4613a948472aaa935fc7; modified: re-scaled and re-rigged for GrudgeLap |
+| "Golf R32" by Nick Broad (nickbroad) | the V6 hatch's body (with the SAAB 9-5's cabin) | CC BY 4.0 — https://sketchfab.com/3d-models/8171332b39be45e896a7fdf3c3e66354; modified: re-scaled and re-rigged for GrudgeLap |
+| "SAAB 9-5 sedan 1997-2001" by blendffnike | the V6 hatch's cabin | CC BY 4.0 — https://sketchfab.com/3d-models/4db0bcbc183a452eb3ef692cce2fe36f; modified: re-scaled and re-rigged for GrudgeLap |
 | "Renault 12" by boitaloran | the 1.4 estate's body and cabin (the saloon: the Toros shares everything ahead of the B-pillar) | CC BY 4.0 — https://sketchfab.com/3d-models/f8c26a68a3dd45b492d6d9a33cda6fcd; modified: re-scaled and re-rigged for GrudgeLap |
 | "VAZ-2106" by domhathair | the 1990s saloon's body and cabin | CC BY 4.0 — https://sketchfab.com/3d-models/a73b3cdeddd846209bf7c73d5f04d20f; modified: re-scaled, re-rigged and lit for GrudgeLap |
 | "Mercedes-Benz E-Class W212" by Peter_D (better_peter) | the fleet saloon's body and cabin | CC BY 4.0 — https://sketchfab.com/3d-models/119c5e10733142b197aa53b86f6aeb04; modified: re-scaled and re-rigged for GrudgeLap |
@@ -60,8 +59,8 @@ written in the style of late-1980s arcade music, not a transcription or arrangem
 from its score by `tools/make-replay-music.py` (no recording or sample goes into it). It replaced an excerpt of
 the CC0 "Horizon Surfer" by congusbongus (OpenGameArt).
 
-The car names ("FLAT-12 GT '84", "V8 GTB '12 SPORT EXHAUST", "HOT HATCH 2.0 16V '01", "FIVE 2.0 20V HATCH
-'97", "TURBO HATCH 2.0T '08", "SALOON 1.6 '91", "ESTATE 1.4 '93", "SALOON 1.4 16V '17") are descriptions of an engine layout, a body style and a year; they are not the
+The car names ("FLAT-12 GT '84", "V8 GTB '12 SPORT EXHAUST", "HOT HATCH 1.9 8V '88", "RALLY HATCH 2.0 TURBO
+4WD '92", "V6 HATCH 3.2 4WD '03", "SALOON 1.6 '91", "ESTATE 1.4 '93", "SALOON 1.4 16V '17") are descriptions of an engine layout, a body style and a year; they are not the
 names of any make or model. The lofted bodies are our own, keyed on the proportions of the period cars; the
 models drawn in their place show real cars (a Ferrari, a McLaren, a Peugeot, a Lancia, a Volkswagen, a VAZ, a
 Renault, a Mercedes-Benz, and cabins of a Lotus and a SAAB), whose names

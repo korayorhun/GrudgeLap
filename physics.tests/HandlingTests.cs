@@ -18,7 +18,7 @@ public sealed class HandlingTests(ITestOutputHelper output)
     /// standing start (<see cref="HandlingRig.Sprint(VehicleSpec, float, float)"/>: revs up on the brake, timed from its
     /// release); since 0.19 the assisted clutch launches at the engine's launch revs with the driven tyres just short of
     /// their peak, the V8 with its launch control and its dual-clutch box handing the drive from gear to gear, which
-    /// brought the ranges in to about a tenth either side of the published figures. The three cars with anti-lock
+    /// brought the ranges in to about a tenth either side of the published figures. The cars with anti-lock
     /// brakes stop at the tyres' peak; the others lock their wheels, which costs them a sixth or so on the dry road, as
     /// a locked tyre slides at about three quarters of its peak friction. Ranges: published sprints (see the specs);
     /// stops of contemporary road tests (Car and Driver's 570S: 144 ft from 70 mph, about 35 m from 100 km/h; road tests
@@ -33,9 +33,21 @@ public sealed class HandlingTests(ITestOutputHelper output)
     // V8: McLaren quotes 3.2 s for the 570S with its launch control (Car and Driver: 2.9 s to 60 mph); about 3.4 here,
     // traction-limited at 0.89 g throughout. ABS.
     [InlineData(1, 3.1f, 3.7f, 29f, 37f)]
-    [InlineData(2, 6.9f, 7.9f, 38f, 48f)]    // hot hatch: 7.2 s quoted (2.0 16V of 2001); no ABS
-    [InlineData(3, 8.2f, 9.5f, 41f, 52f)]    // five: 8.5 s quoted (2.0 20V of 1997); no ABS
-    [InlineData(4, 6.2f, 7.3f, 32f, 39f)]    // turbo hatch: 6.4 s quoted (2.0 TFSI of 2008, 240 hp); ABS
+    // The three hatchbacks, since they follow the cars the game draws: a tenth of the published 0-100 km/h either side,
+    // plainly that and no tighter; the stops a tenth either side of the one published stop (the R32's) or of the class.
+    // Hot hatch: Peugeot quoted 7.8 s for the 205 GTi 1.9 (about 8.4 here, on its eight-valve's broad but modest
+    // torque); no ABS, so the wheels lock (non-ABS cars of the late 1980s on 15 in tyres: 42-52 m).
+    [InlineData(2, 7.0f, 8.6f, 42f, 52f)]
+    // Rally hatch: Lancia quoted 5.7 s for the Delta Integrale Evoluzione (6.27 here: the T3's lag and a launch the
+    // engine limits, not the four tyres). The upper bound is 6.3 s, the tenth over (6.27 s) rounded up to the printed
+    // tenth, and the car sits at its very top: a change that slows the Delta at all takes it out of the range, as it
+    // should, since it is already a tenth slower than Lancia's figure. Bosch ABS, no published stop (34-42 m, the ABS
+    // cars of its time).
+    [InlineData(3, 5.1f, 6.3f, 34f, 42f)]
+    // V6 hatch: VW quoted 6.6 s for the Golf R32 (about 6.6 here: the launch assist counts on the Haldex, whose fronts
+    // run ahead to close it, as the first generation's did); ABS; the Washington Times stopped one from 60 mph in
+    // 117 ft, about 38 m from 100 km/h.
+    [InlineData(4, 5.9f, 7.3f, 34f, 42f)]
     [InlineData(5, 12.8f, 15.0f, 46f, 58f)]  // 1.6 saloon: 13.9 s (FIA form 5608's car); discs and drums, no ABS
     [InlineData(6, 15.5f, 18.5f, 48f, 62f)]  // 1.4 estate: about 16-17 s; no ABS
     [InlineData(7, 10.9f, 12.8f, 35f, 43f)]  // fleet saloon: 11.5 s quoted (Fiat's handbook); ABS with its ESC
@@ -61,6 +73,13 @@ public sealed class HandlingTests(ITestOutputHelper output)
     /// 0.18 the assisted clutch bit from about 2,000 rpm whatever the car: the revs collapsed, the tyres spun up to a slip
     /// of 1.5 and the driver had to feather the throttle back to a fifth.
     /// </summary>
+    /// <remarks>
+    /// The slip read is that of the driven axle that slips most. The V6 hatch's Haldex closes only once its fronts lead
+    /// the rears, by 0.5 rad/s at least, which near a standstill is past their peak slip (0.16 m/s on a slip ratio read
+    /// against 1.2 m/s): its fronts run ahead there so that the rears can drive, and may reach 1.4 times their peak, its
+    /// rears no more than any other car's. The rally hatch is left out: its launch is the engine's (the T3 builds its
+    /// boost on the clutch), its four tyres far short of their peak.
+    /// </remarks>
     [Theory]
     [InlineData(0)]
     [InlineData(1)]
@@ -80,8 +99,8 @@ public sealed class HandlingTests(ITestOutputHelper output)
         Assert.InRange(sim.Drivetrain.Engine.Rpm, launchRpm, launchRpm + 600f);
         Assert.InRange(sim.Speed, -0.05f, 0.05f);
 
-        var (a, b) = spec.FrontWheelDrive ? (sim.Wheels[0], sim.Wheels[1]) : (sim.Wheels[2], sim.Wheels[3]);
-        float lowestRpm = float.MaxValue, mostSlip = 0f, slipSum = 0f;
+        float lowestRpm = float.MaxValue, mostSlip = 0f, slipSum = 0f, mostLeadSlip = 0f;
+        var leadsToClose = spec.FourWheelDrive is { Coupling: CentreCoupling.Haldex };
         var samples = 0;
         var t0 = 0f;
         for (; t0 < 6f; t0 += HandlingRig.Dt)
@@ -90,17 +109,26 @@ public sealed class HandlingTests(ITestOutputHelper output)
             if (!sim.Drivetrain.Launching) break;
             if (t0 < 0.25f) continue;  // the first bite, as the load comes onto the driven wheels
             lowestRpm = MathF.Min(lowestRpm, sim.Drivetrain.Engine.Rpm);
-            var slip = 0.5f * (a.SlipRatio + b.SlipRatio) / TireModel.PeakSlipRatio(a.Friction);
-            mostSlip = MathF.Max(mostSlip, slip);
+            var slip = 0f;
+            foreach (var front in new[] { true, false })
+            {
+                if (!spec.Drives(front)) continue;
+                var (a, b) = front ? (sim.Wheels[0], sim.Wheels[1]) : (sim.Wheels[2], sim.Wheels[3]);
+                var axleSlip = 0.5f * (a.SlipRatio + b.SlipRatio) / TireModel.PeakSlipRatio(a.Friction);
+                slip = MathF.Max(slip, axleSlip);
+                if (leadsToClose && front) mostLeadSlip = MathF.Max(mostLeadSlip, axleSlip);
+                else mostSlip = MathF.Max(mostSlip, axleSlip);
+            }
             slipSum += slip;
             samples++;
         }
         var meanSlip = slipSum / samples;
-        output.WriteLine($"{spec.Name}: launch revs {launchRpm:F0}, held at least {lowestRpm:F0} rpm for {t0:F2} s to {sim.Speed * MathUtil.KmhPerMps:F0} km/h; driven slip {meanSlip:P0} of the peak on average, at most {mostSlip:P0}");
+        output.WriteLine($"{spec.Name}: launch revs {launchRpm:F0}, held at least {lowestRpm:F0} rpm for {t0:F2} s to {sim.Speed * MathUtil.KmhPerMps:F0} km/h; driven slip {meanSlip:P0} of the peak on average, at most {mostSlip:P0}" + (leadsToClose ? $" (the leading fronts {mostLeadSlip:P0})" : ""));
         Assert.InRange(t0, 0.5f, 5f);
         Assert.True(lowestRpm > 0.9f * launchRpm, $"the engine bogged to {lowestRpm:F0} rpm");
         Assert.InRange(meanSlip, spec.LaunchControl ? 0.8f : 0.5f, 1.0f);
         Assert.True(mostSlip < 1.15f, $"a driven tyre spun past its peak ({mostSlip:P0})");
+        Assert.True(mostLeadSlip < 1.4f, $"the fronts ran too far ahead to close the coupling ({mostLeadSlip:P0})");
     }
 
     /// <summary>
@@ -143,11 +171,11 @@ public sealed class HandlingTests(ITestOutputHelper output)
     /// <summary>
     /// Brake balance: pressing the pedal down progressively from 100 km/h, a car without anti-lock brakes locks its
     /// front wheels first, as brake systems are proportioned to; locked rears first would spin it in a hard stop.
+    /// The rally hatch, here while it was a five without ABS, now has the Delta's Bosch anti-lock brakes.
     /// </summary>
     [Theory]
     [InlineData(0)]
     [InlineData(2)]
-    [InlineData(3)]
     [InlineData(5)]
     [InlineData(6)]
     public void The_front_wheels_lock_before_the_rears(int car)
@@ -234,13 +262,16 @@ public sealed class HandlingTests(ITestOutputHelper output)
 
     /// <summary>
     /// At rest each axle carries the share of the weight the real car does: 40/60 for the flat-twelve (the Testarossa
-    /// was quoted at 40/60), 42/58 for the V8 (McLaren quotes 42:58 for the 570S), about 60 % in front for the
-    /// front-engined hatchbacks and 53 % for the rear-wheel-drive saloon.
+    /// was quoted at 40/60), 42/58 for the V8 (McLaren quotes 42:58 for the 570S), about 63 % in front for the 205,
+    /// about 60 % for the two four-wheel-drive hatchbacks (their propshafts and rear differentials behind) and 53 % for
+    /// the rear-wheel-drive saloon.
     /// </summary>
     [Theory]
     [InlineData(0, 0.38f, 0.42f)]
     [InlineData(1, 0.40f, 0.44f)]
-    [InlineData(2, 0.59f, 0.64f)]
+    [InlineData(2, 0.61f, 0.64f)]
+    [InlineData(3, 0.59f, 0.62f)]
+    [InlineData(4, 0.59f, 0.62f)]
     [InlineData(5, 0.51f, 0.55f)]
     public void Static_weight_distribution_matches_the_car(int car, float min, float max)
     {
@@ -263,14 +294,15 @@ public sealed class HandlingTests(ITestOutputHelper output)
     /// follows the cars too: little for the sports cars, a lot for the soft saloons of the 1990s. Since 0.19 the steering
     /// gives under the tyres' aligning torque (<see cref="VehicleSpec.SteeringCompliance"/>), which adds the half a degree
     /// per g or so that steering compliance gives real cars: the hot hatch, at 0.8 deg/g before, below its class, now
-    /// understeers as front-heavy hatchbacks do (1.4).
+    /// understeers as front-heavy hatchbacks do (1.4). No understeer gradient or roll rate is published for the three
+    /// hatchbacks: their ranges are the class's (1-4 deg/g for front-heavy cars, Gillespie ch. 6) narrowed round each.
     /// </summary>
     [Theory]
     [InlineData(0, 0.3f, 1.5f, 1.2f, 2.8f)]
     [InlineData(1, 0.2f, 1.2f, 0.8f, 2.0f)]
-    [InlineData(2, 1.0f, 3.5f, 2.0f, 3.6f)]
-    [InlineData(3, 1.0f, 4.0f, 2.3f, 4.0f)]
-    [InlineData(4, 1.0f, 3.5f, 1.8f, 3.4f)]
+    [InlineData(2, 1.0f, 2.2f, 2.2f, 3.4f)]
+    [InlineData(3, 1.4f, 3.0f, 2.4f, 3.6f)]
+    [InlineData(4, 1.2f, 2.6f, 2.0f, 3.0f)]
     [InlineData(5, 0.8f, 3.0f, 3.8f, 6.5f)]
     [InlineData(6, 1.5f, 5.0f, 4.5f, 7.5f)]
     [InlineData(7, 1.0f, 4.0f, 2.8f, 4.8f)]

@@ -94,14 +94,18 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   optional traction
   control that cuts the engine's torque as the driven wheels spin up, optional anti-lock brakes, brakes
   proportioned to lock the fronts first. Rear- or front-wheel drive
-  (`VehicleSpec.FrontWheelDrive`) through an open differential or, on the flat-twelve, a limited-slip one; a turbo engine's torque builds with its boost
+  (`VehicleSpec.FrontWheelDrive`) through an open differential or, on the flat-twelve, a limited-slip one, or
+  four-wheel drive (`VehicleSpec.FourWheelDrive`, cars3: a centre differential with a fixed split and a viscous
+  coupling, or the gearbox driving the front axle with an on-demand coupling to the rear, and a differential per
+  axle; audit item 18); a turbo engine's torque builds with its boost
   (`EngineModel.Boost`: half a second of lag above a threshold rpm, falling at a third of that rate so a
   shift does not lose it), and the view whistles and vents it.
 - **Cars** — `VehicleSpec` presets: the 1984 flat-twelve (1580 kg, four speeds, 6900 rpm), the 2012 V8
-  (1485 kg, seven speeds, 9000 rpm, stickier tyres, traction control) and, since 0.9, three front-wheel-drive
-  hatchbacks tuned to the published figures of the cars they follow: a 2001 hot hatch (1140 kg, 172 hp, five
-  speeds, 7200 rpm, no traction control), a 1997 five-cylinder (1310 kg, 147 hp, five speeds, the five's
-  warble) and a 2008 turbo (1480 kg, 240 hp with 300 N m from 2200 rpm on boost, six speeds, traction
+  (1485 kg, seven speeds, 9000 rpm, stickier tyres, traction control) and three hatchbacks that, since cars3,
+  follow the cars the game draws (audit item 19): the front-wheel-drive Peugeot 205 GTi 1.9 of 1988 (985 kg with a
+  driver, 130 PS, five speeds, no ABS), the four-wheel-drive Lancia Delta HF Integrale Evoluzione of 1992 (1375 kg,
+  210 PS with a turbo's lag, five speeds, a 47/53 centre differential with a viscous coupling, a Torsen behind, ABS)
+  and the four-wheel-drive Golf R32 of 2003 (1550 kg, a 241 PS VR6, six speeds, a Haldex coupling, ABS and traction
   control); `VehicleTests.Hatchbacks_match_their_published_figures` holds their 0-60 and top speed. Each
   carries an `EngineSpec` (idle, redline, full-throttle curve, engine braking, cylinders, the recordings'
   folder, boost), a body style and the recordings to play.
@@ -270,7 +274,8 @@ Items 12, 13 and 16 were taken up in 0.19, 15 was decided against, 14 stays open
     simulation's (`tools/car_models.py` scales the model to them), the name, the power and the recordings are the
     car the player picks, and its low understeer was the missing steering compliance, not the spec (the 205's softer
     tyres and lighter body give the same 0.5 deg/g from the tyres alone). Should the drawn car stay a 205, the spec
-    and `car_models.py` can follow it together in one change.
+    and `car_models.py` can follow it together in one change. (cars3: the spec followed it, item 19; the geometry
+    `car_models.py` scales the model to stayed.)
 14. **The 570S's brake steer** (it brakes a spinning inside wheel instead of locking the axle) and the hatchbacks'
     electronic equivalents are not modelled; their differentials are open. Still open.
 15. **Camber and tyre temperature** (decided against in 0.19). The raycast wheel has no suspension geometry, so camber
@@ -298,6 +303,89 @@ Items 12, 13 and 16 were taken up in 0.19, 15 was decided against, 14 stays open
     each step, capped by the grip, as the rolling resistance already did along the wheel. Before it, a parked car
     nudged sideways at 1.2 m/s slid on at 1.2 m/s; it now stops in 0.12-0.18 s and stays put
     (`A_parked_car_nudged_sideways_settles`).
+
+Items 18 and 19 came with cars3, when the three hatchbacks were made to drive like the cars the game draws:
+
+18. **Four-wheel drive** (added in cars3). A car drove its front or its rear axle; the Delta and the R32 the game draws
+    drive all four wheels. `VehicleSpec.FourWheelDrive` now gives a car a centre differential with a fixed front share
+    (an epicyclic's: 0.47 on the Delta) or the gearbox driving the front axle (a share of 1), a coupling between the
+    axles (`CentreCoupling.Viscous`, Ferguson's, whose torque grows with the speed difference either way and is never
+    open; or `Haldex`, a multi-plate coupling that closes once the fronts run more than 3 % ahead of the rears, up to
+    its clutch pack's capacity (2500 N m at the rear wheels, about what the rear tyres put down on a dry launch, so once
+    closed it ties the axles together and the tyres share the drive), and opens while the brakes are on, as the first
+    generation's control did for the anti-lock brakes) and a differential per axle (the existing clutch-type model; a Torsen of bias ratio b is its locking
+    (b - 1) / (2 (b + 1)) without preload: 0.2 for the Delta's rear). The clutch sees the centre differential's input:
+    s w_f + (1 - s) w_r, the two axles as one inertia 1 / (s^2 / I_f + (1 - s)^2 / I_r) with their tyres' stiffness,
+    and their loads in the same proportion; with the clutch locked the engine's inertia is shared as the torque is. The
+    coupling's law is taken at the step's end, with each axle's drive, road load and tyre-stiffened inertia, so it
+    never passes more than ties the axles: taken at the step's start it lagged the clutch by a step, the clutch spun the
+    fronts up and the coupling, a step late, hammered them back (the Golf's fronts alternated between 6 % and 73 %
+    slip at the step rate). The launch assist counts what all four tyres can take as the centre shares it, with what
+    the coupling can move from the axle at its limit to the other: the least of the four tyres' whole, of the front's
+    limit plus the coupling over s and of the rear's plus the coupling over 1 - s. A viscous coupling is counted at its
+    rate times the slip the launch allows (one axle at its tyres' peak), a Haldex at its capacity, so the fronts run
+    ahead to close it as a first Haldex's did; traction control, the scripted driver's feathering and its "driven
+    wheels down" read every driven wheel. `FourWheelDriveTests`: at a steady pull the Delta sends 51 % to the
+    front (the epicyclic's 47 % plus a few per cent the coupling hands back from the rear, which creeps a little faster
+    on its larger share), the R32 100 %; with the fronts on grass and the rears on the pad and the same torque sent in
+    with or without the coupling (the clutch held part-way, slipping under an engine on its limiter, so that the rears
+    stay short of their peak), the Delta's coupling gives the rear 59 % (an open centre: 53 %), holds the fronts to
+    0.26 m/s ahead of the rears (8.0) and gains 2.50 m/s where the open centre gains 2.26; the R32's gives the rear 59 %
+    (none without it), holds the fronts to 0.35 m/s ahead (14.3) and gains 2.55 m/s against 0.99; on the same split
+    with the launch assist and the throttle floored the R32 is at 3.38 m/s after 0.7 s, 1.36 without its coupling
+    (`The_launch_assist_counts_on_the_Haldex`; the Delta's launch from idle is its engine's either way); under braking
+    the Haldex passes nothing. The two-wheel-drive cars go through the same arithmetic as before: every figure the tests
+    print for them (sprints, stops, skid pad, launches, laps) was compared line by line with 0.19's and is unchanged
+    (`Two_wheel_drive_cars_drive_one_axle` pins where their torque goes). The native ABI is unchanged: the new spec
+    fields are managed only. Not modelled: the R32's electronic differential lock (EDS, braking a spinning wheel) and
+    the 570S's brake steer (item 14); a viscous coupling's hump; the Haldex's own temperature and pump lag.
+
+    Review follow-ups (cars3): the first fronts-on-grass test let the clutch in at the limiter, which spun the rears on
+    the pad as hard as the fronts on the grass (41 rad/s at 2-8 rad/s of ground speed), so it showed the coupling
+    shuffling torque between two spinning axles, not handing it to one that grips; the Haldex passed at most half the
+    drive, a share rather than a clutch pack's capacity, so with the clutch dumped the fronts kept half and stayed
+    12.5 m/s ahead; and the launch assist counted the Haldex only for what it already passed, which it never let the
+    fronts close it for: with its fronts on grass the R32 pulled away at 0.3 g with or without the coupling, and on a
+    dry road only 18.5 % of the drive reached the rear in the first 2 s (33 % now) and 0-100 km/h took 6.89 s (6.62
+    now). Over a scripted lap at 20, 60 and 144 fps the coupling reverses 7-23 times a lap and reaches its capacity on
+    one frame in 15,000.
+19. **The three hatchbacks follow the cars the game draws** (fixed in cars3). The models drawn since 0.16 are a Peugeot
+    205 GTi, a Lancia Delta HF Integrale and a Golf R32; the specs were a 2001 Clio 2.0 16V, a 1997 Bravo 2.0 20V five
+    and a 2008 Leon 2.0 TFSI, all front-wheel drive. Now, from published figures (sources in the specs' comments):
+
+    | | hot hatch | rally hatch | V6 hatch |
+    |---|---|---|---|
+    | follows (before) | 2001 Clio 2.0 16V | 1997 Bravo 2.0 20V | 2008 Leon 2.0 TFSI |
+    | follows (cars3) | 1988 205 GTi 1.9 | 1992 Delta HF Integrale Evoluzione | 2003 Golf R32 |
+    | name | HOT HATCH 1.9 8V '88 | RALLY HATCH 2.0 TURBO 4WD '92 | V6 HATCH 3.2 4WD '03 |
+    | engine | 172 hp 2.0 16V → 130 PS at 6000, 161 N m at 4750, 8V four | 147 hp 2.0 five → 210 PS at 5750, 304 N m at 3500, turbo four (T3, half its torque off boost, 0.7 s of lag) | 240 hp 2.0 turbo four → 241 PS at 6250, 320 N m at 2800-3200, VR6 |
+    | mass (with driver) | 1140 → 985 kg | 1310 → 1375 kg | 1480 → 1550 kg |
+    | weight on the front axle | 61.5 → 62.8 % | 62.6 → 60.6 % | 62.0 → 60.9 % |
+    | gearbox | 5 speeds, 4.21 → BE1/5 2.92-0.86, 3.69 | 5 speeds, 4.07 → 3.5-0.916, 3.111 | 6 speeds, 3.65 → 02M 3.357-0.927 on 4.235 / 3.273 |
+    | tyres | 205/45 R16 → 185/55 R15 | 195/55 R15 → 205/50 R15 | 225/40 R18 (kept) |
+    | driven wheels | front | front → all four (47/53, viscous, Torsen rear) | front → all four (Haldex, closing as the fronts slip) |
+    | ABS / traction control | no / no | no → ABS / no | ABS / traction control (kept) |
+    | 0-100 km/h, published | 7.2 → 7.8 s | 8.5 → 5.7 s | 6.4 → 6.6 s |
+    | 0-100 km/h, here | 7.52 → 8.36 s | 9.10 → 6.27 s | 7.00 → 6.62 s |
+    | 100-0 km/h dry, here | 44.0 → 46.6 m (locked) | 49.2 (locked) → 39.2 m | 36.4 → 36.5 m |
+    | top speed, published | 220 → 205 km/h | 215 → 220 km/h | 247 km/h |
+    | top speed, here | 219 → 212 km/h | 216 → 233 km/h | 246 → 249 km/h |
+    | understeer, roll (40 m circle) | 1.46 → 1.44 deg/g, 2.82 → 2.81 deg/g | 2.26 → 2.04, 3.20 → 3.07 | 1.82 → 1.86, 2.51 → 2.51 |
+    | loop run-up (needs 1.35 m/s^2) | → 3.09 | → 3.86 | → 4.22 |
+
+    The sprint and stop ranges in `Sprints_and_stops_within_the_real_cars_ranges` are now a tenth of the published
+    figure either side, no tighter: the Delta sits at the very top of its range (6.27 s against 5.7; the bound is 6.3 s,
+    the tenth over rounded up, so anything that slows it takes it out), held back by the T3's lag and a first gear the
+    engine, not the four tyres, limits (0.69 g), and from idle it takes 6.48 s to 60 mph against that test's 6.5; the
+    205 is 0.56 s slow on its modest torque; the R32's Haldex waits for the fronts to slip before the rear joins in, as
+    the first generation did, and the launch assist lets them. The skid-pad
+    ranges were narrowed round each car within its class (no understeer gradient is published for any of the three).
+    All three lap both routes without a crash and make the loop (`Every_car_laps_both_routes`, `LoopRunUp`). The
+    wheelbase, track, ride height and body footprint stay those `tools/car_models.py` prepares the drawn models to (2.47,
+    2.54 and 2.58 m between the axles, against the real 2.42, 2.48 and 2.51); the springs were scaled with the masses so
+    the cars sit at the height the models are set to. Moving the geometry to the real cars is one change with the
+    models' preparation. Where no figure was found the spec says so: the Delta's and the R32's axle loads, the Delta's
+    drag, the couplings' rates and the Haldex's lead are game figures.
 
 Kept, as earlier decisions: the fixed 240 Hz step with semi-implicit Euler for the body, the raycast wheels, the
 grass's grip and rolling resistance (0.9), the weather's grip figures (0.12), the speed-sensitive steering lock,
@@ -592,7 +680,8 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
   named event, which the running game polls every frame to restore and raise its window, and quits before
   building the world. `--invisible` runs neither take nor check the lock.
 - Command-line switches for automation: `--attract`, `--chase`, `--speed-route`,
-  `--car=flat12|v8|hothatch|five|turbohatch` (or the car's index), `--ram=tree|building|traffic|test` (the
+  `--car=flat12|v8|hothatch|five|turbohatch` (or the car's index, or the name of the car it follows: `peugeot205`,
+  `delta`, `r32`, `sahin`, `toros`, `egea`), `--ram=tree|building|traffic|test` (the
   scripted driver runs the course until a thing of that kind is near and drives into it, or into a tree planted
   on the start straight: the crash replay on film),
   `--no-traffic`, `--weather=dry|overcast|wet|rain` (the credit's weather; otherwise every credit draws one),
@@ -699,6 +788,16 @@ fixed in 0.19, each pinned by a test (`TyreMixTests`, `BodyNoiseTests`, `Granula
     wheel times the tangent of the slip angle, which collapses as a slide nears 90 degrees: the howl fell from 1.2 at
     80 degrees to nothing at 88. The wheel now reports the ground's speed across it (`WheelState.LateralSpeed`), and
     the howl, the tyres' travel and the roar take the contact patch's own speeds (`A_slide_near_broadside_keeps_its_howl`).
+16. **The hatchbacks' voices** (changed in cars3, with the cars). Each engine names its bank (`EngineSpec.SoundFolder`)
+    and its cylinders, which the Unreal version's table follows. The 205 keeps the Civic Type R's four; the Delta, a
+    turbo four now, plays the Pulsar's turbo four (`turbohatch/`) with the synthesised whistle and blow-off, which come
+    with any engine that has boost; the R32 plays a six (`v6/`, cut from the CC0 archive item's supercharged V6 of a
+    Jaguar F-type S: no CC0 or CC BY VR6 recording was found, and a VR6 fires every 120 degrees like any even six), at
+    rpm x 6 / 120 (`GranularEngineTests` hold its firing frequency at 2500 and 5500 rpm and at idle). Its run-up bank
+    is cut from blips of a standing car, unloaded and up to about 4,200 rpm: above that the voice spaces its top
+    pulses closer. The five-cylinder banks left the build with the car (`GranularEngine.FivePattern` stays, unused).
+    Open: the archive item's own Delta track is a drive-by with no idle, and a Commons Integrale recording awaits its
+    licence review; a real VR6 recording would replace the V6's.
 
 ## Unreal Engine version (`unreal/`)
 

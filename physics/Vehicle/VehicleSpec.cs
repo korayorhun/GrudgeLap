@@ -3,8 +3,9 @@ namespace GrudgeLap.Physics.Vehicle;
 /// <summary>
 /// Tunable description of a car. The default is a late-80s rear-wheel-drive flat-twelve sports car with the
 /// original game's four-speed gearbox; <see cref="V8Evo"/> is a 2010s mid-engined V8 with a seven-speed box; three
-/// front-wheel-drive hatchbacks follow the hot hatches of 1997-2008 (<see cref="HotHatch"/>, <see cref="FiveHatch"/>,
-/// <see cref="TurboHatch"/>); and three everyday cars of Turkey's roads (0.9.1): the 1.6 rear-wheel-drive saloon of the
+/// hatchbacks follow the cars the game draws for them: the front-wheel-drive 205 GTi 1.9 of 1988 (<see cref="HotHatch"/>),
+/// the four-wheel-drive Delta HF Integrale Evoluzione of 1992 (<see cref="FiveHatch"/>) and Golf R32 of 2003
+/// (<see cref="TurboHatch"/>); and three everyday cars of Turkey's roads (0.9.1): the 1.6 rear-wheel-drive saloon of the
 /// 1990s (<see cref="Saloon"/>), the 1.4 estate of the same years (<see cref="Estate"/>) and the 1.4 fleet saloon of
 /// today (<see cref="Fleet"/>). The numbers are game numbers, tuned for feel from the published figures of the cars
 /// they follow (power, torque, mass, wheelbase, track, tyres, gearing), not a manufacturer datasheet.
@@ -65,8 +66,16 @@ public sealed record VehicleSpec
     /// Only the V8 of the 2010s has one.
     /// </summary>
     public bool LaunchControl { get; init; }
-    /// <summary>The engine drives the front wheels (a transverse engine in a hatchback) instead of the rear.</summary>
+    /// <summary>The engine drives the front wheels (a transverse engine in a hatchback) instead of the rear; on a four-wheel-drive car, see <see cref="FourWheelDrive"/>.</summary>
     public bool FrontWheelDrive { get; init; }
+    /// <summary>
+    /// Four-wheel drive: how the gearbox's torque reaches both axles and each axle's differential; null on a car that
+    /// drives one axle, which <see cref="FrontWheelDrive"/> names. <see cref="LimitedSlipLocking"/> and
+    /// <see cref="LimitedSlipPreload"/> then do not apply: each axle has its own.
+    /// </summary>
+    public FourWheelDrive? FourWheelDrive { get; init; }
+    /// <summary>Whether the engine drives the wheels of the front axle (<paramref name="front"/>) or of the rear one.</summary>
+    public bool Drives(bool front) => FourWheelDrive is not null || front == FrontWheelDrive;
     /// <summary>Tyre sizes as published, front and rear: they set each axle's nominal load and cornering stiffness (<see cref="TireSize"/>).</summary>
     public TireSize FrontTire { get; init; } = new(225f, 50f, 16f);
     public TireSize RearTire { get; init; } = new(255f, 50f, 16f);
@@ -209,26 +218,38 @@ public sealed record VehicleSpec
     };
 
     /// <summary>
-    /// A hot hatch of 2001 (after the 2.0-litre Clio of the time): 172 hp at 6250, 1140 kg with the driver, five
-    /// gears, 205/45 R16 tyres, the front axle carrying 62 % of the weight, no traction control. 0-60 in about 7 s.
+    /// The hot hatch of 1988, after the Peugeot 205 GTi 1.9 (1987-92) the game draws: the eight-valve XU9JA, 130 PS at
+    /// 6000 and 161 N m at 4750 (auto-data.net's 205 GTI 1.9 page), 910 kg at the kerb (listings run from 855,
+    /// auto-data.net, to 940, a Japanese catalogue), the BE1/5 box (2.92 / 1.85 / 1.36 / 1.07 / 0.86, final drive 3.69,
+    /// reverse 3.33: auto motor und sport's data of a test car), 185/55 R15 tyres, discs all round, no anti-lock brakes,
+    /// about 63/37. Peugeot's figures: 0-100 km/h in 7.8 s and 205 km/h.
     /// </summary>
+    /// <remarks>
+    /// The wheelbase, the track, the ride height and the body's footprint stay those the drawn model is prepared to
+    /// (tools/car_models.py scales the model to them: 2.47 m between the axles where the 205 has 2.42), and the springs
+    /// follow the mass so the car sits at the same height on them; the mass, its place, the tyres, the gearing, the engine,
+    /// the brakes and the bars are the 205's.
+    /// </remarks>
     public static VehicleSpec HotHatch => new()
     {
-        Name = "HOT HATCH 2.0 16V '01",
+        Name = "HOT HATCH 1.9 8V '88",
         Style = CarStyle.HotHatch,
-        FrontTire = new(205f, 45f, 16f),
-        RearTire = new(205f, 45f, 16f),
-        FrontAntiRoll = 16000f,
-        RearAntiRoll = 9700f,
-        CentreOfMassOffset = new(0f, -0.10f, 0f),
+        FrontTire = new(185f, 55f, 15f),
+        RearTire = new(185f, 55f, 15f),
+        // The 205's rear axle carries a bar of its own on trailing arms and torsion bars: a livelier balance than the
+        // later hatches, set towards the rear.
+        FrontAntiRoll = 12500f,
+        RearAntiRoll = 9500f,
+        CentreOfMassOffset = new(0f, -0.10f, 0.03f),
         LimitedSlipLocking = 0f,
         LimitedSlipPreload = 0f,
         Engine = EngineSpec.HotHatch,
-        SpeedoMaxMph = 150f,
-        MassKg = 1140f,
-        InertiaRoll = 390f,
-        InertiaYaw = 1500f,
-        InertiaPitch = 1450f,
+        SpeedoMaxMph = 140f,
+        // 910 kg with a driver and a tank.
+        MassKg = 985f,
+        InertiaRoll = 335f,
+        InertiaYaw = 1300f,
+        InertiaPitch = 1250f,
         HalfTrack = 0.73f,
         FrontAxle = 0.95f,
         RearAxle = 1.52f,
@@ -236,49 +257,70 @@ public sealed record VehicleSpec
         BodyRear = 2.109f,
         BodyHalfWidth = 0.83f,
         HubHeight = -0.20f,
-        DragCoefficient = 0.34f,
-        FrontalArea = 1.95f,
+        // Cd 0.35 (auto-data.net); 1.57 m wide and 1.37 m tall.
+        DragCoefficient = 0.35f,
+        FrontalArea = 1.75f,
         FrontLiftArea = 0.10f,
         RearLiftArea = 0.07f,
-        TireGrip = 1.08f,
-        WheelRadius = 0.296f,
+        // The Michelin MXV of the late 1980s: the flat-twelve's grip, short of the 2000s cars'.
+        TireGrip = 1.0f,
+        WheelRadius = 0.292f,
         SuspensionRest = 0.22f,
-        SuspensionStiffness = 30000f,
-        SuspensionDamping = 2900f,
+        // 1140 kg rode on 30,000 N/m before: the same sag for the model's ride height (see the remarks).
+        SuspensionStiffness = 25920f,
+        SuspensionDamping = 2500f,
         MaxCompression = 0.13f,
         MaxSteerLowSpeedDeg = 34f,
         MaxSteerHighSpeedDeg = 7.5f,
-        FrontBrakeTorque = 2100f,
-        RearBrakeTorque = 290f,
-        GearRatios = [-3.55f, 0f, 3.09f, 1.84f, 1.32f, 1.03f, 0.86f],
-        FinalDrive = 4.21f,
-        ClutchMaxTorque = 360f,
-        EngineInertia = 0.12f,
-        WheelInertia = 0.9f,
+        FrontBrakeTorque = 1800f,
+        RearBrakeTorque = 250f,
+        GearRatios = [-3.33f, 0f, 2.92f, 1.85f, 1.36f, 1.07f, 0.86f],
+        FinalDrive = 3.69f,
+        ClutchMaxTorque = 290f,
+        EngineInertia = 0.13f,
+        WheelInertia = 0.8f,
         FrontWheelDrive = true,
     };
 
     /// <summary>
-    /// A five-cylinder hatch of 1997 (after the 2.0 20-valve Bravo): 147 hp at 6100, the five's warble, 1310 kg,
-    /// five gears, 195/55 R15 tyres. Slower than the others, and the one that sounds like nothing else.
+    /// The rally hatch of 1992, after the Lancia Delta HF Integrale Evoluzione (1991-93) the game draws: the sixteen-valve
+    /// two-litre with a Garrett T3, 210 PS at 5750 and 304 N m at 3500 on 1 bar of boost, the five-speed box (3.500 /
+    /// 2.176 / 1.523 / 1.156 / 0.916, final drive 3.111), 205/50 ZR15 tyres, Bosch anti-lock brakes and permanent
+    /// four-wheel drive: an epicyclic centre differential sending 47 % to the front and 53 % to the rear with a Ferguson
+    /// viscous coupling across it, an open front differential and a Torsen at the rear (rallycars.com's spec of the
+    /// street Evoluzione I). 1340 kg at the kerb (1300 DIN, ultimatespecs.com). Lancia's figures: 0-100 km/h in 5.7 s,
+    /// 220 km/h.
     /// </summary>
+    /// <remarks>As the hot hatch's: the axles, the track and the ride height are the drawn model's (2.54 m where the Delta has 2.48).</remarks>
     public static VehicleSpec FiveHatch => new()
     {
-        Name = "FIVE 2.0 20V HATCH '97",
+        Name = "RALLY HATCH 2.0 TURBO 4WD '92",
         Style = CarStyle.FiveHatch,
-        FrontTire = new(195f, 55f, 15f),
-        RearTire = new(195f, 55f, 15f),
-        FrontAntiRoll = 19000f,
-        RearAntiRoll = 8200f,
-        CentreOfMassOffset = new(0f, -0.09f, 0f),
-        LimitedSlipLocking = 0f,
-        LimitedSlipPreload = 0f,
-        Engine = EngineSpec.FiveCylinder,
-        SpeedoMaxMph = 150f,
-        MassKg = 1310f,
-        InertiaRoll = 430f,
-        InertiaYaw = 1750f,
-        InertiaPitch = 1700f,
+        FrontTire = new(205f, 50f, 15f),
+        RearTire = new(205f, 50f, 15f),
+        FrontAntiRoll = 20000f,
+        RearAntiRoll = 10500f,
+        // About 60/40: no measured axle loads were found; the transverse engine hangs ahead of the front axle, the
+        // propshaft and the rear differential sit behind, so a little less in front than the front-wheel-drive hatches.
+        CentreOfMassOffset = new(0f, -0.09f, -0.05f),
+        AntiLockBrakes = true,
+        FourWheelDrive = new FourWheelDrive
+        {
+            FrontShare = 0.47f,
+            Coupling = CentreCoupling.Viscous,
+            // A game figure, as no published one was found: an axle spinning a metre a second faster than the other
+            // (3.4 rad/s) hands about 600 N m to the one that grips.
+            CouplingRate = 180f,
+            // A Torsen biasing about 2.3 to 1 (70/30), the share given to the slower wheel: (2.3 - 1) / (2 x 3.3).
+            RearLocking = 0.2f,
+        },
+        Engine = EngineSpec.RallyTurboFour,
+        SpeedoMaxMph = 160f,
+        // 1300 kg DIN with a driver.
+        MassKg = 1375f,
+        InertiaRoll = 450f,
+        InertiaYaw = 1835f,
+        InertiaPitch = 1785f,
         HalfTrack = 0.73f,
         FrontAxle = 0.95f,
         RearAxle = 1.59f,
@@ -286,50 +328,76 @@ public sealed record VehicleSpec
         BodyRear = 2.204f,
         BodyHalfWidth = 0.875f,
         HubHeight = -0.20f,
-        DragCoefficient = 0.32f,
-        FrontalArea = 2.0f,
-        FrontLiftArea = 0.10f,
-        RearLiftArea = 0.07f,
+        // No published drag figure was found: the square body of 1979 with its flared arches, 1.77 m by 1.37.
+        DragCoefficient = 0.38f,
+        FrontalArea = 1.95f,
+        FrontLiftArea = 0.08f,
+        RearLiftArea = 0.04f,
         TireGrip = 1.0f,
-        WheelRadius = 0.298f,
+        WheelRadius = 0.293f,
         SuspensionRest = 0.23f,
-        SuspensionStiffness = 30000f,
-        SuspensionDamping = 3000f,
+        // 1310 kg rode on 30,000 N/m before: the same sag (see the hot hatch's remarks).
+        SuspensionStiffness = 31490f,
+        SuspensionDamping = 3200f,
         MaxCompression = 0.14f,
         MaxSteerLowSpeedDeg = 33f,
         MaxSteerHighSpeedDeg = 7f,
-        FrontBrakeTorque = 2100f,
-        RearBrakeTorque = 310f,
-        GearRatios = [-3.71f, 0f, 3.35f, 2.05f, 1.41f, 1.03f, 0.82f],
-        FinalDrive = 4.07f,
-        ClutchMaxTorque = 330f,
-        EngineInertia = 0.14f,
+        // 281 mm ventilated discs in front with four-pot callipers, 251 mm discs behind.
+        FrontBrakeTorque = 2400f,
+        RearBrakeTorque = 450f,
+        GearRatios = [-3.545f, 0f, 3.5f, 2.176f, 1.523f, 1.156f, 0.916f],
+        FinalDrive = 3.111f,
+        // The transfer gears and the rear final drive cost a little more than a front-wheel-drive box.
+        DrivelineEfficiency = 0.89f,
+        ClutchMaxTorque = 480f,
+        EngineInertia = 0.12f,
         WheelInertia = 0.9f,
-        FrontWheelDrive = true,
     };
 
     /// <summary>
-    /// A turbo hatch of 2008 (after the 2.0 TFSI Leon of the time): 240 hp, 300 N m from 2200 to 5500 once the
-    /// turbo has spooled, 1480 kg, six gears, 225/40 R18 tyres and traction control. 0-60 in about 6 s.
+    /// The V6 hatch of 2003, after the Golf R32 (2002-04) the game draws: the 3.2-litre VR6, 241 PS at 6250 and 320 N m
+    /// from 2800 to 3200, the six-speed 02M (code FMP: 3.357 / 2.087 / 1.469 / 1.098 on a 4.235 final drive, 1.108 /
+    /// 0.927 on 3.273; VW's workshop manual), 225/40 R18 tyres, ESP with anti-lock brakes and traction control, and
+    /// 4MOTION: a Haldex coupling engages the rear axle as the front wheels slip, the car otherwise driving its fronts.
+    /// 1477 kg as VW quoted it (3409 lb, 1546 kg, at the kerb for the US car of 2004, Edmunds). VW's figures: 0-100
+    /// km/h in 6.6 s, 247 km/h.
     /// </summary>
+    /// <remarks>As the hot hatch's: the axles, the track and the ride height are the drawn model's (2.58 m where the Golf has 2.51).</remarks>
     public static VehicleSpec TurboHatch => new()
     {
-        Name = "TURBO HATCH 2.0T '08",
+        Name = "V6 HATCH 3.2 4WD '03",
         Style = CarStyle.TurboHatch,
         FrontTire = new(225f, 40f, 18f),
         RearTire = new(225f, 40f, 18f),
-        FrontAntiRoll = 25000f,
-        RearAntiRoll = 15300f,
-        CentreOfMassOffset = new(0f, -0.09f, 0f),
+        FrontAntiRoll = 26200f,
+        RearAntiRoll = 16000f,
+        // About 61/39: no measured axle loads were found; the VR6 is heavy and sits ahead of the axle, the Haldex unit
+        // and the rear differential behind.
+        CentreOfMassOffset = new(0f, -0.09f, -0.03f),
         AntiLockBrakes = true,
+        FourWheelDrive = new FourWheelDrive
+        {
+            FrontShare = 1f,
+            Coupling = CentreCoupling.Haldex,
+            // Game figures, as none are published: past a lead of 3 % (the fronts' slip under a part-throttle pull stays
+            // below it) the first Haldex closes within a fraction of a turn between its shafts, a fifth of a metre a
+            // second more (0.6 rad/s) passing its fill. Its clutch pack holds 2500 N m at the rear wheels, about what
+            // the rear tyres put down on a dry launch, so once closed it ties the axles together (a first-generation
+            // Haldex can lock to an even split, jcr-leeds.com's Gen 1 guide) and the tyres' grip, not the coupling,
+            // shares the drive.
+            CouplingRate = 4000f,
+            CouplingCapacity = 2500f,
+            CouplingLead = 0.03f,
+        },
         LimitedSlipLocking = 0f,
         LimitedSlipPreload = 0f,
-        Engine = EngineSpec.TurboFour,
-        SpeedoMaxMph = 170f,
-        MassKg = 1480f,
-        InertiaRoll = 470f,
-        InertiaYaw = 2000f,
-        InertiaPitch = 1950f,
+        Engine = EngineSpec.VrSix,
+        SpeedoMaxMph = 160f,
+        // With a driver and a tank: between VW's 1477 kg and the US car's 1546.
+        MassKg = 1550f,
+        InertiaRoll = 490f,
+        InertiaYaw = 2095f,
+        InertiaPitch = 2040f,
         HalfTrack = 0.765f,
         FrontAxle = 0.98f,
         RearAxle = 1.60f,
@@ -337,7 +405,8 @@ public sealed record VehicleSpec
         BodyRear = 2.395f,
         BodyHalfWidth = 0.884f,
         HubHeight = -0.20f,
-        DragCoefficient = 0.33f,
+        // Cd 0.32 on 2.22 m^2 for the R32 of 2005 (kfz-tech.de); the Mk4's body is a little lower.
+        DragCoefficient = 0.32f,
         FrontalArea = 2.15f,
         FrontLiftArea = 0.08f,
         RearLiftArea = 0.05f,
@@ -345,18 +414,24 @@ public sealed record VehicleSpec
         TractionControl = true,
         WheelRadius = 0.319f,
         SuspensionRest = 0.22f,
-        SuspensionStiffness = 38000f,
-        SuspensionDamping = 3700f,
+        // 1480 kg rode on 38,000 N/m before: the same sag (see the hot hatch's remarks).
+        SuspensionStiffness = 39800f,
+        SuspensionDamping = 3870f,
         MaxCompression = 0.13f,
         MaxSteerLowSpeedDeg = 33f,
         MaxSteerHighSpeedDeg = 7f,
-        FrontBrakeTorque = 3000f,
-        RearBrakeTorque = 370f,
-        GearRatios = [-3.18f, 0f, 3.36f, 2.09f, 1.47f, 1.10f, 0.87f, 0.73f],
-        FinalDrive = 3.65f,
+        FrontBrakeTorque = 3100f,
+        RearBrakeTorque = 420f,
+        // The 02M drives gears 1-4 and 5-6 through two final drives; 5th and 6th are given on the first one (1.108 x
+        // 3.273 / 4.235, 0.927 x 3.273 / 4.235), as is reverse (3.990).
+        GearRatios = [-3.084f, 0f, 3.357f, 2.087f, 1.469f, 1.098f, 0.856f, 0.716f],
+        FinalDrive = 4.235f,
+        // The Haldex unit, the propshaft and the rear final drive cost a little more than a front-wheel-drive box.
+        DrivelineEfficiency = 0.89f,
         ClutchMaxTorque = 520f,
-        EngineInertia = 0.13f,
-        WheelInertia = 1.0f,
+        // The VR6's dual-mass flywheel.
+        EngineInertia = 0.17f,
+        WheelInertia = 1.1f,
         FrontWheelDrive = true,
     };
 
@@ -524,12 +599,68 @@ public sealed record VehicleSpec
     public static VehicleSpec[] Catalogue => [FlatTwelve, V8Evo, HotHatch, FiveHatch, TurboHatch, Saloon, Estate, Fleet];
 }
 
+/// <summary>
+/// A four-wheel-drive car's driveline: its centre, which shares the gearbox's torque between the axles and couples their
+/// speeds, and the differential of each axle. Two layouts of the time are modelled. A permanent four-wheel drive (the
+/// Delta Integrale's) splits the torque in a fixed ratio through an epicyclic centre differential, and a viscous coupling
+/// across it passes torque from the faster axle to the slower one, the more the further their speeds part, so an axle
+/// that spins hands its drive to the one that grips. An on-demand one (the Golf R32's 4MOTION) drives the front axle
+/// and engages the rear through a multi-plate coupling (a Haldex) as the front wheels outrun the rear ones.
+/// </summary>
+/// <remarks>
+/// Torques are N m at the wheels (both wheels of an axle together) and speeds each axle's mean wheel speed, rad/s: the
+/// propshaft, the final drives and the couplings' own ratios are folded into these figures.
+/// </remarks>
+public sealed record FourWheelDrive
+{
+    /// <summary>
+    /// Share of the gearbox's torque the centre differential sends to the front axle while neither axle slips (an
+    /// epicyclic's fixed split); 1 where the gearbox drives the front axle and only the coupling feeds the rear.
+    /// </summary>
+    public float FrontShare { get; init; } = 0.5f;
+    public CentreCoupling Coupling { get; init; } = CentreCoupling.Viscous;
+    /// <summary>Torque (N m) the coupling passes from the faster axle to the slower one per rad/s between their speeds.</summary>
+    public float CouplingRate { get; init; }
+    /// <summary>
+    /// The most torque (N m) the coupling passes, whatever the speed difference: an on-demand coupling's clutch pack at
+    /// its full pressure. A viscous coupling has no such limit short of its hump, which is not modelled.
+    /// </summary>
+    public float CouplingCapacity { get; init; } = float.PositiveInfinity;
+    /// <summary>
+    /// How far the front axle may run ahead of the rear (or behind it), as a share of the rear's speed, before an
+    /// on-demand coupling closes: its control leaves the tyres' slip of a part-throttle pull and the fronts' longer path
+    /// through a bend alone, so the car drives its fronts until they really slip. Zero for a viscous coupling.
+    /// </summary>
+    public float CouplingLead { get; init; }
+    /// <summary>The front axle's differential: locking and preload as <see cref="VehicleSpec.LimitedSlipLocking"/> has them, of the front axle's torque.</summary>
+    public float FrontLocking { get; init; }
+    public float FrontPreload { get; init; }
+    /// <summary>The rear axle's differential, as the front's.</summary>
+    public float RearLocking { get; init; }
+    public float RearPreload { get; init; }
+}
+
+public enum CentreCoupling
+{
+    /// <summary>A viscous coupling across an epicyclic centre differential (Ferguson's): its torque grows with the speed difference, either way, brakes on or off.</summary>
+    Viscous,
+    /// <summary>
+    /// An on-demand multi-plate coupling to the rear axle (Haldex's first generation): it closes as the front wheels
+    /// outrun the rear ones, up to its clutch pack's <see cref="FourWheelDrive.CouplingCapacity"/>, and its control opens it while
+    /// the brakes are on, so the anti-lock brakes see each axle on its own.
+    /// </summary>
+    Haldex,
+}
+
 public enum CarStyle
 {
     FlatTwelve,
     V8,
+    /// <summary>The front-wheel-drive hot hatch of the late 1980s (after the Peugeot 205 GTi 1.9).</summary>
     HotHatch,
+    /// <summary>The four-wheel-drive rally hatch of the early 1990s (after the Lancia Delta HF Integrale Evoluzione); the key keeps the name of the five-cylinder car it once was.</summary>
     FiveHatch,
+    /// <summary>The four-wheel-drive V6 hatch of the 2000s (after the Golf R32); the key keeps the name of the turbo car it once was.</summary>
     TurboHatch,
     /// <summary>The 1.6 rear-wheel-drive saloon of the 1990s (after the Tofas Sahin).</summary>
     Saloon,

@@ -256,7 +256,7 @@ internal sealed partial class Hud : Control
     private static string CarFigures(VehicleSpec spec)
     {
         var power = spec.Engine.FullThrottleCurve.Max(p => p.Rpm * p.Torque) / 7023f;
-        var drive = spec.FrontWheelDrive ? "FRONT-WHEEL DRIVE" : "REAR-WHEEL DRIVE";
+        var drive = spec.FourWheelDrive is not null ? "FOUR-WHEEL DRIVE" : spec.FrontWheelDrive ? "FRONT-WHEEL DRIVE" : "REAR-WHEEL DRIVE";
         var turbo = spec.Engine.BoostShare > 0f ? "  TURBO" : "";
         return $"{power:0} HP{turbo}   {spec.MassKg:0} KG   {drive}   {spec.ForwardGearCount} GEARS";
     }
