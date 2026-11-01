@@ -76,8 +76,10 @@ internal static class WorldExport
             }
         }
 
-        var document = new GltfDocument();
-        var state = new GltfState();
+        // Disposed here, not left to the finalizer: the export quits the game right after, and a GltfState finalized
+        // once the engine had shut down crashed the process on exit (access violation in GodotObject.Dispose).
+        using var document = new GltfDocument();
+        using var state = new GltfState();
         var error = document.AppendFromScene(scene, state);
         if (error == Error.Ok)
         {
