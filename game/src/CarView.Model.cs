@@ -123,6 +123,12 @@ internal sealed partial class CarView
         }
         if (model.GetNodeOrNull<Node3D>("Dials") is { } dials) MountModelDials(dials);
         DressModel(model);
+        // Parts of a borrowed cabin that poke through the shell (car_models.json "inside_only") are drawn from the seat only.
+        foreach (var inside in Descendants(model).OfType<Node3D>().Where(n => n.Name.ToString().StartsWith("Inside_", StringComparison.Ordinal)))
+        {
+            inside.Visible = false;
+            _cockpitOnly.Add(inside);
+        }
         _modelBounds = ModelBounds(model.GetNodeOrNull<Node3D>("Body") ?? model);
         SetPaintCabin();
         CollectModelDents(model.GetNodeOrNull<Node3D>("Body") ?? model);
@@ -274,8 +280,55 @@ internal sealed partial class CarView
                             _brakeLamps.Add(lamp);
                         }
                         break;
+                    case var _ when mesh.Mesh.SurfaceGetMaterial(s) is BaseMaterial3D own:
+                        CorrectModelMaterial(own);
+                        break;
                 }
             }
+        }
+    }
+
+    /// <summary>The model materials already corrected: the imported scene is cached, so its materials are shared by every car drawn with it.</summary>
+    private static readonly HashSet<BaseMaterial3D> _corrected = [];
+
+    /// <summary>
+    /// Physically plausible values for a model's own materials where the exporter left none (0.19). Many of the CC BY
+    /// models carry the glTF defaults (metallic 1, roughness 1, no texture to drive them): a matt plastic or a dial
+    /// then shades as rough grey metal, a mirror's glass as a white blot. Tyres were exported glossy (roughness 0.15 on
+    /// the Testarossa, a third metallic on the Renault) and read as plastic toys' wheels. The material is corrected in
+    /// place, once, as every instance of the cached scene shares it.
+    /// </summary>
+    private static void CorrectModelMaterial(BaseMaterial3D material)
+    {
+        if (!_corrected.Add(material)) return;
+        var name = material.ResourceName.ToLowerInvariant();
+        static bool Says(string name, params string[] words) => words.Any(name.Contains);
+        var drivenByTexture = material.RoughnessTexture is not null || material.MetallicTexture is not null;
+        var exporterDefault = !drivenByTexture && material.Metallic >= 0.999f && material.Roughness >= 0.999f;
+        if (Says(name, "tyre", "tire", "pneu", "rubber"))
+        {
+            // Rubber: a dielectric with a broad, dull sheen (roughness 0.85-0.9); its albedo, about 0.03, the model's.
+            material.Metallic = 0f;
+            if (!drivenByTexture) material.Roughness = MathF.Max(material.Roughness, 0.86f);
+        }
+        else if (Says(name, "mirror") && exporterDefault && material.AlbedoTexture is null && material.AlbedoColor.Luminance > 0.6f)
+        {
+            // A wing mirror's glass left at the defaults: silvered glass, so it mirrors the road through the probe.
+            material.Roughness = 0.03f;
+            material.AlbedoColor = new Color(0.86f, 0.87f, 0.88f);
+        }
+        else if (exporterDefault && !Says(name, "chrome", "croom", "metal", "metel", "steel", "alu", "alminum", "zinc", "brushed", "exhaust", "muffler"))
+        {
+            // No metal by name and no values of its own: plastic, carbon, trim or a printed dial, a matt dielectric.
+            material.Metallic = 0f;
+            material.Roughness = 0.6f;
+        }
+        else if (Says(name, "wheel", "weel", "rim") && !drivenByTexture && material.AlbedoTexture is null && material.Metallic < 0.5f
+                 && material.AlbedoColor.S < 0.15f && material.AlbedoColor.V > 0.3f)
+        {
+            // A grey dielectric wheel: a silver painted alloy, metallic flakes under lacquer.
+            material.Metallic = 0.75f;
+            material.Roughness = 0.32f;
         }
     }
 
@@ -336,6 +389,44 @@ internal sealed partial class CarView
         _modelPaint.SetShaderParameter("cabin_min", new Vector3(-0.86f, eye.Y - 0.55f, eye.Z - 1.1f));
         _modelPaint.SetShaderParameter("cabin_max", new Vector3(0.86f, eye.Y + 0.6f, eye.Z + 0.75f));
     }
+
+    /// <summary>
+    /// The shade of a closed cabin (0.19), on the player's car from the seat: a reflection probe the size of the cabin
+    /// box whose ambient light is a dim constant instead of the open sky's. The roof, the pillars and the doors hide
+    /// most of the sky from a real dashboard, so a cabin is far darker than the road outside and the eye, adapted to
+    /// the road, sees it in shadow, lit where the sun comes in through the glass. Without it every inside face took the
+    /// whole sky's ambient light and the dashboard glowed as if the car had no roof. The probe captures nothing (cull
+    /// mask 0, interior: no sky), so moving with the car costs it an empty capture; inside it the glossy trim reflects
+    /// the dark cabin rather than the sky.
+    /// </summary>
+    private void BuildCabinShade(Vector3 eye)
+    {
+        // Narrower than the paint's cabin box: the wing mirrors' glass, just outside the doors, keeps the road's probe.
+        var min = new Vector3(-0.78f, eye.Y - 0.55f, eye.Z - 1.1f);
+        var max = new Vector3(0.78f, eye.Y + 0.6f, eye.Z + 0.75f);
+        var shade = new ReflectionProbe
+        {
+            Name = "CabinShade",
+            Position = (min + max) * 0.5f,
+            Size = max - min,
+            Interior = true,
+            UpdateMode = ReflectionProbe.UpdateModeEnum.Once,
+            CullMask = 0,
+            EnableShadows = false,
+            BlendDistance = 0.1f,
+            // The capture is empty; a low intensity keeps whatever it holds (fog, a clear colour) out of the chrome.
+            Intensity = 0.2f,
+            AmbientMode = ReflectionProbe.AmbientModeEnum.Color,
+            AmbientColor = CabinAmbient,
+            AmbientColorEnergy = 1f,
+            Visible = _insideCar == true,
+        };
+        AddChild(shade);
+        _cockpitOnly.Add(shade);
+    }
+
+    /// <summary>The cabin's ambient light (BuildCabinShade): about a quarter of the open sky's, a little warm from the trim it bounces off.</summary>
+    private static readonly Color CabinAmbient = new(0.26f, 0.247f, 0.234f);
 
     /// <summary>World to this car's frame, for the paint's cabin test: every frame the car moves.</summary>
     public override void _Process(double delta)
