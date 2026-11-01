@@ -42,9 +42,9 @@ internal sealed partial class EngineAudio : Node
     private float _songFade = 1f;
     private float _songGain = 1f;
     private bool _songFading;
-    // The instant replay's music (0.9.1): eleven seconds of a CC0 FM tune (assets/audio/SOURCES.md), played from its
-    // recording; 1989 mode keeps the synthesised one (ReplaySong). It fades out in a third of a second when the
-    // replay ends or is skipped, as the synthesised one does.
+    // The instant replay's music: our own tune in the manner of the late-eighties arcade (tools/make-replay-music.py),
+    // played from its recording; 1989 mode plays the same score on this node's synthesiser (ReplaySong). It fades out
+    // in a third of a second when the replay ends or is skipped, as the synthesised one does.
     private AudioStreamPlayer? _replayMusic;
     private float _replayMusicFade;
     private double _songTime;
@@ -156,7 +156,7 @@ internal sealed partial class EngineAudio : Node
         public float Lowpass;
     }
 
-    private const int Brass = 0, Lead = 1, Bass = 2, Hat = 3, Snare = 4, Pulse = 5, Kick = 6;
+    private const int Brass = 0, Lead = 1, Bass = 2, Hat = 3, Snare = 4, Pulse = 5, Kick = 6, Tom = 7, Cymbal = 8;
 
     private static Note N(float beat, float beats, int midi, int voice, float level, float bpm) =>
         new(beat * 60f / bpm, beats * 60f / bpm, midi, voice, level);
@@ -183,60 +183,16 @@ internal sealed partial class EngineAudio : Node
     }
 
     /// <summary>
-    /// Eleven seconds under the instant replay, about as long as the replay itself: a pulse lead climbing the
-    /// chords of D major (D, B minor, G, A, then up an octave, E minor and A to land on D), a bass driving the
-    /// eighths in octaves, brass stabs on the off-beats, a kick on one and three and the snare on two and four.
+    /// The instant replay's tune, the score of the recording that plays outside 1989 mode (tools/make-replay-music.py
+    /// writes both, the notes into ReplayScore.cs): ten seconds in A mixolydian at 136 bpm with swung sixteenths, the
+    /// band's intro hit and a tom fill, a four-bar hook on the pulse lead over slap bass, horn stabs and a clav comp
+    /// (A, G to D/F#, A, then F and G as band hits) and the button, an A chord with a crash, on the sixth downbeat.
     /// </summary>
     private static readonly Note[] ReplaySong = BuildReplay();
 
     private static Note[] BuildReplay()
     {
-        const float bpm = 168f;
-        var notes = new List<Note>();
-        (float Beat, float Length, int Midi)[] melody =
-        [
-            (0f, 0.5f, 69), (0.5f, 0.5f, 74), (1f, 0.5f, 78), (1.5f, 0.5f, 81), (2f, 1f, 78), (3f, 1f, 74),
-            (4f, 0.5f, 71), (4.5f, 0.5f, 74), (5f, 0.5f, 78), (5.5f, 0.5f, 83), (6f, 1f, 81), (7f, 1f, 78),
-            (8f, 0.5f, 79), (8.5f, 0.5f, 78), (9f, 0.5f, 76), (9.5f, 0.5f, 74), (10f, 1f, 71), (11f, 0.5f, 74), (11.5f, 0.5f, 76),
-            (12f, 1.5f, 78), (13.5f, 0.5f, 76), (14f, 1f, 73), (15f, 1f, 69),
-            (16f, 0.5f, 74), (16.5f, 0.5f, 78), (17f, 0.5f, 81), (17.5f, 0.5f, 86), (18f, 1f, 85), (19f, 1f, 81),
-            (20f, 0.5f, 83), (20.5f, 0.5f, 81), (21f, 0.5f, 78), (21.5f, 0.5f, 74), (22f, 1f, 78), (23f, 1f, 81),
-            (24f, 0.5f, 79), (24.5f, 0.5f, 78), (25f, 0.5f, 76), (25.5f, 0.5f, 79), (26f, 0.5f, 78), (26.5f, 0.5f, 76), (27f, 0.5f, 73), (27.5f, 0.5f, 76),
-            (28f, 2.5f, 74),
-        ];
-        foreach (var (beat, length, midi) in melody) notes.Add(N(beat, length, midi, Pulse, 0.42f, bpm));
-        // The bass on every eighth, root and octave: D, Bm, G, A, D, Bm, then Em and A for half a bar each.
-        (float Beat, int Root)[] changes = [(0f, 38), (4f, 35), (8f, 43), (12f, 45), (16f, 38), (20f, 35), (24f, 40), (26f, 45)];
-        for (var eighth = 0; eighth < 56; eighth++)
-        {
-            var beat = eighth * 0.5f;
-            var root = changes.Last(c => c.Beat <= beat).Root;
-            notes.Add(N(beat, 0.42f, root + (eighth % 2 == 0 ? 0 : 12), Bass, eighth % 2 == 0 ? 0.55f : 0.4f, bpm));
-        }
-        notes.Add(N(28f, 2.5f, 38, Bass, 0.6f, bpm));
-        // Brass stabs of the chord on the off-beats of two and four, and the last chord held.
-        (float Beat, int[] Chord)[] stabs =
-        [
-            (0f, [62, 66, 69]), (4f, [59, 62, 66]), (8f, [59, 62, 67]), (12f, [61, 64, 69]),
-            (16f, [62, 66, 69]), (20f, [59, 62, 66]), (24f, [59, 64, 67]), (26f, [61, 64, 69]),
-        ];
-        foreach (var (beat, chord) in stabs)
-        {
-            foreach (var offset in beat >= 24f ? new[] { 1.5f } : new[] { 1.5f, 3.5f })
-            {
-                foreach (var midi in chord) notes.Add(N(beat + offset, 0.3f, midi, Brass, 0.16f, bpm));
-            }
-        }
-        foreach (var midi in new[] { 62, 66, 69, 74 }) notes.Add(N(28f, 2.5f, midi, Brass, 0.22f, bpm));
-        for (var bar = 0; bar < 7; bar++)
-        {
-            notes.Add(N(bar * 4f, 0.3f, 0, Kick, 0.7f, bpm));
-            notes.Add(N(bar * 4f + 2f, 0.3f, 0, Kick, 0.7f, bpm));
-            notes.Add(N(bar * 4f + 1f, 0.2f, 0, Snare, 0.32f, bpm));
-            notes.Add(N(bar * 4f + 3f, 0.2f, 0, Snare, 0.32f, bpm));
-        }
-        notes.Add(N(28f, 0.4f, 0, Kick, 0.8f, bpm));
-        for (var eighth = 0; eighth < 56; eighth++) notes.Add(N(eighth * 0.5f, 0.1f, 0, Hat, eighth % 2 == 0 ? 0.16f : 0.1f, bpm));
+        var notes = ReplayScore().Select(r => N(r.Beat, r.Beats, r.Midi, r.Voice, r.Level, ReplayBpm)).ToList();
         notes.Sort((a, b) => a.Start.CompareTo(b.Start));
         return [.. notes];
     }
@@ -329,7 +285,7 @@ internal sealed partial class EngineAudio : Node
         _knockTakes = CrashPlayer();
         // The instant replay's music: a recording of the player's own from the user folder when there is one (0.11:
         // user://music/replay.ogg, .mp3 or .wav, so the tune of a game you remember can play in your copy without
-        // being shipped with this one), otherwise the CC0 tune that comes with the game.
+        // being shipped with this one), otherwise the game's own recording of its tune.
         var custom = CustomReplayMusic();
         if (custom is not null)
         {
@@ -799,6 +755,22 @@ internal sealed partial class EngineAudio : Node
                     // A sine falling from 140 to 50 Hz in a few hundredths of a second.
                     v.Phase += (50f + 90f * MathF.Exp(-v.Age * 30f)) / MixRate;
                     value = MathF.Sin((float)(v.Phase * MathF.Tau)) * MathF.Exp(-v.Age * 9f);
+                    break;
+                }
+                case Tom:
+                {
+                    // The drum machine's tom: a sine at the note's pitch that starts half as high again and drops.
+                    v.Phase += frequency * (1f + 0.5f * MathF.Exp(-v.Age * 25f)) / MixRate;
+                    value = MathF.Sin((float)(v.Phase * MathF.Tau)) * MathF.Exp(-v.Age * 5f);
+                    break;
+                }
+                case Cymbal:
+                {
+                    // Differenced noise (its top end only), dying over the note's length: an open hat for a short
+                    // note, a crash for a long one. Lowpass holds the last noise sample for the difference.
+                    var noise = (float)(_random.NextDouble() * 2.0 - 1.0);
+                    value = (noise - v.Lowpass) * 0.5f * MathF.Exp(-v.Age * 4.5f / MathF.Max(note.Length, 0.05f));
+                    v.Lowpass = noise;
                     break;
                 }
                 default:

@@ -261,11 +261,11 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   low-pass and 7 dB of glass from the driver's seat; the engine silent through the instant replay (the
   simulation holds its last revs through it, which played as a frozen note); checkpoint bleep, a cow's moo
   (formants on a sagging pitch), the clang of a sign going over, and the cabinet's own moments: a chime at every choice on the title screen, the starter at the turn of the key, a brass fanfare
-  when a lap beats the record, a driving tune under the instant replay (eleven seconds at 168 bpm in D major:
-  a quarter-duty pulse lead, a bass on the eighths in octaves, brass stabs, kick, snare and hats; 9 dB over the
-  other jingles because the engine is silent then, faded out in a third of a second when the replay is over or
-  skipped) and an FM tune when the credit is over. The notes are ours in the timbres of the FM and pulse chips:
-  the original's replay music is Atari's and is not copied. The arcade had no music while driving, so neither
+  when a lap beats the record, a driving tune under the instant replay (the score of the replay music below, played
+  by this synth in 1989 mode: a quarter-duty pulse lead, FM bass, saw brass, a clav, kick, snare, toms, hats and
+  cymbals; 9 dB over the other jingles because the engine is silent then, faded out in a third of a second when the
+  replay is over or skipped) and an FM tune when the credit is over. The notes are ours in the timbres of the FM
+  and pulse chips: the original's replay music is Atari's and is not copied. The arcade had no music while driving, so neither
   does this. The overrun recordings take the
   run-up's place as the throttle closes. A limiter on the master bus. Loops imported compressed (QOA) must end
   at `GetLength() × MixRate` frames, not at the data's byte count: that once cut every loop to its first
@@ -560,7 +560,22 @@ new-package requests were withdrawn).
   not by the height itself.
 - Units: km/h by default since 0.14 (mph until then, as the cabinet's dial); U or the menu switches, and the choice is
   kept under `units` in the settings (the Unreal version the same, under a new key so an old copy gets metric once).
-- Instant replay music: eleven seconds of a CC0 FM tune; 1989 mode keeps the synthesised one. A file of the player's
+- Instant replay music: our own tune, written for the game in the manner of the late-eighties arcade and not a
+  transcription of the original's (it replaced eleven seconds of a CC0 FM tune). `tools/make-replay-music.py`
+  holds the score and renders `music/replay.ogg` and `replay.wav` from it, and writes the same notes to
+  `game/src/ReplayScore.cs` for the 1989 synth, so both modes play one tune. Ten seconds (the replay's length; the
+  last chord lands at 8.8 s and rings out before the fade) in A mixolydian at 136 bpm, sixteenths swung to 56 %: the
+  band's intro hit and a tom fill, a four-bar hook (a syncopated lead over slap bass, horn stabs pushed a sixteenth
+  ahead of the bar, a clav comp on the off-sixteenths; A, G to D/F#, A, then F and G as band hits) and a button on A
+  with the brass falling off. The sound is the cabinet's as far as it is documented: its sound board had no FM chip
+  but a TMS32010 DSP mixing sampled instruments into a 12-bit DAC at 20 kHz, mono (MAME's `harddriv_a.cpp`), and the
+  samples of 1989 were of FM synths, drum machines with gated reverb and orchestra hits. So the instruments are
+  four-operator FM in the YM2151's layout (feedback on the first operator, exponential attacks, decays linear in
+  decibels: brass whose modulators open after the carriers, a sawtooth-and-square lead with bends and a delayed
+  vibrato, DX-style slap bass with thumb, pop and dead notes, a clav), drums from oscillators and noise (an 808's six
+  squares for the metal) and an orchestra hit, and the mix goes through the board: band-limited to 20 kHz, glued and
+  limited, truncated to 12 bits, held between samples and smoothed by the amplifier's low-pass. Peak -1 dBFS and
+  -17 LUFS, as the file before it. A file of the player's
   own under `user://music/replay.ogg|.mp3|.wav` takes its place (0.11, `EngineAudio.CustomReplayMusic`): nothing
   copyrighted ships with the game, but a copy can play what its owner remembers. The menu's REPLAY MUSIC line shows
   which plays and opens the folder (0.15); a file dropped in while the game runs is picked up when the menu opens,
