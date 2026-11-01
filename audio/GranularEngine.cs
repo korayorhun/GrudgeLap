@@ -150,6 +150,11 @@ public sealed class GranularEngine
         _driveBottomRpm = MathF.Max(drive.MinFiring * 120f / cylinders, _idleTopRpm + 200f);
         _nextPulse = _latency;
         _rounded = trim;
+        // The cabin's low-pass and boom and the tailpipe's shelf are the body's and never change: set once, where the
+        // throttle's filter and the intake's roar follow the load (UpdateFilters).
+        _cabinHigh.SetLowPass(voicing.CabinCutoff, 0.7f, drive.SampleRate);
+        _cabinBody.SetPeak(voicing.BoomHz, 0.9f, voicing.BoomDb, drive.SampleRate);
+        _tailpipe.SetHighShelf(voicing.TailpipeHz, EngineVoicing.TailpipeDb, drive.SampleRate);
         if (overrun is not null) _cutMatch = Math.Clamp((float)Math.Pow(10.0, (drive.Lufs() - overrun.Lufs()) / 20.0), 0.25f, 4f);
         if (trim)
         {
@@ -304,13 +309,9 @@ public sealed class GranularEngine
         // limiter's cut leaves the throttle open: the load the voice is given holds through it.
         var shut = _overrun is null ? 1100f : 2600f;
         _throttle.SetLowPass(shut + (12100f - shut) * MathF.Pow(_smoothLoad, 1.5f), 0.6f, rate);
-        var voicing = Voicing;
-        _cabinHigh.SetLowPass(voicing.CabinCutoff, 0.7f, rate);
-        _cabinBody.SetPeak(voicing.BoomHz, 0.9f, voicing.BoomDb, rate);
         // The intake's roar grows with the air the engine draws: with the throttle.
-        _cabinIntake.SetPeak(EngineVoicing.IntakeHz, 0.8f, voicing.CabinIntakeDb * _smoothLoad, rate);
-        _outsideIntake.SetPeak(EngineVoicing.IntakeHz, 0.8f, voicing.OutsideIntakeDb * _smoothLoad, rate);
-        _tailpipe.SetHighShelf(voicing.TailpipeHz, EngineVoicing.TailpipeDb, rate);
+        _cabinIntake.SetPeak(EngineVoicing.IntakeHz, 0.8f, Voicing.CabinIntakeDb * _smoothLoad, rate);
+        _outsideIntake.SetPeak(EngineVoicing.IntakeHz, 0.8f, Voicing.OutsideIntakeDb * _smoothLoad, rate);
     }
 
     /// <summary><paramref name="count"/> revs spread evenly over the run-up's recording, half a spacing in from its ends.</summary>
