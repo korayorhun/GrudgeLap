@@ -18,7 +18,7 @@ red barn with "33" on its door, Holstein cows grazing in the fields (they moo, s
 farmhouse with its porch after the curve, a gas station, a camouflaged hut, yellow signs that tip over when you clip them, sawhorses before
 the stunts and a level crossing with its railway, where a train really does come through. You sit in a leather-lined cabin,
 reading working dials through a steering wheel that turns as you steer, with the road behind you in the
-mirror, and the tyres squeal, howl and scrabble on gravel from real recordings. Keyboard-playable on Windows,
+mirror, and the tyres squeal at their limit, howl and scrub past it and scrabble on gravel from real recordings. Keyboard-playable on Windows,
 windowed or full screen. Free, open source, no assets copied from anywhere.
 
 **TR** · 1989'un arcade sürüş simülatörlerine saygı duruşu. Beş araba (1984 flat-12, 4 vites; 2012 V8, 7
@@ -169,9 +169,11 @@ best lap's ghost out of the picture.
   both routes with and without traffic and at any frame rate from 20 to 144 fps, drone collisions, the ghost,
   the skid pad, the ground and the props.
 - `audio/` — the engine voice both versions play: real recordings cut into their firing pulses
-  (`tools/make-engine-bank.py`) and laid down again one per firing period of the simulated revs;
-  `audio.tests/` checks its pitch, clicks and silence (set `GRUDGELAP_AUDIO_DEMO` to a folder for
-  listenable sweeps).
+  (`tools/make-engine-bank.py`) and laid down again one per firing period of the simulated revs; the
+  tyres' mix read from where each tyre is on its force curve (squeal at the limit, howl and scrub past
+  it, anti-lock chatter) and the synthesised wind, wet spray, gear whine and anti-lock pump (0.19);
+  `audio.tests/` renders them offline and measures pitch, levels, spectra and clicks, the tyres on the
+  simulation's own stops (set `GRUDGELAP_AUDIO_DEMO` to a folder for listenable renders).
 - `game/` — the Godot view: world generated from the track (terrain mesh from the ground field with a ring
   of wooded hills and a snow-capped mountain range round the horizon under a clear sky with drifting clouds,
   photo-textured road worn like a real one (patches of other asphalt, potholes, tar snakes, oil in the wheel

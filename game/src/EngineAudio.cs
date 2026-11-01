@@ -8,8 +8,9 @@ namespace GrudgeLap.Game;
 
 /// <summary>
 /// The car's sound. Engine, tyres and road roar, and the V8's overrun pops come from recordings
-/// (<see cref="SampledEngine"/>, <see cref="TyreAudio"/>, the pop one-shots scheduled here); this node mixes the
-/// procedural layers on top: wind that grows with speed, suspension thumps over bumps, the shifter's clunk, bonus
+/// (<see cref="SampledEngine"/>, <see cref="TyreAudio"/>, the pop one-shots scheduled here), the wind, the gears' whine
+/// and the anti-lock pump are synthesised beside the tyres (<see cref="TyreAudio"/>, <see cref="GrudgeLap.Audio.BodyNoise"/>); this
+/// node mixes the procedural layers on top: suspension thumps over bumps, the shifter's clunk, bonus
 /// bleeps, the moo, the sign, the cabinet's chime, starter and jingles (<see cref="Jingle"/>), and the 1989-mode
 /// voices (pulse-train engine, filtered-noise squeal, a noise-burst crash and the train's clack); otherwise the
 /// crash is a recording and the train and the drones are placed in the world by <see cref="WorldAudio"/>. Like
@@ -61,7 +62,7 @@ internal sealed partial class EngineAudio : Node
     private float _blowOff;
     private float _blowLp;
     private float _hissLp;
-    private float _wind, _thump, _thumpPhase, _windLp;
+    private float _thump, _thumpPhase;
     private float _rainLp, _rainLp2;
     private float _lastLoad;
     private readonly float[] _lastCompression = new float[4];
@@ -127,6 +128,7 @@ internal sealed partial class EngineAudio : Node
         _style = spec.Style;
         _turbo = spec.Engine.BoostShare > 0f;
         _sampled.Load(spec.Engine);
+        _tyres.SetCar(spec);
     }
 
     /// <summary>
@@ -405,8 +407,10 @@ internal sealed partial class EngineAudio : Node
         // its last revs through the replay, which played on as a frozen note).
         _running = engine.Running && session.Phase != SessionPhase.Replay;
         _rpm += (MathF.Max(engine.Rpm, 0f) - _rpm) * MathUtil.Clamp01(dt * 12f);
-        var load = MathUtil.Clamp01(engine.LastTorque / 500f);
-        _load += (load - _load) * MathUtil.Clamp01(dt * 8f);
+        // The engine's load is its throttle (0.19). Until 0.18 it was the torque over 500 N m, which a V12 reaches and a
+        // 1.4 four never comes near: the small cars at full throttle played as if coasting, on the overrun recording.
+        var load = engine.Throttle;
+        _load += (load - _load) * MathUtil.Clamp01(dt * 16f);
 
         var squeal = 0f;
         foreach (var w in car.Wheels)
@@ -471,10 +475,7 @@ internal sealed partial class EngineAudio : Node
         }
         _trainLevel += (trainTarget - _trainLevel) * MathUtil.Clamp01(dt * 3f);
 
-        // Wind grows with speed and only matters above town speeds (the tyres' roar is TyreAudio's recording).
-        var speed = MathF.Abs(car.Speed);
-        var windTarget = MathF.Pow(MathUtil.Clamp01((speed - 12f) / 70f), 2f);
-        _wind += (windTarget - _wind) * MathUtil.Clamp01(dt * 3f);
+        // The wind is TyreAudio's (BodyNoise), calibrated against the tyres' roar; 1989 mode has none, as the cabinet had none.
         // A sudden change of suspension travel is a bump: a low thump, louder for a harder hit.
         var jolt = 0f;
         for (var i = 0; i < 4 && i < car.Wheels.Length; i++)
@@ -506,7 +507,8 @@ internal sealed partial class EngineAudio : Node
         _lastLoad = load;
         _sampled.Interior = Interior;
         _sampled.Update(_rpm, _load, _running, muted: Retro);
-        _tyres.Update(session, dt, muted: Retro);
+        _tyres.Interior = Interior;
+        _tyres.Update(session, dt, muted: Retro, running: _running);
         Fill();
     }
 
@@ -573,11 +575,9 @@ internal sealed partial class EngineAudio : Node
         return _rainLp2 * 1.8f * Rain * (Interior ? 0.07f : 0.14f);
     }
 
-    /// <summary>Wind (one-pole low-passed noise) and the bump thump (a 48 Hz burst).</summary>
+    /// <summary>The bump thump: a 48 Hz burst with a little noise.</summary>
     private float Road(float noise)
     {
-        _windLp += (noise - _windLp) * 0.12f;
-        var wind = _windLp * 2.6f * _wind * 0.22f;
         var thump = 0f;
         if (_thump > 0f)
         {
@@ -586,7 +586,7 @@ internal sealed partial class EngineAudio : Node
             thump = MathF.Sin(_thumpPhase * MathF.Tau) * _thump * 0.55f + noise * _thump * 0.08f;
             _thump -= 1f / (MixRate * 0.16f);
         }
-        return wind + thump;
+        return thump;
     }
 
     /// <summary>The shifter going into a gear: a low thud of ninety milliseconds with the click of the linkage on top.</summary>

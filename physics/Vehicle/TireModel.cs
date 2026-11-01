@@ -119,6 +119,28 @@ public static class TireModel
     }
 
     /// <summary>
+    /// How far along its force curve a tyre is, as a share of the slip where the force peaks: below 1 it grips (the force
+    /// still grows with slip), about 1 it is at the limit, beyond it slides, and a locked wheel on dry asphalt is at
+    /// 8 to 11. The slips are combined as <see cref="Forces"/> combines them, so cornering and braking add up as the force does.
+    /// The sound takes the squeal of a tyre at its limit and the scrub of one sliding from it (0.19).
+    /// </summary>
+    public static float SlipToPeak(float slipRatio, float slipAngle, float load, float friction, in TireSize tire)
+    {
+        if (load <= 0f || friction <= 0f) return 0f;
+        var mu = PeakFriction(load, friction, tire);
+        var ux = slipRatio * LongitudinalStiffness / mu;
+        var uy = MathF.Tan(MathUtil.Clamp(slipAngle, -1.4f, 1.4f)) * CorneringStiffness(load, tire) / (mu * load);
+        var u2 = ux * ux + uy * uy;
+        if (u2 < 1e-12f) return 0f;
+        // The peak sits at u = 2.0 on the longitudinal curve and 1.96 on the lateral one; blend as Forces does.
+        var lateralShare = uy * uy / u2;
+        return MathF.Sqrt(u2) / (LongitudinalPeak * (1f - lateralShare) + LateralPeak * lateralShare);
+    }
+
+    /// <summary>Normalised slip at which the lateral curve peaks (see the shape constants).</summary>
+    private const float LateralPeak = 1.96f;
+
+    /// <summary>
     /// Slip ratio at which the longitudinal force peaks on a surface of <paramref name="friction"/> (before load
     /// sensitivity, which moves it by a few per cent): where an anti-lock system holds a braked wheel.
     /// </summary>

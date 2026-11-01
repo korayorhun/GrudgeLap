@@ -27,6 +27,12 @@ public sealed class EngineModel
     public float AngularVelocity { get; set; }               // rad/s
     public float Rpm => AngularVelocity * RpmPerRadPerSec;
     public float LastTorque { get; private set; }
+    /// <summary>
+    /// The throttle the engine ran at in the last <see cref="Torque"/> call, 0 to 1: the driver's, opened a little by the
+    /// idle governor and shut by the rev limiter's cut. It is the engine's load for the sound (0.19): the torque is not,
+    /// since a 1.4 at full throttle makes a fifth of what a V12 does and once sounded as if it were coasting.
+    /// </summary>
+    public float Throttle => Running ? _lastThrottle : 0f;
     /// <summary>The turbo's boost, 0 to 1 (always 0 without a turbo): it builds with the throttle above the threshold revs.</summary>
     public float Boost { get; private set; }
     /// <summary>

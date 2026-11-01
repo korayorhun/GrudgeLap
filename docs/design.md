@@ -345,13 +345,15 @@ the clutch's lock/slip machine and launch assist, and the low-speed fades of the
   of the simulated revs one pulse recorded at the nearest revs is laid down and overlap-added — the
   recording's own sequence while the revs hold, nothing looped or pitch-shifted, so the exhaust keeps its
   character across the rev range; the two banks cross-fade above idle, a low-pass opens with the throttle,
-  and from the cockpit the engine comes through the bulkhead (duller, with a cabin boom). Tyres and road
-  from recordings (`TyreAudio`: the tread's roar recorded in a cabin, pitched up with the speed; a cornering
-  squeal from about four degrees of slip angle, a harder howl that joins it at big angles, a screech for
-  wheelspin and locked wheels beyond 15 % slip, gravel while a wheel is off the asphalt, each faded and
-  pitched from the slip of the four wheels); two to four exhaust pops when the V8 lifts off above 4800 rpm,
-  one-shots from a CC0 recording drawn at random with a spread of pitch and level; synthesised wind that
-  grows with speed and a thump when the suspension is jolted; the shifter's clunk at every change of gear (a
+  and from the cockpit the engine comes through the bulkhead (duller, with a cabin boom); the load is the
+  engine's throttle (0.19). Tyres and road
+  from recordings (`TyreAudio`, levels from `audio/TyreMix`: the tread's roar recorded in a cabin, growing as
+  v^1.5 and pitched up with the speed; a squeal as a tyre nears the peak of its force curve, the howl of a tyre
+  sliding sideways past it and the scrub of a locked or spinning wheel, gravel while a wheel is off the asphalt;
+  see the sound audit below); two to four exhaust pops when the V8 lifts off above 4800 rpm,
+  one-shots from a CC0 recording drawn at random with a spread of pitch and level; synthesised beside the tyres
+  (`audio/BodyNoise`) the wind (v^2, crossing the roar at 110 km/h in the cabin), a wet road's spray, the gears'
+  and the final drive's whine and the anti-lock pump; a thump when the suspension is jolted; the shifter's clunk at every change of gear (a
   110 Hz thud with the click of the linkage); a crash as one of three CC0 recordings of metal and glass with
   a thump under it; the pulse-train engine, a filtered-noise squeal, a noise-burst crash and the clack of
   the train's wheels kept for 1989 mode; the sounds of the world placed in it (`WorldAudio`): every drone's
@@ -543,6 +545,69 @@ the clutch's lock/slip machine and launch assist, and the low-speed fades of the
   unsigned executable back on its first launch (15-35 s measured with Acronis on the development laptop,
   4 s afterwards), and the bare exe changes only with the engine or the version stamp. Signing it is the
   real fix, planned for 1.0.
+
+### Sound audit (0.19)
+
+The car's sound was held against what a microphone hears in and around a real car (in-cabin and pass-by recordings,
+and the literature of vehicle acoustics: Sandberg and Ejsmont, *Tyre/Road Noise Reference Book*; Harrison, *Vehicle
+Refinement*) and measured offline instead of by ear: the voices are rendered headless in `audio.tests` and their
+levels, spectra and envelopes compared (an FFT helper, `audio.tests/Spectrum.cs`), and the tyre sounds are driven by
+the simulation's own stops. Findings ranked by how much each kept the car from sounding real; the first seven were
+fixed in 0.19, each pinned by a test (`TyreMixTests`, `BodyNoiseTests`, `GranularEngineTests`,
+`physics.tests/SoundReadoutTests`).
+
+1. **The engine's load was the torque over 500 N m** (fixed). A V12 reaches that; a 1.4 four never comes near. At full
+   throttle and 4000 rpm the estate read 0.19, so the voice played 77 % of its overrun recording, low-passed as a shut
+   throttle and 11 dB under its full-throttle level: driven flat out it sounded as if coasting. The saloon read 0.24,
+   the fleet saloon 0.25, the hot hatch 0.39, the five 0.37, the turbo hatch 0.6 on full boost; only the V12 and the
+   V8 got their bark. Now the load is the throttle the engine runs at (`EngineModel.Throttle`: the driver's, the idle
+   governor's, shut by the limiter's cut and through assisted shifts), followed in 1/16 s instead of 1/8.
+2. **The tyres ignored the tyre model** (fixed). The squeal grew with the slip angle from a fixed 4 degrees to 17
+   whatever the tyre, its load or its grip, and only grew; a locked wheel and a spinning one were the same screech
+   set by the slip ratio alone; a stop with anti-lock brakes sounded like a locked one; the loudest wheel stood for
+   all four; the skid pad was taken for gravel and crunched; a wet road squealed like a dry one. Now `TyreMix` reads
+   where each tyre is on its force curve (`TireModel.SlipToPeak`, 1 at the peak): quiet below 60 % of it, the squeal
+   from there to the peak, past it the howl of a sideways slide or the scrub of a locked or spinning wheel, pitched
+   by the sliding speed; the wheels add as independent sources (3 dB per doubling), heavier tyres are louder, water
+   all but silences the squeal and softens the scrub. On the simulation's own stops from 100 km/h the estate's locked
+   wheels scrub (1.2) with the squeal at a fifth of that; the V8's anti-lock brakes hold its tyres at the peak, so it
+   squeals (0.76) with no scrub, chattering between 0.4 and 1.2 at the valves' seven cycles a second (the simulation's
+   modulator settles too finely to be heard, so the chatter is laid on while it holds pressure back).
+3. **The wind was missing** (fixed). Silent below 43 km/h and grown as ((v - 12) / 70)^2, it was 26 dB under the
+   tyres' roar at 110 km/h and still 17 dB under at 216 km/h, where real cabins are dominated by it. Now
+   (`BodyNoise`) it grows as v^2 (12 dB a doubling) up to 200 km/h, its band moves up with the speed (vortex
+   shedding) with gusts of buffeting, and it is calibrated against the roar's recording to cross it at 110 km/h in the
+   cabin (`The_wind_takes_over_from_the_tyres_roar_near_110_kmh`); from outside it is 3 dB lower.
+4. **The roar grew almost linearly with the speed** (fixed): 22 dB a decade, where measured tyre/road noise grows by
+   about 30 (v^1.5). Its level at 110 km/h is unchanged; like the wind it grows no more past about 216 km/h.
+5. **No gear whine** (fixed). Gearboxes sing at their meshing frequencies (a shaft's revolutions a second times its
+   teeth): now the selected pair and the constant-mesh pair of an assumed countershaft box, loudest in first, a
+   direct top gear nearly silent, a straight-cut reverse three times as loud, and the hypoid final drive's tone rising
+   with road speed, all loaded by the torque through the closed clutch and modulated by the shafts' runout; louder in
+   the cabin (`Gears_whine_at_their_meshing_frequencies_and_loudest_in_the_low_gears`).
+6. **No anti-lock pump** (fixed). The modulator's return pump growls at about 45 Hz while it works, pulsing with the
+   valves, heard in the cabin and little outside.
+7. **No spray on a wet road** (fixed). The rain's hiss did not care whether the car moved; now the tread throws water
+   with a hiss that grows as v^1.5 with the wetness, on top of the rain.
+8. **Overrun against throttle** (checked, kept). On every car the overrun at the same revs is quieter overall (6-15
+   dB), at the firing frequency (2.7-20 dB) and above 2 kHz (3-23 dB): pinned by
+   `Overrun_is_quieter_than_the_throttle_at_the_same_revs_in_every_band`. It is not always darker: the V12's, the
+   V8's and the saloon's overrun recordings carry more rasp than their run-ups, which is what such exhausts do.
+9. **Timbre against revs** comes from the recordings and rises with the revs, but not evenly where a bank joins
+   segments recorded apart (the turbo hatch is brighter at 3350 rpm than at 4700). Open: a per-bank spectral tilt
+   correction would even it out.
+10. **The cabin is one filter for every car** (open): a 2.6 kHz low-pass and a 130 Hz boom, the same for a front engine
+    heard through the bulkhead and a mid engine behind the driver's head; the intake's roar (front) against the
+    exhaust (rear) is not modelled. It needs intake recordings, or a measured transfer function per body.
+11. **The turbo** (open, minor): its whistle is one sine about 25 dB under the engine, without the compressor's surge or the
+    flutter of a shut throttle on boost; the blow-off valve is fine.
+12. **The rev limiter** (open): the cut is 60 ms, which the voice's smoothing blurs into a dip rather than the hard
+    stutter of a real limiter.
+13. **The other cars** (kept): every drone plays the same recording, attenuated by inverse distance, Doppler-shifted
+    from the simulation and low-passed with distance by the engine (air absorption); they are a background.
+14. **The Unreal version** (open): GlpAudio still takes the torque over 500 N m as the load and keeps the old tyre
+    mapping. The throttle has to be passed through (its inputs are known there) and `TyreMix` and `BodyNoise` exposed
+    through `physics.native` as new functions, which keeps its ABI.
 
 ## Unreal Engine version (`unreal/`)
 
