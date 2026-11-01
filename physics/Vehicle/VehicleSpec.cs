@@ -381,9 +381,12 @@ public sealed record VehicleSpec
             Coupling = CentreCoupling.Haldex,
             // Game figures, as none are published: past a lead of 3 % (the fronts' slip under a part-throttle pull stays
             // below it) the first Haldex closes within a fraction of a turn between its shafts, a fifth of a metre a
-            // second more (0.6 rad/s) passing its fill; up to about half the drive goes to the rear.
+            // second more (0.6 rad/s) passing its fill. Its clutch pack holds 2500 N m at the rear wheels, about what
+            // the rear tyres put down on a dry launch, so once closed it ties the axles together (a first-generation
+            // Haldex can lock to an even split, jcr-leeds.com's Gen 1 guide) and the tyres' grip, not the coupling,
+            // shares the drive.
             CouplingRate = 4000f,
-            CouplingShare = 0.5f,
+            CouplingCapacity = 2500f,
             CouplingLead = 0.03f,
         },
         LimitedSlipLocking = 0f,
@@ -619,10 +622,10 @@ public sealed record FourWheelDrive
     /// <summary>Torque (N m) the coupling passes from the faster axle to the slower one per rad/s between their speeds.</summary>
     public float CouplingRate { get; init; }
     /// <summary>
-    /// The most the coupling passes, as a share of the gearbox's torque (an on-demand coupling's clutch and its control);
-    /// a viscous coupling has no such limit short of its hump, which is not modelled.
+    /// The most torque (N m) the coupling passes, whatever the speed difference: an on-demand coupling's clutch pack at
+    /// its full pressure. A viscous coupling has no such limit short of its hump, which is not modelled.
     /// </summary>
-    public float CouplingShare { get; init; } = float.PositiveInfinity;
+    public float CouplingCapacity { get; init; } = float.PositiveInfinity;
     /// <summary>
     /// How far the front axle may run ahead of the rear (or behind it), as a share of the rear's speed, before an
     /// on-demand coupling closes: its control leaves the tyres' slip of a part-throttle pull and the fronts' longer path
@@ -643,7 +646,7 @@ public enum CentreCoupling
     Viscous,
     /// <summary>
     /// An on-demand multi-plate coupling to the rear axle (Haldex's first generation): it closes as the front wheels
-    /// outrun the rear ones, up to <see cref="FourWheelDrive.CouplingShare"/> of the drive, and its control opens it while
+    /// outrun the rear ones, up to its clutch pack's <see cref="FourWheelDrive.CouplingCapacity"/>, and its control opens it while
     /// the brakes are on, so the anti-lock brakes see each axle on its own.
     /// </summary>
     Haldex,

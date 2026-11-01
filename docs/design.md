@@ -310,28 +310,45 @@ Items 18 and 19 came with cars3, when the three hatchbacks were made to drive li
     drive all four wheels. `VehicleSpec.FourWheelDrive` now gives a car a centre differential with a fixed front share
     (an epicyclic's: 0.47 on the Delta) or the gearbox driving the front axle (a share of 1), a coupling between the
     axles (`CentreCoupling.Viscous`, Ferguson's, whose torque grows with the speed difference either way and is never
-    open; or `Haldex`, a multi-plate coupling that closes once the fronts run more than 3 % ahead of the rears, passes
-    up to half the drive and opens while the brakes are on, as the first generation's control did for the anti-lock
-    brakes) and a differential per axle (the existing clutch-type model; a Torsen of bias ratio b is its locking
+    open; or `Haldex`, a multi-plate coupling that closes once the fronts run more than 3 % ahead of the rears, up to
+    its clutch pack's capacity (2500 N m at the rear wheels, about what the rear tyres put down on a dry launch, so once
+    closed it ties the axles together and the tyres share the drive), and opens while the brakes are on, as the first
+    generation's control did for the anti-lock brakes) and a differential per axle (the existing clutch-type model; a Torsen of bias ratio b is its locking
     (b - 1) / (2 (b + 1)) without preload: 0.2 for the Delta's rear). The clutch sees the centre differential's input:
     s w_f + (1 - s) w_r, the two axles as one inertia 1 / (s^2 / I_f + (1 - s)^2 / I_r) with their tyres' stiffness,
     and their loads in the same proportion; with the clutch locked the engine's inertia is shared as the torque is. The
     coupling's law is taken at the step's end, with each axle's drive, road load and tyre-stiffened inertia, so it
     never passes more than ties the axles: taken at the step's start it lagged the clutch by a step, the clutch spun the
     fronts up and the coupling, a step late, hammered them back (the Golf's fronts alternated between 6 % and 73 %
-    slip at the step rate). The launch assist counts what all four tyres can take as the centre shares it (the axle
-    that saturates first sets the whole through an epicyclic; behind a Haldex the fronts plus what the coupling passes
-    now, not what it could, which had the same chatter); traction control, the scripted driver's feathering and its
-    "driven wheels down" read every driven wheel. `FourWheelDriveTests`: at a steady pull the Delta sends 51 % to the
+    slip at the step rate). The launch assist counts what all four tyres can take as the centre shares it, with what
+    the coupling can move from the axle at its limit to the other: the least of the four tyres' whole, of the front's
+    limit plus the coupling over s and of the rear's plus the coupling over 1 - s. A viscous coupling is counted at its
+    rate times the slip the launch allows (one axle at its tyres' peak), a Haldex at its capacity, so the fronts run
+    ahead to close it as a first Haldex's did; traction control, the scripted driver's feathering and its "driven
+    wheels down" read every driven wheel. `FourWheelDriveTests`: at a steady pull the Delta sends 51 % to the
     front (the epicyclic's 47 % plus a few per cent the coupling hands back from the rear, which creeps a little faster
-    on its larger share), the R32 100 %; with the fronts on grass and the rears on the pad, the clutch let in at the
-    limiter, the Delta's coupling gives the rear 64 % (an open centre: 53 %) and holds the fronts to 0.4 m/s ahead of
-    the rears (3.1), the R32's gives the rear 50 % (none without it) and doubles the speed gained; under braking the
-    Haldex passes nothing. The two-wheel-drive cars go through the same arithmetic as before: every figure the tests
+    on its larger share), the R32 100 %; with the fronts on grass and the rears on the pad and the same torque sent in
+    with or without the coupling (the clutch held part-way, slipping under an engine on its limiter, so that the rears
+    stay short of their peak), the Delta's coupling gives the rear 59 % (an open centre: 53 %), holds the fronts to
+    0.26 m/s ahead of the rears (8.0) and gains 2.50 m/s where the open centre gains 2.26; the R32's gives the rear 59 %
+    (none without it), holds the fronts to 0.35 m/s ahead (14.3) and gains 2.55 m/s against 0.99; on the same split
+    with the launch assist and the throttle floored the R32 is at 3.38 m/s after 0.7 s, 1.36 without its coupling
+    (`The_launch_assist_counts_on_the_Haldex`; the Delta's launch from idle is its engine's either way); under braking
+    the Haldex passes nothing. The two-wheel-drive cars go through the same arithmetic as before: every figure the tests
     print for them (sprints, stops, skid pad, launches, laps) was compared line by line with 0.19's and is unchanged
     (`Two_wheel_drive_cars_drive_one_axle` pins where their torque goes). The native ABI is unchanged: the new spec
     fields are managed only. Not modelled: the R32's electronic differential lock (EDS, braking a spinning wheel) and
     the 570S's brake steer (item 14); a viscous coupling's hump; the Haldex's own temperature and pump lag.
+
+    Review follow-ups (cars3): the first fronts-on-grass test let the clutch in at the limiter, which spun the rears on
+    the pad as hard as the fronts on the grass (41 rad/s at 2-8 rad/s of ground speed), so it showed the coupling
+    shuffling torque between two spinning axles, not handing it to one that grips; the Haldex passed at most half the
+    drive, a share rather than a clutch pack's capacity, so with the clutch dumped the fronts kept half and stayed
+    12.5 m/s ahead; and the launch assist counted the Haldex only for what it already passed, which it never let the
+    fronts close it for: with its fronts on grass the R32 pulled away at 0.3 g with or without the coupling, and on a
+    dry road only 18.5 % of the drive reached the rear in the first 2 s (33 % now) and 0-100 km/h took 6.89 s (6.62
+    now). Over a scripted lap at 20, 60 and 144 fps the coupling reverses 7-23 times a lap and reaches its capacity on
+    one frame in 15,000.
 19. **The three hatchbacks follow the cars the game draws** (fixed in cars3). The models drawn since 0.16 are a Peugeot
     205 GTi, a Lancia Delta HF Integrale and a Golf R32; the specs were a 2001 Clio 2.0 16V, a 1997 Bravo 2.0 20V five
     and a 2008 Leon 2.0 TFSI, all front-wheel drive. Now, from published figures (sources in the specs' comments):
@@ -346,10 +363,10 @@ Items 18 and 19 came with cars3, when the three hatchbacks were made to drive li
     | weight on the front axle | 61.5 → 62.8 % | 62.6 → 60.6 % | 62.0 → 60.9 % |
     | gearbox | 5 speeds, 4.21 → BE1/5 2.92-0.86, 3.69 | 5 speeds, 4.07 → 3.5-0.916, 3.111 | 6 speeds, 3.65 → 02M 3.357-0.927 on 4.235 / 3.273 |
     | tyres | 205/45 R16 → 185/55 R15 | 195/55 R15 → 205/50 R15 | 225/40 R18 (kept) |
-    | driven wheels | front | front → all four (47/53, viscous, Torsen rear) | front → all four (Haldex, up to half to the rear) |
+    | driven wheels | front | front → all four (47/53, viscous, Torsen rear) | front → all four (Haldex, closing as the fronts slip) |
     | ABS / traction control | no / no | no → ABS / no | ABS / traction control (kept) |
     | 0-100 km/h, published | 7.2 → 7.8 s | 8.5 → 5.7 s | 6.4 → 6.6 s |
-    | 0-100 km/h, here | 7.52 → 8.36 s | 9.10 → 6.27 s | 7.00 → 6.89 s |
+    | 0-100 km/h, here | 7.52 → 8.36 s | 9.10 → 6.27 s | 7.00 → 6.62 s |
     | 100-0 km/h dry, here | 44.0 → 46.6 m (locked) | 49.2 (locked) → 39.2 m | 36.4 → 36.5 m |
     | top speed, published | 220 → 205 km/h | 215 → 220 km/h | 247 km/h |
     | top speed, here | 219 → 212 km/h | 216 → 233 km/h | 246 → 249 km/h |
@@ -357,9 +374,11 @@ Items 18 and 19 came with cars3, when the three hatchbacks were made to drive li
     | loop run-up (needs 1.35 m/s^2) | → 3.09 | → 3.86 | → 4.22 |
 
     The sprint and stop ranges in `Sprints_and_stops_within_the_real_cars_ranges` are now a tenth of the published
-    figure either side, no tighter: the Delta sits at the top of its range (6.27 s against 5.7), held back by the T3's
-    lag and a first gear the engine, not the four tyres, limits (0.69 g); the 205 is 0.56 s slow on its modest torque;
-    the R32's Haldex waits for the fronts to slip before the rear joins in, as the first generation did. The skid-pad
+    figure either side, no tighter: the Delta sits at the very top of its range (6.27 s against 5.7; the bound is 6.3 s,
+    the tenth over rounded up, so anything that slows it takes it out), held back by the T3's lag and a first gear the
+    engine, not the four tyres, limits (0.69 g), and from idle it takes 6.48 s to 60 mph against that test's 6.5; the
+    205 is 0.56 s slow on its modest torque; the R32's Haldex waits for the fronts to slip before the rear joins in, as
+    the first generation did, and the launch assist lets them. The skid-pad
     ranges were narrowed round each car within its class (no understeer gradient is published for any of the three).
     All three lap both routes without a crash and make the loop (`Every_car_laps_both_routes`, `LoopRunUp`). The
     wheelbase, track, ride height and body footprint stay those `tools/car_models.py` prepares the drawn models to (2.47,
@@ -641,7 +660,8 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
   named event, which the running game polls every frame to restore and raise its window, and quits before
   building the world. `--invisible` runs neither take nor check the lock.
 - Command-line switches for automation: `--attract`, `--chase`, `--speed-route`,
-  `--car=flat12|v8|hothatch|five|turbohatch` (or the car's index), `--ram=tree|building|traffic|test` (the
+  `--car=flat12|v8|hothatch|five|turbohatch` (or the car's index, or the name of the car it follows: `peugeot205`,
+  `delta`, `r32`, `sahin`, `toros`, `egea`), `--ram=tree|building|traffic|test` (the
   scripted driver runs the course until a thing of that kind is near and drives into it, or into a tree planted
   on the start straight: the crash replay on film),
   `--no-traffic`, `--weather=dry|overcast|wet|rain` (the credit's weather; otherwise every credit draws one),

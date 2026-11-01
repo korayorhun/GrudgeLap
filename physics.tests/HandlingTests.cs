@@ -38,11 +38,15 @@ public sealed class HandlingTests(ITestOutputHelper output)
     // Hot hatch: Peugeot quoted 7.8 s for the 205 GTi 1.9 (about 8.4 here, on its eight-valve's broad but modest
     // torque); no ABS, so the wheels lock (non-ABS cars of the late 1980s on 15 in tyres: 42-52 m).
     [InlineData(2, 7.0f, 8.6f, 42f, 52f)]
-    // Rally hatch: Lancia quoted 5.7 s for the Delta Integrale Evoluzione (about 6.3 here: the T3's lag and a launch
-    // the engine limits, not the four tyres); Bosch ABS, no published stop (34-42 m, the ABS cars of its time).
+    // Rally hatch: Lancia quoted 5.7 s for the Delta Integrale Evoluzione (6.27 here: the T3's lag and a launch the
+    // engine limits, not the four tyres). The upper bound is 6.3 s, the tenth over (6.27 s) rounded up to the printed
+    // tenth, and the car sits at its very top: a change that slows the Delta at all takes it out of the range, as it
+    // should, since it is already a tenth slower than Lancia's figure. Bosch ABS, no published stop (34-42 m, the ABS
+    // cars of its time).
     [InlineData(3, 5.1f, 6.3f, 34f, 42f)]
-    // V6 hatch: VW quoted 6.6 s for the Golf R32 (about 6.9 here: the Haldex closes once the fronts slip, as the first
-    // generation did); ABS; the Washington Times stopped one from 60 mph in 117 ft, about 38 m from 100 km/h.
+    // V6 hatch: VW quoted 6.6 s for the Golf R32 (about 6.6 here: the launch assist counts on the Haldex, whose fronts
+    // run ahead to close it, as the first generation's did); ABS; the Washington Times stopped one from 60 mph in
+    // 117 ft, about 38 m from 100 km/h.
     [InlineData(4, 5.9f, 7.3f, 34f, 42f)]
     [InlineData(5, 12.8f, 15.0f, 46f, 58f)]  // 1.6 saloon: 13.9 s (FIA form 5608's car); discs and drums, no ABS
     [InlineData(6, 15.5f, 18.5f, 48f, 62f)]  // 1.4 estate: about 16-17 s; no ABS
@@ -70,9 +74,11 @@ public sealed class HandlingTests(ITestOutputHelper output)
     /// of 1.5 and the driver had to feather the throttle back to a fifth.
     /// </summary>
     /// <remarks>
-    /// The V6 hatch's Haldex drives its fronts until they slip, so its fronts carry the launch: the slip read is that of
-    /// the driven axle that slips most. The rally hatch is left out: its launch is the engine's (the T3 builds its boost
-    /// on the clutch), its four tyres far short of their peak.
+    /// The slip read is that of the driven axle that slips most. The V6 hatch's Haldex closes only once its fronts lead
+    /// the rears, by 0.5 rad/s at least, which near a standstill is past their peak slip (0.16 m/s on a slip ratio read
+    /// against 1.2 m/s): its fronts run ahead there so that the rears can drive, and may reach 1.4 times their peak, its
+    /// rears no more than any other car's. The rally hatch is left out: its launch is the engine's (the T3 builds its
+    /// boost on the clutch), its four tyres far short of their peak.
     /// </remarks>
     [Theory]
     [InlineData(0)]
@@ -93,7 +99,8 @@ public sealed class HandlingTests(ITestOutputHelper output)
         Assert.InRange(sim.Drivetrain.Engine.Rpm, launchRpm, launchRpm + 600f);
         Assert.InRange(sim.Speed, -0.05f, 0.05f);
 
-        float lowestRpm = float.MaxValue, mostSlip = 0f, slipSum = 0f;
+        float lowestRpm = float.MaxValue, mostSlip = 0f, slipSum = 0f, mostLeadSlip = 0f;
+        var leadsToClose = spec.FourWheelDrive is { Coupling: CentreCoupling.Haldex };
         var samples = 0;
         var t0 = 0f;
         for (; t0 < 6f; t0 += HandlingRig.Dt)
@@ -107,18 +114,21 @@ public sealed class HandlingTests(ITestOutputHelper output)
             {
                 if (!spec.Drives(front)) continue;
                 var (a, b) = front ? (sim.Wheels[0], sim.Wheels[1]) : (sim.Wheels[2], sim.Wheels[3]);
-                slip = MathF.Max(slip, 0.5f * (a.SlipRatio + b.SlipRatio) / TireModel.PeakSlipRatio(a.Friction));
+                var axleSlip = 0.5f * (a.SlipRatio + b.SlipRatio) / TireModel.PeakSlipRatio(a.Friction);
+                slip = MathF.Max(slip, axleSlip);
+                if (leadsToClose && front) mostLeadSlip = MathF.Max(mostLeadSlip, axleSlip);
+                else mostSlip = MathF.Max(mostSlip, axleSlip);
             }
-            mostSlip = MathF.Max(mostSlip, slip);
             slipSum += slip;
             samples++;
         }
         var meanSlip = slipSum / samples;
-        output.WriteLine($"{spec.Name}: launch revs {launchRpm:F0}, held at least {lowestRpm:F0} rpm for {t0:F2} s to {sim.Speed * MathUtil.KmhPerMps:F0} km/h; driven slip {meanSlip:P0} of the peak on average, at most {mostSlip:P0}");
+        output.WriteLine($"{spec.Name}: launch revs {launchRpm:F0}, held at least {lowestRpm:F0} rpm for {t0:F2} s to {sim.Speed * MathUtil.KmhPerMps:F0} km/h; driven slip {meanSlip:P0} of the peak on average, at most {mostSlip:P0}" + (leadsToClose ? $" (the leading fronts {mostLeadSlip:P0})" : ""));
         Assert.InRange(t0, 0.5f, 5f);
         Assert.True(lowestRpm > 0.9f * launchRpm, $"the engine bogged to {lowestRpm:F0} rpm");
         Assert.InRange(meanSlip, spec.LaunchControl ? 0.8f : 0.5f, 1.0f);
         Assert.True(mostSlip < 1.15f, $"a driven tyre spun past its peak ({mostSlip:P0})");
+        Assert.True(mostLeadSlip < 1.4f, $"the fronts ran too far ahead to close the coupling ({mostLeadSlip:P0})");
     }
 
     /// <summary>

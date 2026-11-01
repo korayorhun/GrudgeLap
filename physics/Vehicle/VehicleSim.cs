@@ -582,11 +582,20 @@ public sealed class VehicleSim
 
     /// <summary>
     /// The launch assist's torque on a four-wheel-drive car: what the four tyres can take as the centre of the driveline
-    /// shares it out. An epicyclic centre differential sends its fixed shares, so the axle that reaches its limit first
-    /// sets the whole (its coupling passes torque only once an axle slips, which the launch stays short of); behind an
-    /// on-demand coupling the front axle carries the drive and the rear adds what the coupling passes as the fronts
-    /// outrun it, never more than its tyres hold. With an axle in the air the figure is unknown, as with two-wheel drive.
+    /// shares it out. An epicyclic centre differential sends its fixed shares s and 1 - s and its coupling moves up to C
+    /// from the axle at its limit to the other, so the whole is the least of what the four tyres take together, of the
+    /// front's limit plus C over s and of the rear's limit plus C over 1 - s. Behind an on-demand coupling (s = 1) that
+    /// is the front's limit plus the rear's, the rear's never more than C. With an axle in the air the figure is
+    /// unknown, as with two-wheel drive.
     /// </summary>
+    /// <remarks>
+    /// C is what the coupling can pass at the slip the launch allows. A viscous coupling passes its rate times the axles'
+    /// speed difference, and the assist lets one axle run at its tyres' peak slip while the other grips. An on-demand
+    /// coupling passes nothing until the fronts lead the rears by its lead, which the assist, keeping the fronts short of
+    /// their peak, would never let them do: counted only for what it already passed, the coupling never closed on a
+    /// launch, and the V6 hatch with its fronts on grass pulled away at a front-wheel-drive car's 0.3 g. So the assist
+    /// counts on the clutch pack's whole capacity and the fronts run ahead to close it, as a first Haldex's did.
+    /// </remarks>
     private float LaunchTraction(FourWheelDrive awd)
     {
         if (!(Wheels[0].InContact || Wheels[1].InContact) || !(Wheels[2].InContact || Wheels[3].InContact)) return float.PositiveInfinity;
@@ -595,18 +604,17 @@ public sealed class VehicleSim
         var front = (LaunchShare(Wheels[0], aim) + LaunchShare(Wheels[1], aim)) * _spec.WheelRadius;
         var rear = (LaunchShare(Wheels[2], aim) + LaunchShare(Wheels[3], aim)) * _spec.WheelRadius;
         var s = awd.FrontShare;
-        float total;
-        if (s >= 1f)
+        var passes = awd.CouplingCapacity;
+        if (awd.Coupling == CentreCoupling.Viscous)
         {
-            // What the coupling passes now, not what it could: it closes only as the fronts outrun the rears, and a
-            // launch that counted on its whole share before it had closed spun the fronts and then, cut back, let them
-            // grip again, step after step.
-            total = front + MathF.Min(rear, MathF.Max(CouplingTorque, 0f));
+            // The axles part by the faster one's peak slip at the car's speed (the slip ratio's floor of 1.2 m/s at a
+            // standstill, as the tyre reads it).
+            var ground = MathF.Max(MathF.Abs(0.5f * (Wheels[2].GroundSpeed + Wheels[3].GroundSpeed)), 1.2f);
+            var peakSlip = TireModel.PeakSlipRatio(MathF.Max(Wheels[0].Friction, Wheels[2].Friction));
+            passes = MathF.Min(passes, awd.CouplingRate * peakSlip * ground / _spec.WheelRadius);
         }
-        else
-        {
-            total = MathF.Min(front / s, rear / (1f - s));
-        }
+        var total = MathF.Min(front + rear, (front + passes) / s);
+        if (s < 1f) total = MathF.Min(total, (rear + passes) / (1f - s));
         return total + spinUp;
     }
 
@@ -678,19 +686,19 @@ public sealed class VehicleSim
         }
     }
 
-    /// <summary>
-    /// Torque (N m) the centre coupling passes from the front axle to the rear one this step, negative the other way: its
-    /// rate times the axles' speed difference at the end of the step, an on-demand coupling's capped at its share of the
-    /// gearbox's torque and open while the brakes are on. The law is taken at the step's end (implicitly), with each
-    /// axle's speed moved over the step by its drive, the torque the road holds it back with and the coupling's own
-    /// torque, against the inertia it presents through its tyres (as the clutch reckons its lock): taken at the step's
-    /// start, the coupling lagged the clutch by a step, an axle the clutch had just spun up met it a step late, and the
-    /// two hammered the axle back and forth at the step rate. So computed it can never pass more than would bring the
-    /// two axles to one speed, which is where a real coupling, viscous or multi-plate, stops.
-    /// </summary>
     /// <summary>Speed difference between the axles (rad/s) an on-demand coupling always allows, so a car creeping off does not close it on the tyres' creep.</summary>
     private const float CouplingLeadFloor = 0.5f;
 
+    /// <summary>
+    /// Torque (N m) the centre coupling passes from the front axle to the rear one this step, negative the other way: its
+    /// rate times the axles' speed difference at the end of the step, no more than its capacity (an on-demand coupling's
+    /// clutch pack), and an on-demand coupling's open while the brakes are on. The law is taken at the step's end
+    /// (implicitly), with each axle's speed moved over the step by its drive, the torque the road holds it back with and
+    /// the coupling's own torque, against the inertia it presents through its tyres (as the clutch reckons its lock):
+    /// taken at the step's start, the coupling lagged the clutch by a step, an axle the clutch had just spun up met it a
+    /// step late, and the two hammered the axle back and forth at the step rate. So computed it can never pass more than would bring the
+    /// two axles to one speed, which is where a real coupling, viscous or multi-plate, stops.
+    /// </summary>
     private float CouplingTransfer(FourWheelDrive awd, float pedal, float dt)
     {
         if (awd.Coupling == CentreCoupling.Haldex && pedal > 0f) return 0f;
@@ -708,12 +716,7 @@ public sealed class VehicleSim
         var lead = awd.CouplingLead * MathF.Abs(0.5f * (rl.AngularVelocity + rr.AngularVelocity)) + (awd.CouplingLead > 0f ? CouplingLeadFloor : 0f);
         var beyond = MathF.Sign(gap) * MathF.Max(MathF.Abs(gap) - lead, 0f);
         var torque = awd.CouplingRate * beyond / (1f + awd.CouplingRate * closing);
-        if (awd.Coupling == CentreCoupling.Haldex)
-        {
-            var cap = awd.CouplingShare * MathF.Abs(Drivetrain.AxleTorque);
-            torque = MathUtil.Clamp(torque, -cap, cap);
-        }
-        return torque;
+        return MathUtil.Clamp(torque, -awd.CouplingCapacity, awd.CouplingCapacity);
     }
 
     /// <summary>

@@ -283,8 +283,9 @@ public sealed partial class Bootstrap : Node3D
     private static int CarIndex(string name, int current)
     {
         string[] names = ["flat12", "v8", "hothatch", "five", "turbohatch", "saloon", "estate", "fleet"];
-        // The everyday cars answer to the names of the cars they follow too.
-        string[] aliases = ["", "", "", "", "", "sahin", "toros", "egea"];
+        // The everyday cars and the hatchbacks answer to the names of the cars they follow too (the hatchbacks' keys
+        // are those of the cars they once were, which the models' files still carry).
+        string[] aliases = ["", "", "peugeot205", "delta", "r32", "sahin", "toros", "egea"];
         var index = System.Array.IndexOf(names, name.ToLowerInvariant());
         if (index < 0) index = System.Array.IndexOf(aliases, name.ToLowerInvariant());
         if (index < 0 && int.TryParse(name, out var number)) index = number;

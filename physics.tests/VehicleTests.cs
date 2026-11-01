@@ -151,7 +151,9 @@ public sealed class VehicleTests
     /// </summary>
     [Theory]
     [InlineData(2, false, 6.7f, 8.9f, 115f, 140f)]   // 205 GTi 1.9: 7.8 s to 62 mph, 205 km/h (127 mph); front-wheel drive
-    [InlineData(3, true, 4.9f, 6.5f, 123f, 151f)]    // Delta Integrale Evoluzione: 5.7 s, 220 km/h (137 mph)
+    // Delta Integrale Evoluzione: 5.7 s, 220 km/h (137 mph). It takes 6.48 s from idle, at the very top of its range
+    // (6.5 s, a fifth over 5.4): the T3 waits for its boost, and the road-test start is already a tenth slow.
+    [InlineData(3, true, 4.9f, 6.5f, 123f, 151f)]
     [InlineData(4, true, 5.6f, 7.5f, 138f, 169f)]    // Golf R32: 6.6 s, 247 km/h (153 mph)
     public void Hatchbacks_match_their_published_figures(int car, bool fourWheelDrive, float zeroToSixtyMin, float zeroToSixtyMax, float topMin, float topMax)
     {
