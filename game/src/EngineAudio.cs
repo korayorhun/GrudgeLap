@@ -26,6 +26,8 @@ internal sealed partial class EngineAudio : Node
     private double _phase;
     // The revs, the load and the limiter's cut as the voices follow them (EngineFollower: the load is the engine's throttle).
     private readonly EngineFollower _follower = new();
+    // The 1989 synth's load: the throttle as the limiter's cut shuts it, followed as in 0.19 (see Update).
+    private float _synthLoad;
     private float _squeal;
     private float _lowpass;
     private float _bp1, _bp2;
@@ -58,6 +60,8 @@ internal sealed partial class EngineAudio : Node
     private TyreAudio _tyres = null!;
     private CarStyle _style = CarStyle.FlatTwelve;
     private EngineSpec _engineSpec = EngineSpec.FlatTwelve;
+    // The corner of the low-pass the cabin hears the engine bay through (EngineVoicing.CabinCutoff), for the turbo.
+    private float _cabinCutoff = 2200f;
     private readonly TurboNoise _turbo = new(MixRate);
     private TurboState _turboState;
     private float _turboDt;
@@ -127,6 +131,7 @@ internal sealed partial class EngineAudio : Node
     {
         _style = spec.Style;
         _engineSpec = spec.Engine;
+        _cabinCutoff = SampledEngine.VoicingOf(spec).CabinCutoff;
         _sampled.Load(spec);
         _tyres.SetCar(spec);
     }
@@ -413,6 +418,9 @@ internal sealed partial class EngineAudio : Node
         var load = engine.Throttle;
         var cut = engine.LimiterCut;
         _follower.Update(engine.Rpm, load, cut, dt);
+        // The 1989 synth has no pulses to cut: it takes the throttle unheld, so it dips on the limiter as it did in 0.19,
+        // where the voice's held load would play it as a steady tone.
+        _synthLoad += (load - _synthLoad) * MathUtil.Clamp01(dt * EngineFollower.LoadRate);
 
         var squeal = 0f;
         foreach (var w in car.Wheels)
@@ -446,10 +454,12 @@ internal sealed partial class EngineAudio : Node
         _turboState = new TurboState(
             Boost: _running ? engine.Boost : 0f,
             Throttle: _running ? _follower.Load : 0f,
-            RevShare: _follower.Rpm / _engineSpec.RedlineRpm,
+            // The follower holds its last revs through the replay; the turbo runs down with the engine instead.
+            RevShare: _running ? _follower.Rpm / _engineSpec.RedlineRpm : 0f,
             BoostShare: _engineSpec.BoostShare,
             BlowOffValve: _engineSpec.BlowOffValve,
-            Interior: Interior);
+            Interior: Interior,
+            CabinCutoff: _cabinCutoff);
         // Accumulated until the block is rendered: a frame whose generator was full renders nothing and passes its time on.
         _turboDt += dt;
         // The credit's end: the tune of the original's high-score screen, once.
@@ -531,7 +541,7 @@ internal sealed partial class EngineAudio : Node
         var frequency = _running ? _follower.Rpm / 60.0 * 6.0 : 0.0;
         var step = frequency / MixRate;
         // The synthesised engine only plays in 1989 mode; otherwise the recordings carry the engine note.
-        var load = _follower.Load;
+        var load = _synthLoad;
         var engineGain = _running && Retro ? 0.22f + 0.28f * load : 0f;
         var cutoff = 0.08f + 0.5f * load; // one-pole low-pass opens with the throttle: the "wide open" growl
         var buffer = new Vector2[frames];

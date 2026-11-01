@@ -12,7 +12,8 @@ namespace GrudgeLap.Game;
 /// <remarks>
 /// It replaced loops a fraction of a second long pitched to the revs: their repetition buzzed, and the idle was a
 /// 3000 rpm loop slowed to a third. The banks' WAVs are imported uncompressed (their .import files say
-/// compress/mode=0) because the voice reads the samples themselves.
+/// compress/mode=0) because the voice reads the samples themselves. A voice is made on a worker thread (see
+/// <see cref="Load"/>) and swapped in by <see cref="Update"/> when it is ready.
 /// </remarks>
 internal sealed partial class SampledEngine : Node
 {
@@ -24,6 +25,8 @@ internal sealed partial class SampledEngine : Node
     private AudioStreamGeneratorPlayback? _playback;
     private GranularEngine? _engine;
     private (string Folder, EngineVoicing Voicing, float Redline)? _loaded;
+    /// <summary>The voice being made for the car last loaded; the one it replaces plays until it is ready.</summary>
+    private Task<GranularEngine?>? _making;
 
     public float Volume { get; set; } = 0.9f;
     /// <summary>The listener sits in the cabin (the cockpit view): the engine is heard through the bulkhead.</summary>
@@ -45,6 +48,12 @@ internal sealed partial class SampledEngine : Node
     /// Loads the grain banks of a car's engine (its <see cref="EngineSpec.SoundFolder"/>), replacing the previous ones,
     /// voiced for its body (<see cref="VoicingOf"/>) and trimmed to the common loudness over its own revs.
     /// </summary>
+    /// <remarks>
+    /// The recordings are read here, through Godot's loader on the main thread; the banks are evened and the voice is
+    /// trimmed on a worker. Made here, that took 40-130 ms (100-290 in a debug build), longer than the generator's
+    /// 50 ms of audio, so a change of car in a new session ran it dry (0.20 review); until the new voice is ready the
+    /// previous one plays on.
+    /// </remarks>
     public void Load(VehicleSpec spec)
     {
         var engine = spec.Engine;
@@ -52,8 +61,19 @@ internal sealed partial class SampledEngine : Node
         if (_loaded == (engine.SoundFolder, voicing, engine.RedlineRpm)) return;
         _loaded = (engine.SoundFolder, voicing, engine.RedlineRpm);
         var folder = engine.SoundFolder;
-        var drive = Bank(folder, "engine_drive", required: true);
-        _engine = drive is null ? null : new GranularEngine(Bank(folder, "engine_idle"), drive, engine.Cylinders, voicing, engine.RedlineRpm, overrun: Bank(folder, "engine_overrun"));
+        var drive = Recording(folder, "engine_drive", required: true);
+        if (drive is null)
+        {
+            _engine = null;
+            _making = null;
+            return;
+        }
+        var idle = Recording(folder, "engine_idle");
+        var overrun = Recording(folder, "engine_overrun");
+        var cylinders = engine.Cylinders;
+        var redline = engine.RedlineRpm;
+        _making = Task.Run(() => (GranularEngine?)new GranularEngine(
+            Bank(idle), Bank(drive)!, cylinders, voicing, redline, overrun: Bank(overrun)));
     }
 
     /// <summary>
@@ -71,8 +91,15 @@ internal sealed partial class SampledEngine : Node
         _ => new EngineVoicing(EnginePlacement.Front, 2.3f),
     };
 
-    /// <summary>A grain bank of the car's folder; only the run-up is required, a car may have no idle or overrun recording.</summary>
-    private static GrainBank? Bank(string folder, string name, bool required = false)
+    /// <summary>A bank made from a recording read by <see cref="Recording"/> (its timbre evened: the costly part).</summary>
+    private static GrainBank? Bank((byte[] Pcm, string Marks)? recording) =>
+        recording is { } r ? GrainBank.FromPcm16(r.Pcm, r.Marks) : null;
+
+    /// <summary>
+    /// The 16-bit PCM and the marks of a grain bank of the car's folder; only the run-up is required, a car may have no
+    /// idle or overrun recording.
+    /// </summary>
+    private static (byte[] Pcm, string Marks)? Recording(string folder, string name, bool required = false)
     {
         var wav = $"res://assets/audio/{folder}/{name}.wav";
         var marks = $"res://assets/audio/{folder}/{name}.json";
@@ -87,7 +114,7 @@ internal sealed partial class SampledEngine : Node
             GD.PrintErr($"engine grain bank {folder}/{name} is not imported as 16-bit mono PCM (compress/mode=0)");
             return null;
         }
-        return GrainBank.FromPcm16(stream.Data, Godot.FileAccess.GetFileAsString(marks));
+        return (stream.Data, Godot.FileAccess.GetFileAsString(marks));
     }
 
     /// <summary>
@@ -96,6 +123,12 @@ internal sealed partial class SampledEngine : Node
     /// </summary>
     public void Update(float rpm, float load, bool cut, bool running, bool muted)
     {
+        if (_making is { IsCompleted: true } made)
+        {
+            _making = null;
+            if (made.IsCompletedSuccessfully) _engine = made.Result;
+            else GD.PrintErr($"engine voice {_loaded?.Folder} could not be made: {made.Exception?.GetBaseException().Message}");
+        }
         if (_playback is null || _engine is null) return;
         _engine.Volume = Volume;
         _engine.Interior = Interior;
