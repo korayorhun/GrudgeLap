@@ -138,6 +138,50 @@ public class EngineVoiceTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// The limiter as the simulation runs it (0.20 review, problem 1): the engine held flat out on its limiter, stepped at
+    /// the physics' 240 Hz and read at 60 frames a second as the game reads it, free in neutral (its own flywheel) and
+    /// with a car's inertia behind it (in gear, about 3 kg m^2 at the crank). The follower's held load stays at 0.9 or
+    /// more through every cut: the cut and the shut throttle are reported for the same step, so the step that ends a cut
+    /// does not pass for the driver lifting. Read from the cut's countdown, the load sagged to 0.4-0.7 every few frames (a
+    /// dip of about 2 dB with the throttle's filter closing from 12 to about 7 kHz: 0.19's blurred dip back again).
+    /// </summary>
+    [Theory]
+    [InlineData(4, false)]
+    [InlineData(4, true)]
+    [InlineData(1, false)]
+    [InlineData(1, true)]
+    [InlineData(6, false)]
+    [InlineData(6, true)]
+    public void The_simulated_limiter_holds_the_load_through_its_cuts(int index, bool inGear)
+    {
+        var car = VehicleSpec.Catalogue[index];
+        var spec = car.Engine;
+        var engine = new EngineModel(spec);
+        engine.Start();
+        engine.AngularVelocity = 0.95f * spec.RedlineRpm / EngineModel.RpmPerRadPerSec;
+        var inertia = car.EngineInertia + (inGear ? 3f : 0f);
+        var follower = new EngineFollower(spec.RedlineRpm);
+        follower.Update(spec.RedlineRpm, 1f, false, 1f);
+        const float step = VehicleSim.FixedStep;
+        var lowest = 1f;
+        var cuts = 0;
+        for (var frame = 0; frame < 180; frame++)
+        {
+            for (var k = 0; k < 4; k++)
+            {
+                engine.AngularVelocity += engine.Torque(1f) / inertia * step;
+                engine.Tick(step);
+            }
+            follower.Update(engine.Rpm, engine.Throttle, engine.LimiterCut, 4 * step);
+            if (follower.Cut) cuts++;
+            if (frame >= 30) lowest = MathF.Min(lowest, follower.Load);
+        }
+        output.WriteLine($"{spec.SoundFolder} {(inGear ? "in gear" : "in neutral")}: {cuts} of 180 frames cut, the load at least {lowest:0.000}");
+        Assert.True(cuts > 10, "the engine never reached its limiter");
+        Assert.True(lowest >= 0.9f, $"the held load sags to {lowest:0.00} on the limiter");
+    }
+
+    /// <summary>
     /// Two seconds on the limiter, cut 60 ms in every 100, rendered in 2 ms blocks (the load through an
     /// <see cref="EngineFollower"/> at 60 frames a second, as the game feeds it), and the mean power of each 2 ms of the
     /// cycle over the twenty cycles, in dB.

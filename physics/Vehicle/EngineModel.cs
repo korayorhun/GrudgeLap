@@ -17,6 +17,7 @@ public sealed class EngineModel
     private float _limiterCut;
     private float _lowRpmTime;
     private float _lastThrottle;
+    private bool _lastCut;
 
     public EngineModel() : this(EngineSpec.FlatTwelve) { }
 
@@ -37,7 +38,12 @@ public sealed class EngineModel
     /// The rev limiter has cut the ignition and the fuel: no cylinder fires until the cut ends (60 ms after the revs last
     /// passed the redline). The sound reads it to stutter on the limiter (0.20) rather than read the shut throttle.
     /// </summary>
-    public bool LimiterCut => Running && _limiterCut > 0f;
+    /// <remarks>
+    /// Latched in <see cref="Torque"/> with <see cref="Throttle"/>, so the two always describe the same step. Read from the
+    /// countdown itself, the step whose <see cref="Tick"/> ran the cut out reported no cut with the throttle still shut by
+    /// it, and the sound's held load sagged at the end of every cut (0.20 review: down to 0.4-0.7, a dip of about 2 dB).
+    /// </remarks>
+    public bool LimiterCut => Running && _lastCut;
     /// <summary>The turbo's boost, 0 to 1 (always 0 without a turbo): it builds with the throttle above the threshold revs.</summary>
     public float Boost { get; private set; }
     /// <summary>
@@ -79,7 +85,8 @@ public sealed class EngineModel
 
         // Rev limiter: cut fuel above the redline for a short burst, like a real ignition cut.
         if (rpm > _spec.RedlineRpm) _limiterCut = 0.06f;
-        if (_limiterCut > 0f) throttle = 0f;
+        _lastCut = _limiterCut > 0f;
+        if (_lastCut) throttle = 0f;
 
         _lastThrottle = throttle;
         // A turbo's share of the torque comes with the boost, which lags the throttle (see Tick).
