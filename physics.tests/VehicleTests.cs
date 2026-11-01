@@ -144,16 +144,20 @@ public sealed class VehicleTests
 
     /// <summary>
     /// The hatchbacks against the figures of the cars they follow: 0-60 mph and top speed, driven flat out from a
-    /// standing start with the shifts at the redline and the throttle fed in against wheelspin.
+    /// standing start with the shifts at the redline and the throttle fed in against wheelspin. Top speed a tenth of the
+    /// published figure either side. The sprint starts at idle and counts the shift into first (no revs on the brake, as
+    /// the road-test start of <see cref="HandlingTests"/> makes them): 0-60 mph is taken as the published 0-100 km/h
+    /// less a twentieth, a tenth below it to a fifth above (a turbo engine floored from idle waits for its boost).
     /// </summary>
     [Theory]
-    [InlineData(2, 6.0f, 8.2f, 124f, 145f)]   // hot hatch: 7.2 s to 62 mph, 220 km/h
-    [InlineData(3, 7.2f, 9.8f, 120f, 140f)]   // five: 8.5 s to 62 mph, 215 km/h
-    [InlineData(4, 5.2f, 7.4f, 138f, 160f)]   // turbo hatch: 6.4 s to 62 mph, 247 km/h
-    public void Hatchbacks_match_their_published_figures(int car, float zeroToSixtyMin, float zeroToSixtyMax, float topMin, float topMax)
+    [InlineData(2, false, 6.7f, 8.9f, 115f, 140f)]   // 205 GTi 1.9: 7.8 s to 62 mph, 205 km/h (127 mph); front-wheel drive
+    [InlineData(3, true, 4.9f, 6.5f, 123f, 151f)]    // Delta Integrale Evoluzione: 5.7 s, 220 km/h (137 mph)
+    [InlineData(4, true, 5.6f, 7.5f, 138f, 169f)]    // Golf R32: 6.6 s, 247 km/h (153 mph)
+    public void Hatchbacks_match_their_published_figures(int car, bool fourWheelDrive, float zeroToSixtyMin, float zeroToSixtyMax, float topMin, float topMax)
     {
         var spec = VehicleSpec.Catalogue[car];
-        Assert.True(spec.FrontWheelDrive);
+        Assert.Equal(fourWheelDrive, spec.FourWheelDrive is not null);
+        Assert.True(spec.Drives(front: true));
         var sprint = StartedCar(DragStrip(), spec: spec);
         var t = 0f;
         var reached = -1f;

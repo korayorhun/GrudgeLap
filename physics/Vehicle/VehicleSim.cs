@@ -583,9 +583,9 @@ public sealed class VehicleSim
     /// <summary>
     /// The launch assist's torque on a four-wheel-drive car: what the four tyres can take as the centre of the driveline
     /// shares it out. An epicyclic centre differential sends its fixed shares, so the axle that reaches its limit first
-    /// sets the whole (its coupling passes torque only once an axle slips, which the launch stays short of); an
-    /// on-demand coupling lets the front axle carry the drive until it outruns the rear, and the rear then takes up to its
-    /// share, never more than its tyres hold. With an axle in the air the figure is unknown, as with two-wheel drive.
+    /// sets the whole (its coupling passes torque only once an axle slips, which the launch stays short of); behind an
+    /// on-demand coupling the front axle carries the drive and the rear adds what the coupling passes as the fronts
+    /// outrun it, never more than its tyres hold. With an axle in the air the figure is unknown, as with two-wheel drive.
     /// </summary>
     private float LaunchTraction(FourWheelDrive awd)
     {
@@ -598,8 +598,10 @@ public sealed class VehicleSim
         float total;
         if (s >= 1f)
         {
-            total = front + rear;
-            if (awd.CouplingShare < 1f) total = MathF.Min(total, front / (1f - awd.CouplingShare));
+            // What the coupling passes now, not what it could: it closes only as the fronts outrun the rears, and a
+            // launch that counted on its whole share before it had closed spun the fronts and then, cut back, let them
+            // grip again, step after step.
+            total = front + MathF.Min(rear, MathF.Max(CouplingTorque, 0f));
         }
         else
         {
@@ -678,25 +680,40 @@ public sealed class VehicleSim
 
     /// <summary>
     /// Torque (N m) the centre coupling passes from the front axle to the rear one this step, negative the other way: its
-    /// rate times the axles' speed difference; an on-demand coupling's capped at its share of the gearbox's torque and
-    /// open while the brakes are on. Like the limited-slip differential it never passes more than would halve the speed
-    /// difference within the step, here with the inertia each axle presents through its tyres (as the clutch sees it), so
-    /// it cannot chatter at the fixed step: with the tyres gripping that inertia is large and the coupling's own law rules.
+    /// rate times the axles' speed difference at the end of the step, an on-demand coupling's capped at its share of the
+    /// gearbox's torque and open while the brakes are on. The law is taken at the step's end (implicitly), with each
+    /// axle's speed moved over the step by its drive, the torque the road holds it back with and the coupling's own
+    /// torque, against the inertia it presents through its tyres (as the clutch reckons its lock): taken at the step's
+    /// start, the coupling lagged the clutch by a step, an axle the clutch had just spun up met it a step late, and the
+    /// two hammered the axle back and forth at the step rate. So computed it can never pass more than would bring the
+    /// two axles to one speed, which is where a real coupling, viscous or multi-plate, stops.
     /// </summary>
+    /// <summary>Speed difference between the axles (rad/s) an on-demand coupling always allows, so a car creeping off does not close it on the tyres' creep.</summary>
+    private const float CouplingLeadFloor = 0.5f;
+
     private float CouplingTransfer(FourWheelDrive awd, float pedal, float dt)
     {
-        var gap = 0.5f * (Wheels[0].AngularVelocity + Wheels[1].AngularVelocity) - 0.5f * (Wheels[2].AngularVelocity + Wheels[3].AngularVelocity);
-        var torque = awd.CouplingRate * gap;
+        if (awd.Coupling == CentreCoupling.Haldex && pedal > 0f) return 0f;
+        var (fl, fr, rl, rr) = (Wheels[0], Wheels[1], Wheels[2], Wheels[3]);
+        var frontInertia = AxleInertia(fl, fr, dt);
+        var rearInertia = AxleInertia(rl, rr, dt);
+        // The axles' speed difference at the end of the step without the coupling, and how much a newton metre of
+        // coupling torque closes it.
+        var frontPull = (awd.FrontShare * Drivetrain.AxleTorque - AxleLoad(fl, fr)) / frontInertia;
+        var rearPull = ((1f - awd.FrontShare) * Drivetrain.AxleTorque - AxleLoad(rl, rr)) / rearInertia;
+        var gap = 0.5f * (fl.AngularVelocity + fr.AngularVelocity) - 0.5f * (rl.AngularVelocity + rr.AngularVelocity) + dt * (frontPull - rearPull);
+        var closing = dt * (1f / frontInertia + 1f / rearInertia);
+        // An on-demand coupling lets the axles part a little before it closes (CouplingLead): the tyres' own slip under
+        // a part-throttle pull and the fronts' longer path in a bend.
+        var lead = awd.CouplingLead * MathF.Abs(0.5f * (rl.AngularVelocity + rr.AngularVelocity)) + (awd.CouplingLead > 0f ? CouplingLeadFloor : 0f);
+        var beyond = MathF.Sign(gap) * MathF.Max(MathF.Abs(gap) - lead, 0f);
+        var torque = awd.CouplingRate * beyond / (1f + awd.CouplingRate * closing);
         if (awd.Coupling == CentreCoupling.Haldex)
         {
-            if (pedal > 0f) return 0f;
             var cap = awd.CouplingShare * MathF.Abs(Drivetrain.AxleTorque);
             torque = MathUtil.Clamp(torque, -cap, cap);
         }
-        var front = AxleInertia(Wheels[0], Wheels[1], dt);
-        var rear = AxleInertia(Wheels[2], Wheels[3], dt);
-        var sync = 0.5f * gap * (front * rear / (front + rear)) / dt;
-        return gap >= 0f ? MathUtil.Clamp(torque, 0f, sync) : MathUtil.Clamp(torque, sync, 0f);
+        return torque;
     }
 
     /// <summary>
