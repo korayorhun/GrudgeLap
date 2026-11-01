@@ -153,8 +153,8 @@ public sealed record VehicleSpec
     public float RatioForGear(int gear) => GearRatios[gear + 1];
 
     /// <summary>
-    /// The flat-twelve keeps the defaults but for its gear change: a gated five-speed with a dog-leg first and a heavy
-    /// single-plate clutch, slower across the gate than a modern manual (0.19: at the default quarter second the car ran
+    /// The flat-twelve keeps the defaults but for its gear change: an open metal gate and a heavy single-plate clutch,
+    /// slower across the gate than a modern manual (0.19: at the default quarter second the car ran
     /// 0-100 km/h in 4.9 s, half a second under every published figure).
     /// </summary>
     public static VehicleSpec FlatTwelve => new() { ShiftSeconds = 0.45f };
