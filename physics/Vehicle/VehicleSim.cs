@@ -12,8 +12,15 @@ public sealed class VehicleSim
 {
     public const float FixedStep = 1f / 240f;
     private const float AirDensity = 1.2f;
+    private const float LateralRelaxationLength = 0.3f;     // m
 
     private readonly VehicleSpec _spec;
+    private readonly WheelContact[] _contacts = new WheelContact[4];
+    /// <summary>Spring and damper rate of each wheel: the spec's rates scaled by the wheel's share of the static load.</summary>
+    private readonly float[] _springRate = new float[4];
+    private readonly float[] _damperRate = new float[4];
+    private Vector3 _centreOfMass;
+    private Vector3 _massVelocity;
     private float _accumulator;
 
     public VehicleSim(VehicleSpec spec, TrackGeometry track)
@@ -28,6 +35,16 @@ public sealed class VehicleSim
             new WheelState(new Vector3(-spec.HalfTrack, spec.HubHeight, -spec.RearAxle), false),
             new WheelState(new Vector3(spec.HalfTrack, spec.HubHeight, -spec.RearAxle), false),
         ];
+        // Each axle is sprung for its share of the weight, as cars are, so a car whose mass sits towards one end still
+        // rides level and both ends ride at the same frequency; the spec's rates are those of an evenly loaded corner.
+        var wheelbase = spec.FrontAxle + spec.RearAxle;
+        var frontShare = (spec.RearAxle + spec.CentreOfMassOffset.Z) / wheelbase;
+        for (var i = 0; i < 4; i++)
+        {
+            var share = (i < 2 ? frontShare : 1f - frontShare) * 2f;
+            _springRate[i] = spec.SuspensionStiffness * share;
+            _damperRate[i] = spec.SuspensionDamping * share;
+        }
         Reset(track.StartFrame, track.StartCursor);
     }
 
@@ -36,9 +53,25 @@ public sealed class VehicleSim
     public Drivetrain Drivetrain { get; }
     public WheelState[] Wheels { get; }
 
-    public Vector3 Position { get; private set; }
+    /// <summary>
+    /// The body's reference point (world): where the view and the rules place the car, with the hubs, the body's
+    /// footprint and the probe all measured from it. The mass sits at <see cref="CentreOfMass"/>, which the spec may put
+    /// lower or further back (see <see cref="VehicleSpec.CentreOfMassOffset"/>).
+    /// </summary>
+    public Vector3 Position
+    {
+        get => _centreOfMass - Vector3.Transform(_spec.CentreOfMassOffset, Orientation);
+        private set => _centreOfMass = value + Vector3.Transform(_spec.CentreOfMassOffset, Orientation);
+    }
     public Quaternion Orientation { get; private set; } = Quaternion.Identity;
-    public Vector3 Velocity { get; private set; }
+    /// <summary>Velocity of the body's reference point (<see cref="Position"/>), world space.</summary>
+    public Vector3 Velocity
+    {
+        get => _massVelocity + Vector3.Cross(AngularVelocity, Position - _centreOfMass);
+        private set => _massVelocity = value - Vector3.Cross(AngularVelocity, Position - _centreOfMass);
+    }
+    /// <summary>Where the car's mass is centred (world): every force and torque of the rigid body is taken about it.</summary>
+    public Vector3 CentreOfMass => _centreOfMass;
     /// <summary>World-space angular velocity, rad/s.</summary>
     public Vector3 AngularVelocity { get; private set; }
     /// <summary>Road-wheel steering angle in radians, positive to the right.</summary>
@@ -88,9 +121,9 @@ public sealed class VehicleSim
         // Static ride height: hubs sit at rest-length minus the sag of a quarter of the mass.
         var sag = _spec.MassKg * MathUtil.Gravity / 4f / _spec.SuspensionStiffness;
         var hubHeight = _spec.SuspensionRest + _spec.WheelRadius - sag;
+        AngularVelocity = Vector3.Zero;
         Position = frame.Origin + up * (hubHeight - _spec.HubHeight);
         Velocity = Vector3.Zero;
-        AngularVelocity = Vector3.Zero;
         SteerAngle = 0f;
         Cursor = cursor;
         Airborne = false;
@@ -112,6 +145,7 @@ public sealed class VehicleSim
     public void LaunchAt(float speedMps, float lateralOffset = 0f)
     {
         Position += Right * lateralOffset;
+        AngularVelocity = Vector3.Zero;
         Velocity = Forward * speedMps;
         var wheelSpeed = speedMps / _spec.WheelRadius;
         foreach (var w in Wheels) w.AngularVelocity = wheelSpeed;
@@ -128,7 +162,7 @@ public sealed class VehicleSim
     }
 
     /// <summary>Velocity of a point fixed to the body (world space).</summary>
-    public Vector3 VelocityAt(Vector3 point) => Velocity + Vector3.Cross(AngularVelocity, point - Position);
+    public Vector3 VelocityAt(Vector3 point) => _massVelocity + Vector3.Cross(AngularVelocity, point - _centreOfMass);
 
     /// <summary>
     /// Inverse of the mass the body presents to an impulse along <paramref name="direction"/> at
@@ -137,7 +171,7 @@ public sealed class VehicleSim
     public float InverseMassAlong(Vector3 point, Vector3 direction)
     {
         var inv = Quaternion.Inverse(Orientation);
-        var r = Vector3.Transform(point - Position, inv);
+        var r = Vector3.Transform(point - _centreOfMass, inv);
         var n = Vector3.Transform(direction, inv);
         var turn = Vector3.Cross(r, n) / BodyInertia;
         return 1f / _spec.MassKg + Vector3.Dot(n, Vector3.Cross(turn, r));
@@ -149,14 +183,14 @@ public sealed class VehicleSim
     /// </summary>
     public void ApplyImpulse(Vector3 point, Vector3 impulse)
     {
-        Velocity += impulse / _spec.MassKg;
+        _massVelocity += impulse / _spec.MassKg;
         var inv = Quaternion.Inverse(Orientation);
-        var angular = Vector3.Transform(Vector3.Cross(point - Position, impulse), inv) / BodyInertia;
+        var angular = Vector3.Transform(Vector3.Cross(point - _centreOfMass, impulse), inv) / BodyInertia;
         AngularVelocity += Vector3.Transform(angular, Orientation);
     }
 
     /// <summary>Moves the car without changing its motion: out of an obstacle it has sunk into.</summary>
-    public void Displace(Vector3 offset) => Position += offset;
+    public void Displace(Vector3 offset) => _centreOfMass += offset;
 
     private Vector3 BodyInertia => new(_spec.InertiaPitch, _spec.InertiaYaw, _spec.InertiaRoll);
 
@@ -177,7 +211,7 @@ public sealed class VehicleSim
         var forward = Forward;
         var up = Up;
         var right = Right;
-        var speed = Vector3.Dot(Velocity, forward);
+        var speed = Vector3.Dot(_massVelocity, forward);
 
         SteerAngle = MathUtil.Clamp(input.Steer, -1f, 1f) * MaxSteerAngleAt(speed);
 
@@ -186,111 +220,137 @@ public sealed class VehicleSim
         // the driven wheels spin up (slip ratio from the previous step).
         var (driven0, driven1) = _spec.FrontWheelDrive ? (Wheels[0], Wheels[1]) : (Wheels[2], Wheels[3]);
         var axleSpeed = 0.5f * (driven0.AngularVelocity + driven1.AngularVelocity);
-        var drive = input;
-        if (_spec.TractionControl && Drivetrain.Gear > 0 && input.Throttle > 0f)
-        {
-            var slip = MathF.Max(driven0.SlipRatio, driven1.SlipRatio);
-            drive.Throttle = input.Throttle * (1f - MathUtil.Clamp01((slip - 0.12f) / 0.25f));
-        }
-        Drivetrain.Step(drive, axleSpeed, speed, dt);
+        UpdateTractionControl(driven0, driven1, input, dt);
+        // The inertia the clutch sees over one step: the driven wheels and, through their tyres' stiffness, what the
+        // road holds them to (the terms of SpinGroundedWheel's balance); and the torque the road holds them back with.
+        var axleInertia = 2f * _spec.WheelInertia + (driven0.InContact ? driven0.SpinStiffness * dt : 0f) + (driven1.InContact ? driven1.SpinStiffness * dt : 0f);
+        var axleLoad = ((driven0.InContact ? driven0.LongitudinalForce : 0f) + (driven1.InContact ? driven1.LongitudinalForce : 0f)) * _spec.WheelRadius;
+        Drivetrain.Step(input, axleSpeed, speed, dt, axleInertia, axleLoad);
 
         var force = new Vector3(0f, -_spec.MassKg * MathUtil.Gravity, 0f);
         var torque = Vector3.Zero;
 
         // Aerodynamic drag.
-        var vLen = Velocity.Length();
+        var vLen = _massVelocity.Length();
         if (vLen > 0.01f)
         {
-            force -= Velocity * (0.5f * AirDensity * _spec.DragCoefficient * _spec.FrontalArea * vLen);
+            force -= _massVelocity * (0.5f * AirDensity * _spec.DragCoefficient * _spec.FrontalArea * vLen);
         }
 
         var anyContact = false;
         var rayDir = -up;
         var maxLen = _spec.SuspensionRest + _spec.WheelRadius;
 
+        // First pass: where each wheel touches and how far its spring is compressed. The anti-roll bars need both
+        // wheels of an axle before either wheel's load is known.
         for (var i = 0; i < Wheels.Length; i++)
         {
             var w = Wheels[i];
-            var hub = Position + Vector3.Transform(w.LocalPosition, Orientation);
+            ref var c = ref _contacts[i];
+            c.Hub = Position + Vector3.Transform(w.LocalPosition, Orientation);
             var probeCursor = Cursor;
-            var hit = Track.Probe(hub, ref probeCursor, false);
-            var wasInContact = w.InContact;
+            c.Hit = Track.Probe(c.Hub, ref probeCursor, false);
+            c.WasInContact = w.InContact;
+            c.Compression = 0f;
             w.InContact = false;
             w.Surface = SurfaceType.None;
             w.Load = 0f;
+            if (!c.Hit.HasSurface) continue;
+            var facing = Vector3.Dot(c.Hit.SurfaceNormal, rayDir);
+            if (facing >= -0.2f) continue;
+            var t = Vector3.Dot(c.Hit.SurfaceNormal, c.Hit.SurfacePoint - c.Hub) / facing;
+            if (t <= 0f || t >= maxLen) continue;
+            w.InContact = true;
+            w.Surface = c.Hit.Surface;
+            anyContact = true;
+            c.Ray = t;
+            c.Compression = maxLen - t;
+        }
 
+        // Anti-roll bars: each axle's bar pushes its more compressed wheel down onto the road and lifts the other by the
+        // same force. A wheel in the air hangs at full droop, so the bar then presses only the wheel on the ground.
+        _contacts[0].Bar = _spec.FrontAntiRoll * (_contacts[0].Compression - _contacts[1].Compression);
+        _contacts[1].Bar = -_contacts[0].Bar;
+        _contacts[2].Bar = _spec.RearAntiRoll * (_contacts[2].Compression - _contacts[3].Compression);
+        _contacts[3].Bar = -_contacts[2].Bar;
+
+        // Torque the differential sends to each driven wheel: half the axle's each (an open differential), less or
+        // plus what a limited-slip unit passes from the faster wheel to the slower one.
+        var lsdTorque = LimitedSlipTransfer(dt);
+        var pedal = MathUtil.Clamp01(input.Brake);
+
+        for (var i = 0; i < Wheels.Length; i++)
+        {
+            var w = Wheels[i];
+            ref var c = ref _contacts[i];
             var steer = w.IsFront ? SteerAngle : 0f;
             // Rotating +Z about +Y by a positive angle swings it toward +X, i.e. a positive steer turns the wheel right.
             var wheelForward = MathUtil.RotateAround(forward, up, steer);
 
-            if (hit.HasSurface)
+            var driven = w.IsFront == _spec.FrontWheelDrive;
+            var driveTorque = driven ? Drivetrain.AxleTorque * 0.5f + (w.LocalPosition.X < 0f ? -lsdTorque : lsdTorque) : 0f;
+            var wheelInertia = _spec.WheelInertia + (driven ? Drivetrain.ReflectedInertia * 0.5f : 0f);
+            UpdateAntiLock(w, pedal, dt);
+            var brakeMax = (w.IsFront ? _spec.FrontBrakeTorque : _spec.RearBrakeTorque) * pedal * w.BrakePressure;
+
+            if (!w.InContact)
             {
-                var n = hit.SurfaceNormal;
-                var facing = Vector3.Dot(n, rayDir);
-                if (facing < -0.2f)
-                {
-                    var t = Vector3.Dot(n, hit.SurfacePoint - hub) / facing;
-                    if (t > 0f && t < maxLen)
-                    {
-                        w.InContact = true;
-                        w.Surface = hit.Surface;
-                        anyContact = true;
-                        var contact = hub + rayDir * t;
-                        var r = contact - Position;
-                        var vContact = Velocity + Vector3.Cross(AngularVelocity, r);
-
-                        // Suspension: spring + damper + bump stop, pushing only.
-                        var compression = maxLen - t;
-                        var approach = -Vector3.Dot(vContact, n);
-                        var fs = _spec.SuspensionStiffness * compression + _spec.SuspensionDamping * approach;
-                        if (compression > _spec.MaxCompression)
-                        {
-                            fs += _spec.BumpStopStiffness * (compression - _spec.MaxCompression);
-                        }
-                        fs = MathF.Max(fs, 0f);
-                        w.Load = fs;
-                        w.Compression = compression;
-                        force += n * fs;
-                        torque += Vector3.Cross(r, n * fs);
-
-                        if (!wasInContact)
-                        {
-                            LandingImpact = MathF.Max(LandingImpact, approach);
-                        }
-
-                        // Tire forces in the contact plane.
-                        var fwd = MathUtil.SafeNormalize(MathUtil.ProjectOnPlane(wheelForward, n), forward);
-                        var side = Vector3.Cross(n, fwd);
-                        var vLong = Vector3.Dot(vContact, fwd);
-                        var vLat = Vector3.Dot(vContact, side);
-                        var surfaceSpeed = w.AngularVelocity * _spec.WheelRadius;
-                        var targetSlipRatio = TireModel.SlipRatio(surfaceSpeed, vLong);
-                        var targetSlipAngle = TireModel.SlipAngle(vLat, vLong);
-                        // Tire relaxation: the contact patch needs about a third of a metre of rolling to build up
-                        // force. Without it the wheel spin oscillates against a stiff instantaneous tire and bleeds energy.
-                        var relax = MathUtil.Clamp01(dt * MathF.Max(MathF.Abs(vLong), 1.5f) / 0.3f);
-                        w.SlipRatio += (targetSlipRatio - w.SlipRatio) * relax;
-                        w.SlipAngle += (targetSlipAngle - w.SlipAngle) * relax;
-                        var (fx, fy) = TireModel.Forces(w.SlipRatio, w.SlipAngle, fs, TireModel.FrictionFor(hit.Surface) * _spec.TireGrip * WeatherModel.Grip(Weather, hit.Surface));
-
-                        // Rolling resistance (much higher on grass: the original's off-road "mud" feel, eased in 0.9 from
-                        // 0.16 with the grass grip raised from 0.55, players found the car hard to bring back) acts on the
-                        // body only. Feeding it back into the wheel spin would just make the wheel wind up to cancel it.
-                        var rolling = (hit.Surface == SurfaceType.Grass ? 0.11f : _spec.RollingResistance) * fs;
-                        var drag = MathF.Sign(vLong) * MathF.Min(rolling, MathF.Abs(vLong) * 400f);
-
-                        var tireForce = fwd * (fx - drag) + side * fy;
-                        force += tireForce;
-                        torque += Vector3.Cross(r, tireForce);
-                        w.LongitudinalForce = fx;
-                        w.LateralForce = fy;
-                        w.ContactPoint = contact;
-                        w.ContactNormal = n;
-                    }
-                }
+                SpinFreeWheel(w, driveTorque, wheelInertia, brakeMax, dt);
+                continue;
             }
 
-            IntegrateWheelSpin(w, input, dt);
+            var hit = c.Hit;
+            var n = hit.SurfaceNormal;
+            var contact = c.Hub + rayDir * c.Ray;
+            var r = contact - _centreOfMass;
+            var vContact = _massVelocity + Vector3.Cross(AngularVelocity, r);
+
+            // Suspension: spring + damper + bump stop + anti-roll bar, pushing only.
+            var compression = c.Compression;
+            var approach = -Vector3.Dot(vContact, n);
+            var fs = _springRate[i] * compression + _damperRate[i] * approach + c.Bar;
+            if (compression > _spec.MaxCompression)
+            {
+                fs += _spec.BumpStopStiffness * (compression - _spec.MaxCompression);
+            }
+            fs = MathF.Max(fs, 0f);
+            w.Load = fs;
+            w.Compression = compression;
+            force += n * fs;
+            torque += Vector3.Cross(r, n * fs);
+
+            if (!c.WasInContact)
+            {
+                LandingImpact = MathF.Max(LandingImpact, approach);
+            }
+
+            // Tire forces in the contact plane.
+            var fwd = MathUtil.SafeNormalize(MathUtil.ProjectOnPlane(wheelForward, n), forward);
+            var side = Vector3.Cross(n, fwd);
+            var vLong = Vector3.Dot(vContact, fwd);
+            var vLat = Vector3.Dot(vContact, side);
+            // Lateral relaxation: the contact patch needs about a third of a metre of rolling (a tyre's lateral
+            // relaxation length is of the order of its radius) to build up side force after a change of slip angle.
+            var relax = MathUtil.Clamp01(dt * MathF.Max(MathF.Abs(vLong), 1.5f) / LateralRelaxationLength);
+            w.SlipAngle += (TireModel.SlipAngle(vLat, vLong) - w.SlipAngle) * relax;
+            w.Friction = TireModel.FrictionFor(hit.Surface) * _spec.TireGrip * WeatherModel.Grip(Weather, hit.Surface);
+            w.GroundSpeed = vLong;
+            var tire = w.IsFront ? _spec.FrontTire : _spec.RearTire;
+            var (fx, fy) = SpinGroundedWheel(w, driveTorque, wheelInertia, brakeMax, vLong, fs, tire, dt);
+
+            // Rolling resistance (much higher on grass: the original's off-road "mud" feel, eased in 0.9 from
+            // 0.16 with the grass grip raised from 0.55, players found the car hard to bring back) acts on the
+            // body only. Feeding it back into the wheel spin would just make the wheel wind up to cancel it.
+            var rolling = (hit.Surface == SurfaceType.Grass ? 0.11f : _spec.RollingResistance) * fs;
+            var drag = MathF.Sign(vLong) * MathF.Min(rolling, MathF.Abs(vLong) * 400f);
+
+            var tireForce = fwd * (fx - drag) + side * fy;
+            force += tireForce;
+            torque += Vector3.Cross(r, tireForce);
+            w.LongitudinalForce = fx;
+            w.LateralForce = fy;
+            w.ContactPoint = contact;
+            w.ContactNormal = n;
         }
 
         // Body touching the ground means a roll-over or a landing on the roof.
@@ -299,8 +359,8 @@ public sealed class VehicleSim
 
         // Integrate the rigid body (semi-implicit Euler, body-frame inertia).
         var acceleration = force / _spec.MassKg;
-        Velocity += acceleration * dt;
-        Position += Velocity * dt;
+        _massVelocity += acceleration * dt;
+        _centreOfMass += _massVelocity * dt;
 
         var inv = Quaternion.Inverse(Orientation);
         var omegaBody = Vector3.Transform(AngularVelocity, inv);
@@ -333,29 +393,174 @@ public sealed class VehicleSim
         AirborneTime = Airborne ? AirborneTime + dt : 0f;
     }
 
-    private void IntegrateWheelSpin(WheelState w, in DriverInputs input, float dt)
+    /// <summary>
+    /// Traction control, where the car has it: the engine's torque is cut while a driven wheel spins faster over the
+    /// road than its tyre can use (a tenth of the road speed plus half a metre a second, the slip at the tyre's peak with
+    /// a little to spare) and fed back in once it stops. It acts on the engine (ignition and throttle, as the systems of
+    /// the 2000s did), not on the driver's pedal, so the clutch and the gearbox see the pedal the driver holds. Up to
+    /// 0.16 it eased the pedal itself, by the slip ratio, which near standstill opened the assisted clutch on every cut.
+    /// </summary>
+    private void UpdateTractionControl(WheelState driven0, WheelState driven1, in DriverInputs input, float dt)
     {
-        var inertia = _spec.WheelInertia;
-        var driveTorque = 0f;
-        if (w.IsFront == _spec.FrontWheelDrive)
+        if (!_spec.TractionControl || Drivetrain.Gear <= 0 || input.Throttle <= 0f)
         {
-            driveTorque = Drivetrain.AxleTorque * 0.5f;
-            inertia += Drivetrain.ReflectedInertia * 0.5f;
+            Drivetrain.TorqueCut = 1f;
+            return;
         }
-        var brakeMax = (w.IsFront ? _spec.FrontBrakeTorque : _spec.RearBrakeTorque) * MathUtil.Clamp01(input.Brake);
-        var reaction = w.InContact ? -w.LongitudinalForce * _spec.WheelRadius : 0f;
-        var net = driveTorque + reaction;
+        // While the clutch slips the wheels get the clutch's torque whatever the engine makes, so a cut would only drag
+        // the revs down (into a bog at the launch) without easing the wheelspin.
+        var excess = Drivetrain.ClutchLocked ? MathF.Max(SpinExcess(driven0), SpinExcess(driven1)) : 0f;
+        Drivetrain.TorqueCut = excess > 0f
+            ? MathF.Max(0f, Drivetrain.TorqueCut - dt * (2f + excess * 4f))
+            : MathF.Min(1f, Drivetrain.TorqueCut + dt / 0.35f);
 
-        // Brakes as Coulomb friction: they can hold the wheel still but never reverse it.
+        float SpinExcess(WheelState w)
+        {
+            if (!w.InContact) return 0f;
+            var slipSpeed = w.AngularVelocity * _spec.WheelRadius - w.GroundSpeed;
+            return slipSpeed - (0.1f * MathF.Abs(w.GroundSpeed) + 0.5f);
+        }
+    }
+
+    /// <summary>
+    /// Torque (N m) the limited-slip differential passes from the left driven wheel to the right one this step; zero
+    /// for an open differential. A clutch-type unit: it resists any speed difference with up to its preload plus its
+    /// locking share of the drive torque, never more than would bring the two wheels to one speed (half of that, so it
+    /// cannot chatter against the tyres at the fixed step).
+    /// </summary>
+    private float LimitedSlipTransfer(float dt)
+    {
+        if (_spec.LimitedSlipLocking <= 0f && _spec.LimitedSlipPreload <= 0f) return 0f;
+        var (left, right) = _spec.FrontWheelDrive ? (Wheels[0], Wheels[1]) : (Wheels[2], Wheels[3]);
+        var capacity = _spec.LimitedSlipPreload + _spec.LimitedSlipLocking * MathF.Abs(Drivetrain.AxleTorque);
+        var sync = 0.5f * (left.AngularVelocity - right.AngularVelocity) * _spec.WheelInertia / (2f * dt);
+        return MathUtil.Clamp(sync, -capacity, capacity);
+    }
+
+    /// <summary>
+    /// Advances a wheel on the ground by one step and returns the tyre's (longitudinal, lateral) force at its new speed.
+    /// </summary>
+    /// <remarks>
+    /// The wheel's speed is solved implicitly: the new speed is the one at which the wheel's inertia, the drive, the brake
+    /// and the tyre force the new speed itself produces balance over the step. A road tyre is so stiff lengthways (a few
+    /// tenths of a radian a second separate rolling from spinning at walking pace) that any explicit step overshoots;
+    /// up to 0.16 the slip ratio was relaxed over a third of a metre to keep it in check, a lag that, once the tyre's
+    /// force fell past its peak, let the wheel ring against the tyre and the clutch at the step rate on every launch.
+    /// The balance rises with the speed (the inertia term outgrows the gentle fall of the tyre past its peak), so a
+    /// bracketing search finds its one root; the brake is Coulomb friction that can hold the wheel at rest.
+    /// </remarks>
+    private (float Fx, float Fy) SpinGroundedWheel(WheelState w, float driveTorque, float inertia, float brakeMax, float vLong, float load, TireSize tire, float dt)
+    {
+        var radius = _spec.WheelRadius;
+        var omega0 = w.AngularVelocity;
+        var k = inertia / dt;
+        var slipAngle = w.SlipAngle;
+        var friction = w.Friction;
+
+        // Balance without the brake: g(omega) = I (omega - omega0) / dt - drive + Fx(omega) r, rising with omega.
+        float Balance(float omega) =>
+            k * (omega - omega0) - driveTorque + TireModel.Forces(TireModel.SlipRatio(omega * radius, vLong), slipAngle, load, friction, tire).Fx * radius;
+
+        // The brake opposes the rotation: g(omega) + brake sign(omega) = 0, or the wheel is held at rest when |g(0)| <= brake.
+        float omega;
+        var atRest = Balance(0f);
+        if (brakeMax > 0f && MathF.Abs(atRest) <= brakeMax)
+        {
+            omega = 0f;
+        }
+        else
+        {
+            // Spinning forward (the balance at rest negative) the brake adds +brake; backward, -brake.
+            var target = brakeMax <= 0f ? 0f : (atRest > 0f ? -brakeMax : brakeMax);
+            // The root lies within what every torque at its largest could do in one step.
+            var reach = (MathF.Abs(driveTorque) + brakeMax + 1.2f * friction * load * radius) / k + 1f;
+            float lo, hi;
+            if (brakeMax <= 0f) { lo = omega0 - reach; hi = omega0 + reach; }
+            else if (atRest > 0f) { lo = MathF.Min(omega0, 0f) - reach; hi = 0f; }
+            else { lo = 0f; hi = MathF.Max(omega0, 0f) + reach; }
+            // Regula falsi with the Illinois modification: the bracket always holds the root, and halving the weight of an
+            // end that stays put keeps it converging fast (a handful of tyre evaluations, where bisection took 22).
+            var gLo = Balance(lo) + target;
+            var gHi = Balance(hi) + target;
+            omega = 0.5f * (lo + hi);
+            var side = 0;
+            for (var iteration = 0; iteration < 40 && hi - lo > 1e-3f; iteration++)
+            {
+                omega = gHi - gLo > 1e-6f ? (lo * gHi - hi * gLo) / (gHi - gLo) : 0.5f * (lo + hi);
+                if (!(omega > lo && omega < hi)) omega = 0.5f * (lo + hi);
+                var g = Balance(omega) + target;
+                if (MathF.Abs(g) < 0.5f) break;
+                if (g > 0f)
+                {
+                    hi = omega;
+                    gHi = g;
+                    if (side == 1) gLo *= 0.5f;
+                    side = 1;
+                }
+                else
+                {
+                    lo = omega;
+                    gLo = g;
+                    if (side == -1) gHi *= 0.5f;
+                    side = -1;
+                }
+            }
+        }
+
+        w.AngularVelocity = omega;
+        w.SpinAngle += omega * dt;
+        w.SlipRatio = TireModel.SlipRatio(omega * radius, vLong);
+        var forces = TireModel.Forces(w.SlipRatio, slipAngle, load, friction, tire);
+        // How fast the tyre's drag on the wheel grows with the wheel's speed (N m per rad/s, never negative): what the
+        // clutch has to drag along over one step besides the wheels themselves (see the drivetrain call).
+        const float probe = 0.05f;
+        var ahead = TireModel.Forces(TireModel.SlipRatio((omega + probe) * radius, vLong), slipAngle, load, friction, tire).Fx;
+        w.SpinStiffness = MathF.Max((ahead - forces.Fx) / probe * radius, 0f);
+        return forces;
+    }
+
+    /// <summary>A wheel in the air: drive, brake (Coulomb, holding it still at most) and a little bearing drag.</summary>
+    private static void SpinFreeWheel(WheelState w, float driveTorque, float inertia, float brakeMax, float dt)
+    {
+        w.SpinStiffness = 0f;
+        var net = driveTorque - 0.05f * w.AngularVelocity;
         var brake = MathF.Min(brakeMax, MathF.Abs(net) + MathF.Abs(w.AngularVelocity) * inertia / dt);
         net -= MathF.Sign(w.AngularVelocity != 0f ? w.AngularVelocity : net) * brake;
-
-        if (!w.InContact) net -= 0.05f * w.AngularVelocity; // bearing drag in the air
-
         var next = w.AngularVelocity + net / inertia * dt;
         if (brakeMax > 0f && MathF.Sign(next) != MathF.Sign(w.AngularVelocity) && w.AngularVelocity != 0f) next = 0f;
         w.AngularVelocity = next;
         w.SpinAngle += w.AngularVelocity * dt;
+    }
+
+    /// <summary>
+    /// Anti-lock brakes, where the car has them: a wheel braked past the tyre's peak slip has its pressure dumped
+    /// quickly and fed back more slowly once it spins up again, the release-hold-reapply cycle of a real modulator
+    /// (several times a second). Below walking pace, in the air and off the pedal the system stands aside.
+    /// </summary>
+    private void UpdateAntiLock(WheelState w, float pedal, float dt)
+    {
+        if (!_spec.AntiLockBrakes || pedal <= 0f || !w.InContact || MathF.Abs(w.GroundSpeed) < 2f)
+        {
+            w.BrakePressure = 1f;
+            return;
+        }
+        // Braking slip is negative going forward; mirror it when reversing so the same thresholds apply.
+        var slip = w.SlipRatio * MathF.Sign(w.GroundSpeed);
+        var peak = TireModel.PeakSlipRatio(w.Friction);
+        if (slip < -1.15f * peak) w.BrakePressure -= dt / 0.05f;
+        else if (slip > -0.8f * peak) w.BrakePressure += dt / 0.15f;
+        w.BrakePressure = MathUtil.Clamp(w.BrakePressure, 0.1f, 1f);
+    }
+
+    /// <summary>What the first pass of a step learns about one wheel, for the second.</summary>
+    private struct WheelContact
+    {
+        public Vector3 Hub;
+        public SurfaceHit Hit;
+        public bool WasInContact;
+        public float Ray;
+        public float Compression;
+        public float Bar;
     }
 }
 
@@ -381,6 +586,14 @@ public sealed class WheelState
     public float LateralForce;
     public Vector3 ContactPoint;
     public Vector3 ContactNormal;
+    /// <summary>Peak friction of the surface under the tyre this step (surface, tyre compound and weather).</summary>
+    public float Friction;
+    /// <summary>Speed of the ground along the wheel's heading at the contact patch, m/s.</summary>
+    public float GroundSpeed;
+    /// <summary>Share of the driver's brake pressure the anti-lock modulator lets through, 1 without ABS.</summary>
+    public float BrakePressure = 1f;
+    /// <summary>Growth of the tyre's drag torque on the wheel with the wheel's speed this step, N m s/rad (never negative).</summary>
+    public float SpinStiffness;
 
     public void Reset()
     {
@@ -394,6 +607,10 @@ public sealed class WheelState
         SlipAngle = 0f;
         LongitudinalForce = 0f;
         LateralForce = 0f;
+        Friction = 0f;
+        GroundSpeed = 0f;
+        BrakePressure = 1f;
+        SpinStiffness = 0f;
     }
 
     /// <summary>Slip magnitude used for skid audio and marks: 0 = gripping, 1 = fully sliding.</summary>

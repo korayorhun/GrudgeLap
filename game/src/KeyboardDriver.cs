@@ -1,5 +1,6 @@
 using Godot;
 using GrudgeLap.Physics;
+using GrudgeLap.Physics.Race;
 using GrudgeLap.Physics.Vehicle;
 
 namespace GrudgeLap.Game;
@@ -9,7 +10,10 @@ namespace GrudgeLap.Game;
 /// returning to centre on its own, pedals over a fraction of a second, which keeps keyboard play from being a
 /// bang-bang affair and mimics how fast hands move a real wheel. A pad's stick and triggers are positions
 /// already and are taken as they are, the stick through a gentle curve so that small corrections stay small;
-/// whichever the player is moving wins (<see cref="InputSetup"/> has the layout).
+/// whichever the player is moving wins (<see cref="InputSetup"/> has the layout). A key is all or nothing, so on the
+/// keys the pedals are worked the way a driver's foot would: the throttle fed in against wheelspin and the brake eased
+/// off a locking wheel (<see cref="ScriptedDriver.FeatherThrottle"/>, <see cref="ScriptedDriver.FeatherBrake"/>); the
+/// pad's triggers are the player's own foot and are passed as they are.
 /// </summary>
 internal sealed class KeyboardDriver
 {
@@ -20,8 +24,9 @@ internal sealed class KeyboardDriver
 
     public float Steer => _steer;
 
-    public DriverInputs Sample(float dt, float speedMps)
+    public DriverInputs Sample(float dt, VehicleSim car)
     {
+        var speedMps = MathF.Abs(car.Speed);
         var stick = Input.GetJoyAxis(InputSetup.Pad, JoyAxis.LeftX);
         if (MathF.Abs(stick) > InputSetup.StickDeadzone)
         {
@@ -44,8 +49,8 @@ internal sealed class KeyboardDriver
             _steer = MathUtil.MoveToward(_steer, target, rate * dt);
         }
 
-        _throttle = Pedal(_throttle, JoyAxis.TriggerRight, InputSetup.Throttle, dt, 0.18f, 0.12f);
-        _brake = Pedal(_brake, JoyAxis.TriggerLeft, InputSetup.Brake, dt, 0.15f, 0.10f);
+        _throttle = Pedal(_throttle, JoyAxis.TriggerRight, InputSetup.Throttle, dt, 0.18f, 0.12f, out var throttleKey);
+        _brake = Pedal(_brake, JoyAxis.TriggerLeft, InputSetup.Brake, dt, 0.15f, 0.10f, out var brakeKey);
         _clutch = Ramp(_clutch, Input.IsActionPressed(InputSetup.Clutch), dt, 0.12f, 0.25f);
 
         var gear = DriverInputs.NoGearChange;
@@ -62,8 +67,8 @@ internal sealed class KeyboardDriver
         return new DriverInputs
         {
             Steer = _steer,
-            Throttle = _throttle,
-            Brake = _brake,
+            Throttle = throttleKey ? ScriptedDriver.FeatherThrottle(car, _throttle) : _throttle,
+            Brake = brakeKey ? ScriptedDriver.FeatherBrake(car, _brake) : _brake,
             Clutch = _clutch,
             Gear = gear,
             ShiftUp = Input.IsActionJustPressed(InputSetup.ShiftUp),
@@ -81,10 +86,11 @@ internal sealed class KeyboardDriver
     }
 
     /// <summary>A pedal: the trigger's position while it is pressed at all, the key's ramp otherwise.</summary>
-    private static float Pedal(float current, JoyAxis trigger, string action, float dt, float riseSeconds, float fallSeconds)
+    private static float Pedal(float current, JoyAxis trigger, string action, float dt, float riseSeconds, float fallSeconds, out bool fromKey)
     {
         var pressed = Input.GetJoyAxis(InputSetup.Pad, trigger);
-        if (pressed > 0.02f) return MathUtil.Clamp01(pressed);
+        fromKey = pressed <= 0.02f;
+        if (!fromKey) return MathUtil.Clamp01(pressed);
         return Ramp(current, Input.IsActionPressed(action), dt, riseSeconds, fallSeconds);
     }
 
