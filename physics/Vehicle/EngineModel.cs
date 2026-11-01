@@ -33,6 +33,11 @@ public sealed class EngineModel
     /// since a 1.4 at full throttle makes a fifth of what a V12 does and once sounded as if it were coasting.
     /// </summary>
     public float Throttle => Running ? _lastThrottle : 0f;
+    /// <summary>
+    /// The rev limiter has cut the ignition and the fuel: no cylinder fires until the cut ends (60 ms after the revs last
+    /// passed the redline). The sound reads it to stutter on the limiter (0.20) rather than read the shut throttle.
+    /// </summary>
+    public bool LimiterCut => Running && _limiterCut > 0f;
     /// <summary>The turbo's boost, 0 to 1 (always 0 without a turbo): it builds with the throttle above the threshold revs.</summary>
     public float Boost { get; private set; }
     /// <summary>
@@ -180,6 +185,11 @@ public sealed record EngineSpec
     public float BoostSeconds { get; init; } = 0.6f;
     /// <summary>Revs below which the turbo makes no boost.</summary>
     public float BoostThresholdRpm { get; init; } = 1800f;
+    /// <summary>
+    /// A turbo engine vents its boost when the throttle shuts on it, through a diverter (recirculating) valve as production
+    /// turbo cars have; without one the compressor surges against the shut throttle and flutters. Only the sound reads it.
+    /// </summary>
+    public bool BlowOffValve { get; init; } = true;
 
     /// <summary>Peak torque around 4500 rpm, peak power near 6300 rpm: a late-80s flat-twelve.</summary>
     private static readonly (float Rpm, float Torque)[] FlatTwelveCurve =
