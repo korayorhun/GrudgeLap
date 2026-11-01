@@ -349,6 +349,7 @@ public sealed partial class Bootstrap : Node3D
         var raining = _session is not null && !_retro && WeatherModel.Raining(_session.Weather);
         _cameraRig?.SetRain(raining);
         if (_audio is not null) _audio.Rain = raining ? 1f : 0f;
+        CarView.Overcast = _session is not null && !_retro && WeatherModel.Overcast(_session.Weather);
     }
 
     private void BuildDroneViews()

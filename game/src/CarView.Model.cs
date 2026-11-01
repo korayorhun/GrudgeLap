@@ -234,6 +234,7 @@ internal sealed partial class CarView
             Metallic = 0.9f,
             Roughness = 0.05f,
             CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+            SpecularMode = WindowSpecular,
         };
         // From the seat the glass is all but clear: a faint tint and the sky's reflection, so the road is seen through it.
         _windowInside ??= new StandardMaterial3D
@@ -250,6 +251,7 @@ internal sealed partial class CarView
             Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
             Roughness = 0.04f,
             CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+            SpecularMode = WindowSpecular,
         };
         foreach (var mesh in Descendants(model).OfType<MeshInstance3D>())
         {
@@ -305,7 +307,17 @@ internal sealed partial class CarView
         static bool Says(string name, params string[] words) => words.Any(name.Contains);
         var drivenByTexture = material.RoughnessTexture is not null || material.MetallicTexture is not null;
         var exporterDefault = !drivenByTexture && material.Metallic >= 0.999f && material.Roughness >= 0.999f;
-        if (Says(name, "tyre", "tire", "pneu", "rubber"))
+        if (material.EmissionEnabled && Says(name, "back", "rear", "tail") && material.Emission.S < 0.2f)
+        {
+            // A rear lamp unit exported glowing white (the McLaren's "backights", a white block on its tail that the
+            // rain's dark light made glare): rear lamps are red lenses, lit as tail lamps.
+            material.AlbedoColor = new Color(0.45f, 0.02f, 0.02f);
+            material.Emission = new Color(1f, 0.05f, 0.03f);
+            material.EmissionEnergyMultiplier = MathF.Min(material.EmissionEnergyMultiplier, 0.6f);
+            material.Metallic = 0f;
+            material.Roughness = 0.1f;
+        }
+        else if (Says(name, "tyre", "tire", "pneu", "rubber"))
         {
             // Rubber: a dielectric with a broad, dull sheen (roughness 0.85-0.9); its albedo, about 0.03, the model's.
             material.Metallic = 0f;
@@ -516,6 +528,25 @@ internal sealed partial class CarView
             d.Node.Mesh = any ? mesh : d.Original;
         }
     }
+
+    private static bool _overcast;
+
+    /// <summary>
+    /// Under cloud (Bootstrap.ApplyRain) the windows and the lamp lenses take no highlight from the sun (0.19). The overcast sun is a
+    /// source ten degrees wide (WorldBuilder.SetWeather), and the near-mirror glass returned it as a glaring white
+    /// block on a car's rear window, where a real window under cloud only mirrors the grey sky, which it still does.
+    /// </summary>
+    public static bool Overcast
+    {
+        set
+        {
+            _overcast = value;
+            if (_windowOutside is not null) _windowOutside.SpecularMode = WindowSpecular;
+            if (_lens is not null) _lens.SpecularMode = WindowSpecular;
+        }
+    }
+
+    private static BaseMaterial3D.SpecularModeEnum WindowSpecular => _overcast ? BaseMaterial3D.SpecularModeEnum.Disabled : BaseMaterial3D.SpecularModeEnum.SchlickGgx;
 
     /// <summary>From the seat the windows are all but clear; from outside, tinted.</summary>
     private void SetModelWindows(bool insideCar)
