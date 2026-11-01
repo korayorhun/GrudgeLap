@@ -709,19 +709,36 @@ ffmpeg's `ebur128` (integrated loudness, mono, everything in the mix: engine, ty
   1 / (1 - BoostShare) (1.8 for the turbo four) at 150,000 rpm, and off boost the exhaust still turns it to a third of
   that; it spools behind the boost and runs on for a second. It whistles at its six blades' passing frequency (Raitor
   and Neise, *J. Sound Vib.* 314, 2008), 5.2 kHz at a third of its speed, climbing out of the mix as it comes on full
-  boost, and faintly at the shaft's own frequency, over the rush of the air. Shutting the throttle on boost vents the
-  charge through the diverter valve (`EngineSpec.BlowOffValve`, true by default, as production turbo cars have one);
+  boost, and at the shaft's own frequency (the unbalance's whine, 2.5 kHz on full boost), over the rush of the air.
+  Shutting the throttle on boost vents the charge through the diverter valve (`EngineSpec.BlowOffValve`, true by
+  default, as production turbo cars have one);
   without a valve the compressor surges (Greitzer, *ASME J. Eng. Power* 98, 1976; Galindo et al., *Exp. Therm. Fluid
   Sci.* 32, 2008): chuffs of air with the shaft stumbling, about 14 a second on full boost falling to 7 as the stored
-  air bleeds away (measured: a 27 dB beat at 9.5 Hz). Subtle: on full boost the whole turbo is 24 LU under the
-  engine, the vent's and the surge's loudest 100-250 ms about 14 LU under.
+  air bleeds away (measured: a 15 dB beat at 9.8 Hz). The whine is the tone heard on boost (review): the turbo four is
+  on full boost within half a second of flooring it, its blade tone then at 15 kHz, past the game's 22.05 kHz mix, and
+  with the whine at a quarter of its present gain the whole turbo was under the engine in every third-octave band
+  (the whine 11 dB under in its own). Now the whine is level with the engine in its band, +0.7 dB outside and +0.1 dB
+  in the cabin (`The_turbo_is_heard_on_boost`, through `EngineModel`'s boost), and both tones fade to 0.3 with the
+  throttle shut, as they leave mostly through the compressor's inlet with the air it draws. The turbo sits in the
+  engine bay, so the cabin hears it through the same panels as the engine: low-passed at the body's corner
+  (`TurboState.CabinCutoff`, 2.2 kHz for the front-engined turbo hatch) at 0.6 of its level, crossfaded over 0.15 s
+  (heard unfiltered, its rush stood 11 dB over the cabin's engine at 6.4 kHz). Subtle still: on full boost the whole
+  turbo is 14 LU under the engine, the vent's and the surge's loudest 100-250 ms 13 LU under, each standing out over
+  the steady turbo in its own band (the vent +9 dB above 3 kHz, the surge +18 dB under 2 kHz). The turbo runs down
+  with the engine in the crash replay (the follower holds its last revs there).
 - **The limiter** (finding 12). `EngineModel.LimiterCut` says when the ignition is cut; `EngineFollower` holds the load
   through it and `GranularEngine.Cut` makes every pulse laid while it lasts an overrun pulse at the closed throttle's
   level (the overrun recording brought to the run-up's loudness so the cut is as deep on every car). Averaged over
   twenty 60-in-100 ms cuts, the level swings 13.6 dB on the turbo hatch, 7.4 on the estate and 6.6 on the V8 and falls
   in 4-10 ms; through the load, as in 0.19, it swung 1.5-2.4 dB and took 14-24 ms. The V8's pops are set off by the
   driver lifting, not by the cut. (The cut is heard as late as the voice follows the revs, its latency: a grain's
-  lead, up to 45 ms for the turbo hatch's 22 Hz idle grains.)
+  lead, up to 45 ms for the turbo hatch's 22 Hz idle grains.) The cut is latched in `EngineModel.Torque` with the
+  throttle it shuts (review): read from its countdown, which `Tick` runs after `Torque`, the step that ended a cut
+  reported no cut with the throttle still shut, and the follower's held load sagged to 0.4-0.7 every few frames, a dip
+  of about 2 dB with the throttle's filter closing from 12 to about 7 kHz, 0.19's blurred dip again. Driven through
+  the simulated engine at 240 Hz and read at 60 frames a second, in neutral and with a car's inertia, the load now holds
+  at 1.0 (`The_simulated_limiter_holds_the_load_through_its_cuts`). The 1989 mode's synthesised engine has no pulses
+  to cut: it takes the throttle unheld, so it dips on the limiter as it did in 0.19.
 - **Banks evened across their joins** (finding 9, `GrainBank`). Each grain's brightness (its energy above 1 kHz
   against below) and level are fitted against the firing frequency with a slope common to the bank and an intercept
   per segment (so a step between recordings cannot pass for a slope), the slope held to 0-6 dB an octave for
@@ -740,8 +757,9 @@ ffmpeg's `ebur128` (integrated loudness, mono, everything in the mix: engine, ty
   -14 LUFS at full volume (`GranularEngine.ReferenceLufs`: at the 0.19 voices' mean of -15 the game came out 2.4 LU
   under 0.19's level; higher, the turbo hatch's recording starts to click); the idle is brought to 10 LU
   under that (`IdleLufs`; the saloon's idle, a Niva's recorded quietly, was 25 LU under its pulling), as far as its
-  recording's sharpest edge allows without a click. Rendered, the eight cars pulling hard sit within 0.9 LU of their
-  mean outside and in the cabin (`Every_engine_is_about_as_loud_pulling_hard`); a big engine differs in its sound (the
+  recording's sharpest edge allows without a click. Rendered in a full-throttle run-up from 40 to 95 % of the redline
+  (not the trim's own holds), the eight cars sit within 1.2 LU of their mean outside and in the cabin, the V8 the
+  loudest (`Every_engine_is_about_as_loud_pulling_hard`); a big engine differs in its sound (the
   V12's firing at 600 Hz, the mid engine's brighter cabin and intake), not its level. In the game (attract, 40 s,
   integrated, the whole mix):
 
@@ -761,7 +779,7 @@ ffmpeg's `ebur128` (integrated loudness, mono, everything in the mix: engine, ty
   92 % of the time (mean throttle 0.94), the V8 16 % (0.31; it has the power to spare), and a closed throttle plays at
   CutLevel, 7.5 dB under an open one (the engine alone, tyres, wind and traffic muted in a local run: V8 -21.0, estate
   -15.7 LUFS at -15 LUFS reference). A 1.4 driven flat out is loud and a V8 cruising is not, as on the road; pulling
-  equally hard they are within 0.9 LU.
+  equally hard they are within 1.2 LU.
 - **The load, pinned through the sound** (review). `EngineFollower` (audio library) takes the engine's throttle and
   limiter cut and smooths them as the voice wants; `EngineAudio` only passes them on, so the mapping is tested headless:
   every engine held at full throttle at 60 % of its redline gives the voice a load of 1 and its full-throttle sound,
@@ -776,10 +794,36 @@ ffmpeg's `ebur128` (integrated loudness, mono, everything in the mix: engine, ty
   16.9 dB over them, well over the masked threshold of a tone in noise (Zwicker and Fastl, *Psychoacoustics*)
   (`The_engine_stays_audible_over_the_roar_and_the_wind_at_top_speed`). The hot hatch's cabin is the closest: its
   recording is broadband at the top of its revs, without a strong firing order.
-- **The Unreal version** keeps its ABI (no new export): through `glp_engine_create` it gets the evened banks, the trims
-  over the run-up's recording (it passes no redline) and a front-engined hatchback's voicing. To have the rest it would
-  need new exports: the car's voicing and redline at creation (or the car index), the limiter's cut and the turbo's
-  state in `glp_state` with a `TurboNoise` voice, and `EngineFollower` in place of its own smoothing; with finding 14.
+- **Peaks** (review). Trimmed to the reference alone, three cars peaked over full scale at the game's volume of 0.9
+  (holds at full throttle from 30 % of the redline to the redline: the fleet saloon at +2.8 dBFS, the V8 at +1.2 and
+  the turbo hatch at +1.1, where 0.19's worst was -0.2), and the master `AudioEffectHardLimiter` (-0.5 dB) pulled the
+  whole mix down with them, tyres and wind included, by up to 3.3 dB. Three things hold them now. Evening a bank no
+  longer lifts a segment's peaks past the raw recording's, but for its rarest samples (`PeakMeter`: the level one sample
+  in 10,000 passes; the fleet saloon's run-up reaches 0.99 with a single click where one in 10,000 passes 0.64, and a
+  gain held to the click would have undone the Bravo segment's lift and left it buried by the wind again). The trims
+  are held so that the voice's peaks in the trim's own renders, taken on every 5 % from 30 % of the redline to the
+  redline, stay under -1 dBFS at full volume (`GranularEngine.PeakCeiling`), also but for the rarest samples. And what
+  those miss (a click, a grain with a sharper edge than the renders met) is rounded off above -1.9 dBFS
+  (`PeakKnee`, the trimmed peaks at the game's volume) by a tanh towards -1 dBFS, so the voice never passes it. At the
+  game's volume every car now peaks at -1.0 dBFS or under, outside and in the cabin, the rounding touching at most 5
+  samples in 10,000 (the turbo hatch's cabin) and none on four of the cars (`Full_throttle_peaks_under_minus_one_dbfs`);
+  the loudness between cars is unchanged. The bank's peaks are pinned in `Segments_are_evened_across_the_revs`.
+- **Making a voice** (review). Evening a car's banks and trimming its voice (two trim renders and the idle's) takes
+  40-130 ms in a release build, 100-290 in a debug one, longer than the engine generator's 50 ms buffer: made on the
+  main thread at a change of car, it ran the generator dry. `SampledEngine.Load` now reads the recordings through
+  Godot's loader and makes the banks and the voice on a worker; the previous voice plays until the new one is ready.
+  The fixed filters (the cabin's low-pass and boom, the tailpipe's shelf) are set once when the voice is made, only
+  the throttle's filter and the intake's roar follow the load every 32 samples.
+- **The Unreal version** keeps its ABI (no new export). `glp_engine_create` names no car, so `NativeApi.CreateEngine`
+  finds it by the folder's name (`EngineSpec.SoundFolder`) and makes the voice as `SampledEngine` does: voiced for that
+  car's body (`NativeApi.VoicingOf`, kept alike with `SampledEngine.VoicingOf`) and trimmed over its redline, with the
+  evened banks and the peaks held as above (`EngineVoiceIsVoicedAndTrimmedForItsCar`; a folder no car uses keeps the
+  front-engined default, trimmed over its recording). Without that the flat-twelve and the V8 were voiced as
+  front-engined hatchbacks, a 2.2 kHz cabin booming at 75 Hz where theirs is 4 kHz at 132 Hz. The Unreal side still
+  makes the voice on its game thread when a car is chosen (its audio thread plays the previous set until the new one
+  is swapped in, so it does not run dry). To have the rest it would need new exports: the limiter's cut and the
+  turbo's state in `glp_state` with a `TurboNoise` voice, and `EngineFollower` in place of its own smoothing; with
+  finding 14.
 
 ## Unreal Engine version (`unreal/`)
 
