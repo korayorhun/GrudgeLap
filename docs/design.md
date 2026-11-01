@@ -794,10 +794,33 @@ fixed in 0.19, each pinned by a test (`TyreMixTests`, `BodyNoiseTests`, `Granula
     with any engine that has boost; the R32 plays a six (`v6/`, cut from the CC0 archive item's supercharged V6 of a
     Jaguar F-type S: no CC0 or CC BY VR6 recording was found, and a VR6 fires every 120 degrees like any even six), at
     rpm x 6 / 120 (`GranularEngineTests` hold its firing frequency at 2500 and 5500 rpm and at idle). Its run-up bank
-    is cut from blips of a standing car, unloaded and up to about 4,200 rpm: above that the voice spaces its top
-    pulses closer. The five-cylinder banks left the build with the car (`GranularEngine.FivePattern` stays, unused).
-    Open: the archive item's own Delta track is a drive-by with no idle, and a Commons Integrale recording awaits its
-    licence review; a real VR6 recording would replace the V6's.
+    is cut from blips of a standing car, unloaded: above its top the voice spaces its top pulses closer. The
+    five-cylinder banks left the build with the car (`GranularEngine.FivePattern` stays, unused). Open: the archive
+    item's own Delta track is a drive-by with no idle, and a Commons Integrale recording awaits its licence review; a
+    real VR6 recording would replace the V6's.
+17. **The hatchbacks' voices after the merge** (soundfix, after cars3 and sound3 met). Six audio tests failed and the
+    R32 clicked: (a) the V6's run-up was cut through the crackle of its overloaded recording at the top of every blip
+    (steps of 0.69 between samples at 3,500-3,600 rpm) and through the stretch at the standing car's limiter (cut
+    every 150 ms, 10 dB duller), and its segments began with the MP3 decoder's silence, which the tool's seek left
+    there; re-cut to the crackle (up to about 3,600 rpm) with the tool seeking exactly and warning of crackles
+    (SOURCES.md), its overrun from the limiter (3,800 rpm, was 3,100). (b) Past the top of its recording the voice
+    laid the run-up's pulses closer and divided their overlap out, taking each pulse down with it: the R32 fell 8 dB
+    from half its redline to the redline (-16.0 LUFS pulling hard, the floor -16.0; 4.9 LU under the roar and the wind
+    at top speed in the cabin). The overlap of the run-up's grains past its top now counts only for its share, so the
+    pulses keep their recorded strength; the idle's and the overrun's are left normalised (their levels are set
+    against the run-up's). Now -14.3 LUFS pulling hard (the cars' mean -14.2), -17.2 to -12.3 LUFS held at 30-100 % of
+    its revs (before: -13.3 at half its redline falling to -21.3 at the redline), its brightness rising steadily with
+    the revs (energy above 1 kHz against below, -17 dB at 30 % to -5 dB at 90 %), the engine 0.2 LU under the roar and
+    wind at top speed in the cabin and 2.4 over outside. The largest step of its sweep is 0.41, at 6,400 rpm where the
+    run-up's clipped top pulses are laid 1.8 times closer: a loud, bright stretch, not a click (no step over 1.3 times
+    the RMS of the 5 ms around it, as on the hot hatch). (c) The Delta's run-up held a compressor's flutter (22.2-23.1
+    s of the Pulsar track, pulses up to 30 dB brighter), cut out: its timbre's spread about its trend fell from 2.3 to
+    1.0 dB, and its trim, no longer held down by that stretch's peaks, brings it to -13.5 LUFS pulling hard (was
+    -15.4); its turbo's whine, tuned against the quieter voice, went from 0.085 to 0.1 to stay level with the engine
+    in its band. (d) Tests that named cars by catalogue index (the turbo four as index 4, the R32's now) look them up
+    by sound folder or by boost; the full-throttle test compares the loads at the follower's revs (a rev apart the
+    Delta's voice strings other grains together, 0.7 LU apart), and its check of the old load applies where that load
+    was under a half, the level law's 3 dB (the Delta's turbo four makes 274 N m at 4,080 rpm: 0.55, 2.6 dB).
 
 ### Sound, 0.20: the audit's open findings and the balance between cars
 
@@ -824,27 +847,27 @@ ffmpeg's `ebur128` (integrated loudness, mono, everything in the mix: engine, ty
   Measured on the estate's recording at 4000 rpm: the energy above 2.5 kHz against below is -27.0 dB in a front
   engine's cabin, -23.3 dB in a mid engine's and -13.4 dB behind the car.
 - **The turbo** (finding 11, `audio/TurboNoise.cs`, any engine with `BoostShare > 0`). The shaft turns as the square
-  root of the compressor's work (Euler), the most boost taken from the engine's own figures, a pressure ratio of
-  1 / (1 - BoostShare) (1.8 for the turbo four) at 150,000 rpm, and off boost the exhaust still turns it to a third of
+  root of the compressor's work (Euler), the most boost taken from the engine's own figures, a pressure ratio of 1 /
+  (1 - BoostShare) (1.8 for the turbo four) at 150,000 rpm, and off boost the exhaust still turns it to a third of
   that; it spools behind the boost and runs on for a second. It whistles at its six blades' passing frequency (Raitor
   and Neise, *J. Sound Vib.* 314, 2008), 5.2 kHz at a third of its speed, climbing out of the mix as it comes on full
   boost, and at the shaft's own frequency (the unbalance's whine, 2.5 kHz on full boost), over the rush of the air.
   Shutting the throttle on boost vents the charge through the diverter valve (`EngineSpec.BlowOffValve`, true by
-  default, as production turbo cars have one);
-  without a valve the compressor surges (Greitzer, *ASME J. Eng. Power* 98, 1976; Galindo et al., *Exp. Therm. Fluid
-  Sci.* 32, 2008): chuffs of air with the shaft stumbling, about 14 a second on full boost falling to 7 as the stored
-  air bleeds away (measured: a 15 dB beat at 9.8 Hz). The whine is the tone heard on boost (review): the turbo four is
-  on full boost within half a second of flooring it, its blade tone then at 15 kHz, past the game's 22.05 kHz mix, and
-  with the whine at a quarter of its present gain the whole turbo was under the engine in every third-octave band
-  (the whine 11 dB under in its own). Now the whine is level with the engine in its band, +0.7 dB outside and +0.1 dB
-  in the cabin (`The_turbo_is_heard_on_boost`, through `EngineModel`'s boost), and both tones fade to 0.3 with the
-  throttle shut, as they leave mostly through the compressor's inlet with the air it draws. The turbo sits in the
-  engine bay, so the cabin hears it through the same panels as the engine: low-passed at the body's corner
-  (`TurboState.CabinCutoff`, 2.2 kHz for the front-engined turbo hatch) at 0.6 of its level, crossfaded over 0.15 s
-  (heard unfiltered, its rush stood 11 dB over the cabin's engine at 6.4 kHz). Subtle still: on full boost the whole
-  turbo is 14 LU under the engine, the vent's and the surge's loudest 100-250 ms 13 LU under, each standing out over
-  the steady turbo in its own band (the vent +9 dB above 3 kHz, the surge +18 dB under 2 kHz). The turbo runs down
-  with the engine in the crash replay (the follower holds its last revs there).
+  default, as production turbo cars have one); without a valve the compressor surges (Greitzer, *ASME J. Eng. Power*
+  98, 1976; Galindo et al., *Exp. Therm. Fluid Sci.* 32, 2008): chuffs of air with the shaft stumbling, about 14 a
+  second on full boost falling to 7 as the stored air bleeds away (measured: a 15 dB beat at 9.8 Hz). The whine is the
+  tone heard on boost (review): the turbo four is on full boost within half a second of flooring it, its blade tone
+  then at 15 kHz, past the game's 22.05 kHz mix, and with the whine at a quarter of its present gain the whole turbo
+  was under the engine in every third-octave band (the whine 11 dB under in its own). Now the whine is level with the
+  engine in its band, +1.2 dB outside and +0.3 dB in the cabin at a shaft gain of 0.1 (`The_turbo_is_heard_on_boost`,
+  through `EngineModel`'s boost, on the Delta's run-up; soundfix), and both tones fade to 0.3 with the throttle shut,
+  as they leave mostly through the compressor's inlet with the air it draws. The turbo sits in the engine bay, so the
+  cabin hears it through the same panels as the engine: low-passed at the body's corner (`TurboState.CabinCutoff`, 2.2
+  kHz for the front-engined turbo hatch) at 0.6 of its level, crossfaded over 0.15 s (heard unfiltered, its rush stood
+  11 dB over the cabin's engine at 6.4 kHz). Subtle still: on full boost the whole turbo is 12.8 LU under the engine,
+  the vent's and the surge's loudest 100-250 ms 13 LU under, each standing out over the steady turbo in its own band
+  (the vent +9 dB above 3 kHz, the surge +18 dB under 2 kHz). The turbo runs down with the engine in the crash replay
+  (the follower holds its last revs there).
 - **The limiter** (finding 12). `EngineModel.LimiterCut` says when the ignition is cut; `EngineFollower` holds the load
   through it and `GranularEngine.Cut` makes every pulse laid while it lasts an overrun pulse at the closed throttle's
   level (the overrun recording brought to the run-up's loudness so the cut is as deep on every car). Averaged over
