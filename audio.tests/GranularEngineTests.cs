@@ -41,6 +41,36 @@ public class GranularEngineTests
         Assert.Equal(Hold(Load(car, cylinders), rpm, 1f, 1f), Hold(Load(car, cylinders, overrun: true), rpm, 1f, 1f));
     }
 
+    /// <summary>
+    /// On the overrun a real engine stops firing: what is left at the same revs is the exhaust's rasp, quieter than the
+    /// bark under load overall, at the firing frequency and in the top octaves (on every car's recordings: the level of
+    /// the run-up and the overrun bank, the throttle's filter and the level that follows the load together). At the
+    /// same revs the overrun must never be the louder: in 0.18 the small cars at full throttle played mostly the overrun
+    /// bank (their load was the torque over 500 N m), and the sound fell by 11 dB when they were driven flat out.
+    /// </summary>
+    [Theory]
+    [InlineData("v8", 8, 5600f)]
+    [InlineData("flat12", 12, 4800f)]
+    [InlineData("hothatch", 4, 5000f)]
+    [InlineData("five", 5, 4500f)]
+    [InlineData("turbohatch", 4, 4500f)]
+    [InlineData("saloon", 4, 3200f)]
+    [InlineData("estate", 4, 4000f)]
+    [InlineData("fleet", 4, 5000f)]
+    public void Overrun_is_quieter_than_the_throttle_at_the_same_revs_in_every_band(string car, int cylinders, float rpm)
+    {
+        var rate = 44100;
+        var open = Hold(Load(car, cylinders, overrun: true), rpm, 1f, 2f).AsSpan(rate);
+        var shut = Hold(Load(car, cylinders, overrun: true), rpm, 0f, 2f).AsSpan(rate);
+        var firing = rpm * cylinders / 120f;
+        var total = Spectrum.BandDb(open, rate, 20, 20000) - Spectrum.BandDb(shut, rate, 20, 20000);
+        var fundamental = Spectrum.BandDb(open, rate, firing * 0.8, firing * 1.2) - Spectrum.BandDb(shut, rate, firing * 0.8, firing * 1.2);
+        var top = Spectrum.BandDb(open, rate, 2000, 20000) - Spectrum.BandDb(shut, rate, 2000, 20000);
+        Assert.True(total > 5, $"overall {total:0.0} dB");
+        Assert.True(fundamental > 2, $"at the firing frequency {fundamental:0.0} dB");
+        Assert.True(top > 3, $"above 2 kHz {top:0.0} dB");
+    }
+
     private static float[] Hold(GranularEngine engine, float rpm, float load, float seconds)
     {
         var output = new float[(int)(seconds * engine.SampleRate)];

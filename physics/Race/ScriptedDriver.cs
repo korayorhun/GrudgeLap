@@ -34,7 +34,13 @@ public sealed class ScriptedDriver
     private float _lane = Lane;
     private TrafficCar? _passing;
 
+    /// <summary>
+    /// Whether the driver takes the stunt route at the fork; a car that cannot make the loop (<see cref="LoopRunUp"/>) takes
+    /// the speed route whatever this says, as a driver who knows the car would (0.19; up to 0.18 the attract mode drove
+    /// the 1.4 estate off the top of the loop every lap and set it down 26 m short of it, from where nothing makes it).
+    /// </summary>
     public bool PreferStunt { get; set; } = true;
+    private bool _stunt = true;
     public float CruiseMph { get; set; } = 80f;
     /// <summary>Target speed chosen during the last call, for HUD/debug.</summary>
     public float PlannedMph { get; private set; }
@@ -50,6 +56,7 @@ public sealed class ScriptedDriver
         if (session.Phase != SessionPhase.Driving) return DriverInputs.Idle;
 
         var car = session.Car;
+        _stunt = PreferStunt && session.CanMakeTheLoop;
         var path = car.Cursor.Path;
         var distance = car.Cursor.Distance;
         // The two branches share their first metres, so the cursor may sit on the wrong one just after the
@@ -57,7 +64,7 @@ public sealed class ScriptedDriver
         var branchUndecided = path.Kind == PathKind.Common;
         if (path.Kind is PathKind.Speed or PathKind.Stunt && distance < 45f)
         {
-            var preferred = PreferStunt ? PathKind.Stunt : PathKind.Speed;
+            var preferred = _stunt ? PathKind.Stunt : PathKind.Speed;
             if (path.Kind != preferred)
             {
                 path = session.Track.Paths.First(p => p.Kind == preferred);
@@ -104,20 +111,71 @@ public sealed class ScriptedDriver
             return new DriverInputs { Gear = 1, Steer = steer, Throttle = 0.3f };
         }
         var redline = car.Spec.Engine.RedlineRpm;
-        var shiftUp = !automatic && car.Drivetrain.Engine.Rpm > redline * 0.9f && car.Drivetrain.ClutchLocked && gear == _lastGear && gear < car.Spec.ForwardGearCount;
-        var shiftDown = !automatic && car.Drivetrain.Engine.Rpm < redline * 0.377f && car.Drivetrain.ClutchLocked && gear == _lastGear && gear > 1 && error > 0f;
+        // Not in the air: the driven wheels over-rev with nothing to push against, and the car lands a gear too tall.
+        var grounded = !car.Airborne && DrivenWheelsDown(car);
+        var shiftUp = !automatic && grounded && car.Drivetrain.Engine.Rpm > redline * 0.9f && car.Drivetrain.ClutchLocked && gear == _lastGear && gear < car.Spec.ForwardGearCount;
+        // Down when the revs sag, or a gear early when there is speed to gather and the gear below pulls harder.
+        var shiftDown = !automatic && grounded && car.Drivetrain.ClutchLocked && gear == _lastGear && gear > 1 && error > 0f
+                        && (car.Drivetrain.Engine.Rpm < redline * 0.377f || (error > 2.5f && car.Drivetrain.KickDownPullsHarder()));
         _lastGear = gear;
 
         return new DriverInputs
         {
             Steer = steer,
-            Throttle = sliding ? 0f : MathUtil.Clamp01(error * 0.5f + 0.1f),
+            Throttle = sliding ? 0f : FeatherThrottle(car, MathUtil.Clamp01(error * 0.5f + 0.1f)),
             // Braking in the air only locks the wheels; wait for the landing.
-            Brake = car.Airborne || sliding ? 0f : MathUtil.Clamp01(-error * 0.4f - 0.3f),
+            Brake = car.Airborne || sliding ? 0f : FeatherBrake(car, MathUtil.Clamp01(-error * 0.4f - 0.3f)),
             Gear = DriverInputs.NoGearChange,
             ShiftUp = shiftUp,
             ShiftDown = shiftDown,
         };
+    }
+
+    private static bool DrivenWheelsDown(VehicleSim car) =>
+        car.Spec.FrontWheelDrive ? car.Wheels[0].InContact && car.Wheels[1].InContact : car.Wheels[2].InContact && car.Wheels[3].InContact;
+
+    /// <summary>
+    /// The throttle a competent driver actually holds when asking for <paramref name="throttle"/>: eased in proportion
+    /// to how far a driven wheel spins past what its tyre can use, the way a driver feels the tail squirm or the front
+    /// scrabble and feeds the power in. Since 0.18 the tyre's force falls once it spins past its peak (to about three
+    /// quarters at full wheelspin), so a launch on the stop and a second-gear exit lose more than they did on the old
+    /// tyre, which kept almost all of its force however fast the wheel spun. Used by the scripted driver and by the
+    /// tests' magazine-style launches.
+    /// </summary>
+    public static float FeatherThrottle(VehicleSim car, float throttle)
+    {
+        var spec = car.Spec;
+        var (a, b) = spec.FrontWheelDrive ? (car.Wheels[0], car.Wheels[1]) : (car.Wheels[2], car.Wheels[3]);
+        var excess = MathF.Max(Excess(a), Excess(b));
+        return throttle * MathUtil.Clamp(1f - excess / (1.5f + 0.1f * MathF.Abs(car.Speed)), 0.2f, 1f);
+
+        float Excess(WheelState w)
+        {
+            if (!w.InContact) return 0f;
+            var slipSpeed = w.AngularVelocity * spec.WheelRadius - w.GroundSpeed;
+            // A tenth of the road speed and half a metre a second: about the slip at the tyre's peak, a little over.
+            return MathF.Max(0f, slipSpeed - (0.12f * MathF.Abs(w.GroundSpeed) + 0.5f));
+        }
+    }
+
+    /// <summary>
+    /// The brake pedal a driver actually holds when asking for <paramref name="brake"/> in a car without anti-lock
+    /// brakes: eased as a wheel slides past the tyre's peak slip, so the car stops near its best and keeps some steering
+    /// (cadence braking, as drivers were taught). Since 0.18 a locked tyre brakes with only about three quarters of its
+    /// peak and steers not at all, which a key or the scripted driver's hard stop would otherwise get every time.
+    /// </summary>
+    public static float FeatherBrake(VehicleSim car, float brake)
+    {
+        if (car.Spec.AntiLockBrakes || brake <= 0f) return brake;
+        var worst = 0f;
+        foreach (var w in car.Wheels)
+        {
+            if (!w.InContact || MathF.Abs(w.GroundSpeed) < 3f) continue;
+            var peak = TireModel.PeakSlipRatio(w.Friction);
+            worst = MathF.Max(worst, -w.SlipRatio * MathF.Sign(w.GroundSpeed) / MathF.Max(peak, 0.02f));
+        }
+        // Up to 1.5 times the peak slip the foot stays; by four times it has come off to half.
+        return brake * MathUtil.Clamp(1f - (worst - 1.5f) * 0.2f, 0.5f, 1f);
     }
 
     /// <summary>
@@ -236,7 +294,7 @@ public sealed class ScriptedDriver
         {
             if (distance <= path.Length || path.Next.Count == 0) return path.FrameAt(MathF.Min(distance, path.Length));
             var next = chooseBranch && path.Kind == PathKind.Common
-                ? path.Next.FirstOrDefault(p => p.Kind == (PreferStunt ? PathKind.Stunt : PathKind.Speed)) ?? path.Next[0]
+                ? path.Next.FirstOrDefault(p => p.Kind == (_stunt ? PathKind.Stunt : PathKind.Speed)) ?? path.Next[0]
                 : path.Next[0];
             distance -= path.Length;
             path = next;
@@ -254,7 +312,7 @@ public sealed class ScriptedDriver
         var here = car.Cursor.Distance;
         if (path.Kind is PathKind.Speed or PathKind.Stunt && here < 45f)
         {
-            var preferred = PreferStunt ? PathKind.Stunt : PathKind.Speed;
+            var preferred = _stunt ? PathKind.Stunt : PathKind.Speed;
             if (path.Kind != preferred) path = car.Track.Paths.First(p => p.Kind == preferred);
         }
         var allowed = CruiseMph / MathUtil.MphPerMps;

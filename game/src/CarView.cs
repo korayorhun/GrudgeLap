@@ -1657,7 +1657,9 @@ internal sealed partial class CarView : Node3D
             var hubY = spec.HubHeight - (spec.SuspensionRest - compression);
             var local = pivot.Position;
             pivot.Position = new Vector3(local.X, hubY, local.Z);
-            var steer = w.IsFront ? -steerAngle : 0f;
+            // Each front wheel at its own angle (Ackermann and the steering's give included, 0.19); the steering wheel
+            // below shows the driver's command.
+            var steer = -w.SteerAngle;
             pivot.Rotation = new Vector3(0f, steer, 0f);
             _wheelSpinners[i].Rotation = new Vector3(-w.SpinAngle, 0f, 0f);
         }

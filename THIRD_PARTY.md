@@ -16,7 +16,6 @@
 | Freesound #255122 and #255126, Lada 1500 Combi recordings by YleArkisto | the 1.6 saloon's run-up and overrun (`saloon/engine_drive`, `engine_overrun`) | CC BY 4.0 — https://freesound.org/s/255122/ (credit: YleArkisto) |
 | Freesound #141245 "Reault 19 driving 2" and #141240 "Renault 19 underhood acceleration" by lovretta | the 1.4 estate's banks (`estate/engine_*`) | CC0 1.0 — https://freesound.org/s/141245/ |
 | Wikimedia Commons "Fiat Grande Punto 1.4 T-Jet - engine and exhaust sound" (Adri Drives, YouTube -1zYK0ORqWg) and "Fiat Bravo 1.4 T-Jet - engine and exhaust sound" (michael maurice, YouTube TYdDRfp-LdY) | the 1.4 fleet saloon's banks (`fleet/engine_*`) | CC BY 3.0 (credit: Adri Drives; michael maurice) |
-| OpenGameArt "Horizon Surfer" by congusbongus | the instant replay's music (`music/replay.ogg`, eleven seconds of it) | CC0 1.0 — https://opengameart.org/content/horizon-surfer |
 | ambientCG Ground110 (1K) | the gravel shoulders (`shoulder_*.jpg`) | CC0 1.0 — https://ambientcg.com/view?id=Ground110 |
 | Freesound #383476 "Car interior driving 02.wav" by Daphne_in_Wonderland | the tyres' rolling roar on the road (`tyres/road.wav`) | CC0 1.0 — https://freesound.org/s/383476/ |
 | Freesound #850041 "tire-squeal" by JeffPearson | the cornering squeal loop (`tyres/squeal.wav`) | CC0 1.0 — https://freesound.org/s/850041/ |
@@ -43,7 +42,7 @@
 | "Mercedes-Benz E-Class W212" by Peter_D (better_peter) | the fleet saloon's body and cabin | CC BY 4.0 — https://sketchfab.com/3d-models/119c5e10733142b197aa53b86f6aeb04; modified: re-scaled and re-rigged for GrudgeLap |
 | xunit, Microsoft.NET.Test.Sdk | tests only, not shipped | Apache-2.0 / MIT |
 | Inno Setup 6 | builds the installer, not shipped | Inno Setup License |
-| ffmpeg, numpy, Pillow | offline tools (grain bank, loop and one-shot cutting, icon), not shipped | LGPL/GPL, BSD, MIT-CMU |
+| ffmpeg, numpy, Pillow | offline tools (grain bank, loop and one-shot cutting, icon, the replay music's render and its Vorbis encoding), not shipped | LGPL/GPL, BSD, MIT-CMU |
 
 The track, the world and every other mesh in the game are generated at run time by the code in this
 repository, but for the cars: the CC BY models above are drawn in their place (fetched from the Objaverse
@@ -55,6 +54,11 @@ wear sheet and the cloud sheet are drawn by scripts in `tools/`; the drones' eng
 voice recorded). These are the only recorded sound material; they were cut and normalised from the CC0 and CC BY recordings
 above (the slices are listed in `game/assets/audio/SOURCES.md`) and carry no other claim. If you own a cleaner recording of a flat-twelve and are willing
 to license it CC0 or CC-BY, an issue is welcome.
+
+The instant replay's music (`music/replay.ogg`, `music/replay.wav`) is the project's own: an original composition
+written in the style of late-1980s arcade music, not a transcription or arrangement of any existing tune, synthesised
+from its score by `tools/make-replay-music.py` (no recording or sample goes into it). It replaced an excerpt of
+the CC0 "Horizon Surfer" by congusbongus (OpenGameArt).
 
 The car names ("FLAT-12 GT '84", "V8 GTB '12 SPORT EXHAUST", "HOT HATCH 2.0 16V '01", "FIVE 2.0 20V HATCH
 '97", "TURBO HATCH 2.0T '08", "SALOON 1.6 '91", "ESTATE 1.4 '93", "SALOON 1.4 16V '17") are descriptions of an engine layout, a body style and a year; they are not the

@@ -83,12 +83,18 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   lane just past the fork followed the stunt branch's steeper descent under the speed road and fell through it.
   The road the cursor has just left is not a candidate there: on the crest a few metres past the fork its last
   frame was the higher surface, the cursor hopped back onto it and the rules replayed its start line.
-- **Vehicle** — rigid body on four raycast wheels (spring/damper/bump stop), Pacejka-style tyres with a
-  friction circle, load sensitivity and relaxation, a per-car grip multiplier, rolling resistance as a
+- **Vehicle** — rigid body on four raycast wheels (spring/damper/bump stop, anti-roll bars, each axle sprung for
+  its load) with its mass where the real car carries it (`CentreOfMassOffset`), Magic Formula tyres with combined
+  slip along the normalised slip vector, a fall-off past the peak, load-sensitive friction and cornering stiffness
+  from the published tyre sizes and lateral relaxation, wheel spin solved implicitly against the tyre, a per-car grip
+  multiplier, rolling resistance as a
   body force (much higher on grass: grip 0.66 and resistance 0.11 of the load since 0.9, from 0.55 and 0.16,
-  which made the verge a trap), aerodynamic drag, speed-sensitive steering lock, optional traction
-  control that eases the throttle as the driven wheels spin up. Rear- or front-wheel drive
-  (`VehicleSpec.FrontWheelDrive`) through an open differential; a turbo engine's torque builds with its boost
+  which made the verge a trap), aerodynamic drag, speed-sensitive steering lock, Ackermann steering and the
+  steering's give under the tyres' aligning torque (caster and a pneumatic trail that vanishes at the limit, 0.19),
+  optional traction
+  control that cuts the engine's torque as the driven wheels spin up, optional anti-lock brakes, brakes
+  proportioned to lock the fronts first. Rear- or front-wheel drive
+  (`VehicleSpec.FrontWheelDrive`) through an open differential or, on the flat-twelve, a limited-slip one; a turbo engine's torque builds with its boost
   (`EngineModel.Boost`: half a second of lag above a threshold rpm, falling at a third of that rate so a
   shift does not lose it), and the view whistles and vents it.
 - **Cars** — `VehicleSpec` presets: the 1984 flat-twelve (1580 kg, four speeds, 6900 rpm), the 2012 V8
@@ -102,22 +108,29 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
 - **Drivetrain** — torque-curve engine with idle governor, rev limiter and stall; clutch as a lock/slip
   state machine with the slip torque limited to what synchronises the two inertias in one step (the axle
   side includes the car's mass through the tyres; otherwise the flywheel hammers the wheels and a stall is
-  impossible); a launch assist in the assisted modes that lets the engine hold its revs while the car
-  starts rolling; gearboxes with shift points relative to the redline; three transmission modes.
+  impossible); a launch assist in the assisted modes (0.19) that revs the engine to its launch speed (95 % of peak
+  torque, full boost on the turbo) and slips the clutch with the driven tyres just short of their peak, a pre-rev on
+  brake and throttle at a standstill, launch control on the V8, gear take-up after a shift limited to the tyres' grip
+  with the engine eased down to the shaft's speed; gearboxes with shift points relative to the redline and a
+  kick-down in the automatic; three transmission modes.
 - **Traffic** — drones that ride the road frames of the start straight and the speed route in both
   directions in their own lane, never the stunt route; kinematic, solid to the player, moved away from a
   respawn point.
 - **Rules** — timers from the cabinet's option table (90 s, +45 per lap, +45 at the checkpoint on Medium),
   route detection at the fork (announced 45 m in, where the branches have parted), checkpoints and return
-  points as path markers (counted on road that follows on; a hop between the overlapping branches or back
+  points as path markers (none between the gas-station bend and the loop since 0.19: set down 26 m short of it after
+  a fall, no car had the run-up to make it; counted on road that follows on; a hop between the overlapping branches or back
   across the fork carries the distance over, so nothing is scored or crossed twice), off-road ten-second rule,
   wrong-way detection (suspended on the skid pad), crash detection (hard landing, roll-over, falling into
   the gap or hitting the deck edge, solid props, drones), a 10 s instant replay buffer, the key-turn restart
-  after every crash, messages with a shelf life, and the best lap recorded at 20 Hz as the ghost of the
+  after every crash, messages with a shelf life (among them, for a car without the pull for the loop, a warning on the
+  climb to the fork and on the stunt route, `LoopRunUp`, 0.19), and the best lap recorded at 20 Hz as the ghost of the
   grudge match (serialisable, loaded into the next credit).
 - **Scripted driver** — pure-pursuit steering along its lane plus a curvature-aware speed plan with
   braking distance, slower over a crest (the road falling away takes weight off the tyres:
-  v² = g R k / (1 + κ R k)); it catches a slide with opposite lock once the body slip passes 5° and stays off
+  v² = g R k / (1 + κ R k)); it changes down a gear early when there is speed to gather and the gear below pulls
+  harder, never changes up in the air (0.19), and takes the speed route in a car that cannot make the loop;
+  it catches a slide with opposite lock once the body slip passes 5° and stays off
   the pedals past 8°, keeps the wheel still in the air, and times its lane changes by the session clock, so a
   lap looks the same at 20 fps as at 144 (the game asks it once a frame); traffic sense (follow a slower
   drone, pass with 480 m of empty opposite lane, hurry back when one comes within 250 m, abort a pass when
@@ -133,6 +146,162 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
 - High scores (`HighScoreTable`): ten lines in order, a factory table to beat, three initials of a 27-letter
   alphabet, one text form shared with the Unreal version. The session keeps the credit's own best lap
   (`CreditBestLap`) apart from the loaded ghost's time for it.
+
+### Vehicle dynamics audit (0.18)
+
+The car model was held against established vehicle-dynamics practice (Pacejka, *Tyre and Vehicle Dynamics*;
+Milliken, *Race Car Vehicle Dynamics*; Gillespie, *Fundamentals of Vehicle Dynamics*) and against the published
+figures of the cars the catalogue follows. Findings, ranked by how much each changes how the cars feel and how real
+they are; the first eleven were fixed in 0.18, each pinned by a test in `HandlingTests` (proving-ground instruments in
+`physics.tests/HandlingRig.cs`: a 160 m asphalt pad, a constant-radius circle driver after SAE J266, straight stops
+and standing sprints).
+
+1. **Tyre curves never fell past their peak** (fixed). The Magic Formula shapes (lateral C 1.35, E 0.95;
+   longitudinal C 1.6, E 0.97) only saturated: a locked wheel braked with 99 % of the peak friction, a wheel
+   spinning at three times the road speed drove as hard as one at the ideal slip, and the side force at 20 degrees
+   of slip was still rising. Real road tyres on dry asphalt peak near 10-12 % slip and 5-8 degrees, then fall to
+   about 0.75 (locked) and 0.9 (sliding sideways) of the peak. Now: normalised curves with slope 1 and the peak at
+   u = 2 (`TireModel`), so ABS has something to gain (locked stops are 22-26 % longer than ABS ones,
+   `Locked_wheels_stop_longer_than_anti_lock_brakes`), wheelspin costs drive and a slide past the limit lets go.
+2. **Combined slip clipped the two pure forces** (fixed). The friction circle scaled the longitudinal and lateral
+   forces only when their sum exceeded the peak, so a locked front wheel at 7 degrees still gave two thirds of its
+   side force: a car steered with its wheels locked. Now the slips are normalised by stiffness and friction and
+   combined as one vector, the force lying along it (a friction ellipse that also points the right way): with the
+   fronts locked the car slides straight on (`Locked_front_wheels_do_not_steer_and_anti_lock_brakes_do`: about 1.1 m
+   sideways from 80 km/h with the wheel turned, against 13.4 m with ABS).
+3. **Cornering stiffness proportional to the load** (fixed). With K = B C D and D = mu Fz every tyre used its load
+   equally well, which makes any car steer exactly neutral whatever its weight distribution (the old pad figures:
+   0.5-0.7 deg/g for every car, front-heavy hatches included). Now K follows Pacejka's load dependence
+   (c Fz0 sin(2 atan(Fz / 2 Fz0))), with the nominal load from the tyre's width and the stiffness per load from its
+   aspect ratio (`TireSize`, the published sizes on every spec, staggered 225/255 and 225/285 on the mid-engined
+   cars), and it no longer scales with the road's friction (a wet tyre is as stiff, it just lets go sooner).
+4. **Centre of mass 0.6 m up and halfway between the axles** (fixed). The body's reference point (hubs, footprint,
+   view, models) stands 0.6 m above the road (midway between the axles on the flat-twelve, nearer the front axle on
+   the front-heavy cars), and the mass was there too: SUV-high load transfer, and 50/50 on the two mid-engined cars
+   that are 40/60 (the Testarossa) and 42/58 (the 570S). `VehicleSpec.CentreOfMassOffset` now
+   puts the mass where the real cars carry it (0.45-0.57 m, rearward on the mid-engined cars) without moving the
+   reference point the view and the models are fitted to; each axle is sprung for its load so the cars sit level
+   (`Static_weight_distribution_matches_the_car`). Braking load transfer agrees with statics to a per cent
+   (`Weight_moves_forward_under_braking_as_statics_says`).
+5. **No anti-roll bars** (fixed). Roll came from the corner springs alone, 4-10 deg/g (a 1970s saloon's lean on a
+   sports car), and the front-to-rear split of the roll stiffness, the main tuning of a car's balance, was always
+   the springs' 50/50. `FrontAntiRoll` / `RearAntiRoll` (wheel rates, N/m) now give 1.5 deg/g (V8), 2.2 (flat-twelve),
+   2.5-3.2 (hatchbacks), 3.8 (fleet saloon) and 5-6 (the 1990s saloon and estate), with 55 % of the roll stiffness
+   in front on the mid-engined cars and 58-66 % on the others. On the pad (`Understeer_and_roll_on_the_skid_pad`) the
+   front-heavy cars now understeer (0.8-2.5 deg/g) and the mid-engined ones stay near neutral (0.2-0.4); lifting off
+   at 92 % of the limit tightens their line by 15-20 % (`Lifting_off_at_the_limit_tucks_the_tail_of_a_mid_engined_car`).
+6. **Brakes** (fixed). No anti-lock brakes anywhere: `AntiLockBrakes` now on the three cars whose specs carry
+   traction control or ESC (the V8, the turbo hatch and the fleet saloon), a per-wheel release-and-reapply
+   modulator at the tyre's peak slip. The rear brakes of the front-heavy cars locked first once the mass moved
+   down to where it belongs; they are now proportioned so the fronts lock first at each car's limit
+   (`The_front_wheels_lock_before_the_rears`). Stops from 100 km/h: 31.5 m (V8; Car and Driver's 570S, 144 ft from
+   70 mph, is about 35 m), 36-40 m (turbo hatch, fleet saloon), 44-49 m for the 1980s-2000s cars without ABS on
+   locked wheels, 53-56 m for the 1990s saloon and estate; rain adds about 45 %
+   (`Sprints_and_stops_within_the_real_cars_ranges`).
+7. **Wheel spin integrated explicitly against a stiff tyre** (fixed). The slip ratio was relaxed over 0.3 m only to
+   keep the wheel stable; with tyres that fall past their peak that lag let the wheel ring against the tyre and the
+   slipping clutch at the step rate (a V8 sat at the limiter in first gear with its clutch hammering). The wheel's
+   speed is now solved implicitly each step (the speed at which inertia, drive, brake and the tyre force of that
+   speed balance, by a bracketed regula falsi), the clutch is told the axle's true one-step inertia and the road's
+   load torque, and only the slip angle keeps its 0.3 m relaxation length. The step costs about 20 us at 240 Hz, of
+   which 12 us are the five surface probes it always had.
+8. **Differential and traction control** (fixed). Every car had an open differential; the flat-twelve now has its
+   40 % clutch-type limited-slip unit with a 60 N m preload (`Limited_slip_differential_holds_the_inside_wheel`: the
+   inside rear runs 1.3 m/s ahead of the outside one out of a tight bend, 9.2 with an open differential). Traction
+   control eased the driver's pedal by the slip ratio, which near standstill opened the assisted clutch on every cut;
+   it now cuts the engine's torque (`Drivetrain.TorqueCut`) by the slip speed, and not while the clutch slips.
+   Since wheelspin now costs drive, the scripted driver and the keys feather the throttle against it and the brake
+   off a locking wheel the way a driver's foot does (`ScriptedDriver.FeatherThrottle` / `FeatherBrake`; a pad's
+   triggers are passed as they are).
+
+9. **Aerodynamic lift and downforce** (fixed). Drag only: the V8 at 200 mph carried no downforce and the 1980s
+   cars no lift. `FrontLiftArea` / `RearLiftArea` (lift coefficient times area per axle) now lift the older cars a
+   little, mostly at the front (the flat-twelve's tyres carry 97 % of its weight at 250 km/h), and press the V8 down,
+   more at the back (104 %; `At_speed_the_V8_presses_down_and_the_eighties_car_lifts`).
+10. **Shifts** (fixed in part). Every gearbox took 0.28 s per change with the drive cut; the V8's dual-clutch box now
+    takes 0.1 s (`ShiftSeconds`), which brought its 0-100 km/h from 4.5 s to 3.9 (the real car, with launch
+    control, 3.2).
+11. **Dampers** (fixed). Linear and symmetric; they now rebound 2.2 times harder than they bump
+    (`DamperReboundRatio`, the mean unchanged), as road dampers do: a bump is let through softly and the spring's
+    return is checked, so a car settles after a crest instead of bouncing.
+
+Items 12, 13 and 16 were taken up in 0.19, 15 was decided against, 14 stays open:
+
+12. **Launches** (fixed in 0.19). The assisted clutch bit from about 2,000 rpm whatever the car: the revs collapsed
+    into a bog, the tyres spun up to a slip of 1.5 and the driver had to feather the throttle back to a fifth (V8
+    3.9 s to 100 km/h against the real 3.2, the turbo hatch 7.5 against 6.4). Now a standing start in the assisted
+    modes is made as a good driver makes it (`Drivetrain.Launching`): the engine is held at its launch revs
+    (`EngineSpec.LaunchRpm`: the lowest giving 95 % of peak torque, and full boost on the turbo) by a governor on the
+    throttle, and the clutch takes the engine's torque in proportion to how far the revs stand above a band below
+    that speed, never more than the driven tyres can put down (`VehicleSim.LaunchTraction`: each tyre's peak force at
+    its load, 92 % of it for the assist, 99.5 % for the V8's launch control, cut back while a wheel spins past its
+    peak, plus what the wheels take to spin up); it locks once the shaft has caught the engine up. Brake and throttle
+    together at a standstill hold the revs there with the clutch open (`PreRevving`: the two-footed start, the
+    launch control's brake-throttle-release). After a shift the clutch takes up the gear with no more than the tyres
+    can take and the engine eased down to the shaft's speed (`Synchronising`; it bit with its whole capacity, which
+    spun the V8's tyres past their peak in second), and the V8's dual-clutch box hands the drive over in 0.03 s.
+    The rig times the sprint as a road test does, from the release of the brake (it timed the shift into first and
+    the revs rising from idle too). 0-100 km/h now: flat-twelve 5.05 s (Ferrari quoted 5.8, Car and Driver timed
+    5.0 to 60 mph in 1986; its gated gearbox takes 0.45 s a change, the default quarter second gave 4.9), V8 3.4 (3.2; traction-limited at 0.89 g throughout), hot hatch 7.5 (7.2), five 9.1
+    (8.5), turbo hatch 7.0 (6.4), 1.6 saloon 13.5 (13.9), estate 17.1 (16-17), fleet saloon 12.3 (11.5); the ranges
+    in `Sprints_and_stops_within_the_real_cars_ranges` came in to about a tenth either side of those figures, and
+    `Standing_starts_hold_the_launch_revs_and_the_tyres_short_of_their_peak` and
+    `Flooring_it_from_rest_launches_without_a_bog` pin the launch itself. Still a little quick on the flat-twelve:
+    its magazine figures include a test driver on a heavy single-plate clutch. The ranges are about a tenth of the
+    figure either side, not a tenth of a second: the five, the turbo hatch and the fleet saloon run 0.6-0.8 s slower
+    than quoted.
+13. **Steering** (fixed in 0.19). Parallel steer, no trail, no compliance. Each front wheel now has its own angle
+    (`WheelState.SteerAngle`, drawn by the view; the cockpit's wheel shows the command): Ackermann geometry
+    (`AckermannShare`, full on every car) turns the inner wheel more, so on full lock at walking pace the two front
+    tyres roll round one centre with under a degree of slip between them instead of 8 degrees of scrub
+    (`Ackermann_lets_both_front_wheels_roll_round_at_parking_speed`). The tyres' aligning torque, side force times
+    caster trail (2 cm) and a pneumatic trail of 3 cm at rest that shrinks to nothing just past the side force's peak
+    (`TireModel.PneumaticTrail`, the brush model's a/3), turns each wheel out of the bend through the steering's
+    compliance (1/14000 rad per N m, Gillespie's K_str = W_f (p + t) / K_ss): every car gains about half a degree per
+    g of understeer, which brings the hot hatch from 0.8 to 1.4 deg/g, inside the 1-4 of its class, and leaves the
+    mid-engined cars mildly understeering (0.8-1.0), as they are tuned. The aligning torque per g at the limit falls to half
+    or 60 % of what it is at 0.3 g (`The_steering_goes_light_before_the_front_tyres_let_go`): the lightening of
+    the rim a driver feels, and here the steering's give fading with it. `VehicleSim.AligningTorque` is there for a
+    force-feedback wheel. The keyboard is unchanged: its centring rate is the stand-in for the aligning torque, and
+    slowing it as the trail falls away would leave lock on in an understeering slide, making the keys harder to
+    drive, which the brief ruled out; the speed-sensitive lock stays the keys' stand-in for a three-turn wheel.
+    The hot hatch keeps its catalogue identity (the 2.0 16V of 2001: 172 hp, 1140 kg, 205/45 R16, 62 % in front)
+    although the model drawn is a 205 GTi 1.9 (130 PS, 960 kg, 63/37, 185/55 R15): its dimensions are the
+    simulation's (`tools/car_models.py` scales the model to them), the name, the power and the recordings are the
+    car the player picks, and its low understeer was the missing steering compliance, not the spec (the 205's softer
+    tyres and lighter body give the same 0.5 deg/g from the tyres alone). Should the drawn car stay a 205, the spec
+    and `car_models.py` can follow it together in one change.
+14. **The 570S's brake steer** (it brakes a spinning inside wheel instead of locking the axle) and the hatchbacks'
+    electronic equivalents are not modelled; their differentials are open. Still open.
+15. **Camber and tyre temperature** (decided against in 0.19). The raycast wheel has no suspension geometry, so camber
+    from roll and bump would need a camber gain per car that no source gives for these cars, and its effect on the
+    balance would trade one for one against the roll-stiffness split that `Understeer_and_roll_on_the_skid_pad`
+    already pins to the cars; camber thrust would only move the same balance by other means. Road tyres also work
+    across a wide temperature window: a thermal model would mostly shave a few per cent of grip off the first corner
+    of a 90-second credit, at the price of results that depend on the history of a run (the lap and sprint tests
+    are made from cold every time). Neither is cheap to make or to test for what it would add here.
+16. **The stunt route for the slower cars** (fixed in 0.19). The 1.6 saloon ran the loop's run-up in fifth at
+    2,900 rpm (the scripted driver changed up over the drawbridge with its wheels in the air) and fell off; it now
+    changes down for the run-up (`Drivetrain.KickDownPullsHarder`) and makes the loop. The 1.4 estate cannot (61 PS
+    and Cd 0.46: 1.2 m/s^2 at 50 mph in its best gear against the 1.35 the run-up asks, `LoopRunUp`), which is real:
+    the game now says so on the climb to the fork ("CAN'T MAKE THE LOOP - TAKE SPEED TRACK") and on choosing the
+    stunt route, and the scripted driver takes the speed route with it. Worse, the return point 26 m short of the
+    loop left no car the run-up after a fall (the V8 reached 44 mph there): it is gone, and a fall now sets the car
+    down after the drawbridge, from where every car that makes the loop on a flying lap makes it from rest
+    (`A_car_set_down_after_falling_off_the_loop_has_the_run_up_to_make_it`). The track's geometry is unchanged.
+17. **A broadside slide** (fixed in 0.19, found in review). The tyre faded its slip angle by the speed along the
+    wheel alone (to keep a parked car still), so a wheel moving straight sideways had no slip angle and no side force:
+    a car spun across the road slid on as if on ice (0.6 g of scrub at 60 degrees, nothing at 90). The fade now follows
+    the contact patch's whole speed; a broadside slide scrubs 0.86 g on the flat-twelve and 0.70 g on the estate
+    (`A_car_sliding_broadside_scrubs_its_speed_off`). Below 0.3 m/s the slip angle still fades out (it would make a
+    parked car jitter), and there a standing grip holds the patch sideways: a share of its sideways speed taken off
+    each step, capped by the grip, as the rolling resistance already did along the wheel. Before it, a parked car
+    nudged sideways at 1.2 m/s slid on at 1.2 m/s; it now stops in 0.12-0.18 s and stays put
+    (`A_parked_car_nudged_sideways_settles`).
+
+Kept, as earlier decisions: the fixed 240 Hz step with semi-implicit Euler for the body, the raycast wheels, the
+grass's grip and rolling resistance (0.9), the weather's grip figures (0.12), the speed-sensitive steering lock,
+the clutch's lock/slip machine, and the low-speed fades of the slip angle (no jitter at rest).
 
 ## View (`game/`)
 
@@ -243,13 +412,15 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   of the simulated revs one pulse recorded at the nearest revs is laid down and overlap-added — the
   recording's own sequence while the revs hold, nothing looped or pitch-shifted, so the exhaust keeps its
   character across the rev range; the two banks cross-fade above idle, a low-pass opens with the throttle,
-  and from the cockpit the engine comes through the bulkhead (duller, with a cabin boom). Tyres and road
-  from recordings (`TyreAudio`: the tread's roar recorded in a cabin, pitched up with the speed; a cornering
-  squeal from about four degrees of slip angle, a harder howl that joins it at big angles, a screech for
-  wheelspin and locked wheels beyond 15 % slip, gravel while a wheel is off the asphalt, each faded and
-  pitched from the slip of the four wheels); two to four exhaust pops when the V8 lifts off above 4800 rpm,
-  one-shots from a CC0 recording drawn at random with a spread of pitch and level; synthesised wind that
-  grows with speed and a thump when the suspension is jolted; the shifter's clunk at every change of gear (a
+  and from the cockpit the engine comes through the bulkhead (duller, with a cabin boom); the load is the
+  engine's throttle (0.19). Tyres and road
+  from recordings (`TyreAudio`, levels from `audio/TyreMix`: the tread's roar recorded in a cabin, growing as
+  v^1.5 and pitched up with the speed; a squeal as a tyre nears the peak of its force curve, the howl of a tyre
+  sliding sideways past it and the scrub of a locked or spinning wheel, gravel while a wheel is off the asphalt;
+  see the sound audit below); two to four exhaust pops when the V8 lifts off above 4800 rpm,
+  one-shots from a CC0 recording drawn at random with a spread of pitch and level; synthesised beside the tyres
+  (`audio/BodyNoise`) the wind (v^2, crossing the roar at 110 km/h in the cabin), a wet road's spray, the gears'
+  and the final drive's whine and the anti-lock pump; a thump when the suspension is jolted; the shifter's clunk at every change of gear (a
   110 Hz thud with the click of the linkage); a crash as one of three CC0 recordings of metal and glass with
   a thump under it; the pulse-train engine, a filtered-noise squeal, a noise-burst crash and the clack of
   the train's wheels kept for 1989 mode; the sounds of the world placed in it (`WorldAudio`): every drone's
@@ -261,11 +432,11 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   low-pass and 7 dB of glass from the driver's seat; the engine silent through the instant replay (the
   simulation holds its last revs through it, which played as a frozen note); checkpoint bleep, a cow's moo
   (formants on a sagging pitch), the clang of a sign going over, and the cabinet's own moments: a chime at every choice on the title screen, the starter at the turn of the key, a brass fanfare
-  when a lap beats the record, a driving tune under the instant replay (eleven seconds at 168 bpm in D major:
-  a quarter-duty pulse lead, a bass on the eighths in octaves, brass stabs, kick, snare and hats; 9 dB over the
-  other jingles because the engine is silent then, faded out in a third of a second when the replay is over or
-  skipped) and an FM tune when the credit is over. The notes are ours in the timbres of the FM and pulse chips:
-  the original's replay music is Atari's and is not copied. The arcade had no music while driving, so neither
+  when a lap beats the record, a driving tune under the instant replay (the score of the replay music below, played
+  by this synth in 1989 mode: a quarter-duty pulse lead, FM bass, saw brass, a clav, kick, snare, toms, hats and
+  cymbals; 9 dB over the other jingles because the engine is silent then, faded out in a third of a second when the
+  replay is over or skipped) and an FM tune when the credit is over. The notes are ours in the timbres of the FM
+  and pulse chips: the original's replay music is Atari's and is not copied. The arcade had no music while driving, so neither
   does this. The overrun recordings take the
   run-up's place as the throttle closes. A limiter on the master bus. Loops imported compressed (QOA) must end
   at `GetLength() × MixRate` frames, not at the data's byte count: that once cut every loop to its first
@@ -442,6 +613,73 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   4 s afterwards), and the bare exe changes only with the engine or the version stamp. Signing it is the
   real fix, planned for 1.0.
 
+### Sound audit (0.19)
+
+The car's sound was held against what a microphone hears in and around a real car (in-cabin and pass-by recordings,
+and the literature of vehicle acoustics: Sandberg and Ejsmont, *Tyre/Road Noise Reference Book*; Harrison, *Vehicle
+Refinement*) and measured offline instead of by ear: the voices are rendered headless in `audio.tests` and their
+levels, spectra and envelopes compared (an FFT helper, `audio.tests/Spectrum.cs`), and the tyre sounds are driven by
+the simulation's own stops. Findings ranked by how much each kept the car from sounding real; the first seven were
+fixed in 0.19, each pinned by a test (`TyreMixTests`, `BodyNoiseTests`, `GranularEngineTests`,
+`physics.tests/SoundReadoutTests`).
+
+1. **The engine's load was the torque over 500 N m** (fixed). A V12 reaches that; a 1.4 four never comes near. At full
+   throttle and 4000 rpm the estate read 0.19, so the voice played 77 % of its overrun recording, low-passed as a shut
+   throttle and 11 dB under its full-throttle level: driven flat out it sounded as if coasting. The saloon read 0.24,
+   the fleet saloon 0.25, the hot hatch 0.39, the five 0.37, the turbo hatch 0.6 on full boost; only the V12 and the
+   V8 got their bark. Now the load is the throttle the engine runs at (`EngineModel.Throttle`: the driver's, the idle
+   governor's, shut by the limiter's cut and through assisted shifts), followed in 1/16 s instead of 1/8.
+2. **The tyres ignored the tyre model** (fixed). The squeal grew with the slip angle from a fixed 4 degrees to 17
+   whatever the tyre, its load or its grip, and only grew; a locked wheel and a spinning one were the same screech
+   set by the slip ratio alone; a stop with anti-lock brakes sounded like a locked one; the loudest wheel stood for
+   all four; the skid pad was taken for gravel and crunched; a wet road squealed like a dry one. Now `TyreMix` reads
+   where each tyre is on its force curve (`TireModel.SlipToPeak`, 1 at the peak): quiet below 60 % of it, the squeal
+   from there to the peak, past it the howl of a sideways slide or the scrub of a locked or spinning wheel, pitched
+   by the sliding speed; the wheels add as independent sources (3 dB per doubling), heavier tyres are louder, water
+   all but silences the squeal and softens the scrub. On the simulation's own stops from 100 km/h the estate's locked
+   wheels scrub (1.2) with the squeal at a fifth of that; the V8's anti-lock brakes hold its tyres at the peak, so it
+   squeals (0.76) with no scrub, chattering between 0.4 and 1.2 at the valves' seven cycles a second (the simulation's
+   modulator settles too finely to be heard, so the chatter is laid on while it holds pressure back).
+3. **The wind was missing** (fixed). Silent below 43 km/h and grown as ((v - 12) / 70)^2, it was 26 dB under the
+   tyres' roar at 110 km/h and still 17 dB under at 216 km/h, where real cabins are dominated by it. Now
+   (`BodyNoise`) it grows as v^2 (12 dB a doubling) up to 200 km/h, its band moves up with the speed (vortex
+   shedding) with gusts of buffeting, and it is calibrated against the roar's recording to cross it at 110 km/h in the
+   cabin (`The_wind_takes_over_from_the_tyres_roar_near_110_kmh`); from outside it is 3 dB lower.
+4. **The roar grew almost linearly with the speed** (fixed): 22 dB a decade, where measured tyre/road noise grows by
+   about 30 (v^1.5). Its level at 110 km/h is unchanged; like the wind it grows no more past about 216 km/h.
+5. **No gear whine** (fixed). Gearboxes sing at their meshing frequencies (a shaft's revolutions a second times its
+   teeth): now the selected pair and the constant-mesh pair of an assumed countershaft box, loudest in first, a
+   direct top gear nearly silent, a straight-cut reverse three times as loud, and the hypoid final drive's tone rising
+   with road speed, all loaded by the torque through the closed clutch and modulated by the shafts' runout; louder in
+   the cabin (`Gears_whine_at_their_meshing_frequencies_and_loudest_in_the_low_gears`).
+6. **No anti-lock pump** (fixed). The modulator's return pump growls at about 45 Hz while it works, pulsing with the
+   valves, heard in the cabin and little outside.
+7. **No spray on a wet road** (fixed). The rain's hiss did not care whether the car moved; now the tread throws water
+   with a hiss that grows as v^1.5 with the wetness, on top of the rain.
+8. **Overrun against throttle** (checked, kept). On every car the overrun at the same revs is quieter overall (6-15
+   dB), at the firing frequency (2.7-20 dB) and above 2 kHz (3-23 dB): pinned by
+   `Overrun_is_quieter_than_the_throttle_at_the_same_revs_in_every_band`. It is not always darker: the V12's, the
+   V8's and the saloon's overrun recordings carry more rasp than their run-ups, which is what such exhausts do.
+9. **Timbre against revs** comes from the recordings and rises with the revs, but not evenly where a bank joins
+   segments recorded apart (the turbo hatch is brighter at 3350 rpm than at 4700). Open: a per-bank spectral tilt
+   correction would even it out.
+10. **The cabin is one filter for every car** (open): a 2.6 kHz low-pass and a 130 Hz boom, the same for a front engine
+    heard through the bulkhead and a mid engine behind the driver's head; the intake's roar (front) against the
+    exhaust (rear) is not modelled. It needs intake recordings, or a measured transfer function per body.
+11. **The turbo** (open, minor): its whistle is one sine about 25 dB under the engine, without the compressor's surge or the
+    flutter of a shut throttle on boost; the blow-off valve is fine.
+12. **The rev limiter** (open): the cut is 60 ms, which the voice's smoothing blurs into a dip rather than the hard
+    stutter of a real limiter.
+13. **The other cars** (kept): every drone plays the same recording, attenuated by inverse distance, Doppler-shifted
+    from the simulation and low-passed with distance by the engine (air absorption); they are a background.
+14. **The Unreal version** (open): GlpAudio still takes the torque over 500 N m as the load and keeps the old tyre
+    mapping. The throttle has to be passed through (its inputs are known there) and `TyreMix` and `BodyNoise` exposed
+    through `physics.native` as new functions, which keeps its ABI.
+15. **A slide near broadside went quiet** (fixed in review). The sideways slide was rebuilt as the speed along the
+    wheel times the tangent of the slip angle, which collapses as a slide nears 90 degrees: the howl fell from 1.2 at
+    80 degrees to nothing at 88. The wheel now reports the ground's speed across it (`WheelState.LateralSpeed`), and
+    the howl, the tyres' travel and the roar take the contact patch's own speeds (`A_slide_near_broadside_keeps_its_howl`).
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and
@@ -576,7 +814,22 @@ new-package requests were withdrawn).
   not by the height itself.
 - Units: km/h by default since 0.14 (mph until then, as the cabinet's dial); U or the menu switches, and the choice is
   kept under `units` in the settings (the Unreal version the same, under a new key so an old copy gets metric once).
-- Instant replay music: eleven seconds of a CC0 FM tune; 1989 mode keeps the synthesised one. A file of the player's
+- Instant replay music: our own tune, written for the game in the manner of the late-eighties arcade and not a
+  transcription of the original's (it replaced eleven seconds of a CC0 FM tune). `tools/make-replay-music.py`
+  holds the score and renders `music/replay.ogg` and `replay.wav` from it, and writes the same notes to
+  `game/src/ReplayScore.cs` for the 1989 synth, so both modes play one tune. Ten seconds (the replay's length; the
+  last chord lands at 8.8 s and rings out before the fade) in A mixolydian at 136 bpm, sixteenths swung to 56 %: the
+  band's intro hit and a tom fill, a four-bar hook (a syncopated lead over slap bass, horn stabs pushed a sixteenth
+  ahead of the bar, a clav comp on the off-sixteenths; A, G to D/F#, A, then F and G as band hits) and a button on A
+  with the brass falling off. The sound is the cabinet's as far as it is documented: its sound board had no FM chip
+  but a TMS32010 DSP mixing sampled instruments into a 12-bit DAC at 20 kHz, mono (MAME's `harddriv_a.cpp`), and the
+  samples of 1989 were of FM synths, drum machines with gated reverb and orchestra hits. So the instruments are
+  four-operator FM in the YM2151's layout (feedback on the first operator, exponential attacks, decays linear in
+  decibels: brass whose modulators open after the carriers, a sawtooth-and-square lead with bends and a delayed
+  vibrato, DX-style slap bass with thumb, pop and dead notes, a clav), drums from oscillators and noise (an 808's six
+  squares for the metal) and an orchestra hit, and the mix goes through the board: band-limited to 20 kHz, glued and
+  limited, truncated to 12 bits, held between samples and smoothed by the amplifier's low-pass. Peak -1 dBFS and
+  -17 LUFS, as the file before it. A file of the player's
   own under `user://music/replay.ogg|.mp3|.wav` takes its place (0.11, `EngineAudio.CustomReplayMusic`): nothing
   copyrighted ships with the game, but a copy can play what its owner remembers. The menu's REPLAY MUSIC line shows
   which plays and opens the folder (0.15); a file dropped in while the game runs is picked up when the menu opens,

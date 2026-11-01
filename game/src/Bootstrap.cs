@@ -490,7 +490,7 @@ public sealed partial class Bootstrap : Node3D
             _overlayUntil = -1f;
         }
 
-        var input = _ram is not null ? RamInputs() : _park ? DriverInputs.Idle : _attract ? _scripted.Next(_session) : _keyboard.Sample(dt, MathF.Abs(_session.Car.Speed));
+        var input = _ram is not null ? RamInputs() : _park ? DriverInputs.Idle : _attract ? _scripted.Next(_session) : _keyboard.Sample(dt, _session.Car);
         if (_holdBrake) input.Brake = 1f;
         _carView.Braking = input.Brake > 0.05f;
         if (!_attract && !_park && HandleMenuKeys()) input.Ignition = true;

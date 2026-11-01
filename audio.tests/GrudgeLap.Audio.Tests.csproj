@@ -18,6 +18,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\audio\GrudgeLap.Audio.csproj" />
+    <!-- The tyre sounds are checked on the simulation's own stops and slides, not only on made-up wheel states. -->
+    <ProjectReference Include="..\physics\GrudgeLap.Physics.csproj" />
   </ItemGroup>
 
 </Project>

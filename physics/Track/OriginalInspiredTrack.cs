@@ -105,12 +105,14 @@ public static class OriginalInspiredTrack
             .Mark(MarkerKind.ReturnPoint, "stunt-2")
             .Straight(58f)
             .Curve(95f, 83f)                      // round the gas station
+            // No return point between the bend and the loop (there was one 26 m short of it until 0.19): a car set down
+            // there after falling off the loop had no run-up, so every car fell off again until the time ran out. A crash
+            // here now returns to the one after the drawbridge, with the bend and 105 m of straight to gather speed.
             .Straight(40f)
-            .Mark(MarkerKind.ReturnPoint, "stunt-3")
             .Mark(MarkerKind.Sign, "60")
             .Straight(25f)
             .Loop(15f, 11f)
-            .Mark(MarkerKind.ReturnPoint, "stunt-4")
+            .Mark(MarkerKind.ReturnPoint, "stunt-3")
             .Hill(60f, 2f)
             .Straight(60f)
             .Mark(MarkerKind.Sign, "90<")
@@ -124,7 +126,7 @@ public static class OriginalInspiredTrack
             .Straight(40f)
             .Mark(MarkerKind.Sign, "90<")
             .Curve(-180f, 62f, 32f)
-            .Mark(MarkerKind.ReturnPoint, "stunt-5")
+            .Mark(MarkerKind.ReturnPoint, "stunt-4")
             .Curve(-50f, 145f)
             .Straight(6.5f)
             .Overpass(90f, 1.0f)                  // over the bottom straight's cutting
