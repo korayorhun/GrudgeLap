@@ -306,8 +306,11 @@ internal static class FoliageBuilder
     {
         var root = new Node3D { Name = "Forest" };
         const float cell = 20f;
-        const float clearance = 140f;
-        const float nearBand = 450f;
+        // The arcade's plain is open: from any road the loop, the towers, the barn and the checkpoint gantry are in view
+        // across the fields, and the wood is a line on the horizon. Until 0.12 the wood began 140 m from the roads and
+        // hid every landmark behind the next bend; now it keeps 480 m back and thins over the next 400 m (0.13).
+        const float clearance = 480f;
+        const float nearBand = 900f;
         // A grid of cells with the roads, pads, buildings and fields marked out to the clearance: a lookup instead
         // of a search over every road frame for every candidate tree.
         var nx = (int)MathF.Ceiling((maxX - minX) / cell) + 1;
@@ -364,7 +367,7 @@ internal static class FoliageBuilder
                 if (i < 0 || i >= nx || j < 0 || j >= nz || blocked[j * nx + i]) continue;
                 // Clumps and clearings from a slow noise; the wood closes in with distance from the roads.
                 var isNear = near[j * nx + i];
-                if (clumps.GetNoise2D(px, pz) < (isNear ? 0.25f : 0.08f)) continue;
+                if (clumps.GetNoise2D(px, pz) < (isNear ? 0.45f : 0.08f)) continue;
                 var y = terrain.Height(px, pz);
                 var scale = 0.75f + 0.6f * (float)rng.NextDouble();
                 var basis = new Basis(Vector3.Up, (float)rng.NextDouble() * MathF.Tau).Scaled(new Vector3(scale, scale * (0.9f + 0.3f * (float)rng.NextDouble()), scale));

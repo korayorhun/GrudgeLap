@@ -498,6 +498,18 @@ new-package requests were withdrawn).
   its roughness map), dark gravel and grass with a sheen, shining line paint; rain as a box of streaks travelling with
   the camera (`CameraRig.SetRain`) and a hiss in the mix (`EngineAudio.RainHiss`). The HUD names any weather but a
   clear day. 1989 mode keeps its flat day whatever the weather; the grip is the session's either way.
+- The arcade's open plain (0.13, from its attract-mode map and frames): the wood keeps 480 m back from every road
+  and thins over the next 400 m (140 m until 0.12, when it hid every landmark behind the next bend), so the loop,
+  the drawbridge towers, the barn and the checkpoint gantry stand in view across the fields; the shoulders are the
+  red-brown earth of the original again, 3.2 m wide (the compacted gravel of 0.10 read as a highway); no edge
+  lines or marker posts (`WorldBuilder.RoadFurniture`); the centre dashes 4.5 m every 12 m and 20 cm wide; the
+  mountains taller and nearer (360-800 m at 3.9 km); and the road rolls over two more gentle crests (the speed
+  route after the drawbridge, the stunt route's run to the merge). The plan itself was already the original's: its
+  attract map and ours agree on every feature and its order. The plain itself rolls like farmland (0.13:
+  `rollingGround` 2.6 m with a 620 m swell under the 230/95/38 m octaves, half a metre and no swell until then); the
+  roads keep their profile and the ground field grades the embankments and cuttings, the buildings stand on levelled
+  pads (`TerrainField.AddFlat`), and the terrain mesh paints bare earth by the relief the roads cut into the plain,
+  not by the height itself.
 - Instant replay music: eleven seconds of a CC0 FM tune; 1989 mode keeps the synthesised one. A file of the player's
   own under `user://music/replay.ogg|.mp3|.wav` takes its place (0.11, `EngineAudio.CustomReplayMusic`): nothing
   copyrighted ships with the game, but a copy can play what its owner remembers.

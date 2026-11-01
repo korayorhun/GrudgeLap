@@ -71,7 +71,7 @@ public static class OriginalInspiredTrack
             .Mark(MarkerKind.ReturnPoint, "speed-2")
             .Curve(10f, 600f)
             .Curve(31f, 290f)                     // under the open drawbridge
-            .Straight(150f)
+            .Hill(150f, 2.5f)                     // the plain rolls under the road here, as the arcade's does (0.13)
             .Hill(140f, 3f)
             .Straight(10f)
             .Mark(MarkerKind.Sign, "DIP")
@@ -128,15 +128,29 @@ public static class OriginalInspiredTrack
             .Curve(-50f, 145f)
             .Straight(6.5f)
             .Overpass(90f, 1.0f)                  // over the bottom straight's cutting
-            .Straight(120f)
+            .Hill(120f, 2f)                       // a rise on the run back to the merge (0.13)
             .Curve(35f, 250f);
 
         speed.SplineTo(final.Path.First).JoinTo(final.Path);
         stunt.SplineTo(final.Path.First).JoinTo(final.Path);
 
         var pad = new SkidPad(PadCentre, PadRadius);
-        var track = new TrackGeometry(common.Path, speed.Path, stunt.Path, final.Path, [pad], rollingGround: 0.5f) { Name = "Farm Circuit" };
+        // The plain rolls like real farmland (0.13; half a metre until then): the roads keep their own profile and the
+        // ground field grades embankments and cuttings to meet them.
+        var track = new TrackGeometry(common.Path, speed.Path, stunt.Path, final.Path, [pad], rollingGround: 2.6f) { Name = "Farm Circuit" };
         PlaceProps(track);
+        // The buildings stand on levelled pads in the rolling ground (TerrainField.AddFlat); every prop then takes its
+        // height again, so the pumps beside the shop and the cows in the fields stand on the ground as it now lies.
+        foreach (var prop in track.Props)
+        {
+            if (prop.Kind is PropKind.Barn or PropKind.House or PropKind.Shop or PropKind.Hut) track.Terrain.AddFlat(prop.Position, MathF.Max(prop.Size.X, prop.Size.Z) * 0.5f + (prop.Kind == PropKind.Shop ? 9f : 3f));
+        }
+        for (var i = 0; i < track.Props.Count; i++)
+        {
+            var prop = track.Props[i];
+            if (prop.Kind == PropKind.Field) continue;   // a field conforms to the ground as it is drawn
+            track.Props[i] = prop with { Position = prop.Position with { Y = track.Terrain.Height(prop.Position.X, prop.Position.Z) } };
+        }
         track.AddBridgePiers();
         track.Props.Add(new TrackProp(PropKind.Tower, pad.Centre with { Y = track.Terrain.Height(pad.Centre.X, pad.Centre.Z) }, 0f, new Vector3(3f, 14f, 3f), "pad-column"));
 

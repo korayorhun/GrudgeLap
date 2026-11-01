@@ -41,6 +41,8 @@ public sealed class TerrainField
     private readonly List<int> _pathOfFrame = new();
     private readonly List<byte> _clampOfFrame = new();
     private readonly List<SkidPad> _pads;
+    /// <summary>Flat ground under the buildings (<see cref="AddFlat"/>): a disc at the building's height, fading into the plain.</summary>
+    private readonly List<SkidPad> _flats = new();
     private readonly int _seed;
     private readonly Vector3 _centre;
     private float _minX = float.MaxValue, _maxX = float.MinValue, _minZ = float.MaxValue, _maxZ = float.MinValue;
@@ -86,6 +88,13 @@ public sealed class TerrainField
     public float RollingAmplitude { get; init; } = 2.2f;
     /// <summary>Height of the hills that ring the circuit beyond the outermost road, metres.</summary>
     public float HillAmplitude { get; init; } = 40f;
+
+    /// <summary>
+    /// Flattens the ground under a building (0.13): a disc of <paramref name="radius"/> at <paramref name="centre"/>'s
+    /// height that fades into the rolling plain over eight metres, so a barn on a swell stands on a levelled pad rather
+    /// than with a corner in the air and another buried. Props placed before the call should take their height again.
+    /// </summary>
+    public void AddFlat(Vector3 centre, float radius) => _flats.Add(new SkidPad(centre, radius));
 
     /// <summary>Frames of roads built on earth; the ground is pulled to their edges.</summary>
     public static bool IsEarthwork(in RoadFrame f) =>
@@ -174,7 +183,7 @@ public sealed class TerrainField
             offsetSum += w * (edgeHeight - baseHeight);
         }
 
-        // Skid pads are flat discs that fade into the ground over a few metres.
+        // Skid pads are flat discs that fade into the ground over a few metres; the building pads the same, more quickly.
         foreach (var pad in _pads)
         {
             var dx = x - pad.Centre.X;
@@ -185,6 +194,17 @@ public sealed class TerrainField
             weightSum += w;
             weightMax = MathF.Max(weightMax, w);
             offsetSum += w * (pad.Centre.Y - baseHeight);
+        }
+        foreach (var flat in _flats)
+        {
+            var dx = x - flat.Centre.X;
+            var dz = z - flat.Centre.Z;
+            var beyond = MathF.Max(MathF.Sqrt(dx * dx + dz * dz) - flat.Radius, 0f);
+            var w = 1f - MathUtil.SmoothStep(beyond / 8f);
+            if (w <= 0f) continue;
+            weightSum += w;
+            weightMax = MathF.Max(weightMax, w);
+            offsetSum += w * (flat.Centre.Y - baseHeight);
         }
 
         roadWeight = weightMax;
@@ -202,8 +222,10 @@ public sealed class TerrainField
     }
 
     /// <summary>
-    /// The ground with no roads: three octaves of rolling value noise around the circuit, and beyond the
-    /// outermost road a ring of hills that rises over half a kilometre and fades again before the far plane.
+    /// The ground with no roads: a broad swell and three octaves of rolling value noise around the circuit (the swell
+    /// since 0.13, when the plain was given the relief of real farmland: long rises of a few metres over a few hundred,
+    /// smaller undulations on them), and beyond the outermost road a ring of hills that rises over half a kilometre
+    /// and fades again before the far plane.
     /// </summary>
     public float Base(float x, float z)
     {
@@ -215,9 +237,10 @@ public sealed class TerrainField
         var rolling = 0f;
         if (envelope > 0f)
         {
-            var n = ValueNoise(x / 230f, z / 230f, _seed) * 0.70f
-                  + ValueNoise(x / 95f, z / 95f, _seed + 7) * 0.22f
-                  + ValueNoise(x / 38f, z / 38f, _seed + 13) * 0.08f;
+            var n = ValueNoise(x / 620f, z / 620f, _seed + 3) * 0.46f
+                  + ValueNoise(x / 230f, z / 230f, _seed) * 0.38f
+                  + ValueNoise(x / 95f, z / 95f, _seed + 7) * 0.12f
+                  + ValueNoise(x / 38f, z / 38f, _seed + 13) * 0.04f;
             rolling = n * RollingAmplitude * envelope;
         }
         var outside = MathF.Max(MathF.Max(_minX - 140f - x, x - _maxX - 140f), MathF.Max(_minZ - 140f - z, z - _maxZ - 140f));
