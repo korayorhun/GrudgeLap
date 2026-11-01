@@ -175,7 +175,7 @@ public sealed partial class Bootstrap : Node3D
         {
             // After the session: the car stands at the start and the cockpit camera is placed.
             _leaving = true;
-            WorldExport.Write(this, _exportWorld, _carView, GetViewport().GetCamera3D());
+            WorldExport.Write(this, _exportWorld, _carView, GetViewport().GetCamera3D(), _track);
             GetTree().Quit();
             return;
         }

@@ -183,13 +183,20 @@ def import_texture(folder, stem, kind, path=None):
     return texture
 
 
-def surface_material(name, folder, u_tiling, v_tiling, tint=(1.0, 1.0, 1.0), macro=0.0, vertex_colour=False, wear=None):
+WEATHER = {"collection": None, "puddles": None}   # MPC_Weather and the puddle mask (weather_assets), read by the ground materials
+
+
+def surface_material(name, folder, u_tiling, v_tiling, tint=(1.0, 1.0, 1.0), macro=0.0, vertex_colour=False, wear=None, anti_tiling=False, wet=None):
     """Base colour, normal and roughness/AO from one Poly Haven set, tiled on the mesh UVs.
 
     macro > 0 multiplies in the same texture at macro times the tile size as a slow brightness wobble, so a large
     ground does not show its repeat. vertex_colour multiplies the mesh's vertex colour in (the road's slabs,
     wheel tracks, patches and potholes, the shoulders' tones, as the Godot version shades them); wear is a sheet
-    multiplied in on the second UV set (the road's tar snakes and stains).
+    multiplied in on the second UV set (the road's tar snakes and stains). anti_tiling (0.13) samples the same scan a
+    second time, a quarter turn round and 0.71 times the size, and blends it in where a slow noise says so, which
+    breaks the repeat of the tile along a long road. wet (0.13) is {"dark": d, "rough": r} or {"dark": d, "puddles":
+    True}: under MPC_Weather's Wetness the surface darkens by d and its roughness drops to r, or, with puddles, to a
+    wet sheen with mirror-flat standing water where the world-aligned puddle mask is high.
     """
     path = f"{GAME}/Materials/{name}"
     if eal.does_asset_exist(path):
@@ -202,22 +209,73 @@ def surface_material(name, folder, u_tiling, v_tiling, tint=(1.0, 1.0, 1.0), mac
     def expression(cls, x, y):
         return mel.create_material_expression(material, cls, x, y)
 
-    def sample(texture, sampler, uv, x, y):
+    def sample(texture, sampler, uv, x, y, uv_out=""):
         node = expression(unreal.MaterialExpressionTextureSample, x, y)
         node.set_editor_property("texture", texture)
         node.set_editor_property("sampler_type", sampler)
-        mel.connect_material_expressions(uv, "", node, "UVs")
+        mel.connect_material_expressions(uv, uv_out, node, "UVs")
         return node
 
-    uv = expression(unreal.MaterialExpressionTextureCoordinate, -1400, 0)
-    uv.set_editor_property("u_tiling", u_tiling)
-    uv.set_editor_property("v_tiling", v_tiling)
+    def coords(u, v, x, y):
+        node = expression(unreal.MaterialExpressionTextureCoordinate, x, y)
+        node.set_editor_property("u_tiling", u)
+        node.set_editor_property("v_tiling", v)
+        return node
+
+    def constant(value, x, y):
+        node = expression(unreal.MaterialExpressionConstant, x, y)
+        node.set_editor_property("r", value)
+        return node
+
+    def lerp(a, b, alpha, x, y):
+        """a, b, alpha: (node, output) pairs."""
+        node = expression(unreal.MaterialExpressionLinearInterpolate, x, y)
+        mel.connect_material_expressions(a[0], a[1], node, "A")
+        mel.connect_material_expressions(b[0], b[1], node, "B")
+        mel.connect_material_expressions(alpha[0], alpha[1], node, "Alpha")
+        return node
+
+    def channel(source, name, x, y):
+        node = expression(unreal.MaterialExpressionComponentMask, x, y)
+        for c in "rgba":
+            node.set_editor_property(c, c in name)
+        mel.connect_material_expressions(source[0], source[1], node, "")
+        return node
+
+    def threshold(source, low, gain, x, y):
+        """saturate((source - low) * gain): a soft step of a noise channel."""
+        sub = expression(unreal.MaterialExpressionSubtract, x, y)
+        sub.set_editor_property("const_b", low)
+        mel.connect_material_expressions(source[0], source[1], sub, "A")
+        mul = expression(unreal.MaterialExpressionMultiply, x + 150, y)
+        mul.set_editor_property("const_b", gain)
+        mel.connect_material_expressions(sub, "", mul, "A")
+        sat = expression(unreal.MaterialExpressionSaturate, x + 300, y)
+        mel.connect_material_expressions(mul, "", sat, "")
+        return sat
+
+    uv = coords(u_tiling, v_tiling, -1400, 0)
     base = sample(diff, unreal.MaterialSamplerType.SAMPLERTYPE_COLOR, uv, -900, -400)
     normal = sample(nor, unreal.MaterialSamplerType.SAMPLERTYPE_NORMAL, uv, -900, 0)
     masks = sample(arm, unreal.MaterialSamplerType.SAMPLERTYPE_MASKS, uv, -900, 400)
+    base_rgb, normal_rgb, masks_rgb = (base, "RGB"), (normal, "RGB"), (masks, "RGB")
+    if anti_tiling:
+        # The quarter turn: the second coordinates' u and v swapped (mask each, append the other way round).
+        uv_b = coords(v_tiling * 0.71, u_tiling * 0.71, -1700, 1000)
+        turned = expression(unreal.MaterialExpressionAppendVector, -1400, 1000)
+        mel.connect_material_expressions(channel((uv_b, ""), "g", -1550, 950), "", turned, "A")
+        mel.connect_material_expressions(channel((uv_b, ""), "r", -1550, 1050), "", turned, "B")
+        base_b = sample(diff, unreal.MaterialSamplerType.SAMPLERTYPE_COLOR, turned, -900, 800)
+        normal_b = sample(nor, unreal.MaterialSamplerType.SAMPLERTYPE_NORMAL, turned, -900, 1100)
+        masks_b = sample(arm, unreal.MaterialSamplerType.SAMPLERTYPE_MASKS, turned, -900, 1400)
+        mixer = sample(diff, unreal.MaterialSamplerType.SAMPLERTYPE_COLOR, coords(u_tiling / 23.0, v_tiling / 23.0, -1400, 1700), -900, 1700)
+        blend = (threshold((mixer, "R"), 0.44, 5.0, -600, 1700), "")
+        base_rgb = (lerp(base_rgb, (base_b, "RGB"), blend, -200, 800), "")
+        normal_rgb = (lerp(normal_rgb, (normal_b, "RGB"), blend, -200, 1100), "")
+        masks_rgb = (lerp(masks_rgb, (masks_b, "RGB"), blend, -200, 1400), "")
 
     colour = expression(unreal.MaterialExpressionMultiply, -500, -400)
-    mel.connect_material_expressions(base, "RGB", colour, "A")
+    mel.connect_material_expressions(base_rgb[0], base_rgb[1], colour, "A")
     tint_node = expression(unreal.MaterialExpressionConstant3Vector, -700, -250)
     tint_node.set_editor_property("constant", unreal.LinearColor(*tint, 1.0))
     if macro > 0:
@@ -248,13 +306,194 @@ def surface_material(name, folder, u_tiling, v_tiling, tint=(1.0, 1.0, 1.0), mac
         mel.connect_material_expressions(final, "", worn, "A")
         mel.connect_material_expressions(sample(wear, unreal.MaterialSamplerType.SAMPLERTYPE_COLOR, uv2, -900, -1000), "RGB", worn, "B")
         final = worn
+    roughness = (channel(masks_rgb, "g", 200, 400), "")
+    occlusion = (channel(masks_rgb, "r", 200, 550), "")
+    normal_out = normal_rgb
+    if wet is not None and WEATHER["collection"] is not None:
+        wetness_node = expression(unreal.MaterialExpressionCollectionParameter, 200, 1000)
+        wetness_node.set_editor_property("collection", WEATHER["collection"])
+        wetness_node.set_editor_property("parameter_name", "Wetness")
+        wetness = (wetness_node, "")
+        # Darker when wet: the water fills the pores and the light goes in and does not come back.
+        darken = expression(unreal.MaterialExpressionMultiply, 400, 1000)
+        darken.set_editor_property("const_b", wet.get("dark", 0.4))
+        mel.connect_material_expressions(wetness_node, "", darken, "A")
+        kept = expression(unreal.MaterialExpressionOneMinus, 550, 1000)
+        mel.connect_material_expressions(darken, "", kept, "")
+        darkened = expression(unreal.MaterialExpressionMultiply, 700, -400)
+        mel.connect_material_expressions(final, "", darkened, "A")
+        mel.connect_material_expressions(kept, "", darkened, "B")
+        final = darkened
+        if wet.get("puddles") and WEATHER["puddles"] is not None:
+            # Standing water where the world-aligned puddle mask is high (a 9 m tile), a wet sheen everywhere else;
+            # the water lies flat, so the normal flattens with it.
+            world = expression(unreal.MaterialExpressionWorldPosition, 200, 1300)
+            plane = channel((world, ""), "rg", 400, 1300)
+            puddle_uv = expression(unreal.MaterialExpressionDivide, 550, 1300)
+            puddle_uv.set_editor_property("const_b", 900.0)
+            mel.connect_material_expressions(plane, "", puddle_uv, "A")
+            # The mask is imported as TC_MASKS: a sampler of any other type fails the whole material's compile (the road drew
+            # as the default grid until this matched).
+            puddle_noise = sample(WEATHER["puddles"], unreal.MaterialSamplerType.SAMPLERTYPE_MASKS, puddle_uv, 700, 1300)
+            puddle = (threshold((puddle_noise, "R"), 0.56, 6.0, 900, 1300), "")
+            wet_rough = lerp((constant(0.22, 1000, 1500), ""), (constant(0.04, 1000, 1600), ""), puddle, 1200, 1500)
+            roughness = (lerp(roughness, (wet_rough, ""), wetness, 1400, 400), "")
+            standing = expression(unreal.MaterialExpressionMultiply, 1200, 1700)
+            mel.connect_material_expressions(wetness_node, "", standing, "A")
+            mel.connect_material_expressions(puddle[0], puddle[1], standing, "B")
+            flat = expression(unreal.MaterialExpressionConstant3Vector, 1200, 1850)
+            flat.set_editor_property("constant", unreal.LinearColor(0.0, 0.0, 1.0, 1.0))
+            normal_out = (lerp(normal_rgb, (flat, ""), (standing, ""), 1400, 0), "")
+        else:
+            roughness = (lerp(roughness, (constant(wet.get("rough", 0.3), 1000, 500), ""), wetness, 1400, 400), "")
     mel.connect_material_property(final, "", unreal.MaterialProperty.MP_BASE_COLOR)
-    mel.connect_material_property(normal, "RGB", unreal.MaterialProperty.MP_NORMAL)
-    mel.connect_material_property(masks, "G", unreal.MaterialProperty.MP_ROUGHNESS)
-    mel.connect_material_property(masks, "R", unreal.MaterialProperty.MP_AMBIENT_OCCLUSION)
+    mel.connect_material_property(normal_out[0], normal_out[1], unreal.MaterialProperty.MP_NORMAL)
+    mel.connect_material_property(roughness[0], roughness[1], unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.connect_material_property(occlusion[0], occlusion[1], unreal.MaterialProperty.MP_AMBIENT_OCCLUSION)
     mel.recompile_material(material)
     eal.save_loaded_asset(material)
     return material
+
+
+def weather_assets():
+    """MPC_Weather (Wetness and Rain, set by the game from the simulation's weather, AGlpGame::ApplyWeather), the
+    puddle mask the wet ground reads, and M_Rain, the unlit sheet of falling streaks the game wraps round the camera
+    (a cylinder, panning down) when it rains. Made before the ground materials, which read the collection."""
+    path = f"{GAME}/Materials/MPC_Weather"
+    if eal.does_asset_exist(path):
+        eal.delete_asset(path)
+    collection = asset_tools.create_asset("MPC_Weather", f"{GAME}/Materials", unreal.MaterialParameterCollection, unreal.MaterialParameterCollectionFactoryNew())
+    parameters = []
+    for name in ("Wetness", "Rain"):
+        parameter = unreal.CollectionScalarParameter()
+        parameter.set_editor_property("parameter_name", name)
+        parameter.set_editor_property("default_value", 0.0)
+        parameters.append(parameter)
+    collection.set_editor_property("scalar_parameters", parameters)
+    eal.save_loaded_asset(collection)
+    WEATHER["collection"] = collection
+    decals = os.path.join(IMPORT, "Decals")
+    WEATHER["puddles"] = import_texture("Decals", "puddles", "mask", path=os.path.join(decals, "puddles.png"))
+
+    streaks = import_texture("Decals", "rain_streaks", "colour", path=os.path.join(decals, "rain_streaks.png"))
+    rain_path = f"{GAME}/Materials/M_Rain"
+    if eal.does_asset_exist(rain_path):
+        eal.delete_asset(rain_path)
+    rain = asset_tools.create_asset("M_Rain", f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    rain.set_editor_property("blend_mode", unreal.BlendMode.BLEND_ADDITIVE)
+    rain.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    rain.set_editor_property("two_sided", True)
+    coords = mel.create_material_expression(rain, unreal.MaterialExpressionTextureCoordinate, -1000, 0)
+    coords.set_editor_property("u_tiling", 6.0)
+    coords.set_editor_property("v_tiling", 2.5)
+    panner = mel.create_material_expression(rain, unreal.MaterialExpressionPanner, -800, 0)
+    panner.set_editor_property("speed_x", 0.03)
+    panner.set_editor_property("speed_y", 1.7)
+    mel.connect_material_expressions(coords, "", panner, "Coordinate")
+    sample = mel.create_material_expression(rain, unreal.MaterialExpressionTextureSample, -600, 0)
+    sample.set_editor_property("texture", streaks)
+    sample.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_COLOR)
+    mel.connect_material_expressions(panner, "", sample, "UVs")
+    glow = mel.create_material_expression(rain, unreal.MaterialExpressionMultiply, -350, -100)
+    glow.set_editor_property("const_b", 0.35)
+    mel.connect_material_expressions(sample, "RGB", glow, "A")
+    mel.connect_material_property(glow, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    amount = mel.create_material_expression(rain, unreal.MaterialExpressionCollectionParameter, -600, 300)
+    amount.set_editor_property("collection", collection)
+    amount.set_editor_property("parameter_name", "Rain")
+    opacity = mel.create_material_expression(rain, unreal.MaterialExpressionMultiply, -350, 200)
+    mel.connect_material_expressions(sample, "R", opacity, "A")
+    mel.connect_material_expressions(amount, "", opacity, "B")
+    mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY)
+    mel.recompile_material(rain)
+    eal.save_loaded_asset(rain)
+    log("weather assets made: MPC_Weather, the puddle mask, M_Rain")
+
+
+def decal_material(name, texture, roughness, opacity):
+    """A deferred decal of one wear sheet (make_decals.py): its colour laid over the road, its alpha the coverage."""
+    path = f"{GAME}/Materials/{name}"
+    if eal.does_asset_exist(path):
+        eal.delete_asset(path)
+    material = asset_tools.create_asset(name, f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    material.set_editor_property("material_domain", unreal.MaterialDomain.MD_DEFERRED_DECAL)
+    material.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+    sample = mel.create_material_expression(material, unreal.MaterialExpressionTextureSample, -500, 0)
+    sample.set_editor_property("texture", texture)
+    sample.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_COLOR)
+    mel.connect_material_property(sample, "RGB", unreal.MaterialProperty.MP_BASE_COLOR)
+    coverage = mel.create_material_expression(material, unreal.MaterialExpressionMultiply, -250, 200)
+    coverage.set_editor_property("const_b", opacity)
+    mel.connect_material_expressions(sample, "A", coverage, "A")
+    mel.connect_material_property(coverage, "", unreal.MaterialProperty.MP_OPACITY)
+    rough = mel.create_material_expression(material, unreal.MaterialExpressionConstant, -250, 350)
+    rough.set_editor_property("r", roughness)
+    mel.connect_material_property(rough, "", unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.recompile_material(material)
+    eal.save_loaded_asset(material)
+    return material
+
+
+# Each kind of wear: its sheets, the chance per 8 m of road, the length and width ranges (metres), where it lies
+# (anywhere across the road, in a wheel track, along a lane), its roughness and its coverage.
+DECALS = {
+    "patch": (("patch_1", "patch_2"), 0.07, (2.5, 5.5), (2.0, 4.5), "any", 0.85, 0.9),
+    "crack": (("crack_1", "crack_2", "crack_3"), 0.24, (3.0, 6.5), (2.0, 4.0), "any", 0.72, 0.95),
+    "oil": (("oil_1", "oil_2"), 0.10, (1.2, 2.4), (0.8, 1.6), "track", 0.35, 0.8),
+    "skid": (("skid",), 0.05, (6.0, 11.0), (1.9, 2.3), "lane", 0.8, 0.75),
+    "pothole": (("pothole",), 0.025, (0.8, 1.5), (0.8, 1.5), "track", 0.95, 1.0),
+}
+
+
+def road_decals(placements):
+    """The wear of a used road, scattered along the exported centrelines (0.13): cracks, patches of other asphalt, oil in
+    the wheel tracks, skid marks and the odd pothole, as deferred decals that project down onto the asphalt. None on
+    the bridges, the ramps and the loop, which are structures, not earth roads."""
+    roads = placements.get("roads", [])
+    if not roads:
+        log("no road centrelines in the export: no decals (export the world again with --export-world)")
+        return
+    materials = {}
+    for kind, (stems, _, _, _, _, roughness, opacity) in DECALS.items():
+        materials[kind] = [decal_material(f"M_Decal_{stem}", import_texture("Decals", stem, "colour", path=os.path.join(IMPORT, "Decals", f"{stem}.png")), roughness, opacity) for stem in stems]
+    scatter_rng = random.Random(1989)
+    count = 0
+    for frame in roads:
+        if frame["kind"] not in ("Straight", "Curve", "Hill", "Dip", "Spline", "BankedCurve"):
+            continue
+        half_width = frame["halfWidth"]
+        tangent = frame["tangent"]
+        # Right of the road in Godot axes: the tangent turned about +Y.
+        right = [-tangent[2], 0.0, tangent[0]]
+        length_right = math.sqrt(right[0] ** 2 + right[2] ** 2) or 1.0
+        right = [right[0] / length_right, 0.0, right[2] / length_right]
+        heading = direction(tangent)
+        yaw = math.degrees(math.atan2(heading.y, heading.x))
+        for kind, (stems, chance, length, width, where, _, _) in DECALS.items():
+            if scatter_rng.random() > chance:
+                continue
+            if where == "any":
+                lateral = scatter_rng.uniform(-half_width + 1.0, half_width - 1.0)
+            elif where == "track":
+                lateral = scatter_rng.choice((-1.0, 1.0)) * scatter_rng.uniform(0.25 * half_width, 0.75 * half_width) + scatter_rng.uniform(-0.3, 0.3)
+            else:
+                lateral = scatter_rng.choice((-1.0, 1.0)) * 0.5 * half_width + scatter_rng.uniform(-0.6, 0.6)
+            spot = [frame["position"][i] + right[i] * lateral for i in range(3)]
+            location = to_unreal(spot)
+            location.z += 20.0
+            size_along = scatter_rng.uniform(*length)
+            size_across = scatter_rng.uniform(*width)
+            turn = yaw + scatter_rng.uniform(-4.0, 4.0) if kind in ("skid", "crack", "oil") else yaw + scatter_rng.choice((0.0, 90.0)) + scatter_rng.uniform(-6.0, 6.0)
+            actor = actor_sub.spawn_actor_from_class(unreal.DecalActor, location, unreal.Rotator(roll=0.0, pitch=-90.0, yaw=turn))
+            decal = actor.get_component_by_class(unreal.DecalComponent)
+            decal.set_decal_material(scatter_rng.choice(materials[kind]))
+            # Half extents, centimetres: X the depth of the projection, Y across the road, Z along it.
+            decal.set_editor_property("decal_size", unreal.Vector(80.0, size_across * 50.0, size_along * 50.0))
+            decal.set_editor_property("sort_order", list(DECALS).index(kind))
+            actor.set_actor_label(f"Decal-{kind}-{count}")
+            actor.set_folder_path("GrudgeLap/Decals")
+            count += 1
+    log(f"{count} road decals scattered along {len(roads)} centreline frames")
 
 
 def mirror_material():
@@ -366,11 +605,14 @@ def rig_car(car, root_tag):
                      and a.get_attach_parent_actor().get_actor_label() == "Column"), None)
     if steering is not None:
         tag(steering, "GLP.Steering")
-    exterior = [a for a in parts if a.get_actor_label() in ("Shell", "Bonnet", "Glass", "Outside")]
+    # ModelShell (0.13): a real car model's body in place of the lofted one (prepare_car_model.py), kept in the
+    # driver's view too (its roof and pillars frame the windscreen).
+    exterior = [a for a in parts if a.get_actor_label() in ("Shell", "Bonnet", "Glass", "Outside", "ModelShell")]
     for actor in exterior:
         tag(actor, "GLP.Exterior")
-        # CarView._outsideOnly: from the driver's seat only their shadows are drawn (the wheels are found by tag).
-        if actor.get_actor_label() in ("Shell", "Outside"):
+        # CarView._outsideOnly: from the driver's seat only their shadows are drawn (the wheels are found by tag); a
+        # model's body too, so the seat keeps the game's own cabin round it (its inner faces showed through, 0.13).
+        if actor.get_actor_label() in ("Shell", "Outside", "ModelShell"):
             tag(actor, "GLP.OutsideOnly")
     dials = next((a for a in parts if a.get_actor_label() == "Dials"), None)
     if dials is not None:
@@ -382,6 +624,8 @@ def rig_car(car, root_tag):
     # named only by number; its polished-metal material gives it away. From the seat it shows the mirror's view.
     side = 0
     for actor in parts:
+        if actor.get_actor_label().startswith("Mdl_"):
+            continue   # a real car model's chrome is not a mirror (0.13)
         for component in actor.get_components_by_class(unreal.StaticMeshComponent):
             material = component.get_material(0)
             try:
@@ -791,6 +1035,37 @@ def dress_car(car, materials):
     glass = mirror_glass(car)
     for component in mesh_components(glass) if glass else []:
         component.set_material(0, materials["mirror"])
+    # A real car model's glass (Mdl_Glass_*, prepare_car_model.py): the clear glass, and no Nanite (translucent).
+    model_glass = 0
+    for actor in parts.values():
+        if not actor.get_actor_label().startswith("Mdl_Glass_"):
+            continue
+        for component in mesh_components(actor):
+            mesh = component.get_editor_property("static_mesh")
+            settings = mesh.get_editor_property("nanite_settings")
+            if settings.enabled:
+                settings.enabled = False
+                mesh.modify()
+                mesh.set_editor_property("nanite_settings", settings)
+                eal.save_loaded_asset(mesh, False)
+            for slot in range(component.get_num_materials()):
+                component.set_material(slot, materials["glass"])
+            model_glass += 1
+    # A model's paint (its materials named for it) becomes the game's clear-coated paint, so the player's car is the
+    # red of the original and the traffic copies take their own colours through the Paint parameter (0.13).
+    model_paint = 0
+    for actor in parts.values():
+        if not actor.get_actor_label().startswith("Mdl_") or actor.get_actor_label().startswith("Mdl_Glass_"):
+            continue
+        for component in mesh_components(actor):
+            for slot in range(component.get_num_materials()):
+                material = component.get_material(slot)
+                name = material.get_name().lower() if material else ""
+                if any(key in name for key in ("paint", "pintura", "body_mat", "mat_body", "m_body", "carrosserie", "lack")) or name.endswith("_body"):
+                    component.set_material(slot, materials["paint_solid"])
+                    model_paint += 1
+    if model_glass or model_paint:
+        log(f"{car.get_actor_label()}: {model_glass} model glass part(s) glazed, {model_paint} painted")
     # The plain-painted parts (CarView's solidPaint: metallic 0.18, roughness 0.26) and the cabin's photo materials.
     solid = cabin = 0
     for component in mesh_components(car):
@@ -829,13 +1104,16 @@ def dress_track(actors):
     # shoulder strips run 0..1 across 2.2 m. Tile sizes are the scans' real ones (Poly Haven "dimensions").
     # Mean linear albedos measured from the scans: asphalt 0.10 (kept), the aerial grass (0.17, 0.12, 0.03) is a
     # dry yellow; the tint turns it to a meadow's (0.09, 0.12, 0.03).
-    ground = surface_material("M_Ground", "aerial_grass_rock", 5000 / 15.0, 5000 / 15.0, tint=(0.5, 1.0, 1.3), macro=23.0)
+    ground = surface_material("M_Ground", "aerial_grass_rock", 5000 / 15.0, 5000 / 15.0, tint=(0.5, 1.0, 1.3), macro=23.0, wet={"dark": 0.3, "rough": 0.55})
     # The road's wear sheet is the game's own (tools/make-road-wear.py); the road mesh carries its UV2 and the
     # vertex colours of the slabs, wheel tracks, patches and potholes.
     wear = import_texture("GrudgeLap", "road_wear", "colour", path=os.path.join(ROOT, "..", "game", "assets", "textures", "road_wear.png"))
-    asphalt = surface_material("M_Asphalt", "asphalt_02", 11.0 / 3.0, 1 / 3.0, tint=(0.9, 0.9, 0.9), vertex_colour=True, wear=wear)
-    # Dry earth, as the Godot version's shoulders and the orange dirt of the original; the grass path read as lawn.
-    verge = surface_material("M_Verge", "brown_mud_dry", 2.2, 1.0, tint=(1.15, 0.95, 0.75), vertex_colour=True)
+    # Anti-tiling (0.13): the asphalt scan sampled again a quarter turn round and blended in by a slow noise, a 57 m
+    # brightness wobble on top, and the wear decals (road_decals) over it all. Wet under the weather, with puddles.
+    asphalt = surface_material("M_Asphalt", "asphalt_02", 11.0 / 3.0, 1 / 3.0, tint=(0.9, 0.9, 0.9), macro=19.0, vertex_colour=True, wear=wear,
+                               anti_tiling=True, wet={"dark": 0.5, "puddles": True})
+    # Red-brown earth, as the Godot version's shoulders (0.13) and the orange dirt of the original; the grass path read as lawn.
+    verge = surface_material("M_Verge", "brown_mud_dry", 3.2, 1.0, tint=(1.25, 0.88, 0.62), vertex_colour=True, anti_tiling=True, wet={"dark": 0.4, "rough": 0.3})
     # The earthworks (the fork hill, the cuttings' walls) are bare earth in the game: its TerrainEarth mesh shares
     # the terrain's UVs (5 km across), so the mud scan tiles every 4 m there, tinted to the hill's red-brown.
     earth = surface_material("M_Earth", "brown_mud_dry", 5000 / 4.0, 5000 / 4.0, tint=(1.15, 0.78, 0.55))
@@ -1087,6 +1365,8 @@ def prepare_materials():
         for path in eal.list_assets(root, recursive=True):
             kind = str(eal.find_asset_data(path).asset_class_path.asset_name)
             if kind == "Material" and root == "/Game/GrudgeLap/Materials":
+                if "/M_Decal_" in path or path.endswith("/M_Rain"):
+                    continue   # decals and the rain sheet are neither Nanite nor instanced
                 material = eal.load_asset(path)
                 translucent = material.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
                 for usage in USAGES[1:] if translucent else USAGES:
@@ -1145,8 +1425,8 @@ def cameras(placements, extra):
     # A plain -game run (the frame-rate measurement in perf.cmd) looks through the cockpit; the renders follow
     # their sequences' camera cuts regardless.
     cockpit.set_editor_property("auto_activate_for_player", unreal.AutoReceiveInput.PLAYER0)
-    # The chase camera where CameraRig settles it: 1.9 m over the ground and 6.3 m behind the car, looking at a point
-    # 0.7 m up and 2 m ahead. The car's origin is its centre of gravity, 0.61 m over the flat start.
+    # The chase camera where CameraRig settles it (0.11): 1.7 m over the ground and 7.4 m behind the car, looking at a
+    # point 0.7 m up and 2 m ahead through a 54 degree lens. The car's origin is its centre of gravity, 0.61 m over the flat start.
     car = placements["car"]
     origin, (bx, by, bz) = car["position"], car["basis"]
     cg_height = 0.61
@@ -1154,9 +1434,9 @@ def cameras(placements, extra):
     def local(x, y, z):
         return [origin[i] + bx[i] * x + by[i] * y + bz[i] * z for i in range(3)]
 
-    eye = local(0.0, 1.9 - cg_height, 6.3)
+    eye = local(0.0, 1.7 - cg_height, 7.4)
     focus = local(0.0, 0.7 - cg_height, -2.0)
-    chase = cine_camera("ChaseCamera", to_unreal(eye), direction([f - e for f, e in zip(focus, eye)]), 62.0)
+    chase = cine_camera("ChaseCamera", to_unreal(eye), direction([f - e for f, e in zip(focus, eye)]), 54.0)
     shots = {"Cockpit": cockpit, "Chase": chase}
     roadside = extra.get("roadside_camera")
     if roadside:
@@ -1205,12 +1485,18 @@ def light_and_look():
     for name, value in (("override_lumen_final_gather_quality", True), ("lumen_final_gather_quality", 2.0),
                         ("override_lumen_scene_lighting_quality", True), ("lumen_scene_lighting_quality", 2.0),
                         ("override_lumen_reflection_quality", True), ("lumen_reflection_quality", 2.0),
-                        ("override_vignette_intensity", True), ("vignette_intensity", 0.25),
+                        ("override_vignette_intensity", True), ("vignette_intensity", 0.35),
+                        # The photographic finish (0.13): a little grain, a trace of the lens's colour fringing and
+                        # flare, a touch more bloom. Each is what a camera adds to a real scene; none hides it.
+                        ("override_film_grain_intensity", True), ("film_grain_intensity", 0.28),
+                        ("override_scene_fringe_intensity", True), ("scene_fringe_intensity", 0.45),
+                        ("override_lens_flare_intensity", True), ("lens_flare_intensity", 0.12),
+                        ("override_bloom_intensity", True), ("bloom_intensity", 0.5),
                         ("override_auto_exposure_min_brightness", True), ("auto_exposure_min_brightness", EXPOSURE_EV100),
                         ("override_auto_exposure_max_brightness", True), ("auto_exposure_max_brightness", EXPOSURE_EV100),
                         # The default motion blur smeared the grass beside the road into streaks at 130 km/h; a
                         # trace of it keeps the sense of speed (the Godot version has none).
-                        ("override_motion_blur_amount", True), ("motion_blur_amount", 0.15),
+                        ("override_motion_blur_amount", True), ("motion_blur_amount", 0.25),
                         ("override_motion_blur_max", True), ("motion_blur_max", 2.0),
                         # Lumen's reflections on the front layer of glass: the windscreen and the windows reflect
                         # the sky, the road and the dashboard instead of only the sky's cube map.
@@ -1308,6 +1594,7 @@ def main():
     import_track()
     actors = label_map()
     calibrate(placements, actors)
+    weather_assets()
     dress_track(actors)
     materials = car_materials()
     car = actors.get("PlayerCar")
@@ -1316,9 +1603,9 @@ def main():
     dress_car(car, materials)
     rig_car(car, "GLP.Car")
     # The other catalogue cars, in the catalogue's order (VehicleSpec.Catalogue): GLP.Car1 the V8, GLP.Car2 the hot
-    # hatch, GLP.Car3 the five, GLP.Car4 the turbo hatch; a missing export leaves its slot empty and the title screen
-    # skips it.
-    for index, name in enumerate(["v8", "hothatch", "five", "turbohatch"], start=1):
+    # hatch, GLP.Car3 the five, GLP.Car4 the turbo hatch, GLP.Car5-7 the everyday cars (0.13); a missing export leaves
+    # its slot empty and the title screen skips it.
+    for index, name in enumerate(["v8", "hothatch", "five", "turbohatch", "saloon", "estate", "fleet"], start=1):
         other = import_car(name)
         if other is not None:
             dress_car(other, materials)
@@ -1326,6 +1613,7 @@ def main():
     rig_world(actors)
     place_game(car, game_materials(materials["paint"]))
     scatter(placements, extra, actors)
+    road_decals(placements)
     prepare_materials()
     shots = cameras(placements, extra)
     sun = light_and_look()

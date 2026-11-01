@@ -440,7 +440,8 @@ internal static class WorldBuilder
             }, Photo("asphalt_color") ?? Noise(9f, 4, new[] { (0f, new Color(0.82f, 0.82f, 0.82f)), (0.5f, new Color(0.98f, 0.98f, 0.98f)), (1f, new Color(1.15f, 1.15f, 1.15f)) }, seed: 5),
                Photo("asphalt_normal") ?? Noise(16f, 4, null, seed: 17, asNormal: true), normalScale: 0.35f);
             // The wear sheet (tools/make-road-wear.py): tar snakes, sealed cracks and stains multiplied in on the
-            // second UV set, which runs 40 m along the road and drifts across it so the sheet's repeat does not read.
+            // second UV set, which runs 160 m along the road (40 until 0.13) and drifts across it so the sheet's repeat
+            // does not read.
             var wear = Photo("road_wear", "png");
             if (wear is not null)
             {
@@ -1231,7 +1232,7 @@ internal static class WorldBuilder
                 st.SetNormal(Convert.ToGodot(normal));
                 st.SetTangent(gLateral, sign);
                 st.SetUV(new Vector2((fraction + 1f) * 0.5f, f.Distance));
-                st.SetUV2(new Vector2((fraction + 1f) * 0.5f + acrossDrift, f.Distance / 40f));
+                st.SetUV2(new Vector2((fraction + 1f) * 0.5f + acrossDrift, f.Distance / 160f));
                 st.AddVertex(Convert.ToGodot(position));
                 vertices++;
             }

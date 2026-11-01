@@ -1,0 +1,16 @@
+Title:        Mercedes E Class W212
+Kind:         Everyday 1990s-2020s saloon (Mercedes-Benz E-Class W212, 2009-2016) - ALTERNATE with interior
+Licence:      Creative Commons Attribution 4.0 International (CC BY 4.0)
+Licence URL:  https://creativecommons.org/licenses/by/4.0/
+Author:       Peter_D (Sketchfab user "better_peter", https://sketchfab.com/better_peter)
+Source URL:   https://sketchfab.com/3d-models/119c5e10733142b197aa53b86f6aeb04  (original Sketchfab page; published 2022-03-08)
+Mirror:       Objaverse 1.0 dataset (allenai/objaverse on Hugging Face), object uid 119c5e10733142b197aa53b86f6aeb04
+Download URL: https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-132/119c5e10733142b197aa53b86f6aeb04.glb
+Downloaded:   2026-11-01
+File:         mercedes-e-w212.glb (37,334,564 bytes, glTF 2.0 binary; Sketchfab metadata faceCount=362868, vertexCount=196242)
+Thumbnail:    thumbnail.jpg (Sketchfab preview render, same licence) 
+
+Attribution text to show in the game credits (CC BY 4.0 requires attribution, a licence link and
+a note of any changes you make; CC BY-SA additionally requires sharing derivatives under the same licence):
+  "Mercedes E Class W212" by Peter_D (https://sketchfab.com/3d-models/119c5e10733142b197aa53b86f6aeb04) is licensed under Creative Commons Attribution 4.0 International (CC BY 4.0) (https://creativecommons.org/licenses/by/4.0/).
+  Obtained via the Objaverse dataset (Deitke et al., 2022). Modified for use in GrudgeLap (re-rigged wheels, material/LOD changes).

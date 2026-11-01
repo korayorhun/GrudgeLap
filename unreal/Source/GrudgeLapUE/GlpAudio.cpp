@@ -307,6 +307,7 @@ void UGlpAudio::Update(const glp_state& State, float TrainDistance, bool bInteri
 	const float Speed = FMath::Abs(State.speed);
 	Wind += (FMath::Pow(Clamp01((Speed - 12.f) / 70.f), 2.f) - Wind) * Clamp01(DeltaSeconds * 3.f);
 	Frame.Wind = Wind;
+	Frame.Rain = State.weather == GLP_WEATHER_RAIN ? 1.f : 0.f;
 	// A sudden change of suspension travel is a bump: a low thump, louder for a harder hit.
 	float Jolt = 0.f;
 	for (int32 i = 0; i < 4; i++)
@@ -434,6 +435,7 @@ void UGlpAudio::Apply(const FFrame& Frame)
 	FMemory::Memcpy(Current.TyreGain, Frame.TyreGain, sizeof(Frame.TyreGain));
 	FMemory::Memcpy(Current.TyrePitch, Frame.TyrePitch, sizeof(Frame.TyrePitch));
 	Current.Wind = Frame.Wind;
+	Current.Rain = Frame.Rain;
 	Current.TrainLevel = Frame.TrainLevel;
 	if (Frame.Jingle != EJingle::None)
 	{
@@ -612,8 +614,21 @@ float UGlpAudio::Synth()
 		Sum += FMath::Sin(BleepPhase * UE_TWO_PI) * 0.25f * FMath::Min(1.f, Bleep * 6.f);
 		Bleep -= 1.f / MixRate;
 	}
-	Sum += Song() + ChimeSample() + StarterSample(Noise) + Moo() + Clang(Noise) + Clunk(Noise) + (bSteam ? 0.f : TrainClack(Noise)) + Road(Noise);
+	Sum += Song() + ChimeSample() + StarterSample(Noise) + Moo() + Clang(Noise) + Clunk(Noise) + (bSteam ? 0.f : TrainClack(Noise)) + Road(Noise) + RainHiss(Noise);
 	return FMath::Tanh(Sum * SynthVolume);
+}
+
+float UGlpAudio::RainHiss(float Noise)
+{
+	// The rain on the car and the road (EngineAudio.RainHiss): noise through two one-pole low-passes, a steady hiss,
+	// half as loud through the glass.
+	if (Current.Rain <= 0.f)
+	{
+		return 0.f;
+	}
+	RainLp += (Noise - RainLp) * 0.3f;
+	RainLp2 += (RainLp - RainLp2) * 0.3f;
+	return RainLp2 * 1.8f * Current.Rain * (Current.bInterior ? 0.07f : 0.14f);
 }
 
 float UGlpAudio::Road(float Noise)

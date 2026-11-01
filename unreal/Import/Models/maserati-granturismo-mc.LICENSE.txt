@@ -1,0 +1,16 @@
+Title:        Maserati Granturismo Mc Stradale
+Kind:         2010s front-engined V8 GT coupe (Maserati GranTurismo MC Stradale) - PRIMARY
+Licence:      Creative Commons Attribution 4.0 International (CC BY 4.0)
+Licence URL:  https://creativecommons.org/licenses/by/4.0/
+Author:       Marcos Gigena (Sketchfab user "MarcosGigena", https://sketchfab.com/MarcosGigena)
+Source URL:   https://sketchfab.com/3d-models/c4aa1cf6461048e3b75a77ff027f90c6  (original Sketchfab page; published 2015-05-14)
+Mirror:       Objaverse 1.0 dataset (allenai/objaverse on Hugging Face), object uid c4aa1cf6461048e3b75a77ff027f90c6
+Download URL: https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-009/c4aa1cf6461048e3b75a77ff027f90c6.glb
+Downloaded:   2026-11-01
+File:         maserati-granturismo-mc.glb (14,126,496 bytes, glTF 2.0 binary; Sketchfab metadata faceCount=184222, vertexCount=210218)
+Thumbnail:    thumbnail.jpg (Sketchfab preview render, same licence) 
+
+Attribution text to show in the game credits (CC BY 4.0 requires attribution, a licence link and
+a note of any changes you make; CC BY-SA additionally requires sharing derivatives under the same licence):
+  "Maserati Granturismo Mc Stradale" by Marcos Gigena (https://sketchfab.com/3d-models/c4aa1cf6461048e3b75a77ff027f90c6) is licensed under Creative Commons Attribution 4.0 International (CC BY 4.0) (https://creativecommons.org/licenses/by/4.0/).
+  Obtained via the Objaverse dataset (Deitke et al., 2022). Modified for use in GrudgeLap (re-rigged wheels, material/LOD changes).

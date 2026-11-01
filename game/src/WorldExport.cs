@@ -7,7 +7,7 @@ namespace GrudgeLap.Game;
 /// Writes the generated track world to a glTF binary (<c>--export-world=&lt;file.glb&gt;</c>): terrain, road,
 /// shoulders, lines, bridges, buildings, signs, trees, the train and the player's car at the start, so that
 /// another engine can be dressed around the same circuit. A JSON file beside it (same name, <c>.json</c>) lists
-/// what that engine should place itself: every grass tuft, every prop by kind, and the cockpit camera.
+/// what that engine should place itself: every grass tuft, every prop by kind, the roads' centrelines and the cockpit camera.
 /// </summary>
 /// <remarks>
 /// Copies go into a scene of their own, without the camera, lights, sky, the far ground plane, the drones or the
@@ -16,7 +16,7 @@ namespace GrudgeLap.Game;
 /// </remarks>
 internal static class WorldExport
 {
-    public static Error Write(Node root, string path, CarView car, Camera3D camera)
+    public static Error Write(Node root, string path, CarView car, Camera3D camera, GrudgeLap.Physics.Track.TrackGeometry track)
     {
         var scene = new Node3D { Name = "GrudgeLapWorld" };
         var grass = new List<float[]>();
@@ -55,10 +55,26 @@ internal static class WorldExport
             scene.AddChild(copy);
             copy.Transform = node.Transform;
             if (node == car) copy.Name = "PlayerCar";
+            // The train between its runs stands hidden where it was built, at the start line; the other engine keeps it
+            // for its own game to move, so the copy is parked 500 m under the plain, out of any still (0.13).
+            if (node is TrainView && !node.Visible) copy.Position += new Vector3(0f, -500f, 0f);
         }
 
         // One of each tree of the wood travels in the file, named for the placements to find (ForestVariant-<n>).
         foreach (var (variant, mesh) in forestMeshes) scene.AddChild(new MeshInstance3D { Mesh = mesh, Name = $"ForestVariant-{variant}" });
+
+        // The roads' centrelines every 8 m (0.13): position, tangent and half width of each frame on earth, so the other
+        // engine can scatter its own wear (cracks, patches, oil, skid marks) along them.
+        var roads = new List<object>();
+        foreach (var trackPath in track.Paths)
+        {
+            for (var d = 0f; d < trackPath.Length; d += 8f)
+            {
+                var f = trackPath.FrameAt(d);
+                if (f.Surface != GrudgeLap.Physics.Vehicle.SurfaceType.Road) continue;
+                roads.Add(new { path = trackPath.Kind.ToString(), distance = d, position = Vec(Convert.ToGodot(f.Origin)), tangent = Vec(Convert.ToGodot(f.Tangent)), halfWidth = f.HalfWidth, kind = f.Kind.ToString() });
+            }
+        }
 
         var document = new GltfDocument();
         var state = new GltfState();
@@ -78,6 +94,7 @@ internal static class WorldExport
             props,
             grass,
             forest,
+            roads,
         };
         System.IO.File.WriteAllText(System.IO.Path.ChangeExtension(path, ".json"), JsonSerializer.Serialize(placement));
         GD.Print(error == Error.Ok ? $"world exported: {path} ({scene.GetChildCount()} nodes, {props.Count} props, {grass.Count} grass tufts, {forest.Count} trees of the wood)" : $"world export failed: {error}");

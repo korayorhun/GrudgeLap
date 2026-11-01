@@ -407,6 +407,15 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   downloaded scans, so `Content/` is not versioned. What the export needed is recorded there and in
   [unreal/README.md](../unreal/README.md): hidden nodes, rewound primitives, vertex colours, foliage
   cut-outs and Nanite area preservation.
+- **Towards a photograph (0.13, after the user's verdict that the game was "far from real life"):** the road no
+  longer repeats (a second rotated sampling of the scan blended by a slow noise, a 57 m brightness wobble, the
+  160 m wear sheet) and carries 300-odd scattered decals of cracks, patches, oil, skid marks and potholes along
+  the exported centrelines; the weather of the credit reaches the level through `MPC_Weather` (a wet road
+  darkens and mirrors, with puddles from a world-aligned mask) and `AGlpGame::ApplyWeather` (sun, clouds, fog,
+  exposure, a rain sheet round the camera); a photographic finish (grain, fringing, flare, bloom, motion blur);
+  the chase camera's longer lens; and real CC BY car models in place of the lofted bodies
+  (`prepare_car_model.py`: turned, scaled to the simulation's wheelbase, hubs at rest height, wheels re-centred on
+  the game's own pivots; the game's cabin kept). The traffic is the everyday cars when the level has them.
 - **The game runs in Unreal** (`AGlpGame`): the title screen with the car and gearbox choice (both cars:
   the V8 is taken from a second export with `--car=v8`), the keyboard with the manual gearbox, traffic, the
   ghost of the best lap, the train, signs that tip over, the HUD and the instrument panel (drawn on the

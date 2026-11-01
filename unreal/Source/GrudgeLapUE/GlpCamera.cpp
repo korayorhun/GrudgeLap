@@ -31,13 +31,14 @@ FGlpShot FGlpCameraRig::Follow(const FTransform& Car, float SpeedMps, const FVec
 		Shot.HorizontalFov = GlpSpace::HorizontalFov(62.f + 6.f * FMath::Clamp(SpeedMps / 75.f, 0.f, 1.f));
 		return Shot;
 	}
-	const FVector Target = Local(FVector3f(0.f, 1.9f - CgHeight, 6.3f));
+	// A little further back and lower with a longer lens (0.11): at 62 degrees from 6.3 m the car was drawn in a fish-eye.
+	const FVector Target = Local(FVector3f(0.f, 1.7f - CgHeight, 7.4f));
 	ChaseEye = bChaseSet ? FMath::Lerp(ChaseEye, Target, FMath::Clamp(DeltaSeconds * 6.f, 0.f, 1.f)) : Target;
 	bChaseSet = true;
 	const FVector Focus = Local(FVector3f(0.f, 0.7f - CgHeight, -2.f));
 	Shot.Location = ChaseEye;
 	Shot.Rotation = FRotationMatrix::MakeFromXZ(Focus - ChaseEye, FVector::UpVector).ToQuat();
-	Shot.HorizontalFov = GlpSpace::HorizontalFov(62.f);
+	Shot.HorizontalFov = GlpSpace::HorizontalFov(54.f);
 	return Shot;
 }
 

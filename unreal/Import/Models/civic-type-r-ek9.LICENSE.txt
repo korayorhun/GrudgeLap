@@ -1,0 +1,16 @@
+Title:        Honda Civic Type R -98 (Free Asset)
+Kind:         1997-2008 three-door hot hatch (1998 Honda Civic Type R EK9) - PRIMARY
+Licence:      Creative Commons Attribution 4.0 International (CC BY 4.0)
+Licence URL:  https://creativecommons.org/licenses/by/4.0/
+Author:       tiedtke (Sketchfab user "tiedtke", https://sketchfab.com/tiedtke)
+Source URL:   https://sketchfab.com/3d-models/b9604dd71c6546ec842702682019492a  (original Sketchfab page; published 2022-03-15)
+Mirror:       Objaverse 1.0 dataset (allenai/objaverse on Hugging Face), object uid b9604dd71c6546ec842702682019492a
+Download URL: https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-066/b9604dd71c6546ec842702682019492a.glb
+Downloaded:   2026-11-01
+File:         civic-type-r-ek9.glb (19,364,232 bytes, glTF 2.0 binary; Sketchfab metadata faceCount=238189, vertexCount=127899)
+Thumbnail:    thumbnail.jpg (Sketchfab preview render, same licence) - NOT AVAILABLE (Sketchfab returned 403; see preview_render.png made locally)
+
+Attribution text to show in the game credits (CC BY 4.0 requires attribution, a licence link and
+a note of any changes you make; CC BY-SA additionally requires sharing derivatives under the same licence):
+  "Honda Civic Type R -98 (Free Asset)" by tiedtke (https://sketchfab.com/3d-models/b9604dd71c6546ec842702682019492a) is licensed under Creative Commons Attribution 4.0 International (CC BY 4.0) (https://creativecommons.org/licenses/by/4.0/).
+  Obtained via the Objaverse dataset (Deitke et al., 2022). Modified for use in GrudgeLap (re-rigged wheels, material/LOD changes).

@@ -93,6 +93,8 @@ private:
 	void FitOutCockpit();
 	void ShowSideMirrors(bool bInside);
 	void ApplyFrameCap();
+	/** The credit's weather (glp_state.weather) on the level: the sun, the fog, the clouds, the exposure, MPC_Weather and the rain. */
+	void ApplyWeather();
 
 	UPROPERTY(VisibleAnywhere, Category = "GrudgeLap")
 	TObjectPtr<UCameraComponent> Camera;
@@ -161,6 +163,18 @@ private:
 	FVector GhostLast = FVector::ZeroVector;
 	bool bInsideShown = false;   // the player's car is drawn for the driver's seat (FGlpCarView::SetInside)
 	uint32 MirrorFrame = 0;
+
+	// The weather (ApplyWeather): the level's own values, kept for a clear day, and the rain sheet round the camera.
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> Rain;
+	UPROPERTY()
+	TObjectPtr<UMaterialInterface> CloudMaterial;   // the level's cloud material, put back on a clear day
+	float SunLux = -1.f;
+	float FogDensity = -1.f;
+	FLinearColor FogColour = FLinearColor::White;
+	float ExposureEv = -1.f;
+	int32 WeatherShown = -1;
+	int32 FixedWeather = -1;   // -GlpWeather=0..3 fixes the credit's weather for automated runs; otherwise the core draws one
 
 	// Automated runs (see the class comment).
 	TArray<float> ShotTimes;

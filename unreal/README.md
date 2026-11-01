@@ -132,3 +132,42 @@ the development laptop); later runs only cook what changed.
   - **Plain paint:** the strakes and trims carry their own paint material; it takes the traffic's colours too.
   - **The wood:** the export's `forest` placements become instanced scanned trees (`Wood*`, drawn to 2.5 km);
     the one-of-each template meshes the file carries (`ForestVariant-<n>`) are removed from the level.
+  - **The road's wear (0.13):** the asphalt scan is sampled a second time, a quarter turn round and 0.71 times
+    the size, and blended in by a slow noise, with a 57 m brightness wobble on top, so the tile never reads as a
+    repeat along a straight; the game's wear sheet runs 160 m; and `road_decals` scatters 300-odd deferred decals
+    along the exported centrelines (`roads` in track.json, every 8 m): cracks, patches of other asphalt, oil in the
+    wheel tracks, skid marks and the odd pothole, drawn by `make_decals.py` from no source material.
+  - **The weather (0.13):** `MPC_Weather` (Wetness, Rain) is read by the ground materials: a wet road darkens,
+    its roughness drops to a sheen with mirror-flat standing water where a world-aligned puddle mask is high, and
+    the verge and the grass darken and dull. The game sets it from the simulation's weather (`glp_state.weather`,
+    drawn for every credit; `-GlpWeather=0..3` fixes it: dry, overcast, wet, rain), and under any weather but a
+    clear day drops the sun to a wide soft source, closes the clouds over (the template cloud material's coverage
+    parameter), thickens the fog and opens the exposure; rain is `M_Rain`, a panning sheet of streaks on a
+    cylinder round the camera (`AGlpGame::ApplyWeather`).
+  - **The photographic finish (0.13):** a little film grain, a trace of chromatic aberration and lens flare, a
+    touch more bloom and motion blur in the post-process volume; the chase camera a 54 degree lens from 7.4 m, as
+    the Godot version's since 0.11.
+
+## Real car models (0.13)
+
+The lofted bodies the game exports are stand-ins; the level puts real car models in their place
+(`Scripts/prepare_car_model.py`, driven by `Import/Models/models.json`): the model is turned to face the car's
+way, scaled so that its wheelbase is the simulation's, set down with its hubs at the rest hub height, its body
+hung under a `ModelShell` node in place of the lofted shell, bonnet, glass and outside details, and its wheels
+re-centred on their hubs under the game's own `Spin` pivots, so they steer and roll with the simulation. The
+game's cabin (dashboard, dials, steering wheel, mirror) stays; a model's own interior is left out. The glass is
+found by name or by a translucent material and given the clear glass. `fetch_models.py` downloads the models
+(not versioned, 14-37 MB each) from the Objaverse mirror on Hugging Face; each is CC BY 4.0, with its author,
+source and the credit line the licence asks for in the `LICENSE.txt` beside `models.json`:
+
+| Catalogue car | Model | Author (Sketchfab) |
+| --- | --- | --- |
+| the flat-twelve | Lotus Esprit Turbo 1983 | Shogos_esprit |
+| the V8 | Maserati GranTurismo MC Stradale | Marcos Gigena |
+| the three hatchbacks | Honda Civic Type R '98 | tiedtke |
+| the 1990s saloon | SAAB 9-5 sedan 1997-2001 | blendffnike |
+| the fleet saloon | Mercedes-Benz E-Class W212 | Peter_D |
+
+The estate keeps its lofted body (no suitable model was found). The models' makes are the authors' subjects; the
+game itself still names its cars by description, and this is a build input, not something the game ships. The
+Ferrari models found were taken down from Sketchfab since the dataset's snapshot and were not used.

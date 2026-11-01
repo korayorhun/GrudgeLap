@@ -1,10 +1,19 @@
 #include "GlpGame.h"
 
 #include "Camera/CameraComponent.h"
+#include "Components/DirectionalLightComponent.h"
+#include "Components/ExponentialHeightFogComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/VolumetricCloudComponent.h"
+#include "Engine/DirectionalLight.h"
+#include "Engine/ExponentialHeightFog.h"
+#include "Engine/PostProcessVolume.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "EngineUtils.h"
+#include "Kismet/KismetMaterialLibrary.h"
+#include "Materials/MaterialParameterCollection.h"
 #include "GameFramework/GameUserSettings.h"
 #include "GameFramework/PlayerController.h"
 #include "GlpAudio.h"
@@ -110,6 +119,7 @@ void AGlpGame::BeginPlay()
 	LoadScores();
 	bTraffic = !FParse::Param(FCommandLine::Get(), TEXT("GlpNoTraffic"));
 	bSpeedRoute = FParse::Param(FCommandLine::Get(), TEXT("GlpSpeedRoute"));
+	FParse::Value(FCommandLine::Get(), TEXT("GlpWeather="), FixedWeather);
 	FString View;
 	if (FParse::Value(FCommandLine::Get(), TEXT("GlpView="), View))
 	{
@@ -172,6 +182,142 @@ void AGlpGame::BeginPlay()
 	NewSession();
 }
 
+void AGlpGame::ApplyWeather()
+{
+	// What the credit's weather does to the level (0.13), as WorldBuilder.ApplyWeather does in Godot: under any
+	// weather but a clear day the sun drops to a wide soft source behind the cloud, the clouds close over, the air
+	// thickens and the camera opens up; a wet road darkens and shines through MPC_Weather (the ground materials,
+	// Scripts/build_scene.py); rain is a sheet of streaks round the camera.
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	const int32 Weather = Current.weather;
+	const bool bOvercast = Weather != GLP_WEATHER_DRY;
+	const bool bRaining = Weather == GLP_WEATHER_RAIN;
+	if (UMaterialParameterCollection* Collection = LoadObject<UMaterialParameterCollection>(nullptr, TEXT("/Game/GrudgeLap/Materials/MPC_Weather.MPC_Weather")))
+	{
+		UKismetMaterialLibrary::SetScalarParameterValue(World, Collection, TEXT("Wetness"), Current.wetness);
+		UKismetMaterialLibrary::SetScalarParameterValue(World, Collection, TEXT("Rain"), bRaining ? 1.f : 0.f);
+	}
+	for (ADirectionalLight* Sun : TActorRange<ADirectionalLight>(World))
+	{
+		UDirectionalLightComponent* Light = Cast<UDirectionalLightComponent>(Sun->GetLightComponent());
+		if (!Light)
+		{
+			continue;
+		}
+		if (SunLux < 0.f)
+		{
+			SunLux = Light->Intensity;
+		}
+		Light->SetIntensity(bOvercast ? SunLux * 0.12f : SunLux);
+		Light->SetLightColor(bOvercast ? FLinearColor(0.86f, 0.89f, 0.95f) : FLinearColor::White);
+		Light->SetLightSourceAngle(bOvercast ? 12.f : 0.5357f);
+	}
+	for (AExponentialHeightFog* FogActor : TActorRange<AExponentialHeightFog>(World))
+	{
+		UExponentialHeightFogComponent* Fog = FogActor->GetComponent();
+		if (!Fog)
+		{
+			continue;
+		}
+		if (FogDensity < 0.f)
+		{
+			FogDensity = Fog->FogDensity;
+			FogColour = Fog->FogInscatteringLuminance;
+		}
+		Fog->SetFogDensity(bOvercast ? FogDensity * (bRaining ? 4.5f : 2.5f) : FogDensity);
+		Fog->SetFogInscatteringColor(bOvercast ? FLinearColor(0.42f, 0.44f, 0.48f) : FogColour);
+	}
+	for (AVolumetricCloud* CloudActor : TActorRange<AVolumetricCloud>(World))
+	{
+		UVolumetricCloudComponent* Cloud = CloudActor->GetComponentByClass<UVolumetricCloudComponent>();
+		if (!Cloud)
+		{
+			continue;
+		}
+		if (!CloudMaterial)
+		{
+			CloudMaterial = Cloud->Material.LoadSynchronous();
+		}
+		if (!CloudMaterial)
+		{
+			continue;
+		}
+		if (bOvercast)
+		{
+			// The template's cloud material is closed over through whatever coverage parameter it has.
+			UMaterialInstanceDynamic* Overcast = UMaterialInstanceDynamic::Create(CloudMaterial, this);
+			TArray<FMaterialParameterInfo> Infos;
+			TArray<FGuid> Ids;
+			CloudMaterial->GetAllScalarParameterInfo(Infos, Ids);
+			for (const FMaterialParameterInfo& Info : Infos)
+			{
+				const FString Name = Info.Name.ToString();
+				if (Name.Contains(TEXT("overage")))
+				{
+					Overcast->SetScalarParameterValue(Info.Name, 0.95f);
+				}
+				else if (Name.Contains(TEXT("xtinction")) || Name.Contains(TEXT("ensity")))
+				{
+					float Value = 0.f;
+					if (CloudMaterial->GetScalarParameterValue(Info, Value))
+					{
+						Overcast->SetScalarParameterValue(Info.Name, Value * 3.f);
+					}
+				}
+				UE_LOG(LogGlpGame, Log, TEXT("cloud parameter %s"), *Name);
+			}
+			Cloud->SetMaterial(Overcast);
+			Cloud->SetLayerBottomAltitude(1.2f);
+			Cloud->SetLayerHeight(6.f);
+		}
+		else
+		{
+			Cloud->SetMaterial(CloudMaterial);
+		}
+	}
+	for (APostProcessVolume* Volume : TActorRange<APostProcessVolume>(World))
+	{
+		if (!Volume->bUnbound)
+		{
+			continue;
+		}
+		if (ExposureEv < 0.f)
+		{
+			ExposureEv = Volume->Settings.AutoExposureMinBrightness;
+		}
+		// A grey day is a stop or two dimmer than a sunny one: the eye, and the camera, open up.
+		const float Ev = bOvercast ? ExposureEv - (bRaining ? 2.0f : 1.6f) : ExposureEv;
+		Volume->Settings.AutoExposureMinBrightness = Ev;
+		Volume->Settings.AutoExposureMaxBrightness = Ev;
+	}
+	if (!Rain)
+	{
+		Rain = NewObject<UStaticMeshComponent>(this, TEXT("Rain"));
+		Rain->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder")));
+		if (UMaterialInterface* Sheet = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/GrudgeLap/Materials/M_Rain.M_Rain")))
+		{
+			Rain->SetMaterial(0, Sheet);
+		}
+		Rain->SetCastShadow(false);
+		Rain->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Rain->bAffectDynamicIndirectLighting = false;
+		Rain->bAffectDistanceFieldLighting = false;
+		Rain->SetupAttachment(GetRootComponent());
+		Rain->RegisterComponent();
+		Rain->SetWorldScale3D(FVector(70.0, 70.0, 50.0));
+	}
+	Rain->SetVisibility(bRaining);
+	if (WeatherShown != Weather)
+	{
+		WeatherShown = Weather;
+		UE_LOG(LogGlpGame, Log, TEXT("weather %d (wetness %.2f)"), Weather, Current.wetness);
+	}
+}
+
 void AGlpGame::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	// The world is going away with every actor in it: only the simulation's session needs closing.
@@ -215,7 +361,9 @@ void AGlpGame::NewSession()
 	Scores.Dismiss();
 	bScoreOffered = false;
 	CloseSession(true);
-	Session = Library->Create(CarIndex, (bTraffic ? GLP_TRAFFIC : 0) | (bSpeedRoute ? GLP_SPEED_ROUTE : 0));
+	// The credit's weather: the core draws one as the Godot version does, unless an automated run fixed it.
+	const int32 WeatherFlags = FixedWeather >= 0 ? (FMath::Clamp(FixedWeather, 0, 3) << GLP_WEATHER_SHIFT) : GLP_RANDOM_WEATHER;
+	Session = Library->Create(CarIndex, (bTraffic ? GLP_TRAFFIC : 0) | (bSpeedRoute ? GLP_SPEED_ROUTE : 0) | WeatherFlags);
 	if (!Session)
 	{
 		UE_LOG(LogGlpGame, Error, TEXT("no session: %s"), *Library->LastError());
@@ -263,13 +411,27 @@ void AGlpGame::NewSession()
 	for (int32 i = 0; i < Drones; i++)
 	{
 		const FLinearColor Colour(DronePaints[Bodies[i].colour % UE_ARRAY_COUNT(DronePaints)]);
-		if (TUniquePtr<FGlpCarView> Copy = Cars[0]->Clone(GetWorld(), FString::Printf(TEXT("Drone%d"), i), &Colour, nullptr))
+		// The traffic is the everyday cars of the road when the level has them (0.13, as the Godot version since
+		// 0.9.1: the saloon, the estate and the fleet saloon in turn), the period car otherwise.
+		FGlpCarView* Source = Cars[0].Get();
+		static const int32 Everyday[] = { 5, 6, 7 };
+		for (int32 k = 0; k < UE_ARRAY_COUNT(Everyday); k++)
+		{
+			const int32 Index = Everyday[(i + k) % UE_ARRAY_COUNT(Everyday)];
+			if (Cars.IsValidIndex(Index) && Cars[Index])
+			{
+				Source = Cars[Index].Get();
+				break;
+			}
+		}
+		if (TUniquePtr<FGlpCarView> Copy = Source->Clone(GetWorld(), FString::Printf(TEXT("Drone%d"), i), &Colour, nullptr))
 		{
 			Copy->Root()->Tags.Add(TEXT("GLP.Copy"));
 			TrafficCars.Add(MoveTemp(Copy));
 		}
 	}
 	Library->GetState(Session, &Current);
+	ApplyWeather();
 	if (Current.grudge_match)
 	{
 		BuildGhost();
@@ -438,6 +600,11 @@ void AGlpGame::Tick(float DeltaSeconds)
 		return;
 	}
 	Time += DeltaSeconds;
+	if (Rain && Rain->IsVisible() && Camera)
+	{
+		// The rain sheet stays round the camera, upright whatever the car does.
+		Rain->SetWorldLocationAndRotation(Camera->GetComponentLocation() - FVector(0.0, 0.0, 600.0), FQuat::Identity);
+	}
 	if (bFrameCap && Time >= FrameCapCheck)
 	{
 		// The window may have lost the focus or moved to a screen with another refresh rate.

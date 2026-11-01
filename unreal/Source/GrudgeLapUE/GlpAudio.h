@@ -107,6 +107,7 @@ private:
 		float TyreGain[TyreLoops] = {};
 		float TyrePitch[TyreLoops] = { 1.f, 1.f, 1.f, 1.f, 1.f };
 		float Wind = 0.f;
+		float Rain = 0.f;   // how hard it rains, 0 to 1 (the credit's weather)
 		float TrainLevel = 0.f;
 		float Thump = 0.f;
 		bool bCrash = false;    // the burst of noise, when no crash recording is loaded
@@ -154,6 +155,7 @@ private:
 	float ChimeSample();
 	float StarterSample(float Noise);
 	float Road(float Noise);
+	float RainHiss(float Noise);
 	float Moo();
 	float Clang(float Noise);
 	float Clunk(float Noise);
@@ -202,6 +204,7 @@ private:
 	FVoice SteamVoice;
 	bool bSteam = false;   // the steam loop is loaded: it stands in for the synthesised clack
 	float WindLp = 0.f, Thump = 0.f, ThumpPhase = 0.f;
+	float RainLp = 0.f, RainLp2 = 0.f;
 
 	// Automated checks (see the class comment); the recording is shared between the threads under DumpLock.
 	FString DumpFile;
