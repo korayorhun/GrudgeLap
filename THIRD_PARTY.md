@@ -41,7 +41,7 @@
 | "Mercedes-Benz E-Class W212" by Peter_D (better_peter) | the fleet saloon's body and cabin | CC BY 4.0 — https://sketchfab.com/3d-models/119c5e10733142b197aa53b86f6aeb04; modified: re-scaled and re-rigged for GrudgeLap |
 | xunit, Microsoft.NET.Test.Sdk | tests only, not shipped | Apache-2.0 / MIT |
 | Inno Setup 6 | builds the installer, not shipped | Inno Setup License |
-| ffmpeg, numpy, Pillow | offline tools (grain bank, loop and one-shot cutting, icon, the replay music's render and its Vorbis encoding), not shipped | LGPL/GPL, BSD, MIT-CMU |
+| ffmpeg, numpy, Pillow, SciPy | offline tools (grain bank, loop and one-shot cutting, icon, the replay music's render and its Vorbis encoding, the car models' paint masks), not shipped | LGPL/GPL, BSD, MIT-CMU, BSD |
 
 The track, the world and every other mesh in the game are generated at run time by the code in this
 repository, but for the cars: the CC BY models above are drawn in their place (fetched from the Objaverse

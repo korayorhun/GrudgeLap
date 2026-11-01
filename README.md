@@ -98,7 +98,7 @@ shows a replay and puts you back at the last return point; Enter turns the key a
 | F7 | graphics preset: high, medium, low (remembered) |
 | F6 | frame-rate counter |
 | F5 | new game |
-| Esc | the menu: carry on, new game, camera, graphics, 1989 mode, units, full screen, **quit** (the race stands still while it is open) |
+| Esc | the menu: carry on, new game, paint (the car's own colour or red, white, silver, black, dark blue, green, yellow; remembered), camera, graphics, weather, 1989 mode, units, full screen, replay music, **quit** (the race stands still while it is open) |
 
 A gamepad works too: the left stick steers, the right trigger is the throttle and the left the brake, RB / LB
 shift (on the title screen they step through the gearboxes), X is the clutch, A starts, B skips, Y switches
@@ -144,7 +144,7 @@ dotnet test physics.tests/GrudgeLap.Physics.Tests.csproj   # the feel checklist,
 
 The installer needs [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`installer/GrudgeLap.iss`). The
 build also fetches the real car models (CC BY, credited in [THIRD_PARTY.md](THIRD_PARTY.md)) and prepares them
-for the game, which needs Python 3 with numpy; `./tools/build.ps1 -SkipModels` builds without them, and the
+for the game, which needs Python 3 with numpy, Pillow and SciPy; `./tools/build.ps1 -SkipModels` builds without them, and the
 game then draws its own lofted bodies.
 Godot's editor opens the `game/` folder; the simulation lives in `physics/` with no engine dependency.
 Automated runs (screenshots, checks) take a few switches after Godot's `--`, listed in
@@ -187,7 +187,9 @@ best lap's ghost out of the picture.
   models of a Ferrari Testarossa (with a Lotus Esprit's cabin), a McLaren 570S, a Peugeot 205 GTi, a Lancia Delta
   Integrale, a Volkswagen Golf R32 (with a SAAB 9-5's cabin), a VAZ-2106, a Renault 12 and a Mercedes-Benz E-Class, set to
   the simulation's wheelbase, their wheels and steering wheel turning, the live dials in their binnacles, the
-  rear-view mirror on their own; `tools/prepare_car_models.py`), and where a car has none, lofted car bodies
+  rear-view mirror on their own; `tools/prepare_car_models.py`; in their own colours or the one the menu picks, a
+  paint drawn from a texture recoloured with its shading, lettering and trim kept), traffic of five everyday cars in
+  twelve road colours, no two drones alike, and where a car has none, lofted car bodies
   with rounded character lines, panel seams, the hatchbacks' lamps, grilles and tail lamps laid on the skin,
   and a lined cabin behind tinted glass (leather dashboard, binnacle with live dials, a centre stack with its
   radio and heater knobs, gear lever and handbrake, sun visors, a three-spoke wheel that turns with the steering,

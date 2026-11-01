@@ -30,9 +30,54 @@ internal sealed partial class CarView : Node3D
     private const float SeamWidth = 0.014f;                // dark band of a panel shut line
     private const float SteeringRatio = 12f;               // turns of the wheel per turn of the road wheels
 
+    /// <summary>The lofted bodies' red, and the colour of a model's car when its own cannot be told.</summary>
     public static readonly Color DefaultPaint = new(0.76f, 0.03f, 0.05f);
-    /// <summary>Paints for the drone cars, by their colour index.</summary>
-    public static readonly Color[] DronePaints = [new(0.12f, 0.25f, 0.70f), new(0.90f, 0.90f, 0.87f), new(0.56f, 0.07f, 0.08f)];
+
+    /// <summary>
+    /// A car's paint: its colour and its finish. A solid colour is a coated dielectric (0.11): hardly any metallic,
+    /// since a metallic albedo reflects the sky and turned the red pink, a slightly rough colour coat under a hard,
+    /// near-mirror clearcoat. A metallic paint's flakes make its base coat partly metal and smoother: a silver drawn
+    /// as a solid was a flat light grey, hardly told from the white.
+    /// </summary>
+    public readonly record struct CarPaint(Color Colour, float Metallic = 0.05f, float Roughness = 0.38f);
+
+    /// <summary>
+    /// The paints the player chooses from (the menu's PAINT line): the car's own colour as its model has it (null:
+    /// the Testarossa's red, the McLaren's orange, the 205's navy, the Delta's Martini white, the Golf's blue, the
+    /// VAZ's beige, the Renault's blue, the Mercedes' silver; the lofted bodies' red), then the classic colours.
+    /// </summary>
+    public static readonly (string Name, CarPaint? Paint)[] Paints =
+    [
+        ("ORIGINAL", null),
+        ("RED", new(DefaultPaint)),
+        ("WHITE", new(new(0.90f, 0.90f, 0.87f))),
+        ("SILVER", new(new(0.62f, 0.63f, 0.64f), Metallic: 0.6f, Roughness: 0.3f)),
+        ("BLACK", new(new(0.035f, 0.035f, 0.04f))),
+        ("DARK BLUE", new(new(0.05f, 0.10f, 0.30f))),
+        ("GREEN", new(new(0.06f, 0.24f, 0.13f))),
+        ("YELLOW", new(new(0.92f, 0.70f, 0.05f))),
+    ];
+
+    /// <summary>
+    /// The traffic's paints (0.21): the colours of ordinary cars of the 1970s to the 2000s, ordered so that each
+    /// differs from the ones beside it in hue or in lightness, and more of them than a credit has drones, so no two
+    /// drones of a credit share a colour (Bootstrap.BuildDroneViews). The silver and the grey are metallics.
+    /// </summary>
+    public static readonly CarPaint[] TrafficPaints =
+    [
+        new(new(0.88f, 0.88f, 0.85f)),                                  // white
+        new(new(0.06f, 0.11f, 0.30f)),                                  // dark blue
+        new(new(0.62f, 0.06f, 0.06f)),                                  // signal red
+        new(new(0.60f, 0.61f, 0.62f), Metallic: 0.6f, Roughness: 0.3f),  // silver
+        new(new(0.07f, 0.22f, 0.13f)),                                  // bottle green
+        new(new(0.76f, 0.68f, 0.52f)),                                  // beige
+        new(new(0.035f, 0.035f, 0.04f)),                                // black
+        new(new(0.42f, 0.58f, 0.74f)),                                  // light blue
+        new(new(0.33f, 0.05f, 0.07f)),                                  // maroon
+        new(new(0.80f, 0.60f, 0.16f)),                                  // ochre
+        new(new(0.33f, 0.34f, 0.35f), Metallic: 0.5f, Roughness: 0.32f), // gunmetal grey
+        new(new(0.28f, 0.18f, 0.11f)),                                  // brown
+    ];
     private static readonly Color Trim = new(0.06f, 0.06f, 0.065f);
     private static readonly Color Amber = new(1f, 0.55f, 0.08f);
     /// <summary>Tint that turns the brown leather photo into the black leather of the dashboard.</summary>
@@ -48,7 +93,9 @@ internal sealed partial class CarView : Node3D
     private Node3D? _body;
     private bool? _insideCar;
     private BodyStyle _style = BodyStyle.FlatTwelve;
-    private Color _paint = DefaultPaint;
+    private Color _paint = DefaultPaint;    // the car's colour as drawn (a model's own when none was chosen)
+    private CarPaint _finish = new(DefaultPaint);   // the lofted body's paint: its finish (a model's: _paintChoice)
+    private CarPaint? _paintChoice;         // the paint chosen for it; null keeps a model's own (CarView.Model.cs)
     private float _cgHeight;
     private float _wheelRadius;
     private float _wheelAngle;
@@ -58,12 +105,15 @@ internal sealed partial class CarView : Node3D
     /// model's driver's seat when the car is a real model with a cabin (CarView.Model.cs), the lofted cabin's otherwise.</summary>
     public Vector3 Eye => _modelEye ?? new(DriverX, _style.EyeH - _cgHeight, _style.EyeZ);
 
-    public static CarView Create(VehicleSpec spec, Color? paint = null)
+    /// <summary>A car in a paint, or (null) in its model's own; a lofted body without one is red.</summary>
+    public static CarView Create(VehicleSpec spec, CarPaint? paint = null)
     {
         var view = new CarView
         {
             Name = "Car",
-            _paint = paint ?? DefaultPaint,
+            _paint = paint?.Colour ?? DefaultPaint,
+            _finish = paint ?? new CarPaint(DefaultPaint),
+            _paintChoice = paint,
             _wheelRadius = spec.WheelRadius,
             _style = spec.Style switch
             {
@@ -787,12 +837,13 @@ internal sealed partial class CarView : Node3D
 
         // Car paint as a coated dielectric (0.11): hardly any metallic, since a metallic albedo reflects the sky and
         // turned the red pink; a slightly rough colour coat under a hard, near-mirror clearcoat, which is where the
-        // gloss and the reflections of the car's probe (WorldBuilder.BuildCarProbe) come from.
+        // gloss and the reflections of the car's probe (WorldBuilder.BuildCarProbe) come from; a metallic paint's
+        // base is partly metal (CarPaint).
         var paint = new StandardMaterial3D
         {
             VertexColorUseAsAlbedo = true,
-            Metallic = 0.05f,
-            Roughness = 0.38f,
+            Metallic = _finish.Metallic,
+            Roughness = _finish.Roughness,
             ClearcoatEnabled = true,
             Clearcoat = 1f,
             ClearcoatRoughness = 0.04f,
@@ -935,7 +986,7 @@ internal sealed partial class CarView : Node3D
     private void BuildDetails(Node3D body, VehicleSpec spec)
     {
         var style = _style;
-        var solidPaint = new StandardMaterial3D { AlbedoColor = _paint, Metallic = 0.05f, Roughness = 0.38f, ClearcoatEnabled = true, Clearcoat = 1f, ClearcoatRoughness = 0.04f };
+        var solidPaint = new StandardMaterial3D { AlbedoColor = _paint, Metallic = _finish.Metallic, Roughness = _finish.Roughness, ClearcoatEnabled = true, Clearcoat = 1f, ClearcoatRoughness = 0.04f };
         var trim = new StandardMaterial3D { AlbedoColor = Trim, Roughness = 0.75f };
         var lamp = new StandardMaterial3D { AlbedoColor = new Color(0.9f, 0.10f, 0.06f), EmissionEnabled = true, Emission = new Color(0.9f, 0.08f, 0.04f), EmissionEnergyMultiplier = 1.4f };
         var chrome = new StandardMaterial3D { AlbedoColor = new Color(0.8f, 0.8f, 0.82f), Metallic = 0.95f, Roughness = 0.2f };

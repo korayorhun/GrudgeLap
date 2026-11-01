@@ -37,6 +37,7 @@ public sealed partial class Bootstrap : Node3D
     private SN.Vector3? _ramTarget;
     private CarView? _ghostView;
     private readonly List<CarView> _droneViews = new();
+    private int _droneSerial;   // drones drawn so far, over the credits: the next one's car and colour (BuildDroneViews)
     private readonly Dictionary<int, Node3D> _propNodes = new();
     private readonly List<(Node3D Node, float Start, float Yaw, Vector3 Axis)> _tipping = new();
     private TrainView? _trainView;
@@ -79,6 +80,8 @@ public sealed partial class Bootstrap : Node3D
     private bool _noTraffic;
     private Weather? _weather;   // --weather=: a fixed weather for automated runs; otherwise the menu's choice
     private int _weatherChoice;  // the menu's weather: 0-3 a fixed Weather, 4 random for every credit; kept in the settings
+    private int _paintChoice;    // the menu's paint (CarView.Paints, 0 the car's own colour); kept in the settings
+    private bool _repaintLofted; // a lofted car repainted during a crash's replay: built again in the new colour next credit
     private bool _noHud;        // pictures of the 3D scene alone, e.g. to compare it with another engine's
     private Vector3? _orbit;
     private bool _showAll;      // debug: draw the whole car from the driver's seat too
@@ -105,7 +108,9 @@ public sealed partial class Bootstrap : Node3D
         _quality = (GraphicsQuality)Math.Clamp(LoadChoice("quality", (int)GraphicsQuality.High), 0, 2);
         // The weather (0.15): clear by default; the menu chooses clear, overcast, wet road, rain or random, and keeps it.
         _weatherChoice = Math.Clamp(LoadChoice("weather", 0), 0, 4);
-        ParseArgs();   // may override the saved car with --car=
+        // The paint (0.21): the car's own colour by default; the menu chooses another, and keeps it.
+        _paintChoice = Math.Clamp(LoadChoice("paint", 0), 0, CarView.Paints.Length - 1);
+        ParseArgs();   // may override the saved car with --car= and the paint with --paint=
         if (_invisible)
         {
             HideWindow();
@@ -155,7 +160,7 @@ public sealed partial class Bootstrap : Node3D
             if (!_retro && !_leaving) ApplyGraphics();
         };
 
-        _carView = CarView.Create(VehicleSpec.Catalogue[_carIndex]);
+        _carView = CarView.Create(VehicleSpec.Catalogue[_carIndex], PlayerPaint);
         AddChild(_carView);
         _carView.MarkPlayer();
         AddChild(WorldBuilder.BuildCarProbe());
@@ -269,6 +274,7 @@ public sealed partial class Bootstrap : Node3D
                 CarView.UseModels = false;
             }
             else if (arg.StartsWith("--car=", System.StringComparison.Ordinal)) _carIndex = CarIndex(arg["--car=".Length..], _carIndex);
+            else if (arg.StartsWith("--paint=", System.StringComparison.Ordinal)) _paintChoice = PaintIndex(arg["--paint=".Length..], _paintChoice);   // this run only
             else if (arg.StartsWith("--look=", System.StringComparison.Ordinal)) _look = arg["--look=".Length..];
             else if (arg.StartsWith("--seat-look=", System.StringComparison.Ordinal)) _seatLook = ParseVector2(arg["--seat-look=".Length..]);
             else if (arg == "--lofted") CarView.UseModels = false;
@@ -291,6 +297,18 @@ public sealed partial class Bootstrap : Node3D
         if (index < 0 && int.TryParse(name, out var number)) index = number;
         return index >= 0 && index < VehicleSpec.Catalogue.Length ? index : current;
     }
+
+    /// <summary>The paint a --paint= switch names: its name in the menu (dark-blue or darkblue for DARK BLUE) or its index.</summary>
+    private static int PaintIndex(string name, int current)
+    {
+        var wanted = name.Replace("-", "").Replace("_", "").Replace(" ", "").ToUpperInvariant();
+        var index = System.Array.FindIndex(CarView.Paints, p => p.Name.Replace(" ", "") == wanted);
+        if (index < 0 && int.TryParse(name, out var number)) index = number;
+        return index >= 0 && index < CarView.Paints.Length ? index : current;
+    }
+
+    /// <summary>The player's paint: a colour and its finish, or null for the car's own (its model's).</summary>
+    private CarView.CarPaint? PlayerPaint => CarView.Paints[_paintChoice].Paint;
 
     /// <summary>
     /// What only the player's car has: the lit instruments in its binnacle, a working rear-view mirror, and the
@@ -318,14 +336,7 @@ public sealed partial class Bootstrap : Node3D
         EndCrash();
         // A car kept from the last credit (the same body) takes its dents with it otherwise.
         _carView.Repair();
-        if (_carView.IsInsideTree() && _carView.Name != $"Car-{spec.Style}")
-        {
-            _carView.QueueFree();
-            _carView = CarView.Create(spec);
-            AddChild(_carView);
-            _carView.MarkPlayer();
-            FitOutPlayerCar();
-        }
+        if (_carView.IsInsideTree() && (_carView.Name != $"Car-{spec.Style}" || _repaintLofted)) BuildPlayerCar();
         _carView.Name = $"Car-{spec.Style}";
         _audio.SetCar(spec);
         if (_savedBestLap is not null && !_noGhost) _session.LoadBestLap(_savedBestLap);
@@ -359,19 +370,39 @@ public sealed partial class Bootstrap : Node3D
         foreach (var view in _droneViews) view.QueueFree();
         _droneViews.Clear();
         if (_session.Traffic is null) return;
-        var index = 0;
+        // The traffic is the everyday cars of the road (0.9.1; until then every drone was the period sports car of the
+        // original): the saloon, the estate and the fleet saloon, and since 0.21 the 205 and the Golf too (the 205
+        // the GTi its model is, its red wheels, bucket seats and pinstripe with it) in the road's colours. Each drone
+        // in turn takes the next car and the next colour of the road palette (CarView.TrafficPaints), counting on
+        // from the last credit's, so no two drones of a credit look alike and the next credit's are others: five cars
+        // and twelve colours repeat a pair only every sixty drones, and a credit has eight. Only the look: the drones
+        // move as before (physics/Race/Traffic.cs), whatever car is drawn; their cabins are drawn only near
+        // (CarView.TrimCabinForTraffic).
+        VehicleSpec[] everyday = [VehicleSpec.Saloon, VehicleSpec.Estate, VehicleSpec.Fleet, VehicleSpec.HotHatch, VehicleSpec.TurboHatch];
         foreach (var drone in _session.Traffic.Cars)
         {
-            // The traffic is the everyday cars of the road (0.9.1; until then every drone was the period sports car of
-            // the original): the 1990s saloon, the estate and the fleet saloon in turn.
-            VehicleSpec[] everyday = [VehicleSpec.Saloon, VehicleSpec.Estate, VehicleSpec.Fleet];
-            var view = CarView.Create(everyday[index++ % everyday.Length], CarView.DronePaints[drone.Colour % CarView.DronePaints.Length]);
+            var index = _droneSerial++ % (everyday.Length * CarView.TrafficPaints.Length);
+            var view = CarView.Create(everyday[index % everyday.Length], CarView.TrafficPaints[index % CarView.TrafficPaints.Length]);
             view.Name = "Drone";
             view.SetViewpoint(false);
             AddChild(view);
+            view.TrimCabinForTraffic();
             _world.AttachDrone(view, drone);
             _droneViews.Add(view);
         }
+    }
+
+    /// <summary>The player's car built again (another car chosen, or a lofted body repainted), in the chosen paint.</summary>
+    private void BuildPlayerCar()
+    {
+        var spec = VehicleSpec.Catalogue[_carIndex];
+        _carView.QueueFree();
+        _carView = CarView.Create(spec, PlayerPaint);
+        _carView.Name = $"Car-{spec.Style}";
+        AddChild(_carView);
+        _carView.MarkPlayer();
+        FitOutPlayerCar();
+        _repaintLofted = false;
     }
 
     private void BuildGhostView()
@@ -659,6 +690,11 @@ public sealed partial class Bootstrap : Node3D
     private void LookAtProp(string look)
     {
         var parts = look.Split(':');
+        if (parts[0] == "drone")
+        {
+            LookAtDrone(parts);
+            return;
+        }
         if (!System.Enum.TryParse<PropKind>(parts[0], ignoreCase: true, out var kind)) return;
         var n = parts.Length > 1 && int.TryParse(parts[1], out var index) ? index : 0;
         var props = _track.Props.Select((p, i) => (Prop: p, Index: i)).Where(p => p.Prop.Kind == kind).ToList();
@@ -674,6 +710,24 @@ public sealed partial class Bootstrap : Node3D
         var eye = node.GlobalPosition + front * distance;
         eye.Y = _track.Terrain.Height(eye.X, -eye.Z) + 1.7f + distance * 0.08f;
         _cameraRig.Look(eye, centre, 50f);
+    }
+
+    /// <summary>
+    /// The --look=drone:n[:distance[:bearing]] shot (0.21): the n-th drone of the traffic followed from <c>distance</c>
+    /// metres (default 7) off its front corner (<c>bearing</c> degrees round from straight ahead, default 35), for
+    /// pictures of the traffic's cars.
+    /// </summary>
+    private void LookAtDrone(string[] parts)
+    {
+        var n = parts.Length > 1 && int.TryParse(parts[1], out var index) ? index : 0;
+        if (_droneViews.Count == 0) return;
+        var drone = _droneViews[System.Math.Clamp(n, 0, _droneViews.Count - 1)];
+        var distance = parts.Length > 2 && float.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : 7f;
+        var bearing = parts.Length > 3 && float.TryParse(parts[3], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var b) ? b : 35f;
+        // A car's nose is its -Z.
+        var front = (-drone.GlobalTransform.Basis.Z).Normalized().Rotated(Vector3.Up, Mathf.DegToRad(bearing));
+        var eye = drone.GlobalPosition + front * distance + Vector3.Up * 1.2f;
+        _cameraRig.Look(eye, drone.GlobalPosition, 50f);
     }
 
     /// <summary>
@@ -876,6 +930,20 @@ public sealed partial class Bootstrap : Node3D
             ? new Vector2(x, y) : Vector2.Zero;
     }
 
+    /// <summary>
+    /// The menu's paint (0.21): left and right step through the car's own colour and the classic ones; the car is
+    /// repainted at once and the choice kept. A lofted body (a checkout without the models) is built again in it.
+    /// </summary>
+    private void CyclePaint(int step)
+    {
+        _paintChoice = (_paintChoice + step + CarView.Paints.Length) % CarView.Paints.Length;
+        SaveChoice("paint", _paintChoice);
+        if (_carView.Repaint(PlayerPaint)) return;
+        // During a crash's replay the car is the scene's (CrashScene): it is built again with the next credit.
+        if (_crash is null) BuildPlayerCar();
+        else _repaintLofted = true;
+    }
+
     private string WeatherLabel() => _weatherChoice switch { 0 => "CLEAR", 1 => "OVERCAST", 2 => "WET ROAD", 3 => "RAIN", _ => "RANDOM" };
 
     /// <summary>
@@ -959,6 +1027,9 @@ public sealed partial class Bootstrap : Node3D
             case PauseMenu.Item.Weather:
                 CycleWeather(left ? -1 : 1);
                 break;
+            case PauseMenu.Item.Paint:
+                CyclePaint(left ? -1 : 1);
+                break;
             case PauseMenu.Item.Retro:
                 SetRetro(!_retro);
                 break;
@@ -987,6 +1058,7 @@ public sealed partial class Bootstrap : Node3D
         labels[(int)PauseMenu.Item.Camera] = $"CAMERA:  {(_cameraRig.Mode == CameraMode.Cockpit ? "DRIVER'S SEAT" : "BEHIND THE CAR")}";
         labels[(int)PauseMenu.Item.Graphics] = $"GRAPHICS:  {_quality.ToString().ToUpperInvariant()}";
         labels[(int)PauseMenu.Item.Weather] = $"WEATHER:  {WeatherLabel()}";
+        labels[(int)PauseMenu.Item.Paint] = $"PAINT:  {CarView.Paints[_paintChoice].Name}";
         labels[(int)PauseMenu.Item.Retro] = $"1989 MODE:  {(_retro ? "ON" : "OFF")}";
         // The player's own tune by name (without its extension); the built-in one with the hint that Enter opens the folder.
         labels[(int)PauseMenu.Item.Music] = _audio.CustomReplayMusicName is { } tune
