@@ -7,9 +7,9 @@ pinned in `HandlingTests` against real-car ranges, and the figures there are the
 
 | Behaviour | Target | Current | Test |
 |---|---|---|---|
-| 0-60 mph, flat-twelve, stick with assisted clutch | 4-7.5 s | 5.4 s (0.18) | `Accelerates_to_60_mph_in_a_sports_car_time` |
+| 0-60 mph, flat-twelve, stick with assisted clutch | 4-7.5 s | 5.1 s from idle (0.19 launch assist) | `Accelerates_to_60_mph_in_a_sports_car_time` |
 | Top speed in 4th, flat-twelve | 135-175 mph | 163 mph (0.18) | `Top_speed_lands_in_the_150_mph_class` |
-| 0-60 mph, V8 (traction control, seven gears) | 3-5 s | 4.0 s (0.18) | `V8_launches_and_tops_out_like_a_modern_supercar` |
+| 0-60 mph, V8 (traction control, seven gears) | 3-5 s | 3.5 s (0.19: launch control, dual-clutch handover) | `V8_launches_and_tops_out_like_a_modern_supercar` |
 | Top speed in 7th, V8 | 180-215 mph | 201 mph @ 8800 rpm | same |
 | 60-0 mph braking | 30-70 m | 42 m on locked wheels (0.18: a locked tyre keeps about three quarters of its peak; with ABS, see HandlingTests) | `Brakes_from_60_mph_in_a_reasonable_distance` |
 | Dump the clutch at idle (stick + clutch) | engine stalls, car barely moves | stalls in 0.17 s, rolls 1.2 m | `Dumping_the_clutch_at_idle_stalls_the_engine` |
@@ -17,13 +17,15 @@ pinned in `HandlingTests` against real-car ranges, and the figures there are the
 | Vertical loop (R 15 m, 30 m tall) | ~60 mph minimum | 68 mph completes, 42 mph falls at 25 m | `Vertical_loop_needs_about_60_mph` |
 | Open drawbridge (30 m ramp @ 7°, 18 m gap, 34 m landing) | 60-80 mph window | 62 and 76 land; 48 hits the edge; 90 slams the flat road | `Drawbridge_wants_a_60_to_80_mph_run_up` |
 | Banked 180 (R 85 m, 32°) | holds 90 mph | holds, 1.4 m max lane error | `Banked_180_holds_90_mph` |
-| Full lock at 95 mph | rear breaks away | 57° rear slip (0.18) | `Full_lock_at_high_speed_spins_the_car` |
+| Full lock at 95 mph | rear breaks away | 83° rear slip (0.19) | `Full_lock_at_high_speed_spins_the_car` |
 | Grass | like mud | 5x the coasting loss of asphalt | `Grass_is_like_mud` |
 | Braking in gear over a jump | clutch slips, engine keeps running | min 2390 rpm over bridge and overpass | `Engine_keeps_running_over_jumps_in_top_gear` |
 | Rules: scripted lap, stunt route (2.5 km), empty road | checkpoint, lap bonus, no crash | about 91 s, 0 crashes (0.18) | `Scripted_driver_completes_a_lap` |
-| Rules: scripted lap, speed route (3.4 km), empty road | same | 105 s, 0 crashes | `Scripted_driver_completes_a_lap` |
+| Rules: scripted lap, speed route (3.4 km), empty road | same | 104 s, 0 crashes (0.19) | `Scripted_driver_completes_a_lap` |
 | Scripted laps at 20, 30, 90 and 144 fps (one driver call per frame, as in the game) | both routes, no crash, no run-off, no lap counted at the fork | 90 s and 102 s laps at every rate | `Scripted_driver_completes_a_lap_at_any_frame_rate` |
-| Scripted lap, speed route, 8 drones both ways | lap completed, at most one crash | 108 s, 0 crashes, follows and overtakes | `Scripted_driver_threads_the_traffic_on_the_speed_route` |
+| Scripted lap, speed route, 8 drones both ways | lap completed, at most one crash | 111 s, 0 crashes, follows and overtakes (0.19) |
+| A car without the pull for the loop (the 1.4 estate) | told before the fork, attract driver takes the speed route | warned, speed lap, 0 crashes (0.19) | `A_car_that_cannot_make_the_loop_is_told_and_takes_the_speed_route` |
+| Fall off the loop, set down at the last return point | the run-up to make it from rest | 57-65 mph at the loop for the saloon, fleet, hot hatch and flat-twelve (0.19) | `A_car_set_down_after_falling_off_the_loop_has_the_run_up_to_make_it` | `Scripted_driver_threads_the_traffic_on_the_speed_route` |
 | Drones | keep their lane, never enter the stunt route | 300 s, every step | `Drones_keep_their_lane_and_never_enter_the_stunt_route` |
 | Ram a drone | crash → replay → return point clear of traffic | yes | `Hitting_a_drone_crashes_and_replays` |
 | Hit a barn | crash → replay → key turn at last return point | yes | `Driving_into_a_barn_crashes_and_returns_to_the_last_point` |

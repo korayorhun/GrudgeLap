@@ -89,7 +89,9 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   from the published tyre sizes and lateral relaxation, wheel spin solved implicitly against the tyre, a per-car grip
   multiplier, rolling resistance as a
   body force (much higher on grass: grip 0.66 and resistance 0.11 of the load since 0.9, from 0.55 and 0.16,
-  which made the verge a trap), aerodynamic drag, speed-sensitive steering lock, optional traction
+  which made the verge a trap), aerodynamic drag, speed-sensitive steering lock, Ackermann steering and the
+  steering's give under the tyres' aligning torque (caster and a pneumatic trail that vanishes at the limit, 0.19),
+  optional traction
   control that cuts the engine's torque as the driven wheels spin up, optional anti-lock brakes, brakes
   proportioned to lock the fronts first. Rear- or front-wheel drive
   (`VehicleSpec.FrontWheelDrive`) through an open differential or, on the flat-twelve, a limited-slip one; a turbo engine's torque builds with its boost
@@ -106,22 +108,29 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
 - **Drivetrain** — torque-curve engine with idle governor, rev limiter and stall; clutch as a lock/slip
   state machine with the slip torque limited to what synchronises the two inertias in one step (the axle
   side includes the car's mass through the tyres; otherwise the flywheel hammers the wheels and a stall is
-  impossible); a launch assist in the assisted modes that lets the engine hold its revs while the car
-  starts rolling; gearboxes with shift points relative to the redline; three transmission modes.
+  impossible); a launch assist in the assisted modes (0.19) that revs the engine to its launch speed (95 % of peak
+  torque, full boost on the turbo) and slips the clutch with the driven tyres just short of their peak, a pre-rev on
+  brake and throttle at a standstill, launch control on the V8, gear take-up after a shift limited to the tyres' grip
+  with the engine eased down to the shaft's speed; gearboxes with shift points relative to the redline and a
+  kick-down in the automatic; three transmission modes.
 - **Traffic** — drones that ride the road frames of the start straight and the speed route in both
   directions in their own lane, never the stunt route; kinematic, solid to the player, moved away from a
   respawn point.
 - **Rules** — timers from the cabinet's option table (90 s, +45 per lap, +45 at the checkpoint on Medium),
   route detection at the fork (announced 45 m in, where the branches have parted), checkpoints and return
-  points as path markers (counted on road that follows on; a hop between the overlapping branches or back
+  points as path markers (none between the gas-station bend and the loop since 0.19: set down 26 m short of it after
+  a fall, no car had the run-up to make it; counted on road that follows on; a hop between the overlapping branches or back
   across the fork carries the distance over, so nothing is scored or crossed twice), off-road ten-second rule,
   wrong-way detection (suspended on the skid pad), crash detection (hard landing, roll-over, falling into
   the gap or hitting the deck edge, solid props, drones), a 10 s instant replay buffer, the key-turn restart
-  after every crash, messages with a shelf life, and the best lap recorded at 20 Hz as the ghost of the
+  after every crash, messages with a shelf life (among them, for a car without the pull for the loop, a warning on the
+  climb to the fork and on the stunt route, `LoopRunUp`, 0.19), and the best lap recorded at 20 Hz as the ghost of the
   grudge match (serialisable, loaded into the next credit).
 - **Scripted driver** — pure-pursuit steering along its lane plus a curvature-aware speed plan with
   braking distance, slower over a crest (the road falling away takes weight off the tyres:
-  v² = g R k / (1 + κ R k)); it catches a slide with opposite lock once the body slip passes 5° and stays off
+  v² = g R k / (1 + κ R k)); it changes down a gear early when there is speed to gather and the gear below pulls
+  harder, never changes up in the air (0.19), and takes the speed route in a car that cannot make the loop;
+  it catches a slide with opposite lock once the body slip passes 5° and stays off
   the pedals past 8°, keeps the wheel still in the air, and times its lane changes by the session clock, so a
   lap looks the same at 20 fps as at 144 (the game asks it once a frame); traffic sense (follow a slower
   drone, pass with 480 m of empty opposite lane, hurry back when one comes within 250 m, abort a pass when
@@ -216,25 +225,72 @@ and standing sprints).
     (`DamperReboundRatio`, the mean unchanged), as road dampers do: a bump is let through softly and the spring's
     return is checked, so a car settles after a crest instead of bouncing.
 
-Still open, in the same order:
+Items 12, 13 and 16 were taken up in 0.19, 15 was decided against, 14 stays open:
 
-12. **Launches** — the V8 is 0.7 s slow to 100 km/h (no launch control: a torque-cut traction control and the
-    assisted clutch's feed-in), the front-wheel-drive cars 0.5-1 s (the turbo hatch 7.5 s against 6.4). A launch
-    mode in the assisted clutch, holding the driven wheels at their peak slip, would close it.
-13. **Steering** — parallel steer (no Ackermann), no caster trail or self-aligning torque (nothing to feel without
-    force feedback), and the speed-sensitive lock remains the keyboard's stand-in for a three-turn wheel. Understeer
-    of the front-heavy hot hatch (0.8 deg/g) is at the low end of the 1-4 deg/g of such cars, the share real cars get
-    from steering compliance and roll steer, which the model does not have.
+12. **Launches** (fixed in 0.19). The assisted clutch bit from about 2,000 rpm whatever the car: the revs collapsed
+    into a bog, the tyres spun up to a slip of 1.5 and the driver had to feather the throttle back to a fifth (V8
+    3.9 s to 100 km/h against the real 3.2, the turbo hatch 7.5 against 6.4). Now a standing start in the assisted
+    modes is made as a good driver makes it (`Drivetrain.Launching`): the engine is held at its launch revs
+    (`EngineSpec.LaunchRpm`: the lowest giving 95 % of peak torque, and full boost on the turbo) by a governor on the
+    throttle, and the clutch takes the engine's torque in proportion to how far the revs stand above a band below
+    that speed, never more than the driven tyres can put down (`VehicleSim.LaunchTraction`: each tyre's peak force at
+    its load, 92 % of it for the assist, 99.5 % for the V8's launch control, cut back while a wheel spins past its
+    peak, plus what the wheels take to spin up); it locks once the shaft has caught the engine up. Brake and throttle
+    together at a standstill hold the revs there with the clutch open (`PreRevving`: the two-footed start, the
+    launch control's brake-throttle-release). After a shift the clutch takes up the gear with no more than the tyres
+    can take and the engine eased down to the shaft's speed (`Synchronising`; it bit with its whole capacity, which
+    spun the V8's tyres past their peak in second), and the V8's dual-clutch box hands the drive over in 0.03 s.
+    The rig times the sprint as a road test does, from the release of the brake (it timed the shift into first and
+    the revs rising from idle too). 0-100 km/h now: flat-twelve 4.9 s (Ferrari quoted 5.8, Car and Driver timed
+    5.0 to 60 mph in 1986), V8 3.4 (3.2; traction-limited at 0.89 g throughout), hot hatch 7.5 (7.2), five 9.1
+    (8.5), turbo hatch 7.0 (6.4), 1.6 saloon 13.5 (13.9), estate 17.1 (16-17), fleet saloon 12.3 (11.5); the ranges
+    in `Sprints_and_stops_within_the_real_cars_ranges` came in to about a tenth either side of those figures, and
+    `Standing_starts_hold_the_launch_revs_and_the_tyres_short_of_their_peak` and
+    `Flooring_it_from_rest_launches_without_a_bog` pin the launch itself. Still quick on the flat-twelve: its
+    magazine figures include a test driver on a heavy single-plate clutch.
+13. **Steering** (fixed in 0.19). Parallel steer, no trail, no compliance. Each front wheel now has its own angle
+    (`WheelState.SteerAngle`, drawn by the view; the cockpit's wheel shows the command): Ackermann geometry
+    (`AckermannShare`, full on every car) turns the inner wheel more, so on full lock at walking pace the two front
+    tyres roll round one centre with under a degree of slip between them instead of 8 degrees of scrub
+    (`Ackermann_lets_both_front_wheels_roll_round_at_parking_speed`). The tyres' aligning torque, side force times
+    caster trail (2 cm) and a pneumatic trail of 3 cm at rest that shrinks to nothing just past the side force's peak
+    (`TireModel.PneumaticTrail`, the brush model's a/3), turns each wheel out of the bend through the steering's
+    compliance (1/14000 rad per N m, Gillespie's K_str = W_f (p + t) / K_ss): every car gains about half a degree per
+    g of understeer, which brings the hot hatch from 0.8 to 1.4 deg/g, inside the 1-4 of its class, and leaves the
+    mid-engined cars mildly understeering (0.8-1.0), as they are tuned. The aligning torque per g at the limit falls to half
+    or 60 % of what it is at 0.3 g (`The_steering_goes_light_before_the_front_tyres_let_go`): the lightening of
+    the rim a driver feels, and here the steering's give fading with it. `VehicleSim.AligningTorque` is there for a
+    force-feedback wheel. The keyboard is unchanged: its centring rate is the stand-in for the aligning torque, and
+    slowing it as the trail falls away would leave lock on in an understeering slide, making the keys harder to
+    drive, which the brief ruled out; the speed-sensitive lock stays the keys' stand-in for a three-turn wheel.
+    The hot hatch keeps its catalogue identity (the 2.0 16V of 2001: 172 hp, 1140 kg, 205/45 R16, 62 % in front)
+    although the model drawn is a 205 GTi 1.9 (130 PS, 960 kg, 63/37, 185/55 R15): its dimensions are the
+    simulation's (`tools/car_models.py` scales the model to them), the name, the power and the recordings are the
+    car the player picks, and its low understeer was the missing steering compliance, not the spec (the 205's softer
+    tyres and lighter body give the same 0.5 deg/g from the tyres alone). Should the drawn car stay a 205, the spec
+    and `car_models.py` can follow it together in one change.
 14. **The 570S's brake steer** (it brakes a spinning inside wheel instead of locking the axle) and the hatchbacks'
-    electronic equivalents are not modelled; their differentials are open.
-15. **Camber and tyre temperature** — none; the grip is the same on the first lap as on the tenth.
-16. **The stunt route for the 1990s saloon and estate** — 75 PS and 61 PS cannot gather the loop's 60 mph in the
-    140 m after the bend before it, so the scripted driver crashes there and respawns 40 m short of it (it did
-    before 0.18 too); `Every_car_laps_both_routes` holds them to the speed route. A track matter, not a physics one.
+    electronic equivalents are not modelled; their differentials are open. Still open.
+15. **Camber and tyre temperature** (decided against in 0.19). The raycast wheel has no suspension geometry, so camber
+    from roll and bump would need a camber gain per car that no source gives for these cars, and its effect on the
+    balance would trade one for one against the roll-stiffness split that `Understeer_and_roll_on_the_skid_pad`
+    already pins to the cars; camber thrust would only move the same balance by other means. Road tyres also work
+    across a wide temperature window: a thermal model would mostly shave a few per cent of grip off the first corner
+    of a 90-second credit, at the price of results that depend on the history of a run (the lap and sprint tests
+    are made from cold every time). Neither is cheap to make or to test for what it would add here.
+16. **The stunt route for the slower cars** (fixed in 0.19). The 1.6 saloon ran the loop's run-up in fifth at
+    2,900 rpm (the scripted driver changed up over the drawbridge with its wheels in the air) and fell off; it now
+    changes down for the run-up (`Drivetrain.KickDownPullsHarder`) and makes the loop. The 1.4 estate cannot (61 PS
+    and Cd 0.46: 1.2 m/s^2 at 50 mph in its best gear against the 1.35 the run-up asks, `LoopRunUp`), which is real:
+    the game now says so on the climb to the fork ("CAN'T MAKE THE LOOP - TAKE SPEED TRACK") and on choosing the
+    stunt route, and the scripted driver takes the speed route with it. Worse, the return point 26 m short of the
+    loop left no car the run-up after a fall (the V8 reached 44 mph there): it is gone, and a fall now sets the car
+    down after the drawbridge, from where every car that makes the loop on a flying lap makes it from rest
+    (`A_car_set_down_after_falling_off_the_loop_has_the_run_up_to_make_it`). The track's geometry is unchanged.
 
 Kept, as earlier decisions: the fixed 240 Hz step with semi-implicit Euler for the body, the raycast wheels, the
 grass's grip and rolling resistance (0.9), the weather's grip figures (0.12), the speed-sensitive steering lock,
-the clutch's lock/slip machine and launch assist, and the low-speed fades of the slip angle (no jitter at rest).
+the clutch's lock/slip machine, and the low-speed fades of the slip angle (no jitter at rest).
 
 ## View (`game/`)
 
