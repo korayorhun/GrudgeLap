@@ -1,8 +1,9 @@
 # GrudgeLap
 
 **EN** · A homage to the 1989 arcade driving simulators. Eight cars — a four-speed flat-twelve of 1984, a
-seven-speed V8 of 2012 with a sports exhaust, three front-wheel-drive hot hatches of 1997-2008 (a
-sixteen-valve two-litre, a five-cylinder and a two-litre turbo) and three everyday cars of Turkey's roads (a 1.6
+seven-speed V8 of 2012 with a sports exhaust, three hatchbacks of 1988-2003 (a front-wheel-drive eight-valve
+1.9, a four-wheel-drive two-litre turbo with a viscous-coupled centre differential and a four-wheel-drive 3.2 V6 with
+an on-demand coupling) and three everyday cars of Turkey's roads (a 1.6
 rear-wheel-drive saloon of the 1990s, a 1.4 estate of the same years and a 1.4 fleet saloon of today, with their
 published weights, gearing and power), all with real engine recordings — a fork between a long
 *speed* route and a short *stunt* route with an open drawbridge, a vertical loop and a banked 180, dips,
@@ -22,7 +23,7 @@ mirror, and the tyres squeal at their limit, howl and scrub past it and scrabble
 windowed or full screen. Free, open source, no assets copied from anywhere.
 
 **TR** · 1989'un arcade sürüş simülatörlerine saygı duruşu. Beş araba (1984 flat-12, 4 vites; 2012 V8, 7
-vites, spor egzoz; 1997-2008'den üç önden çekişli hot hatch: 2.0 16V, beş silindirli ve 2.0 turbo; Türkiye
+vites, spor egzoz; 1988-2003'ten üç hatchback: önden çekişli 1.9 8V, dört çeker 2.0 turbo ve dört çeker 3.2 V6; Türkiye
 yollarının üç gündelik arabası: 1990'ların 1.6 arkadan itişli sedanı, aynı yılların 1.4 station'ı ve bugünün 1.4
 filo sedanı, yayımlanmış ağırlık, vites ve güç değerleriyle; hepsinde gerçek motor kayıtları), uzun *speed* ve kısa *stunt* (açık köprü, dikey loop, eğimli
 180°) rotaları, çukurlar, iki yönlü trafik, süreye karşı kontrol noktaları, her kazadan sonra arabanın çarptığı
@@ -153,8 +154,9 @@ best lap's ghost out of the picture.
 ## How it is made
 
 - `physics/` — the simulation: raycast-wheel rigid body at 240 Hz, Pacejka-style tyres, torque-curve
-  engines (flat-twelve, V8, two-litre four, five-cylinder and turbo four specs, the turbo with its boost lag),
-  front- or rear-wheel drive, clutch lock/slip with a launch assist, gearboxes, the track as a graph
+  engines (flat-twelve, V8, the fours, a two-litre turbo four with its boost lag and a VR6),
+  front-, rear- or four-wheel drive (a centre differential with a viscous coupling, or an on-demand coupling to the
+  rear axle, and a differential per axle), clutch lock/slip with a launch assist, gearboxes, the track as a graph
   of road frames built by a turtle API (loop, drawbridge, banked curve, overpass, dips), the wear of the road
   (a slow undulation and potholes in the wheel tracks that the wheels feel and the view draws), a ground
   field that gives the terrain its embankments and cuttings, traffic drones, the rules of a credit, the
