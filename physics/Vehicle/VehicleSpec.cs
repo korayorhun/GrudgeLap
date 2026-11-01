@@ -65,8 +65,16 @@ public sealed record VehicleSpec
     /// Only the V8 of the 2010s has one.
     /// </summary>
     public bool LaunchControl { get; init; }
-    /// <summary>The engine drives the front wheels (a transverse engine in a hatchback) instead of the rear.</summary>
+    /// <summary>The engine drives the front wheels (a transverse engine in a hatchback) instead of the rear; on a four-wheel-drive car, see <see cref="FourWheelDrive"/>.</summary>
     public bool FrontWheelDrive { get; init; }
+    /// <summary>
+    /// Four-wheel drive: how the gearbox's torque reaches both axles and each axle's differential; null on a car that
+    /// drives one axle, which <see cref="FrontWheelDrive"/> names. <see cref="LimitedSlipLocking"/> and
+    /// <see cref="LimitedSlipPreload"/> then do not apply: each axle has its own.
+    /// </summary>
+    public FourWheelDrive? FourWheelDrive { get; init; }
+    /// <summary>Whether the engine drives the wheels of the front axle (<paramref name="front"/>) or of the rear one.</summary>
+    public bool Drives(bool front) => FourWheelDrive is not null || front == FrontWheelDrive;
     /// <summary>Tyre sizes as published, front and rear: they set each axle's nominal load and cornering stiffness (<see cref="TireSize"/>).</summary>
     public TireSize FrontTire { get; init; } = new(225f, 50f, 16f);
     public TireSize RearTire { get; init; } = new(255f, 50f, 16f);
@@ -522,6 +530,53 @@ public sealed record VehicleSpec
 
     /// <summary>The cars the player can choose from, in menu order.</summary>
     public static VehicleSpec[] Catalogue => [FlatTwelve, V8Evo, HotHatch, FiveHatch, TurboHatch, Saloon, Estate, Fleet];
+}
+
+/// <summary>
+/// A four-wheel-drive car's driveline: its centre, which shares the gearbox's torque between the axles and couples their
+/// speeds, and the differential of each axle. Two layouts of the time are modelled. A permanent four-wheel drive (the
+/// Delta Integrale's) splits the torque in a fixed ratio through an epicyclic centre differential, and a viscous coupling
+/// across it passes torque from the faster axle to the slower one, the more the further their speeds part, so an axle
+/// that spins hands its drive to the one that grips. An on-demand one (the Golf R32's 4MOTION) drives the front axle
+/// and engages the rear through a multi-plate coupling (a Haldex) as the front wheels outrun the rear ones.
+/// </summary>
+/// <remarks>
+/// Torques are N m at the wheels (both wheels of an axle together) and speeds each axle's mean wheel speed, rad/s: the
+/// propshaft, the final drives and the couplings' own ratios are folded into these figures.
+/// </remarks>
+public sealed record FourWheelDrive
+{
+    /// <summary>
+    /// Share of the gearbox's torque the centre differential sends to the front axle while neither axle slips (an
+    /// epicyclic's fixed split); 1 where the gearbox drives the front axle and only the coupling feeds the rear.
+    /// </summary>
+    public float FrontShare { get; init; } = 0.5f;
+    public CentreCoupling Coupling { get; init; } = CentreCoupling.Viscous;
+    /// <summary>Torque (N m) the coupling passes from the faster axle to the slower one per rad/s between their speeds.</summary>
+    public float CouplingRate { get; init; }
+    /// <summary>
+    /// The most the coupling passes, as a share of the gearbox's torque (an on-demand coupling's clutch and its control);
+    /// a viscous coupling has no such limit short of its hump, which is not modelled.
+    /// </summary>
+    public float CouplingShare { get; init; } = float.PositiveInfinity;
+    /// <summary>The front axle's differential: locking and preload as <see cref="VehicleSpec.LimitedSlipLocking"/> has them, of the front axle's torque.</summary>
+    public float FrontLocking { get; init; }
+    public float FrontPreload { get; init; }
+    /// <summary>The rear axle's differential, as the front's.</summary>
+    public float RearLocking { get; init; }
+    public float RearPreload { get; init; }
+}
+
+public enum CentreCoupling
+{
+    /// <summary>A viscous coupling across an epicyclic centre differential (Ferguson's): its torque grows with the speed difference, either way, brakes on or off.</summary>
+    Viscous,
+    /// <summary>
+    /// An on-demand multi-plate coupling to the rear axle (Haldex's first generation): it closes as the front wheels
+    /// outrun the rear ones, up to <see cref="FourWheelDrive.CouplingShare"/> of the drive, and its control opens it while
+    /// the brakes are on, so the anti-lock brakes see each axle on its own.
+    /// </summary>
+    Haldex,
 }
 
 public enum CarStyle

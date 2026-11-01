@@ -21,6 +21,9 @@ public sealed class VehicleSim
     /// <summary>Spring and damper rate of each wheel: the spec's rates scaled by the wheel's share of the static load.</summary>
     private readonly float[] _springRate = new float[4];
     private readonly float[] _damperRate = new float[4];
+    /// <summary>What the driveline gives each wheel this step: its drive torque (N m) and the inertia it turns with (kg m^2, the engine's share included while the clutch is locked).</summary>
+    private readonly float[] _driveTorque = new float[4];
+    private readonly float[] _driveInertia = new float[4];
     private Vector3 _centreOfMass;
     private Vector3 _massVelocity;
     private float _accumulator;
@@ -100,6 +103,11 @@ public sealed class VehicleSim
     /// <summary>Lateral acceleration felt by the driver, m/s^2, positive to the right. Used by the scrolling dashboard.</summary>
     public float LateralAcceleration { get; private set; }
     public float LongitudinalAcceleration { get; private set; }
+    /// <summary>Drive torque (N m) the driveline sent to the two front wheels in the last step, and to the two rear ones.</summary>
+    public float FrontDriveTorque { get; private set; }
+    public float RearDriveTorque { get; private set; }
+    /// <summary>On a four-wheel-drive car, the torque (N m at the wheels) the centre coupling passed from the front axle to the rear one in the last step (negative the other way); zero otherwise.</summary>
+    public float CouplingTorque { get; private set; }
 
     public Vector3 Forward => Vector3.Transform(Vector3.UnitZ, Orientation);
     public Vector3 Up => Vector3.Transform(Vector3.UnitY, Orientation);
@@ -145,6 +153,9 @@ public sealed class VehicleSim
         BodyGrounded = false;
         LateralAcceleration = 0f;
         LongitudinalAcceleration = 0f;
+        FrontDriveTorque = 0f;
+        RearDriveTorque = 0f;
+        CouplingTorque = 0f;
         _accumulator = 0f;
         Drivetrain.Reset();
         foreach (var w in Wheels) w.Reset();
@@ -235,14 +246,23 @@ public sealed class VehicleSim
         // Drivetrain first: it needs the driven axle's speed from the previous step (the rear wheels, 2 and 3, or on a
         // front-wheel-drive car the front ones, 0 and 1). Traction control, where the car has it, eases the throttle as
         // the driven wheels spin up (slip ratio from the previous step).
-        var (driven0, driven1) = _spec.FrontWheelDrive ? (Wheels[0], Wheels[1]) : (Wheels[2], Wheels[3]);
-        var axleSpeed = 0.5f * (driven0.AngularVelocity + driven1.AngularVelocity);
-        UpdateTractionControl(driven0, driven1, input, dt);
-        Drivetrain.TractionTorque = LaunchTraction(driven0, driven1);
-        // The inertia the clutch sees over one step: the driven wheels and, through their tyres' stiffness, what the
-        // road holds them to (the terms of SpinGroundedWheel's balance); and the torque the road holds them back with.
-        var axleInertia = 2f * _spec.WheelInertia + (driven0.InContact ? driven0.SpinStiffness * dt : 0f) + (driven1.InContact ? driven1.SpinStiffness * dt : 0f);
-        var axleLoad = ((driven0.InContact ? driven0.LongitudinalForce : 0f) + (driven1.InContact ? driven1.LongitudinalForce : 0f)) * _spec.WheelRadius;
+        UpdateTractionControl(input, dt);
+        float axleSpeed, axleInertia, axleLoad;
+        if (_spec.FourWheelDrive is { } awd)
+        {
+            (axleSpeed, axleInertia, axleLoad) = CentreDifferentialInput(awd, dt);
+            Drivetrain.TractionTorque = LaunchTraction(awd);
+        }
+        else
+        {
+            var (driven0, driven1) = _spec.FrontWheelDrive ? (Wheels[0], Wheels[1]) : (Wheels[2], Wheels[3]);
+            axleSpeed = 0.5f * (driven0.AngularVelocity + driven1.AngularVelocity);
+            Drivetrain.TractionTorque = LaunchTraction(driven0, driven1);
+            // The inertia the clutch sees over one step: the driven wheels and, through their tyres' stiffness, what the
+            // road holds them to (the terms of SpinGroundedWheel's balance); and the torque the road holds them back with.
+            axleInertia = AxleInertia(driven0, driven1, dt);
+            axleLoad = AxleLoad(driven0, driven1);
+        }
         Drivetrain.Step(input, axleSpeed, speed, dt, axleInertia, axleLoad);
 
         var force = new Vector3(0f, -_spec.MassKg * MathUtil.Gravity, 0f);
@@ -305,10 +325,28 @@ public sealed class VehicleSim
         _contacts[2].Bar = _spec.RearAntiRoll * (_contacts[2].Compression - _contacts[3].Compression);
         _contacts[3].Bar = -_contacts[2].Bar;
 
-        // Torque the differential sends to each driven wheel: half the axle's each (an open differential), less or
-        // plus what a limited-slip unit passes from the faster wheel to the slower one.
-        var lsdTorque = LimitedSlipTransfer(dt);
         var pedal = MathUtil.Clamp01(input.Brake);
+        // Torque the differential sends to each driven wheel: half the axle's each (an open differential), less or
+        // plus what a limited-slip unit passes from the faster wheel to the slower one. On a four-wheel-drive car the
+        // centre of the driveline first shares the gearbox's torque between the axles (DistributeFourWheelDrive).
+        if (_spec.FourWheelDrive is { } fourWheelDrive)
+        {
+            DistributeFourWheelDrive(fourWheelDrive, pedal, dt);
+        }
+        else
+        {
+            var (leftWheel, rightWheel) = _spec.FrontWheelDrive ? (Wheels[0], Wheels[1]) : (Wheels[2], Wheels[3]);
+            var lsdTorque = LimitedSlipTransfer(leftWheel, rightWheel, _spec.LimitedSlipLocking, _spec.LimitedSlipPreload, Drivetrain.AxleTorque, dt);
+            for (var i = 0; i < Wheels.Length; i++)
+            {
+                var w = Wheels[i];
+                var driven = w.IsFront == _spec.FrontWheelDrive;
+                _driveTorque[i] = driven ? Drivetrain.AxleTorque * 0.5f + (w.LocalPosition.X < 0f ? -lsdTorque : lsdTorque) : 0f;
+                _driveInertia[i] = _spec.WheelInertia + (driven ? Drivetrain.ReflectedInertia * 0.5f : 0f);
+            }
+        }
+        FrontDriveTorque = _driveTorque[0] + _driveTorque[1];
+        RearDriveTorque = _driveTorque[2] + _driveTorque[3];
 
         for (var i = 0; i < Wheels.Length; i++)
         {
@@ -318,9 +356,8 @@ public sealed class VehicleSim
             // Rotating +Z about +Y by a positive angle swings it toward +X, i.e. a positive steer turns the wheel right.
             var wheelForward = MathUtil.RotateAround(forward, up, steer);
 
-            var driven = w.IsFront == _spec.FrontWheelDrive;
-            var driveTorque = driven ? Drivetrain.AxleTorque * 0.5f + (w.LocalPosition.X < 0f ? -lsdTorque : lsdTorque) : 0f;
-            var wheelInertia = _spec.WheelInertia + (driven ? Drivetrain.ReflectedInertia * 0.5f : 0f);
+            var driveTorque = _driveTorque[i];
+            var wheelInertia = _driveInertia[i];
             UpdateAntiLock(w, pedal, dt);
             var brakeMax = (w.IsFront ? _spec.FrontBrakeTorque : _spec.RearBrakeTorque) * pedal * w.BrakePressure;
 
@@ -493,8 +530,9 @@ public sealed class VehicleSim
     /// a little to spare) and fed back in once it stops. It acts on the engine (ignition and throttle, as the systems of
     /// the 2000s did), not on the driver's pedal, so the clutch and the gearbox see the pedal the driver holds. Up to
     /// 0.17 it eased the pedal itself, by the slip ratio, which near standstill opened the assisted clutch on every cut.
+    /// On a four-wheel-drive car it watches all four wheels.
     /// </summary>
-    private void UpdateTractionControl(WheelState driven0, WheelState driven1, in DriverInputs input, float dt)
+    private void UpdateTractionControl(in DriverInputs input, float dt)
     {
         if (!_spec.TractionControl || Drivetrain.Gear <= 0 || input.Throttle <= 0f)
         {
@@ -503,7 +541,15 @@ public sealed class VehicleSim
         }
         // While the clutch slips the wheels get the clutch's torque whatever the engine makes, so a cut would only drag
         // the revs down (into a bog at the launch) without easing the wheelspin.
-        var excess = Drivetrain.ClutchLocked ? MathF.Max(SpinExcess(driven0), SpinExcess(driven1)) : 0f;
+        var excess = 0f;
+        if (Drivetrain.ClutchLocked)
+        {
+            excess = float.NegativeInfinity;
+            foreach (var w in Wheels)
+            {
+                if (_spec.Drives(w.IsFront)) excess = MathF.Max(excess, SpinExcess(w));
+            }
+        }
         Drivetrain.TorqueCut = excess > 0f
             ? MathF.Max(0f, Drivetrain.TorqueCut - dt * (2f + excess * 4f))
             : MathF.Min(1f, Drivetrain.TorqueCut + dt / 0.35f);
@@ -527,33 +573,142 @@ public sealed class VehicleSim
     private float LaunchTraction(WheelState a, WheelState b)
     {
         if (!a.InContact && !b.InContact) return float.PositiveInfinity;
-        var aim = _spec.LaunchControl ? 0.995f : 0.92f;
+        var aim = LaunchAim;
         // The wheels themselves take a little torque to speed up with the car (two wheels' inertia at the car's
         // acceleration): what reaches the road is the rest.
         var spinUp = 2f * _spec.WheelInertia * MathF.Max(LongitudinalAcceleration, 0f) / _spec.WheelRadius;
-        return (Share(a) + Share(b)) * _spec.WheelRadius + spinUp;
+        return (LaunchShare(a, aim) + LaunchShare(b, aim)) * _spec.WheelRadius + spinUp;
+    }
 
-        float Share(WheelState w)
+    /// <summary>
+    /// The launch assist's torque on a four-wheel-drive car: what the four tyres can take as the centre of the driveline
+    /// shares it out. An epicyclic centre differential sends its fixed shares, so the axle that reaches its limit first
+    /// sets the whole (its coupling passes torque only once an axle slips, which the launch stays short of); an
+    /// on-demand coupling lets the front axle carry the drive until it outruns the rear, and the rear then takes up to its
+    /// share, never more than its tyres hold. With an axle in the air the figure is unknown, as with two-wheel drive.
+    /// </summary>
+    private float LaunchTraction(FourWheelDrive awd)
+    {
+        if (!(Wheels[0].InContact || Wheels[1].InContact) || !(Wheels[2].InContact || Wheels[3].InContact)) return float.PositiveInfinity;
+        var aim = LaunchAim;
+        var spinUp = 4f * _spec.WheelInertia * MathF.Max(LongitudinalAcceleration, 0f) / _spec.WheelRadius;
+        var front = (LaunchShare(Wheels[0], aim) + LaunchShare(Wheels[1], aim)) * _spec.WheelRadius;
+        var rear = (LaunchShare(Wheels[2], aim) + LaunchShare(Wheels[3], aim)) * _spec.WheelRadius;
+        var s = awd.FrontShare;
+        float total;
+        if (s >= 1f)
         {
-            if (!w.InContact || w.Load <= 0f) return 0f;
-            var tire = w.IsFront ? _spec.FrontTire : _spec.RearTire;
-            var peak = TireModel.PeakFriction(w.Load, w.Friction, tire) * w.Load;
-            var over = w.SlipRatio / MathF.Max(TireModel.PeakSlipRatio(w.Friction), 0.02f) - 1f;
-            return peak * aim * MathUtil.Clamp(1f - 0.6f * MathF.Max(over, 0f), 0.3f, 1f);
+            total = front + rear;
+            if (awd.CouplingShare < 1f) total = MathF.Min(total, front / (1f - awd.CouplingShare));
+        }
+        else
+        {
+            total = MathF.Min(front / s, rear / (1f - s));
+        }
+        return total + spinUp;
+    }
+
+    private float LaunchAim => _spec.LaunchControl ? 0.995f : 0.92f;
+
+    /// <summary>The force (N) a driven tyre can put down at the launch: its peak at its load, times the aim, cut back while it spins past its peak.</summary>
+    private float LaunchShare(WheelState w, float aim)
+    {
+        if (!w.InContact || w.Load <= 0f) return 0f;
+        var tire = w.IsFront ? _spec.FrontTire : _spec.RearTire;
+        var peak = TireModel.PeakFriction(w.Load, w.Friction, tire) * w.Load;
+        var over = w.SlipRatio / MathF.Max(TireModel.PeakSlipRatio(w.Friction), 0.02f) - 1f;
+        return peak * aim * MathUtil.Clamp(1f - 0.6f * MathF.Max(over, 0f), 0.3f, 1f);
+    }
+
+    /// <summary>
+    /// The inertia (kg m^2) an axle presents over one step: its two wheels and, through their tyres' stiffness, what the
+    /// road holds them to (the terms of SpinGroundedWheel's balance, from the last step).
+    /// </summary>
+    private float AxleInertia(WheelState a, WheelState b, float dt) =>
+        2f * _spec.WheelInertia + (a.InContact ? a.SpinStiffness * dt : 0f) + (b.InContact ? b.SpinStiffness * dt : 0f);
+
+    /// <summary>The torque (N m) the road holds an axle's wheels back with through their tyres, from the last step.</summary>
+    private float AxleLoad(WheelState a, WheelState b) =>
+        ((a.InContact ? a.LongitudinalForce : 0f) + (b.InContact ? b.LongitudinalForce : 0f)) * _spec.WheelRadius;
+
+    /// <summary>
+    /// What the gearbox's output sees on a four-wheel-drive car, in the axles' terms: its speed, the inertia the clutch
+    /// drags along over a step and the torque the road holds it back with. Through an epicyclic centre differential that
+    /// sends the share s to the front, the output turns at s w_f + (1 - s) w_r (the balance of power across a
+    /// differential), the two axles act on it as one inertia of 1 / (s^2 / I_f + (1 - s)^2 / I_r) and their loads in the
+    /// same proportion; where the gearbox drives the front axle and a coupling feeds the rear (s = 1), it sees the front axle.
+    /// </summary>
+    private (float Speed, float Inertia, float Load) CentreDifferentialInput(FourWheelDrive awd, float dt)
+    {
+        var s = awd.FrontShare;
+        var frontSpeed = 0.5f * (Wheels[0].AngularVelocity + Wheels[1].AngularVelocity);
+        var rearSpeed = 0.5f * (Wheels[2].AngularVelocity + Wheels[3].AngularVelocity);
+        var frontInertia = AxleInertia(Wheels[0], Wheels[1], dt);
+        var rearInertia = AxleInertia(Wheels[2], Wheels[3], dt);
+        var frontLoad = AxleLoad(Wheels[0], Wheels[1]);
+        var rearLoad = AxleLoad(Wheels[2], Wheels[3]);
+        if (s >= 1f) return (frontSpeed, frontInertia, frontLoad);
+        var inertia = 1f / (s * s / frontInertia + (1f - s) * (1f - s) / rearInertia);
+        return (s * frontSpeed + (1f - s) * rearSpeed, inertia, inertia * (s * frontLoad / frontInertia + (1f - s) * rearLoad / rearInertia));
+    }
+
+    /// <summary>
+    /// Each wheel's drive torque and inertia on a four-wheel-drive car: the centre differential's share of the gearbox's
+    /// torque for each axle, the coupling's torque taken from the faster axle and given to the slower one, then each
+    /// axle's differential between its wheels. With the clutch locked the engine's inertia is shared out as the torque is,
+    /// which is exact while the two axles turn together.
+    /// </summary>
+    private void DistributeFourWheelDrive(FourWheelDrive awd, float pedal, float dt)
+    {
+        var s = awd.FrontShare;
+        var coupling = CouplingTransfer(awd, pedal, dt);
+        var front = s * Drivetrain.AxleTorque - coupling;
+        var rear = (1f - s) * Drivetrain.AxleTorque + coupling;
+        var frontLsd = LimitedSlipTransfer(Wheels[0], Wheels[1], awd.FrontLocking, awd.FrontPreload, front, dt);
+        var rearLsd = LimitedSlipTransfer(Wheels[2], Wheels[3], awd.RearLocking, awd.RearPreload, rear, dt);
+        CouplingTorque = coupling;
+        for (var i = 0; i < Wheels.Length; i++)
+        {
+            var w = Wheels[i];
+            var (axle, lsd, share) = w.IsFront ? (front, frontLsd, s) : (rear, rearLsd, 1f - s);
+            _driveTorque[i] = axle * 0.5f + (w.LocalPosition.X < 0f ? -lsd : lsd);
+            _driveInertia[i] = _spec.WheelInertia + Drivetrain.ReflectedInertia * 0.5f * share;
         }
     }
 
     /// <summary>
-    /// Torque (N m) the limited-slip differential passes from the left driven wheel to the right one this step; zero
-    /// for an open differential. A clutch-type unit: it resists any speed difference with up to its preload plus its
-    /// locking share of the drive torque, never more than would bring the two wheels to one speed (half of that, so it
-    /// cannot chatter against the tyres at the fixed step).
+    /// Torque (N m) the centre coupling passes from the front axle to the rear one this step, negative the other way: its
+    /// rate times the axles' speed difference; an on-demand coupling's capped at its share of the gearbox's torque and
+    /// open while the brakes are on. Like the limited-slip differential it never passes more than would halve the speed
+    /// difference within the step, here with the inertia each axle presents through its tyres (as the clutch sees it), so
+    /// it cannot chatter at the fixed step: with the tyres gripping that inertia is large and the coupling's own law rules.
     /// </summary>
-    private float LimitedSlipTransfer(float dt)
+    private float CouplingTransfer(FourWheelDrive awd, float pedal, float dt)
     {
-        if (_spec.LimitedSlipLocking <= 0f && _spec.LimitedSlipPreload <= 0f) return 0f;
-        var (left, right) = _spec.FrontWheelDrive ? (Wheels[0], Wheels[1]) : (Wheels[2], Wheels[3]);
-        var capacity = _spec.LimitedSlipPreload + _spec.LimitedSlipLocking * MathF.Abs(Drivetrain.AxleTorque);
+        var gap = 0.5f * (Wheels[0].AngularVelocity + Wheels[1].AngularVelocity) - 0.5f * (Wheels[2].AngularVelocity + Wheels[3].AngularVelocity);
+        var torque = awd.CouplingRate * gap;
+        if (awd.Coupling == CentreCoupling.Haldex)
+        {
+            if (pedal > 0f) return 0f;
+            var cap = awd.CouplingShare * MathF.Abs(Drivetrain.AxleTorque);
+            torque = MathUtil.Clamp(torque, -cap, cap);
+        }
+        var front = AxleInertia(Wheels[0], Wheels[1], dt);
+        var rear = AxleInertia(Wheels[2], Wheels[3], dt);
+        var sync = 0.5f * gap * (front * rear / (front + rear)) / dt;
+        return gap >= 0f ? MathUtil.Clamp(torque, 0f, sync) : MathUtil.Clamp(torque, sync, 0f);
+    }
+
+    /// <summary>
+    /// Torque (N m) a limited-slip differential passes from an axle's left wheel to its right one this step; zero for an
+    /// open differential. A clutch-type unit: it resists any speed difference with up to its preload plus its locking
+    /// share of the axle's drive torque, never more than would bring the two wheels to one speed (half of that, so it
+    /// cannot chatter against the tyres at the fixed step). A Torsen's torque bias ratio b is the locking (b - 1) / (2 (b + 1)) with no preload.
+    /// </summary>
+    private float LimitedSlipTransfer(WheelState left, WheelState right, float locking, float preload, float axleTorque, float dt)
+    {
+        if (locking <= 0f && preload <= 0f) return 0f;
+        var capacity = preload + locking * MathF.Abs(axleTorque);
         var sync = 0.5f * (left.AngularVelocity - right.AngularVelocity) * _spec.WheelInertia / (2f * dt);
         return MathUtil.Clamp(sync, -capacity, capacity);
     }

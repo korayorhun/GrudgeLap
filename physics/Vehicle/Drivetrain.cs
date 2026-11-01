@@ -1,7 +1,8 @@
 namespace GrudgeLap.Physics.Vehicle;
 
 /// <summary>
-/// Engine + clutch + gearbox feeding the driven axle (the rear, or the front on a front-wheel-drive car). The clutch is a lock/slip state machine:
+/// Engine + clutch + gearbox feeding the driven axle (the rear, or the front on a front-wheel-drive car; on a four-wheel-drive car the
+/// centre of the driveline, which VehicleSim shares between the axles). The clutch is a lock/slip state machine:
 /// while slipping it transmits Coulomb torque limited by the pedal, when the speeds meet it locks and the
 /// engine inertia is lumped onto the wheels. That is numerically stable at the 240 Hz step and still gives
 /// the two behaviours the original cabinet was known for: a launch you can fluff, and a stall.
@@ -19,7 +20,7 @@ public sealed class Drivetrain
     /// <summary>Effective clutch engagement after driver assists, 0 = open, 1 = fully engaged.</summary>
     public float Engagement { get; private set; }
     public TransmissionMode Mode { get; set; } = TransmissionMode.ManualAutoClutch;
-    /// <summary>Torque delivered to the driven axle (sum of both wheels) during the last step.</summary>
+    /// <summary>Torque delivered to the driven axle (sum of both wheels; of all four on a four-wheel-drive car) during the last step.</summary>
     public float AxleTorque { get; private set; }
     /// <summary>
     /// Share of the throttle the engine is allowed (1 = all of it): traction control's cut, applied to the engine only,
@@ -82,7 +83,8 @@ public sealed class Drivetrain
     }
 
     /// <summary>
-    /// Steps the drivetrain. <paramref name="axleSpeed"/> is the mean angular velocity of the driven wheels (rad/s).
+    /// Steps the drivetrain. <paramref name="axleSpeed"/> is the mean angular velocity of the driven wheels (rad/s; on a
+    /// four-wheel-drive car the speed of the centre differential's input in the axles' terms).
     /// <paramref name="axleInertia"/> is the inertia (kg m^2) the driven axle presents to the clutch over one step: its
     /// wheels plus what their tyres hold them to (see VehicleSim.IntegrateWheelSpin); zero or less means unknown, and
     /// the wheels are then taken as tied to the car through the tyres. <paramref name="axleLoadTorque"/> is the torque the
