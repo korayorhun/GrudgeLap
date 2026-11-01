@@ -644,7 +644,9 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         source = pathlib.Path(tmp) / "replay44.wav"
         write_wav(source, ogg_source, 44100, 2)
+        # Bit-exact, so a re-run gives the same file (the Ogg stream serial number is random otherwise).
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(source), "-c:a", "libvorbis", "-b:a", "160k",
+                        "-fflags", "+bitexact", "-flags:a", "+bitexact",
                         "-map_metadata", "-1", str(MUSIC / "replay.ogg")], check=True)
     rms = 20.0 * math.log10(math.sqrt(np.mean(wav * wav)))
     peak = 20.0 * math.log10(np.max(np.abs(wav)))

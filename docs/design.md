@@ -138,12 +138,12 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   alphabet, one text form shared with the Unreal version. The session keeps the credit's own best lap
   (`CreditBestLap`) apart from the loaded ghost's time for it.
 
-### Vehicle dynamics audit (0.17)
+### Vehicle dynamics audit (0.18)
 
 The car model was held against established vehicle-dynamics practice (Pacejka, *Tyre and Vehicle Dynamics*;
 Milliken, *Race Car Vehicle Dynamics*; Gillespie, *Fundamentals of Vehicle Dynamics*) and against the published
 figures of the cars the catalogue follows. Findings, ranked by how much each changes how the cars feel and how real
-they are; the first eleven were fixed in 0.17, each pinned by a test in `HandlingTests` (proving-ground instruments in
+they are; the first eleven were fixed in 0.18, each pinned by a test in `HandlingTests` (proving-ground instruments in
 `physics.tests/HandlingRig.cs`: a 160 m asphalt pad, a constant-radius circle driver after SAE J266, straight stops
 and standing sprints).
 
@@ -158,8 +158,8 @@ and standing sprints).
    forces only when their sum exceeded the peak, so a locked front wheel at 7 degrees still gave two thirds of its
    side force: a car steered with its wheels locked. Now the slips are normalised by stiffness and friction and
    combined as one vector, the force lying along it (a friction ellipse that also points the right way): with the
-   fronts locked the car slides straight on (`Locked_front_wheels_do_not_steer_and_anti_lock_brakes_do`: 0.6 m
-   sideways from 80 km/h with the wheel turned, against 9.9 m with ABS).
+   fronts locked the car slides straight on (`Locked_front_wheels_do_not_steer_and_anti_lock_brakes_do`: about 1.1 m
+   sideways from 80 km/h with the wheel turned, against 13.4 m with ABS).
 3. **Cornering stiffness proportional to the load** (fixed). With K = B C D and D = mu Fz every tyre used its load
    equally well, which makes any car steer exactly neutral whatever its weight distribution (the old pad figures:
    0.5-0.7 deg/g for every car, front-heavy hatches included). Now K follows Pacejka's load dependence
@@ -167,8 +167,9 @@ and standing sprints).
    aspect ratio (`TireSize`, the published sizes on every spec, staggered 225/255 and 225/285 on the mid-engined
    cars), and it no longer scales with the road's friction (a wet tyre is as stiff, it just lets go sooner).
 4. **Centre of mass 0.6 m up and halfway between the axles** (fixed). The body's reference point (hubs, footprint,
-   view, models) stands 0.6 m above the road and midway along, and the mass was there too: SUV-high load transfer
-   and 50/50 for cars that were 40/60 (the Testarossa) and 42/58 (the 570S). `VehicleSpec.CentreOfMassOffset` now
+   view, models) stands 0.6 m above the road (midway between the axles on the flat-twelve, nearer the front axle on
+   the front-heavy cars), and the mass was there too: SUV-high load transfer, and 50/50 on the two mid-engined cars
+   that are 40/60 (the Testarossa) and 42/58 (the 570S). `VehicleSpec.CentreOfMassOffset` now
    puts the mass where the real cars carry it (0.45-0.57 m, rearward on the mid-engined cars) without moving the
    reference point the view and the models are fitted to; each axle is sprung for its load so the cars sit level
    (`Static_weight_distribution_matches_the_car`). Braking load transfer agrees with statics to a per cent
@@ -229,7 +230,7 @@ Still open, in the same order:
 15. **Camber and tyre temperature** — none; the grip is the same on the first lap as on the tenth.
 16. **The stunt route for the 1990s saloon and estate** — 75 PS and 61 PS cannot gather the loop's 60 mph in the
     140 m after the bend before it, so the scripted driver crashes there and respawns 40 m short of it (it did
-    before 0.17 too); `Every_car_laps_both_routes` holds them to the speed route. A track matter, not a physics one.
+    before 0.18 too); `Every_car_laps_both_routes` holds them to the speed route. A track matter, not a physics one.
 
 Kept, as earlier decisions: the fixed 240 Hz step with semi-implicit Euler for the body, the raycast wheels, the
 grass's grip and rolling resistance (0.9), the weather's grip figures (0.12), the speed-sensitive steering lock,

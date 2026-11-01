@@ -308,6 +308,16 @@ public sealed class VehicleSim
 
             if (!w.InContact)
             {
+                // The bar still reaches a wheel hanging at full droop: it pulls that corner of the body down through the
+                // droop limit with the force it pushes the grounded wheel up by (c.Bar is the negative of its partner's),
+                // so the two cancel vertically and only roll the body. Dropping it here left a net push up from nothing,
+                // a few kN for a hatchback lifting an inside wheel.
+                if (c.Bar < 0f)
+                {
+                    var barForce = up * c.Bar;
+                    force += barForce;
+                    torque += Vector3.Cross(c.Hub - _centreOfMass, barForce);
+                }
                 SpinFreeWheel(w, driveTorque, wheelInertia, brakeMax, dt);
                 continue;
             }
@@ -413,7 +423,7 @@ public sealed class VehicleSim
     /// road than its tyre can use (a tenth of the road speed plus half a metre a second, the slip at the tyre's peak with
     /// a little to spare) and fed back in once it stops. It acts on the engine (ignition and throttle, as the systems of
     /// the 2000s did), not on the driver's pedal, so the clutch and the gearbox see the pedal the driver holds. Up to
-    /// 0.16 it eased the pedal itself, by the slip ratio, which near standstill opened the assisted clutch on every cut.
+    /// 0.17 it eased the pedal itself, by the slip ratio, which near standstill opened the assisted clutch on every cut.
     /// </summary>
     private void UpdateTractionControl(WheelState driven0, WheelState driven1, in DriverInputs input, float dt)
     {
@@ -459,7 +469,7 @@ public sealed class VehicleSim
     /// The wheel's speed is solved implicitly: the new speed is the one at which the wheel's inertia, the drive, the brake
     /// and the tyre force the new speed itself produces balance over the step. A road tyre is so stiff lengthways (a few
     /// tenths of a radian a second separate rolling from spinning at walking pace) that any explicit step overshoots;
-    /// up to 0.16 the slip ratio was relaxed over a third of a metre to keep it in check, a lag that, once the tyre's
+    /// up to 0.17 the slip ratio was relaxed over a third of a metre to keep it in check, a lag that, once the tyre's
     /// force fell past its peak, let the wheel ring against the tyre and the clutch at the step rate on every launch.
     /// The balance rises with the speed (the inertia term outgrows the gentle fall of the tyre past its peak), so a
     /// bracketing search finds its one root; the brake is Coulomb friction that can hold the wheel at rest.

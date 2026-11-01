@@ -759,9 +759,11 @@ internal sealed partial class EngineAudio : Node
                 }
                 case Tom:
                 {
-                    // The drum machine's tom: a sine at the note's pitch that starts half as high again and drops.
+                    // The drum machine's tom: a sine at the note's pitch that starts half as high again and drops. It dies
+                    // as fast as the kick: at exp(-5 t) it was still at 8 % when the voice is let go (0.4 s past the note)
+                    // and that step clicked.
                     v.Phase += frequency * (1f + 0.5f * MathF.Exp(-v.Age * 25f)) / MixRate;
-                    value = MathF.Sin((float)(v.Phase * MathF.Tau)) * MathF.Exp(-v.Age * 5f);
+                    value = MathF.Sin((float)(v.Phase * MathF.Tau)) * MathF.Exp(-v.Age * 9f);
                     break;
                 }
                 case Cymbal:

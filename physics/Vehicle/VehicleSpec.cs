@@ -37,7 +37,8 @@ public sealed record VehicleSpec
     public float BodyHalfWidth { get; init; } = 0.99f;
     /// <summary>
     /// Where the mass is centred, from the body's reference point (m; x right, y up, z forward). The reference point is
-    /// the one the hubs, the body and the view are measured from, set midway between the axles and 0.6 m up; the real cars
+    /// the one the hubs, the body and the view are measured from, 0.6 m up (midway between the axles on the flat-twelve,
+    /// FrontAxle/RearAxle from it on every car); the real cars
     /// carry their weight lower, and the mid-engined ones towards the back (40/60 for the flat-twelve, 42/58 for the V8),
     /// which is what makes a car squat, roll and turn the way it does.
     /// </summary>

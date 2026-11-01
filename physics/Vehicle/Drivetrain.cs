@@ -122,7 +122,7 @@ public sealed class Drivetrain
                 // The axle side carries the wheels and what the tyres tie them to. The caller knows that from the tyres'
                 // stiffness: a gripping tyre makes the wheel heavy to turn within a step, a spinning one leaves it light.
                 // Without that, the axle was taken as the wheels plus the whole car (m r^2), which is right for a
-                // gripping tyre and badly wrong for a spinning one: once the tyre's force fell past its peak (0.17),
+                // gripping tyre and badly wrong for a spinning one: once the tyre's force fell past its peak (0.18),
                 // the clutch overshot every step and hammered the wheels back and forth.
                 if (axleInertia <= 0f) axleInertia = 2f * _spec.WheelInertia + _spec.MassKg * _spec.WheelRadius * _spec.WheelRadius;
                 var syncTorque = (slip + engineTorque * dt / _spec.EngineInertia + ratio * axleLoadTorque * dt / axleInertia)

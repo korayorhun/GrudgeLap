@@ -35,7 +35,7 @@ public readonly record struct TireSize(float WidthMm, float AspectPercent, float
 /// sliding sideways keeps about nine tenths, the measured behaviour of road tyres on dry asphalt.
 /// </summary>
 /// <remarks>
-/// Up to 0.16 the curves never fell after their peak (a locked wheel braked with 99 % of the peak and wheelspin drove
+/// Up to 0.17 the curves never fell after their peak (a locked wheel braked with 99 % of the peak and wheelspin drove
 /// as hard as the ideal slip), the cornering stiffness was proportional to the load (which makes every car steer
 /// neutrally whatever its weight distribution) and the friction circle only clipped the two pure forces, so a locked
 /// front wheel still steered with two thirds of its side force.

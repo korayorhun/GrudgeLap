@@ -7,7 +7,7 @@ using Xunit.Abstractions;
 namespace GrudgeLap.Physics.Tests;
 
 /// <summary>
-/// The handling as a proving ground would measure it (0.17): stopping distances, sprints, steady-state cornering,
+/// The handling as a proving ground would measure it (0.18): stopping distances, sprints, steady-state cornering,
 /// weight transfer, anti-lock brakes, the limited-slip differential and lift-off oversteer. Each figure is checked
 /// against the range the real cars the catalogue follows were measured in, or against the textbook law that governs it.
 /// </summary>

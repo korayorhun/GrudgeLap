@@ -123,7 +123,7 @@ public sealed class ScriptedDriver
     /// <summary>
     /// The throttle a competent driver actually holds when asking for <paramref name="throttle"/>: eased in proportion
     /// to how far a driven wheel spins past what its tyre can use, the way a driver feels the tail squirm or the front
-    /// scrabble and feeds the power in. Since 0.17 the tyre's force falls once it spins past its peak (to about three
+    /// scrabble and feeds the power in. Since 0.18 the tyre's force falls once it spins past its peak (to about three
     /// quarters at full wheelspin), so a launch on the stop and a second-gear exit lose more than they did on the old
     /// tyre, which kept almost all of its force however fast the wheel spun. Used by the scripted driver and by the
     /// tests' magazine-style launches.
@@ -147,7 +147,7 @@ public sealed class ScriptedDriver
     /// <summary>
     /// The brake pedal a driver actually holds when asking for <paramref name="brake"/> in a car without anti-lock
     /// brakes: eased as a wheel slides past the tyre's peak slip, so the car stops near its best and keeps some steering
-    /// (cadence braking, as drivers were taught). Since 0.17 a locked tyre brakes with only about three quarters of its
+    /// (cadence braking, as drivers were taught). Since 0.18 a locked tyre brakes with only about three quarters of its
     /// peak and steers not at all, which a key or the scripted driver's hard stop would otherwise get every time.
     /// </summary>
     public static float FeatherBrake(VehicleSim car, float brake)
