@@ -30,6 +30,8 @@ internal static class WorldBuilder
     /// <summary>How far the shoulders' outer edge sits below the road plane: a centimetre above the ground there.</summary>
     private const float ShoulderDrop = RoadClearance - 0.01f;
     private const float TerrainMargin = 2400f;
+    /// <summary>Metres one tile of the grass's macro-variation noise spans (the terrain's second UV set; see <see cref="Grass"/>).</summary>
+    private const float MacroTile = 90f;
 
     private static StandardMaterial3D? _grass;
     private static StandardMaterial3D? _asphalt;
@@ -43,7 +45,7 @@ internal static class WorldBuilder
     // cuttings' earth a natural brown (0.9.1; before, the orange of the original was kept in both).
     private static readonly Color OrangeShoulder = new(0.95f, 0.46f, 0.12f);
     private static readonly Color OrangeEarth = new(0.86f, 0.50f, 0.27f);
-    private static readonly Color GravelTint = new(0.98f, 0.95f, 0.90f);
+    private static readonly Color GravelTint = new(0.80f, 0.77f, 0.72f);   // 0.11: the pale tint read as fresh concrete in the sun
     private static readonly Color SoilTint = new(0.72f, 0.58f, 0.46f);
     private static Godot.Environment? _environment;
     private static Godot.Environment? _mirrorEnvironment;
@@ -52,10 +54,14 @@ internal static class WorldBuilder
     // for SDFGI, which lit the scene the same way but cost a third of the GPU's frame (see SetQuality).
     private const float SkyAmbientShare = 0.8f;
     private static readonly Color GroundBounce = new(0.62f, 0.58f, 0.46f);
-    private const float AmbientEnergy = 1.15f;
+    private const float AmbientEnergy = 0.95f;   // 0.11: a little less fill, so the sun's side and the shade differ as they do outdoors
     private static StandardMaterial3D? _steel;
     private static MeshInstance3D? _clouds;
     private static Node3D? _forest;
+    /// <summary>The reflection probe that travels with the player's car (<see cref="BuildCarProbe"/>), and where and when it was last moved.</summary>
+    private static ReflectionProbe? _carProbe;
+    private static Vector3 _carProbeAt;
+    private static float _carProbeMovedAt = -100f;
     private static GraphicsQuality _quality = GraphicsQuality.High;
     private static bool _retro;
     /// <summary>How fast the cloud sheet drifts, in tiles per second: about five metres a second on a 2.8 km tile.</summary>
@@ -76,6 +82,7 @@ internal static class WorldBuilder
     /// </summary>
     public static void ReleaseShared()
     {
+        _carProbe = null;
         _grass = null;
         _asphalt = null;
         _concrete = null;
@@ -148,6 +155,39 @@ internal static class WorldBuilder
     }
 
     /// <summary>
+    /// A reflection probe for the player's car (0.11): the road, the verges and the horizon mirrored in the paint, the
+    /// glass and the chrome, where the sky alone made the car look like a toy set down on a photograph. It renders
+    /// once each time it is moved (<see cref="FollowCar"/>), six small faces every half second rather than six a
+    /// frame. The player's car is on visual layer 2 as well as 1 (CarView.MarkPlayer) and is masked out of the
+    /// capture: the probe stands at the car's roof, and the car itself would fill the cubemap. Off on Low and in
+    /// 1989 mode (ApplyQuality); the car then reflects the sky alone, as before.
+    /// </summary>
+    public static ReflectionProbe BuildCarProbe()
+    {
+        _carProbe = new ReflectionProbe
+        {
+            Name = "CarReflections",
+            UpdateMode = ReflectionProbe.UpdateModeEnum.Once,
+            Size = new Vector3(90f, 50f, 90f),
+            CullMask = 0xFFFFFu & ~2u,
+            EnableShadows = false,
+            Intensity = 1f,
+        };
+        ApplyQuality();
+        return _carProbe;
+    }
+
+    /// <summary>Moves the car's reflection probe along with the car every half second or twelve metres; each move renders it again.</summary>
+    public static void FollowCar(Vector3 carPosition, float time)
+    {
+        if (_carProbe is null || !_carProbe.Visible) return;
+        if (time - _carProbeMovedAt < 0.5f && carPosition.DistanceTo(_carProbeAt) < 12f) return;
+        _carProbeAt = carPosition;
+        _carProbeMovedAt = time;
+        _carProbe.GlobalPosition = carPosition + new Vector3(0f, 1.3f, 0f);
+    }
+
+    /// <summary>
     /// The cost of the picture: what the environment does on top of the geometry. High is everything (indirect
     /// light, reflections, haze); Medium drops the screen-space indirect light and reflections; Low keeps only the
     /// sun and the fog and thins the wood. The caller sets the viewport's part (resolution, anti-aliasing). 1989 mode
@@ -173,6 +213,7 @@ internal static class WorldBuilder
         var medium = !retro && _quality >= GraphicsQuality.Medium;
         if (_sun is not null) _sun.ShadowEnabled = medium;
         if (_clouds is not null) _clouds.Visible = !retro;
+        if (_carProbe is not null) _carProbe.Visible = medium;
         if (_forest is not null)
         {
             foreach (var child in _forest.GetChildren())
@@ -204,6 +245,7 @@ internal static class WorldBuilder
             material.TextureFilter = retro ? BaseMaterial3D.TextureFilterEnum.Nearest : BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic;
         }
         if (_asphalt is not null) _asphalt.DetailEnabled = !retro && _asphalt.DetailAlbedo is not null;
+        if (_grass is not null) _grass.DetailEnabled = !retro && _grass.DetailAlbedo is not null;
         // The shoulders and the earthworks take the cabinet's orange back with the textures off; the edge lines and the
         // marker posts go.
         if (_gravel is not null) _gravel.AlbedoColor = retro ? OrangeShoulder : GravelTint;
@@ -255,8 +297,9 @@ internal static class WorldBuilder
     // Photo textures (CC0, see assets/textures/SOURCES.md); the procedural noise stays as the fallback if a file is missing.
     private static StandardMaterial3D Grass => _grass ??= Textured(new StandardMaterial3D
     {
-        // A deeper green than the photo's own: the pale tint read as hay, and the plain of the 1989 game is a saturated green.
-        AlbedoColor = new Color(0.50f, 0.66f, 0.36f),
+        // A deeper green than the photo's own: the pale tint read as hay, and the plain of the 1989 game is a saturated
+        // green; a touch less saturated and a little brighter since 0.11, when the macro variation below began darkening it.
+        AlbedoColor = new Color(0.56f, 0.66f, 0.39f),
         Roughness = 1f,
         // Grass barely reflects and is matte all over (no roughness map): with the photo's roughness map at the
         // default specular, its smoother specks glinted on every slope facing the sun, a patch of white frost on
@@ -264,8 +307,14 @@ internal static class WorldBuilder
         MetallicSpecular = 0.2f,
         Uv1Scale = new Vector3(1150f, 1150f, 1f),    // the terrain's UV spans 5000 m: a 4.3 m tile
         VertexColorUseAsAlbedo = true,
+        // Macro variation (0.11): a low-frequency noise multiplied in on the second UV set, which spans MacroTile metres,
+        // so the 4.3 m tile no longer reads as a repeat across the plain. SetRetro switches it off with the textures.
+        DetailEnabled = true,
+        DetailAlbedo = Noise(0.6f, 3, new[] { (0f, new Color(0.78f, 0.72f, 0.56f)), (0.45f, new Color(0.93f, 0.94f, 0.90f)), (1f, new Color(1f, 1f, 0.97f)) }, seed: 91),   // the low end is dry straw: a field is never one green
+        DetailBlendMode = BaseMaterial3D.BlendModeEnum.Mul,
+        DetailUVLayer = BaseMaterial3D.DetailUV.UV2,
     }, Photo("grass_color") ?? Noise(0.9f, 5, new[] { (0f, new Color(0.62f, 0.72f, 0.55f)), (0.5f, new Color(0.95f, 1.0f, 0.9f)), (1f, new Color(1.25f, 1.2f, 1.1f)) }, seed: 3),
-       Photo("grass_normal") ?? Noise(2.5f, 4, null, seed: 11, asNormal: true), normalScale: 0.7f);
+       Photo("grass_normal") ?? Noise(2.5f, 4, null, seed: 11, asNormal: true), normalScale: 0.5f);   // 0.11: at 0.7 the blades glinted frost-white at a distance
 
     private static StandardMaterial3D Asphalt
     {
@@ -274,16 +323,19 @@ internal static class WorldBuilder
             if (_asphalt is not null) return _asphalt;
             _asphalt = Textured(new StandardMaterial3D
             {
-                // Slightly darkened photo asphalt; the slab shade, the wheel tracks, the patches and the potholes
-                // come from the vertex colour multiplied in.
-                AlbedoColor = new Color(0.46f, 0.46f, 0.47f),
+                // Darkened photo asphalt: aged asphalt reflects about a fifth of the light, and at 0.46 (until 0.10) the
+                // road read as fresh concrete in the sun. The slab shade, the wheel tracks, the patches and the potholes
+                // come from the vertex colour multiplied in. Rough all over, without the photo's roughness map: that
+                // map averages 0.52, and under the screen-space reflections a dry road mirrored the car and the sky
+                // as if it had just rained (0.11). A dry road only shines at a grazing angle towards a low sun.
+                AlbedoColor = new Color(0.33f, 0.33f, 0.34f),
                 VertexColorUseAsAlbedo = true,
-                Roughness = 1f,
+                Roughness = 0.95f,
                 Uv1Scale = new Vector3(2f, 0.18f, 1f),      // u spans the 11 m width, v is metres along: a 5.5 m tile
                 // Both faces: on the bridges, the ramps and the loop this ribbon is the whole deck, seen from below too.
                 CullMode = BaseMaterial3D.CullModeEnum.Disabled,
             }, Photo("asphalt_color") ?? Noise(9f, 4, new[] { (0f, new Color(0.82f, 0.82f, 0.82f)), (0.5f, new Color(0.98f, 0.98f, 0.98f)), (1f, new Color(1.15f, 1.15f, 1.15f)) }, seed: 5),
-               Photo("asphalt_normal") ?? Noise(16f, 4, null, seed: 17, asNormal: true), normalScale: 0.5f, Photo("asphalt_roughness"));
+               Photo("asphalt_normal") ?? Noise(16f, 4, null, seed: 17, asNormal: true), normalScale: 0.35f);
             // The wear sheet (tools/make-road-wear.py): tar snakes, sealed cracks and stains multiplied in on the
             // second UV set, which runs 40 m along the road and drifts across it so the sheet's repeat does not read.
             var wear = Photo("road_wear", "png");
@@ -329,12 +381,12 @@ internal static class WorldBuilder
     {
         AlbedoColor = _retro ? OrangeShoulder : GravelTint,
         VertexColorUseAsAlbedo = true,
-        Roughness = 1f,
+        Roughness = 1f,   // compacted gravel is matte; its photo roughness map (mean 0.54) gave it a damp sheen (0.11)
         Uv1Scale = new Vector3(0.9f, 0.45f, 1f),
         // Both faces: the shoulders run along the bridge decks too, seen from below.
         CullMode = BaseMaterial3D.CullModeEnum.Disabled,
     }, Photo("shoulder_color") ?? Photo("dirt_color") ?? Noise(4f, 3, new[] { (0f, new Color(0.7f, 0.65f, 0.55f)), (1f, new Color(1f, 0.95f, 0.85f)) }, seed: 41),
-       Photo("shoulder_normal") ?? Photo("dirt_normal"), 0.8f, Photo("shoulder_roughness") ?? Photo("dirt_roughness"));
+       Photo("shoulder_normal") ?? Photo("dirt_normal"), 0.8f);
 
     /// <summary>
     /// A photo material for props and foliage, cached by texture, tint and scale and tracked for the retro
@@ -438,11 +490,11 @@ internal static class WorldBuilder
             AmbientLightEnergy = AmbientEnergy,
             // AgX keeps the saturated paint and the sky from clipping the way ACES does.
             TonemapMode = Godot.Environment.ToneMapper.Agx,
-            TonemapExposure = 0.9f,
+            TonemapExposure = 0.95f,
             TonemapWhite = 6f,
             SsaoEnabled = true,
             SsaoRadius = 1.5f,
-            SsaoIntensity = 1.5f,
+            SsaoIntensity = 2f,
             SsilEnabled = true,
             SsilRadius = 3f,
             SsilIntensity = 1f,
@@ -458,8 +510,8 @@ internal static class WorldBuilder
             // plain of the 1989 game, where nothing faded. Denser fog washed everything past the next bend to grey.
             FogEnabled = true,
             FogLightColor = new Color(0.72f, 0.80f, 0.94f),
-            FogDensity = 0.00004f,
-            FogAerialPerspective = 0.35f,
+            FogDensity = 0.00006f,
+            FogAerialPerspective = 0.5f,
             FogSkyAffect = 0.05f,
             // A trace of haze near the ground, so the sun still has something to light in the dips.
             VolumetricFogEnabled = true,
@@ -468,8 +520,8 @@ internal static class WorldBuilder
             VolumetricFogLength = 300f,
             VolumetricFogSkyAffect = 0.1f,
             AdjustmentEnabled = true,
-            AdjustmentContrast = 1.05f,
-            AdjustmentSaturation = 1.12f,
+            AdjustmentContrast = 1.08f,
+            AdjustmentSaturation = 1.02f,
         };
         return new WorldEnvironment { Environment = _environment };
     }
@@ -478,7 +530,7 @@ internal static class WorldBuilder
     {
         _sun = new DirectionalLight3D
         {
-            LightEnergy = 1.45f,
+            LightEnergy = 1.75f,
             LightColor = new Color(1f, 0.96f, 0.90f),
             LightAngularDistance = 0.5f,
             ShadowEnabled = true,
@@ -488,7 +540,8 @@ internal static class WorldBuilder
             DirectionalShadowSplit2 = 0.15f,
             DirectionalShadowSplit3 = 0.4f,
             ShadowBias = 0.02f,
-            ShadowNormalBias = 1.5f,
+            ShadowNormalBias = 1.0f,
+            DirectionalShadowBlendSplits = true,
         };
         // Shine from where the HDRI's sun is, so shadows and the sky agree.
         _sun.LookAtFromPosition(Vector3.Zero, -SunDirection, Vector3.Up);
@@ -880,6 +933,7 @@ internal static class WorldBuilder
             st.SetTangent((Vector3.Right - gNormal * gNormal.X).Normalized(), 1f);
             st.SetNormal(gNormal);
             st.SetUV(new Vector2(x / 5000f + 0.5f, z / 5000f + 0.5f));
+            st.SetUV2(new Vector2(x / MacroTile, z / MacroTile));
             st.AddVertex(Convert.ToGodot(new SN.Vector3(x, h, z)));
         }
         // Grass or bare earth, split along the earthworks' contour (vertexEarth = 0.5, ground about 2.1 m off the
@@ -923,6 +977,7 @@ internal static class WorldBuilder
             st.SetTangent((Vector3.Right - gNormal * gNormal.X).Normalized(), 1f);
             st.SetNormal(gNormal);
             st.SetUV(new Vector2(x / 5000f + 0.5f, z / 5000f + 0.5f));
+            st.SetUV2(new Vector2(x / MacroTile, z / MacroTile));
             st.AddVertex(position);
             EarthAttributes(es, gNormal, MathUtil.Lerp(EarthTone(u), EarthTone(w), t), x, z);
             es.AddVertex(position);
@@ -1044,7 +1099,7 @@ internal static class WorldBuilder
             var shared = sink > 0f && SiblingSide(track, path, f) != 0;
             // Alternate the shade every original slab length: the stripey look of the 1989 road, softened.
             var slab = (int)MathF.Floor(f.Distance / TrackBuilder.Slab);
-            var slabShade = slab % 2 == 0 ? 1f : 0.88f;
+            var slabShade = slab % 2 == 0 ? 1f : 0.94f;
             var tint = f.Kind == SegmentKind.Loop ? loopTint : Colors.White;
             var gLateral = Convert.ToGodot(f.Lateral);
             var sign = Convert.ToGodot(f.Normal).Cross(gLateral).Dot(Convert.ToGodot(f.Tangent)) < 0f ? -1f : 1f;
@@ -1061,7 +1116,7 @@ internal static class WorldBuilder
                 var tone = slabShade * TrackShade(fraction)
                     * RoadWear.PatchTone(path.Kind, f.Kind, f.Distance, lateral, f.HalfWidth)
                     * MathF.Max(1f - 9f * MathF.Max(depth - 0.004f, 0f), 0.6f)
-                    * (1f + 0.05f * grain.GetNoise2D(f.Distance * 3.7f, lateral * 2.1f));
+                    * (1f + 0.025f * grain.GetNoise2D(f.Distance * 3.7f, lateral * 2.1f));
                 var colour = tint * tone;
                 colour.A = 1f;
                 st.SetColor(colour);
@@ -1190,7 +1245,7 @@ internal static class WorldBuilder
     {
         var st = new MeshBuilder();
         var frames = path.Frames;
-        var yellow = new Color(0.95f, 0.78f, 0.20f);
+        var yellow = new Color(0.86f, 0.70f, 0.26f);   // road paint, not a traffic cone: duller since 0.11
         for (var i = 0; i < frames.Count - 1; i++)
         {
             var a = frames[i];
@@ -1209,7 +1264,7 @@ internal static class WorldBuilder
                     a.Normal, b.Normal, (yellow * dashTone) with { A = 1f }, a.Distance, b.Distance);
             }
         }
-        var material = new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 0.6f, CullMode = BaseMaterial3D.CullModeEnum.Back };
+        var material = new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 0.7f, CullMode = BaseMaterial3D.CullModeEnum.Back };
         return new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = material, Name = $"Lines-{path.Kind}" };
     }
 
@@ -1230,7 +1285,7 @@ internal static class WorldBuilder
             var shared = SiblingSide(track, path, a);
             // The paint wears in patches.
             var tone = 0.78f + 0.22f * RoadWear.Hash((int)(a.Distance / 7f), (int)path.Kind, 47);
-            var white = new Color(0.92f * tone, 0.92f * tone, 0.90f * tone);
+            var white = new Color(0.84f * tone, 0.84f * tone, 0.82f * tone);
             foreach (var side in new[] { -1f, 1f })
             {
                 if ((int)side == shared) continue;
@@ -1242,7 +1297,7 @@ internal static class WorldBuilder
                 else Quad(st, aOut, aIn, bOut, bIn, a.Normal, b.Normal, white, a.Distance, b.Distance);
             }
         }
-        _edgeLines ??= new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 0.55f, CullMode = BaseMaterial3D.CullModeEnum.Back };
+        _edgeLines ??= new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 0.65f, CullMode = BaseMaterial3D.CullModeEnum.Back };
         var lines = new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = _edgeLines, Name = $"EdgeLines-{path.Kind}", Visible = !_retro };
         _modernRoad.Add(lines);
         return lines;

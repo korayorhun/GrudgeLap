@@ -282,13 +282,58 @@ internal sealed partial class EngineAudio : Node
         _pops = PopPlayer();
         _crashTakes = CrashPlayer();
         _knockTakes = CrashPlayer();
-        if (ResourceLoader.Exists("res://assets/audio/music/replay.ogg"))
+        // The instant replay's music: a recording of the player's own from the user folder when there is one (0.11:
+        // user://music/replay.ogg, .mp3 or .wav, so the tune of a game you remember can play in your copy without
+        // being shipped with this one), otherwise the CC0 tune that comes with the game.
+        var custom = CustomReplayMusic();
+        if (custom is not null)
+        {
+            _replayMusic = new AudioStreamPlayer { Stream = custom, VolumeDb = ReplayMusicDb };
+            AddChild(_replayMusic);
+        }
+        else if (ResourceLoader.Exists("res://assets/audio/music/replay.ogg"))
         {
             _replayMusic = new AudioStreamPlayer { Stream = GD.Load<AudioStream>("res://assets/audio/music/replay.ogg"), VolumeDb = ReplayMusicDb };
             AddChild(_replayMusic);
         }
         // The engine, tyres, pops and these layers add up on the master bus: a limiter there instead of the output's clipping.
         if (AudioServer.GetBusEffectCount(0) == 0) AudioServer.AddBusEffect(0, new AudioEffectHardLimiter { CeilingDb = -0.5f });
+    }
+
+    /// <summary>
+    /// A replay tune the player put in the user folder (<c>user://music/replay.ogg</c>, <c>.mp3</c> or <c>.wav</c>; the
+    /// folder is made on the first run so it is easy to find), decoded from the file, or null when there is none or
+    /// it does not decode. Only this copy of the game plays it: nothing in the folder is part of the game.
+    /// </summary>
+    private static AudioStream? CustomReplayMusic()
+    {
+        const string folder = "user://music";
+        DirAccess.MakeDirRecursiveAbsolute(folder);
+        var candidates = new (string Name, System.Func<string, AudioStream?> Load)[]
+        {
+            ("replay.ogg", path => AudioStreamOggVorbis.LoadFromFile(path)),
+            ("replay.mp3", path => AudioStreamMP3.LoadFromFile(path)),
+            ("replay.wav", path => AudioStreamWav.LoadFromFile(path)),
+        };
+        foreach (var (name, load) in candidates)
+        {
+            var path = $"{folder}/{name}";
+            if (!Godot.FileAccess.FileExists(path)) continue;
+            try
+            {
+                var stream = load(path);
+                if (stream is not null)
+                {
+                    GD.Print($"replay music: {ProjectSettings.GlobalizePath(path)}");
+                    return stream;
+                }
+            }
+            catch (System.Exception ex)
+            {
+                GD.PrintErr($"replay music {path} did not load: {ex.Message}");
+            }
+        }
+        return null;
     }
 
     /// <summary>

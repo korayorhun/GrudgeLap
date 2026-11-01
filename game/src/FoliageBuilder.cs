@@ -31,6 +31,11 @@ internal static class FoliageBuilder
         AlbedoTexture = GD.Load<Texture2D>("res://assets/textures/grass_blades.png"),
         Transparency = BaseMaterial3D.TransparencyEnum.AlphaScissor,
         AlphaScissorThreshold = 0.45f,
+        // Alpha-to-coverage (0.11) softens the cut-out edges under multisampling; the backlight lets the sun through
+        // the blades, as it does through real grass.
+        AlphaAntialiasingMode = BaseMaterial3D.AlphaAntiAliasing.AlphaToCoverage,
+        BacklightEnabled = true,
+        Backlight = new Color(0.22f, 0.28f, 0.10f),
         CullMode = BaseMaterial3D.CullModeEnum.Disabled,
         VertexColorUseAsAlbedo = true,
         Roughness = 0.95f,
@@ -46,6 +51,10 @@ internal static class FoliageBuilder
         AlbedoTexture = GD.Load<Texture2D>("res://assets/textures/leaf_clusters.png"),
         Transparency = BaseMaterial3D.TransparencyEnum.AlphaScissor,
         AlphaScissorThreshold = 0.5f,
+        // As for the tufts (0.11): softer card edges, and the sun through the canopy.
+        AlphaAntialiasingMode = BaseMaterial3D.AlphaAntiAliasing.AlphaToCoverage,
+        BacklightEnabled = true,
+        Backlight = new Color(0.28f, 0.34f, 0.14f),
         CullMode = BaseMaterial3D.CullModeEnum.Disabled,
         VertexColorUseAsAlbedo = true,
         Roughness = 0.9f,
@@ -277,6 +286,9 @@ internal static class FoliageBuilder
         AlbedoTexture = GD.Load<Texture2D>("res://assets/textures/leaf_clusters.png"),
         Transparency = BaseMaterial3D.TransparencyEnum.AlphaScissor,
         AlphaScissorThreshold = 0.35f,
+        AlphaAntialiasingMode = BaseMaterial3D.AlphaAntiAliasing.AlphaToCoverage,
+        BacklightEnabled = true,
+        Backlight = new Color(0.28f, 0.34f, 0.14f),
         CullMode = BaseMaterial3D.CullModeEnum.Disabled,
         VertexColorUseAsAlbedo = true,
         Roughness = 0.9f,

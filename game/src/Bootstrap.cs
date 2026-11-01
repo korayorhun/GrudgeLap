@@ -145,6 +145,8 @@ public sealed partial class Bootstrap : Node3D
 
         _carView = CarView.Create(VehicleSpec.Catalogue[_carIndex]);
         AddChild(_carView);
+        _carView.MarkPlayer();
+        AddChild(WorldBuilder.BuildCarProbe());
         _cameraRig = new CameraRig { Mode = _orbit is not null ? CameraMode.Orbit : _startChase ? CameraMode.Chase : CameraMode.Cockpit };
         if (_orbit is { } orbit) _cameraRig.Orbit = orbit;
         AddChild(_cameraRig);
@@ -287,6 +289,7 @@ public sealed partial class Bootstrap : Node3D
             _carView.QueueFree();
             _carView = CarView.Create(spec);
             AddChild(_carView);
+            _carView.MarkPlayer();
             FitOutPlayerCar();
         }
         _carView.Name = $"Car-{spec.Style}";
@@ -585,6 +588,7 @@ public sealed partial class Bootstrap : Node3D
         _knockSmoke.Follow(_carView, _session.Damage, _retro || _session.Phase == SessionPhase.Finished);
         _carView.SetPose(car.Position, car.Orientation);
         _carView.SetWheels(car.Wheels, car.SteerAngle, car.Spec);
+        WorldBuilder.FollowCar(_carView.GlobalPosition, _elapsed);
         _cameraRig.Roughness = car.Wheels.Any(w => w.InContact && w.Surface != SurfaceType.Road) ? 1f : 0f;
         _cameraRig.Acceleration = new Vector2(car.LateralAcceleration, car.LongitudinalAcceleration);
         _cameraRig.FollowCar(_carView.GlobalTransform, MathF.Abs(car.Speed), dt);

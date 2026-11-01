@@ -87,7 +87,8 @@ Eleven seconds of "Horizon Surfer" by congusbongus (OpenGameArt, https://opengam
 CC0 1.0; FM, made in BambooTracker on the YM2608 chip), from 14.2 s (where the full arrangement comes in) with a
 20 ms fade-in and a 1.4 s fade-out, loudness-normalised (-14 LUFS); `replay.wav` is the same, mono 22.05 kHz, for the
 Unreal version's reader (the Godot export leaves it out). The original game's replay music is Atari's and is not
-used; 1989 mode keeps our synthesised tune.
+used; 1989 mode keeps our synthesised tune. Since 0.11 a player can put a `replay.ogg`, `replay.mp3` or `replay.wav` of
+their own into the user folder (`user://music/`), which that copy plays instead; it is never part of the game.
 
 ## References (not shipped)
 

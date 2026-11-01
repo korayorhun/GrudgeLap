@@ -116,6 +116,11 @@ with you; beat it and the new lap becomes the ghost.
 at the end of the credit, as the cabinet did (up and down turn the letter, Enter takes it). The table
 ships with ten names to beat.
 
+**Your own replay music.** Put a file named `replay.ogg`, `replay.mp3` or `replay.wav` into
+`%APPDATA%\Godot\app_userdata\GrudgeLap\music\` (the folder is created on the first run) and the instant replay
+plays it instead of the built-in tune; 1989 mode keeps its synthesised one. The game itself ships only CC0 music, so
+whatever you put there stays on your machine.
+
 ## Build from source
 
 Needs the .NET 8 SDK and [Godot 4.7.2 .NET](https://godotengine.org/download/windows/) with its export

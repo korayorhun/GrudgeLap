@@ -99,7 +99,8 @@ internal sealed partial class CameraRig : Node3D
             return;
         }
 
-        var target = car * new Vector3(0f, 1.9f - CgHeight, 6.3f);
+        // A little further back and lower since 0.11, with the longer lens below, so the car fills the frame as before.
+        var target = car * new Vector3(0f, 1.7f - CgHeight, 7.4f);
         if (!_chaseInitialised)
         {
             _chasePosition = target;
@@ -109,7 +110,8 @@ internal sealed partial class CameraRig : Node3D
         var focus = car * new Vector3(0f, 0.7f - CgHeight, -2.0f);
         var chase = _chasePosition + car.Basis * (_jolt * 2.5f);
         _camera.GlobalTransform = new Transform3D(Basis.LookingAt(focus - chase, Vector3.Up), chase);
-        _camera.Fov = 62f;
+        // A longer lens than the seat's: at 62 degrees the car outside was drawn in a fish-eye and read as a toy (0.11).
+        _camera.Fov = 54f;
     }
 
     /// <summary>

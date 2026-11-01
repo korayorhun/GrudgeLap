@@ -332,6 +332,18 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   loop the ribbon is the whole deck and is seen from below; the centre line and the far ground only from above.
   The hot hatch's and the five's mirror housings are black plastic, the turbo hatch's in paint: from the seat
   the housing's back shows through the side glass, and in red paint it read as a ball beside the screen.
+- The look of 0.11 (a step towards a photograph, after the plain photo textures of 0.10): the asphalt darkened to the
+  albedo of aged asphalt (0.33) and made matte all over (its photo roughness map, mean 0.52, had the road mirroring
+  the car and the sky under the screen-space reflections as if it had rained), the gravel darkened and matte, the
+  grass a little less saturated with a 90 m macro-variation noise multiplied in on the terrain's second UV set
+  (dry-straw patches, so the 4.3 m tile does not read as a repeat across the plain), less ambient and more sun
+  (0.95 / 1.75) with blended shadow splits, saturation 1.02 and contrast 1.08, more aerial perspective; the car paint
+  a coated dielectric (metallic 0.05, roughness 0.38, clearcoat 1 at 0.04); a reflection probe travelling with the
+  player's car (`WorldBuilder.BuildCarProbe`: rendered again at each move, every half second or twelve metres; the
+  car sits on visual layer 2 and is left out of the capture) and a dark radial decal under the body as its contact
+  shadow (`CarView.MarkPlayer`); the chase camera a longer lens (54 degrees from 7.4 m back) so the car is not drawn
+  in a fish-eye; leaf and grass cards with alpha-to-coverage and backlight. Off (probe) or unchanged on Low and in
+  1989 mode.
 - Off the road (0.9): the grass tufts are 0.45 m tall (0.75 before, a metre with the scale: a car on the verge
   drove under the grass) and start 4.5 m past the shoulder, a mown verge. The drones' and the ghost's wheels
   are drawn at rest, one radius over the road: set at the hub mounts they hung 16 cm up and the cars floated.
@@ -476,5 +488,7 @@ new-package requests were withdrawn).
 - The cabin (`CarView.Cabin.cs`): two shadowless fill lights stand in for the light bouncing round a cabin (seen from
   the seat only), the A-pillars are trimmed panels, the dashboard has a top pad and a lighter fascia with vents,
   glovebox and trim strip, the doors have their trims, the seats bolsters and headrests, and the airbag cars a padded hub.
-- Instant replay music: eleven seconds of a CC0 FM tune; 1989 mode keeps the synthesised one.
+- Instant replay music: eleven seconds of a CC0 FM tune; 1989 mode keeps the synthesised one. A file of the player's
+  own under `user://music/replay.ogg|.mp3|.wav` takes its place (0.11, `EngineAudio.CustomReplayMusic`): nothing
+  copyrighted ships with the game, but a copy can play what its owner remembers.
 

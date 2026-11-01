@@ -43,6 +43,7 @@ internal sealed partial class CarView : Node3D
     private readonly List<Node3D> _outsideOnly = [];      // not drawn from the driver's seat, but still casting shadows
     private readonly List<Node3D> _cockpitOnly = [];
     private MeshInstance3D? _glass;                       // hidden from the seat; glass casts no shadow at all
+    private MeshInstance3D? _shell;                       // the loft of the body; its bounds size the contact shadow (MarkPlayer)
     private MeshInstance3D? _gaugeFace;
     private Node3D? _body;
     private bool? _insideCar;
@@ -99,6 +100,45 @@ internal sealed partial class CarView : Node3D
         }
         if (_glass is not null) _glass.Visible = !insideCar;
         foreach (var node in _cockpitOnly) node.Visible = insideCar;
+    }
+
+    /// <summary>
+    /// What only the player's car has (0.11): its meshes on visual layer 2 as well as 1, so the reflection probe that
+    /// travels with it (<see cref="WorldBuilder.BuildCarProbe"/>) leaves the car out of its capture, and a soft dark
+    /// decal on the ground under the body, the contact shadow that sets a real car down on the road where the sun's
+    /// shadow alone left it floating. The decal projects down from the car's own frame, so it follows the car onto
+    /// the banking and the loop, and layer 2 is masked out of it so it never darkens the car itself.
+    /// </summary>
+    public void MarkPlayer()
+    {
+        foreach (var geometry in Descendants(this).OfType<GeometryInstance3D>()) geometry.Layers = 3;
+        if (_shell is null || _body is null) return;
+        var bounds = _shell.GetAabb();
+        var centre = _body.Transform * bounds.GetCenter();
+        var shade = new Gradient();
+        shade.SetColor(0, new Color(0f, 0f, 0f, 0.80f));
+        shade.SetColor(1, new Color(0f, 0f, 0f, 0f));
+        shade.AddPoint(0.45f, new Color(0f, 0f, 0f, 0.55f));
+        var texture = new GradientTexture2D
+        {
+            Gradient = shade,
+            Width = 256,
+            Height = 256,
+            Fill = GradientTexture2D.FillEnum.Radial,
+            FillFrom = new Vector2(0.5f, 0.5f),
+            FillTo = new Vector2(1f, 0.5f),
+        };
+        AddChild(new Decal
+        {
+            Name = "ContactShadow",
+            TextureAlbedo = texture,
+            Size = new Vector3(bounds.Size.X + 0.7f, 1.8f, bounds.Size.Z + 0.5f),
+            Position = new Vector3(centre.X, -_cgHeight + 0.3f, centre.Z),
+            CullMask = 0xFFFFFu & ~2u,
+            NormalFade = 0.4f,
+            LowerFade = 0.5f,
+            UpperFade = 0.5f,
+        });
     }
 
     /// <summary>Puts the instrument panel (<see cref="InstrumentCluster"/>) into the binnacle: lit dials under the hood.</summary>
@@ -711,15 +751,17 @@ internal sealed partial class CarView : Node3D
             AddDeformable(liningMesh);
         }
 
-        // Little metallic: a metallic albedo reflects the sky and turns the red pink; the gloss comes from the clearcoat.
+        // Car paint as a coated dielectric (0.11): hardly any metallic, since a metallic albedo reflects the sky and
+        // turned the red pink; a slightly rough colour coat under a hard, near-mirror clearcoat, which is where the
+        // gloss and the reflections of the car's probe (WorldBuilder.BuildCarProbe) come from.
         var paint = new StandardMaterial3D
         {
             VertexColorUseAsAlbedo = true,
-            Metallic = 0.18f,
-            Roughness = 0.26f,
+            Metallic = 0.05f,
+            Roughness = 0.38f,
             ClearcoatEnabled = true,
-            Clearcoat = 0.9f,
-            ClearcoatRoughness = 0.08f,
+            Clearcoat = 1f,
+            ClearcoatRoughness = 0.04f,
         };
         // Dark tinted glass: the cabin shows through it faintly and the sky and the road reflect in it. Lighter, the
         // long screen and the tall side glass of the flat-twelve made the car read as an open targa.
@@ -744,6 +786,7 @@ internal sealed partial class CarView : Node3D
         // Tinted glass lets the sun through: no shadow, and from the seat it is not drawn at all.
         glassMesh.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
         _glass = glassMesh;
+        _shell = shellMesh;
 
         BuildDetails(body, spec);
         CollectParts(body);
@@ -858,7 +901,7 @@ internal sealed partial class CarView : Node3D
     private void BuildDetails(Node3D body, VehicleSpec spec)
     {
         var style = _style;
-        var solidPaint = new StandardMaterial3D { AlbedoColor = _paint, Metallic = 0.18f, Roughness = 0.26f, ClearcoatEnabled = true, Clearcoat = 0.9f, ClearcoatRoughness = 0.08f };
+        var solidPaint = new StandardMaterial3D { AlbedoColor = _paint, Metallic = 0.05f, Roughness = 0.38f, ClearcoatEnabled = true, Clearcoat = 1f, ClearcoatRoughness = 0.04f };
         var trim = new StandardMaterial3D { AlbedoColor = Trim, Roughness = 0.75f };
         var lamp = new StandardMaterial3D { AlbedoColor = new Color(0.9f, 0.10f, 0.06f), EmissionEnabled = true, Emission = new Color(0.9f, 0.08f, 0.04f), EmissionEnergyMultiplier = 1.4f };
         var chrome = new StandardMaterial3D { AlbedoColor = new Color(0.8f, 0.8f, 0.82f), Metallic = 0.95f, Roughness = 0.2f };
