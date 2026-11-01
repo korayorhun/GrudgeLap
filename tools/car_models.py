@@ -224,6 +224,73 @@ def strip_unlit(doc):
     return count
 
 
+def merge(base, base_blob, model, model_blob):
+    """Appends a second model's meshes, materials, textures, images, samplers, accessors and buffer views (and its
+    binary chunk) to the first; returns the index offsets. Its nodes are left to the caller."""
+    base_blob += b"\0" * (-len(base_blob) % 8)
+    blob_offset = len(base_blob)
+    base_blob += model_blob
+    offsets = {key: len(base.get(key, [])) for key in ("meshes", "materials", "textures", "images", "samplers", "accessors", "bufferViews")}
+    for view in model.get("bufferViews", []):
+        view = dict(view)
+        view["buffer"] = 0
+        view["byteOffset"] = view.get("byteOffset", 0) + blob_offset
+        base.setdefault("bufferViews", []).append(view)
+    for accessor in model.get("accessors", []):
+        accessor = dict(accessor)
+        accessor.pop("sparse", None)
+        if "bufferView" in accessor:
+            accessor["bufferView"] += offsets["bufferViews"]
+        base.setdefault("accessors", []).append(accessor)
+    for sampler in model.get("samplers", []):
+        base.setdefault("samplers", []).append(dict(sampler))
+    for image in model.get("images", []):
+        image = dict(image)
+        if "bufferView" in image:
+            image["bufferView"] += offsets["bufferViews"]
+        base.setdefault("images", []).append(image)
+    for texture in model.get("textures", []):
+        texture = dict(texture)
+        if "source" in texture:
+            texture["source"] += offsets["images"]
+        if "sampler" in texture:
+            texture["sampler"] += offsets["samplers"]
+        for extension in texture.get("extensions", {}).values():
+            if isinstance(extension, dict) and "source" in extension:
+                extension["source"] += offsets["images"]
+        base.setdefault("textures", []).append(texture)
+
+    def shift_textures(obj, key=""):
+        if isinstance(obj, dict):
+            if key.lower().endswith("texture") and "index" in obj:
+                obj["index"] += offsets["textures"]
+            for k, value in obj.items():
+                shift_textures(value, k)
+        elif isinstance(obj, list):
+            for value in obj:
+                shift_textures(value, key)
+
+    for material in model.get("materials", []):
+        material = json.loads(json.dumps(material))
+        shift_textures(material)
+        base.setdefault("materials", []).append(material)
+    for mesh in model.get("meshes", []):
+        mesh = json.loads(json.dumps(mesh))
+        for primitive in mesh["primitives"]:
+            primitive["attributes"] = {k: v + offsets["accessors"] for k, v in primitive["attributes"].items()}
+            if "indices" in primitive:
+                primitive["indices"] += offsets["accessors"]
+            if "material" in primitive:
+                primitive["material"] += offsets["materials"]
+            primitive.pop("targets", None)
+        base.setdefault("meshes", []).append(mesh)
+    used = set(base.get("extensionsUsed", [])) | set(model.get("extensionsUsed", []))
+    if used:
+        base["extensionsUsed"] = sorted(used)
+    base.pop("extensionsRequired", None)
+    return offsets
+
+
 def is_glass_material(material):
     if material.get("alphaMode") == "BLEND":
         base = material.get("pbrMetallicRoughness", {}).get("baseColorFactor", [1, 1, 1, 1])
@@ -241,6 +308,15 @@ def rig(model, entry, spec, car):
     space), body_nodes (the rest), to_car (4x4), and the measures printed for the log.
     """
     worlds, _ = world_matrices(model)
+    # A model lying along x is turned about y first so it faces +z, then rigged as one that does.
+    axis = entry.get("forward", "+z")
+    if axis in ("+x", "-x"):
+        angle = -np.pi / 2 if axis == "+x" else np.pi / 2
+        turn_y = np.eye(4)
+        turn_y[0, 0] = turn_y[2, 2] = np.cos(angle)
+        turn_y[0, 2] = np.sin(angle)
+        turn_y[2, 0] = -np.sin(angle)
+        worlds = {i: turn_y @ w for i, w in worlds.items()}
     nodes = model["nodes"]
     mesh_nodes = [i for i in worlds if "mesh" in nodes[i]]
     bounds = {i: mesh_bounds(model, nodes[i]["mesh"], worlds[i]) for i in mesh_nodes}
@@ -251,7 +327,7 @@ def rig(model, entry, spec, car):
     mesh_nodes = [i for i in mesh_nodes if i not in dropped]
 
     # The tyres: the named nodes, or the four wheel-like meshes (two equal extents, a smaller third, low) nearest the corners.
-    forward = 1.0 if entry.get("forward", "+z") == "+z" else -1.0
+    forward = -1.0 if entry.get("forward", "+z") == "-z" else 1.0
     if entry.get("tyres") == "auto" or "tyres" not in entry:
         candidates = []
         for i in mesh_nodes:

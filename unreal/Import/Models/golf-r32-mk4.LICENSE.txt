@@ -1,0 +1,16 @@
+Title:        Golf R32
+Kind:         1997-2008 three-door hot hatch (VW Golf R32 Mk4, 2002-2004) - ALTERNATE
+Licence:      Creative Commons Attribution 4.0 International (CC BY 4.0)
+Licence URL:  https://creativecommons.org/licenses/by/4.0/
+Author:       Nick Broad (Sketchfab user "nickbroad", https://sketchfab.com/nickbroad)
+Source URL:   https://sketchfab.com/3d-models/8171332b39be45e896a7fdf3c3e66354  (original Sketchfab page; published 2021-03-30)
+Mirror:       Objaverse 1.0 dataset (allenai/objaverse on Hugging Face), object uid 8171332b39be45e896a7fdf3c3e66354
+Download URL: https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-060/8171332b39be45e896a7fdf3c3e66354.glb
+Downloaded:   2026-11-01
+File:         golf-r32-mk4.glb (9,451,692 bytes, glTF 2.0 binary; Sketchfab metadata faceCount=132030, vertexCount=71038)
+Thumbnail:    thumbnail.jpg (Sketchfab preview render, same licence) 
+
+Attribution text to show in the game credits (CC BY 4.0 requires attribution, a licence link and
+a note of any changes you make; CC BY-SA additionally requires sharing derivatives under the same licence):
+  "Golf R32" by Nick Broad (https://sketchfab.com/3d-models/8171332b39be45e896a7fdf3c3e66354) is licensed under Creative Commons Attribution 4.0 International (CC BY 4.0) (https://creativecommons.org/licenses/by/4.0/).
+  Obtained via the Objaverse dataset (Deitke et al., 2022). Modified for use in GrudgeLap (re-rigged wheels, material/LOD changes).

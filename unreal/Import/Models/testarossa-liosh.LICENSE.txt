@@ -1,0 +1,21 @@
+Title:        Ferrari Testarossa
+Kind:         1980s mid-engined sports car (Ferrari Testarossa, red) - ALTERNATE, higher poly, untextured
+Licence:      Creative Commons Attribution 4.0 International (CC BY 4.0)
+Licence URL:  https://creativecommons.org/licenses/by/4.0/
+Author:       li_osh (Sketchfab user "li_osh", https://sketchfab.com/li_osh)
+Source URL:   https://sketchfab.com/3d-models/762c958bd80f4cac8e4dc76f847fca49  (original Sketchfab page; published 2020-07-11)
+Mirror:       Objaverse 1.0 dataset (allenai/objaverse on Hugging Face), object uid 762c958bd80f4cac8e4dc76f847fca49
+Download URL: https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-141/762c958bd80f4cac8e4dc76f847fca49.glb
+Downloaded:   2026-11-01
+File:         testarossa-liosh.glb (16,343,008 bytes, glTF 2.0 binary; Sketchfab metadata faceCount=326658, vertexCount=167095)
+Thumbnail:    thumbnail.jpg (Sketchfab preview render, same licence) 
+
+Attribution text to show in the game credits (CC BY 4.0 requires attribution, a licence link and
+a note of any changes you make; CC BY-SA additionally requires sharing derivatives under the same licence):
+  "Ferrari Testarossa" by li_osh (https://sketchfab.com/3d-models/762c958bd80f4cac8e4dc76f847fca49) is licensed under Creative Commons Attribution 4.0 International (CC BY 4.0) (https://creativecommons.org/licenses/by/4.0/).
+  Obtained via the Objaverse dataset (Deitke et al., 2022). Modified for use in GrudgeLap (re-rigged wheels, material/LOD changes).
+
+NOTE (2026-11-01): the Sketchfab page above now returns 404 Not found (all Ferrari models checked were removed,
+probably a rights-holder take-down). The CC BY 4.0 licence recorded in the Objaverse metadata snapshot (late 2022) is
+irrevocable for this copy, but a branded Ferrari design may carry trademark/design-right exposure independent of the
+licence; see REPORT.md. Live-licensed alternative: lotus-esprit-turbo-1983.

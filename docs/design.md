@@ -332,6 +332,13 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   loop the ribbon is the whole deck and is seen from below; the centre line and the far ground only from above.
   The hot hatch's and the five's mirror housings are black plastic, the turbo hatch's in paint: from the seat
   the housing's back shows through the side glass, and in red paint it read as a ball beside the screen.
+- 0.17: the flat-twelve is the Testarossa again, the car the game is about (the Ferrari models were taken down from
+  Sketchfab, which is why 0.16 used the Esprit; the CC BY copy in the Objaverse mirror stands): li_osh's shell,
+  which has no cabin, with the Esprit's cabin borrowed (`cabin_from`: a donor entry, its parts rigged for this car
+  and moved by an offset). The hatchbacks are three cars: the hot hatch a Peugeot 205 GTi, the five a Lancia
+  Delta Integrale (its cabin is one black mesh, so its wheel does not turn; `eye_at` gives the eyes), the turbo
+  hatch a Golf R32 Mk4 with the SAAB 9-5's cabin moved 15 cm forward. Models lying along x turn about y first
+  (`forward: -x`); untextured pure black is lifted to 0.035, as nothing real is black as 0.
 - Real car models (0.16, `tools/prepare_car_models.py`, `CarView.Model.cs`). The lofted bodies and the boxes of
   their cabins read as toys, from the seat most of all, so the catalogue's cars are drawn as CC BY models of real
   cars with cabins of their own (THIRD_PARTY.md): the flat-twelve a Lotus Esprit Turbo 1983 (right-hand drive,

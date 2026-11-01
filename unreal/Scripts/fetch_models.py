@@ -17,6 +17,10 @@ MODELS = {
     "mclaren-570s-mmcworks.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-132/869feee8011d4803894318f6f0ddf2c6.glb",
     "peugeot-205-gti-lafreizz.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-079/b52c8e5e8070463ab1485039246f527c.glb",
     "vaz-2106-domhathair.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-047/a73b3cdeddd846209bf7c73d5f04d20f.glb",
+    # 0.17: the flat-twelve as the Testarossa it always was (the Esprit lends it its cabin), and three different hatches.
+    "testarossa-liosh.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-141/762c958bd80f4cac8e4dc76f847fca49.glb",
+    "lancia-delta-integrale-tarantula.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-140/85614131e0dc4613a948472aaa935fc7.glb",
+    "golf-r32-mk4.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-060/8171332b39be45e896a7fdf3c3e66354.glb",
 }
 
 folder = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "Import", "Models")

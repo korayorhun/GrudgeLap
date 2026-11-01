@@ -296,7 +296,35 @@ def split_lining(model, blob, nodes, eye, wheel):
     print(f"  {split} painted face(s) inside the cabin take the lining")
 
 
-def prepare(car, entry, inspect=False):
+def borrow_cabin(model, blob, r, world, boxes, car, spec, donor_entry, cabin):
+    """Puts another model's cabin into this one (cabin_from): a body with no interior of its own (the Testarossas
+    found are shells) takes the named parts of a donor of its kind, rigged for this car's simulation like the
+    donor's own model would be, then moved and scaled by the entry's offset and scale (car frame, metres)."""
+    donor, donor_blob = cm.load(os.path.join(SOURCE, donor_entry["file"]))
+    if donor_entry.get("split"):
+        cm.split_nodes(donor, donor_blob, [s.lower() for s in donor_entry["split"]])
+    cm.strip_unlit(donor)
+    rd = cm.rig(donor, donor_entry, spec, car)
+    to_car = rd["to_car"]
+    if donor_entry.get("mirror_x"):
+        to_car = np.diag([-1.0, 1.0, 1.0, 1.0]) @ to_car
+    shift = matrix(translation=cabin.get("offset", [0.0, 0.0, 0.0]), scale=cabin.get("scale", [1.0, 1.0, 1.0]))
+    words = [s.lower() for s in cabin["nodes"]]
+    picked = [i for i in rd["body_nodes"] if cm.matches(i, rd["name_of"](i), words)]
+    offsets = cm.merge(model, blob, donor, donor_blob)
+    added = []
+    for i in picked:
+        model["nodes"].append({"name": rd["name_of"](i), "mesh": donor["nodes"][i]["mesh"] + offsets["meshes"]})
+        k = len(model["nodes"]) - 1
+        world[k] = shift @ to_car @ rd["worlds"][i]
+        lo, hi = cm.mesh_bounds(model, model["nodes"][k]["mesh"], world[k])
+        boxes[k] = (np.minimum(lo, hi), np.maximum(lo, hi))
+        r["body_nodes"].append(k)
+        added.append(rd["name_of"](i))
+    print(f"  cabin from {donor_entry['file']}: {len(added)} part(s) {added[:12]}")
+
+
+def prepare(car, entry, inspect=False, config=None):
     spec = cm.SPECS[car]
     source = os.path.join(SOURCE, entry["file"])
     if not os.path.exists(source):
@@ -321,6 +349,9 @@ def prepare(car, entry, inspect=False):
     for i in r["mesh_nodes"]:
         lo, hi = cm.mesh_bounds(model, nodes[i]["mesh"], world[i])
         boxes[i] = (np.minimum(lo, hi), np.maximum(lo, hi))
+    if entry.get("cabin_from"):
+        cabin = entry["cabin_from"]
+        borrow_cabin(model, blob, r, world, boxes, car, spec, config[cabin["car"]], cabin)
     print(f"{car}: {entry['file']} wheelbase {r['wheelbase']:.3f} -> scale {r['scale']:.4f} ({r['length']:.2f} m long), "
           f"tyre radius {r['tyre_radius']:.3f} m (simulation {spec['radius']:.3f}); {len(r['body_nodes'])} body node(s), "
           f"{sum(len(a) - 1 for a in r['assemblies'])} wheel part(s), {len(r['dropped'])} dropped")
@@ -373,10 +404,20 @@ def prepare(car, entry, inspect=False):
         parts = [add(name_of(i)[:60], recentre @ world[i], nodes[i]["mesh"]) for i in r["assemblies"][w]]
         children.append(add(f"Wheel{w}", matrix(translation=pivot[:3]), children=parts))
 
-    if interior and steering:
-        points = np.vstack([cm.mesh_points(model, blob, nodes[i]["mesh"], world[i]) for i in steering])
-        lo, hi = points.min(axis=0), points.max(axis=0)
-        centre = (lo + hi) / 2
+    if interior and not steering and entry.get("eye_at"):
+        # A cabin whose steering wheel is part of a larger mesh (it cannot turn): the entry gives the eyes, and the
+        # hub the dials are found from is taken where it would be, half a metre ahead and 28 cm under them.
+        eye_at = np.array(entry["eye_at"], dtype=float)
+        centre = eye_at - np.array([0.0, 0.28, 0.52])
+        entry = dict(entry, eye=list(eye_at - centre - np.array([0.0, 0.28, 0.52])))
+    if interior and (steering or entry.get("eye_at")):
+        if steering:
+            points = np.vstack([cm.mesh_points(model, blob, nodes[i]["mesh"], world[i]) for i in steering])
+            lo, hi = points.min(axis=0), points.max(axis=0)
+            centre = (lo + hi) / 2
+        else:
+            points = np.array([centre + [0.17, 0.0, 0.0], centre - [0.17, 0.0, 0.0], centre + [0.0, 0.17, 0.0], centre - [0.0, 0.17, 0.0], centre + [0.0, 0.0, 0.03]])
+            lo, hi = points.min(axis=0), points.max(axis=0)
         # The column's axis: the direction in which the wheel is thinnest (the rim's plane is its widest), turned to
         # point back at the driver.
         covariance = np.cov((points - centre).T)
@@ -519,7 +560,12 @@ def prepare(car, entry, inspect=False):
         glassy = contains(lower, GLASS_WORDS) or "KHR_materials_transmission" in material.get("extensions", {})
         # Some exporters mark every material see-through (the VAZ's): an opaque one is drawn alpha-tested instead, so
         # it casts its shadow and sorts with the glass; a texture's holes (a grille) still show through.
-        alpha = material.get("pbrMetallicRoughness", {}).get("baseColorFactor", [1, 1, 1, 1])
+        pbr = material.setdefault("pbrMetallicRoughness", {})
+        alpha = pbr.get("baseColorFactor", [1, 1, 1, 1])
+        # Nothing real is black as 0: black plastic, rubber and leather reflect 3-5 % of the light. An untextured
+        # pure black (the Delta's whole cabin) drew as a void with no shape; it is lifted to 0.035.
+        if "baseColorTexture" not in pbr and len(alpha) >= 3 and max(alpha[:3]) < 0.02:
+            pbr["baseColorFactor"] = [0.035, 0.035, 0.037] + list(alpha[3:4] or [1.0])
         if material.get("alphaMode") == "BLEND" and not glassy and not contains(lower, LAMP_WORDS) and (len(alpha) < 4 or alpha[3] >= 0.99):
             material["alphaMode"] = "MASK"
             material["alphaCutoff"] = 0.5
@@ -531,7 +577,7 @@ def prepare(car, entry, inspect=False):
             material["name"] = "GLP_Glass"
 
     orient_paint(model, blob, out_nodes)
-    if interior and steering:
+    if interior and (steering or entry.get("eye_at")):
         split_lining(model, blob, out_nodes, eye, centre)
 
     model["nodes"] = out_nodes
@@ -568,7 +614,7 @@ def main():
                 os.remove(stale)
             print(f"{car}: drawn as {entry['same_as']}")
             continue
-        prepare(car, entry, inspect)
+        prepare(car, entry, inspect, config)
 
 
 main()
