@@ -3,7 +3,8 @@ namespace GrudgeLap.Audio;
 /// <summary>
 /// The turbocharger's state as its sound needs it, once a frame: the boost (0 to 1 of the most the engine makes), the
 /// throttle, the revs against the redline, the turbo's share of the full-throttle torque (which sets the most boost it
-/// makes), whether a valve vents the boost when the throttle shuts, and whether the listener is in the cabin.
+/// makes), whether a valve vents the boost when the throttle shuts, whether the listener is in the cabin, and the corner
+/// of the low-pass the cabin hears the engine bay through (<see cref="EngineVoicing.CabinCutoff"/>).
 /// </summary>
 public readonly record struct TurboState(
     float Boost,
@@ -11,7 +12,8 @@ public readonly record struct TurboState(
     float RevShare,
     float BoostShare,
     bool BlowOffValve,
-    bool Interior);
+    bool Interior,
+    float CabinCutoff = 2200f);
 
 /// <summary>
 /// The turbocharger's sounds, synthesised (0.20, audit finding 11): the compressor's whistle following the shaft's speed,
@@ -34,7 +36,16 @@ public readonly record struct TurboState(
 /// and more faintly at the shaft's own frequency from the rotor's residual unbalance (Raitor and Neise, Sound generation
 /// in centrifugal compressors, J. Sound Vib. 314, 2008). With six full blades the blade tone climbs through the top of
 /// hearing as the turbo spools (5 kHz at a third of its speed) and leaves it on full boost, which is why a turbo whistles
-/// as it comes on boost and as it runs down, while the shaft's own tone stays at one or two kilohertz.
+/// as it comes on boost and as it runs down, while the shaft's own tone stays at one to two and a half kilohertz. That
+/// whine is the tone that is heard on boost: the blade tone is then at 15 kHz, past what the game mixes (22.05 kHz), and
+/// with the whine at a third of <see cref="ShaftGain"/> the turbo four on full boost was under its engine in every
+/// third-octave band (0.20 review). It is now level with the engine in its own band, outside and in the cabin, a tone
+/// over its masked threshold, and the whole turbo is still some 15 LU under the engine.
+/// </para>
+/// <para>
+/// The cabin. The turbo sits in the engine bay and reaches the cabin through the same panels as the engine: low-passed
+/// at the body's corner (<see cref="TurboState.CabinCutoff"/>) and at 0.6 of its level, crossfaded over 0.15 s when
+/// the view changes. (Heard unfiltered, its rush stood 11 dB over the cabin's engine at 6.4 kHz.)
 /// </para>
 /// <para>
 /// The shut throttle. With the throttle shut on boost the compressor pushes against a closed duct: its flow collapses and
@@ -53,11 +64,13 @@ public sealed class TurboNoise
     /// <summary>Full blades of the compressor wheel (splitter blades between them are not counted).</summary>
     public const int Blades = 6;
     /// <summary>Peak of the blade tone, of the shaft's own tone, RMS of the air's rush at full boost, and of the vent and the surge's chuffs.</summary>
-    public const float WhistleGain = 0.012f, ShaftGain = 0.004f, RushGain = 0.02f, VentGain = 0.12f, SurgeGain = 0.3f;
+    public const float WhistleGain = 0.012f, ShaftGain = 0.085f, RushGain = 0.02f, VentGain = 0.12f, SurgeGain = 0.3f;
 
     private readonly float _rate;
     private uint _noise = 0x2545F491u;
-    private Biquad _rush, _vent, _chuff, _ventLow;
+    private Biquad _rush, _vent, _chuff, _ventLow, _cabin;
+    private float _cabinCutoff, _interior;
+    private bool _started;
     private double _bladePhase, _shaftPhase, _thumpPhase;
     private float _shaft, _lastThrottle, _stored, _surgePhase;
     private bool _venting, _surging;
@@ -97,6 +110,11 @@ public sealed class TurboNoise
     /// <summary>Adds the turbo's sounds for a frame of <paramref name="dt"/> seconds to <paramref name="output"/> (mixed into what is there).</summary>
     public void Render(Span<float> output, in TurboState state, float dt)
     {
+        if (!_started)
+        {
+            _interior = state.Interior ? 1f : 0f;
+            _started = true;
+        }
         var target = ShaftTarget(state);
         // Spools behind the boost (which already lags the throttle) and runs on for about a second when it falls.
         _shaft += (target - _shaft) * Math.Clamp(dt / (target > _shaft ? 0.15f : 1.2f), 0f, 1f);
@@ -112,13 +130,20 @@ public sealed class TurboNoise
         if (state.Throttle > 0.4f) _venting = _surging = false;
         _lastThrottle = state.Throttle;
 
-        var place = state.Interior ? 0.6f : 1f;
+        if (state.CabinCutoff != _cabinCutoff)
+        {
+            _cabinCutoff = state.CabinCutoff;
+            _cabin.SetLowPass(_cabinCutoff, 0.7f, _rate);
+        }
+        var cabinFollow = 1f - MathF.Exp(-1f / (0.15f * _rate));
         var whistleFrom = _whistleLevel;
         var shaftFrom = _shaftLevel;
         var rushFrom = _rushLevel;
-        _whistleLevel = WhistleGain * _shaft * (0.3f + 0.7f * Math.Clamp(state.Throttle, 0f, 1f)) * place;
-        _shaftLevel = ShaftGain * _shaft * _shaft * place;
-        _rushLevel = RushGain * Math.Clamp(state.Boost, 0f, 1f) * Math.Clamp(state.Throttle, 0f, 1f) * place;
+        // Both tones leave mostly through the compressor's inlet with the air it draws: fainter with the throttle shut.
+        var drawn = 0.3f + 0.7f * Math.Clamp(state.Throttle, 0f, 1f);
+        _whistleLevel = WhistleGain * _shaft * drawn;
+        _shaftLevel = ShaftGain * _shaft * _shaft * drawn;
+        _rushLevel = RushGain * Math.Clamp(state.Boost, 0f, 1f) * Math.Clamp(state.Throttle, 0f, 1f);
         var nyquist = 0.5f * _rate;
         var n = output.Length;
         for (var i = 0; i < n; i++)
@@ -145,7 +170,7 @@ public sealed class TurboNoise
             if (_venting)
             {
                 // The valve's rush: high-passed noise as the charge escapes, gone in about half a second.
-                sample += _ventLow.Process(_vent.Process(noise)) * VentGain * _stored * place;
+                sample += _ventLow.Process(_vent.Process(noise)) * VentGain * _stored;
                 _stored -= _stored * 4.5f / _rate;
                 if (_stored < 0.01f) _venting = false;
             }
@@ -160,11 +185,14 @@ public sealed class TurboNoise
                 _thumpPhase += 110.0 / _rate;
                 if (_thumpPhase >= 1.0) _thumpPhase -= 1.0;
                 var thump = MathF.Sin(MathF.Tau * (float)_thumpPhase) * MathF.Exp(-_surgePhase / cycleHz / 0.012f);
-                sample += (_chuff.Process(noise) * 2.2f + 0.6f * thump) * chuff * SurgeGain * _stored * place;
+                sample += (_chuff.Process(noise) * 2.2f + 0.6f * thump) * chuff * SurgeGain * _stored;
                 _stored -= _stored * 2.5f / _rate;
                 if (_stored < 0.05f) _surging = false;
             }
-            output[i] += sample;
+            // Both paths run all the time, so a change of view crossfades without the filter starting cold.
+            _interior += ((state.Interior ? 1f : 0f) - _interior) * cabinFollow;
+            var cabin = _cabin.Process(sample) * 0.6f;
+            output[i] += sample + (cabin - sample) * _interior;
         }
     }
 
