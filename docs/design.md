@@ -143,7 +143,7 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
 The car model was held against established vehicle-dynamics practice (Pacejka, *Tyre and Vehicle Dynamics*;
 Milliken, *Race Car Vehicle Dynamics*; Gillespie, *Fundamentals of Vehicle Dynamics*) and against the published
 figures of the cars the catalogue follows. Findings, ranked by how much each changes how the cars feel and how real
-they are; the first eight were fixed in 0.17, each pinned by a test in `HandlingTests` (proving-ground instruments in
+they are; the first eleven were fixed in 0.17, each pinned by a test in `HandlingTests` (proving-ground instruments in
 `physics.tests/HandlingRig.cs`: a 160 m asphalt pad, a constant-radius circle driver after SAE J266, straight stops
 and standing sprints).
 
@@ -204,24 +204,30 @@ and standing sprints).
    off a locking wheel the way a driver's foot does (`ScriptedDriver.FeatherThrottle` / `FeatherBrake`; a pad's
    triggers are passed as they are).
 
+9. **Aerodynamic lift and downforce** (fixed). Drag only: the V8 at 200 mph carried no downforce and the 1980s
+   cars no lift. `FrontLiftArea` / `RearLiftArea` (lift coefficient times area per axle) now lift the older cars a
+   little, mostly at the front (the flat-twelve's tyres carry 97 % of its weight at 250 km/h), and press the V8 down,
+   more at the back (104 %; `At_speed_the_V8_presses_down_and_the_eighties_car_lifts`).
+10. **Shifts** (fixed in part). Every gearbox took 0.28 s per change with the drive cut; the V8's dual-clutch box now
+    takes 0.1 s (`ShiftSeconds`), which brought its 0-100 km/h from 4.5 s to 3.9 (the real car, with launch
+    control, 3.2).
+11. **Dampers** (fixed). Linear and symmetric; they now rebound 2.2 times harder than they bump
+    (`DamperReboundRatio`, the mean unchanged), as road dampers do: a bump is let through softly and the spring's
+    return is checked, so a car settles after a crest instead of bouncing.
+
 Still open, in the same order:
 
-9. **Aerodynamic lift and downforce** — drag only. The V8 at 200 mph carries no downforce and the 1980s cars no
-   lift; a per-axle lift coefficient (CL A front and rear) would make the V8 calmer and the flat-twelve lighter at
-   the top of the speed route. Cheap, and worth doing next.
-10. **The V8's launch** — 4.5 s to 100 km/h against the real car's 3.2 (launch control on a dual-clutch box; here a
-    torque-cut traction control and an assisted clutch). The front-wheel-drive cars are 0.5-1 s slow off the line
-    for the same reason (the turbo hatch 7.5 s against 6.4). A launch mode in the assisted clutch would close it.
-11. **Dampers** — linear and symmetric; real dampers rebound two to three times harder than they bump, which
-    governs how a car settles after a crest and how it takes a kerb.
-12. **Steering** — parallel steer (no Ackermann), no caster trail or self-aligning torque (nothing to feel without
+12. **Launches** — the V8 is 0.7 s slow to 100 km/h (no launch control: a torque-cut traction control and the
+    assisted clutch's feed-in), the front-wheel-drive cars 0.5-1 s (the turbo hatch 7.5 s against 6.4). A launch
+    mode in the assisted clutch, holding the driven wheels at their peak slip, would close it.
+13. **Steering** — parallel steer (no Ackermann), no caster trail or self-aligning torque (nothing to feel without
     force feedback), and the speed-sensitive lock remains the keyboard's stand-in for a three-turn wheel. Understeer
     of the front-heavy hot hatch (0.8 deg/g) is at the low end of the 1-4 deg/g of such cars, the share real cars get
     from steering compliance and roll steer, which the model does not have.
-13. **The 570S's brake steer** (it brakes a spinning inside wheel instead of locking the axle) and the hatchbacks'
+14. **The 570S's brake steer** (it brakes a spinning inside wheel instead of locking the axle) and the hatchbacks'
     electronic equivalents are not modelled; their differentials are open.
-14. **Camber and tyre temperature** — none; the grip is the same on the first lap as on the tenth.
-15. **The stunt route for the 1990s saloon and estate** — 75 PS and 61 PS cannot gather the loop's 60 mph in the
+15. **Camber and tyre temperature** — none; the grip is the same on the first lap as on the tenth.
+16. **The stunt route for the 1990s saloon and estate** — 75 PS and 61 PS cannot gather the loop's 60 mph in the
     140 m after the bend before it, so the scripted driver crashes there and respawns 40 m short of it (it did
     before 0.17 too); `Every_car_laps_both_routes` holds them to the speed route. A track matter, not a physics one.
 

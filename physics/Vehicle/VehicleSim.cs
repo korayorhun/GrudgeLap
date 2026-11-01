@@ -237,6 +237,19 @@ public sealed class VehicleSim
             force -= _massVelocity * (0.5f * AirDensity * _spec.DragCoefficient * _spec.FrontalArea * vLen);
         }
 
+        // Aerodynamic lift (or downforce) over each axle, from the dynamic pressure of the air along the car.
+        var air = MathF.Max(Vector3.Dot(_massVelocity, forward), 0f);
+        var dynamicPressure = 0.5f * AirDensity * air * air;
+        if (dynamicPressure > 0f)
+        {
+            var frontLift = up * (dynamicPressure * _spec.FrontLiftArea);
+            var rearLift = up * (dynamicPressure * _spec.RearLiftArea);
+            var frontAt = Position + Vector3.Transform(new Vector3(0f, 0f, _spec.FrontAxle), Orientation);
+            var rearAt = Position + Vector3.Transform(new Vector3(0f, 0f, -_spec.RearAxle), Orientation);
+            force += frontLift + rearLift;
+            torque += Vector3.Cross(frontAt - _centreOfMass, frontLift) + Vector3.Cross(rearAt - _centreOfMass, rearLift);
+        }
+
         var anyContact = false;
         var rayDir = -up;
         var maxLen = _spec.SuspensionRest + _spec.WheelRadius;
@@ -308,7 +321,9 @@ public sealed class VehicleSim
             // Suspension: spring + damper + bump stop + anti-roll bar, pushing only.
             var compression = c.Compression;
             var approach = -Vector3.Dot(vContact, n);
-            var fs = _springRate[i] * compression + _damperRate[i] * approach + c.Bar;
+            // The damper resists rebound harder than bump (DamperReboundRatio), the two averaging the spec's rate.
+            var damping = _damperRate[i] * 2f / (1f + _spec.DamperReboundRatio) * (approach < 0f ? _spec.DamperReboundRatio : 1f);
+            var fs = _springRate[i] * compression + damping * approach + c.Bar;
             if (compression > _spec.MaxCompression)
             {
                 fs += _spec.BumpStopStiffness * (compression - _spec.MaxCompression);

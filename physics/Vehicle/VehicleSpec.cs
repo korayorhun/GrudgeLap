@@ -44,6 +44,14 @@ public sealed record VehicleSpec
     public System.Numerics.Vector3 CentreOfMassOffset { get; init; } = new(0f, -0.14f, -0.26f);
     public float DragCoefficient { get; init; } = 0.36f;
     public float FrontalArea { get; init; } = 1.95f;         // m^2
+    /// <summary>
+    /// Aerodynamic lift at each axle as lift coefficient times area, m^2 (positive lifts, negative presses down): the
+    /// force is that times the dynamic pressure, applied over the axle. Road cars of the 1980s and 1990s lift a
+    /// little (whole-car lift coefficients of 0.1-0.3, mostly at the front; Hucho, Aerodynamics of Road Vehicles,
+    /// ch. 4); the V8 of the 2010s is shaped to press itself down a little, more at the back.
+    /// </summary>
+    public float FrontLiftArea { get; init; } = 0.12f;
+    public float RearLiftArea { get; init; } = 0.06f;
     public float RollingResistance { get; init; } = 0.015f;
     /// <summary>Multiplier on the surface friction: modern tyres grip harder than 1984's.</summary>
     public float TireGrip { get; init; } = 1.0f;
@@ -62,6 +70,12 @@ public sealed record VehicleSpec
     public float SuspensionDamping { get; init; } = 3800f;   // N s/m
     public float BumpStopStiffness { get; init; } = 260000f; // N/m beyond MaxCompression
     public float MaxCompression { get; init; } = 0.17f;      // m
+    /// <summary>
+    /// How much harder the dampers resist extension (rebound) than compression (bump), as a ratio. Road dampers rebound
+    /// two to three times harder than they bump (Milliken, ch. 21; Dixon, The Shock Absorber Handbook): a bump is
+    /// let through softly and the spring's return is checked. <see cref="SuspensionDamping"/> is the mean of the two.
+    /// </summary>
+    public float DamperReboundRatio { get; init; } = 2.2f;
     /// <summary>
     /// Anti-roll bars as a wheel rate, N/m: the force pushing the more compressed wheel of an axle down (and its partner
     /// up) per metre of compression difference, so an axle's roll stiffness from its bar is this times the track
@@ -95,6 +109,11 @@ public sealed record VehicleSpec
     public float DrivelineEfficiency { get; init; } = 0.9f;
     public float ClutchMaxTorque { get; init; } = 900f;       // N m
     public float EngineInertia { get; init; } = 0.28f;        // kg m^2 (flywheel + clutch)
+    /// <summary>
+    /// Seconds a gear change takes in the assisted modes, the drive interrupted: about a quarter of a second for a
+    /// quick hand on a manual gate, a tenth for a dual-clutch box that hands the drive from one clutch to the other.
+    /// </summary>
+    public float ShiftSeconds { get; init; } = 0.28f;
     public float WheelInertia { get; init; } = 1.3f;          // kg m^2 per wheel + half shaft
     /// <summary>
     /// Limited-slip differential: the share of the torque into the differential that its clutches can pass from the
@@ -115,6 +134,11 @@ public sealed record VehicleSpec
     {
         Name = "V8 GTB '12 SPORT EXHAUST",
         Style = CarStyle.V8,
+        // The 570S's seven-speed dual-clutch box: the next gear is engaged on its own clutch and taken up as the other
+        // lets go, so a shift costs a fraction of the drive a manual's does.
+        ShiftSeconds = 0.1f,
+        FrontLiftArea = -0.06f,
+        RearLiftArea = -0.12f,
         // 225/35 R19 front, 285/35 R20 rear; an open differential (the real car brakes a spinning inside wheel instead).
         FrontTire = new(225f, 35f, 19f),
         RearTire = new(285f, 35f, 20f),
@@ -182,6 +206,8 @@ public sealed record VehicleSpec
         HubHeight = -0.20f,
         DragCoefficient = 0.34f,
         FrontalArea = 1.95f,
+        FrontLiftArea = 0.10f,
+        RearLiftArea = 0.07f,
         TireGrip = 1.08f,
         WheelRadius = 0.296f,
         SuspensionRest = 0.22f,
@@ -230,6 +256,8 @@ public sealed record VehicleSpec
         HubHeight = -0.20f,
         DragCoefficient = 0.32f,
         FrontalArea = 2.0f,
+        FrontLiftArea = 0.10f,
+        RearLiftArea = 0.07f,
         TireGrip = 1.0f,
         WheelRadius = 0.298f,
         SuspensionRest = 0.23f,
@@ -279,6 +307,8 @@ public sealed record VehicleSpec
         HubHeight = -0.20f,
         DragCoefficient = 0.33f,
         FrontalArea = 2.15f,
+        FrontLiftArea = 0.08f,
+        RearLiftArea = 0.05f,
         TireGrip = 1.08f,
         TractionControl = true,
         WheelRadius = 0.319f,
@@ -330,6 +360,8 @@ public sealed record VehicleSpec
         HubHeight = -0.20f,
         DragCoefficient = 0.43f,
         FrontalArea = 1.90f,
+        FrontLiftArea = 0.16f,
+        RearLiftArea = 0.10f,
         TireGrip = 0.86f,
         WheelRadius = 0.2875f,
         SuspensionRest = 0.25f,
@@ -380,6 +412,8 @@ public sealed record VehicleSpec
         HubHeight = -0.20f,
         DragCoefficient = 0.46f,
         FrontalArea = 1.95f,
+        FrontLiftArea = 0.16f,
+        RearLiftArea = 0.12f,
         TireGrip = 0.82f,
         WheelRadius = 0.289f,
         SuspensionRest = 0.26f,
@@ -433,6 +467,8 @@ public sealed record VehicleSpec
         HubHeight = -0.20f,
         DragCoefficient = 0.30f,
         FrontalArea = 2.20f,
+        FrontLiftArea = 0.08f,
+        RearLiftArea = 0.05f,
         TireGrip = 0.94f,
         TractionControl = true,
         WheelRadius = 0.317f,

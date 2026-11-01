@@ -23,7 +23,7 @@ public sealed class HandlingTests(ITestOutputHelper output)
     /// </summary>
     [Theory]
     [InlineData(0, 5.0f, 6.5f, 39f, 50f)]    // flat-twelve: 5.8 s; no ABS
-    [InlineData(1, 3.8f, 5.0f, 29f, 37f)]    // V8: 3.2 s with launch control (see the design notes); ABS
+    [InlineData(1, 3.4f, 4.5f, 29f, 37f)]    // V8: 3.2 s with launch control (see the design notes); ABS
     [InlineData(2, 6.8f, 8.6f, 38f, 48f)]    // hot hatch: 7.2 s; no ABS
     [InlineData(3, 8.0f, 10.2f, 41f, 52f)]   // five: 8.5 s; no ABS
     [InlineData(4, 6.2f, 7.9f, 32f, 39f)]    // turbo hatch: 6.4 s; ABS
@@ -235,6 +235,39 @@ public sealed class HandlingTests(ITestOutputHelper output)
         }
         output.WriteLine($"{spec.Name}: limit {limit:F1} m/s on R {radius} m, lifted at {speed:F1}: path curvature {before * 1000f:F1} -> {most * 1000f:F1} /km");
         Assert.True(most > before * 1.12f, $"the car should tighten its line on lifting off ({before * 1000f:F1} -> {most * 1000f:F1} /km)");
+    }
+
+    /// <summary>
+    /// Aerodynamic lift at speed: at 250 km/h the V8 presses itself onto the road (its tyres carry more than the car's
+    /// weight, mostly at the back) while the 1980s car lifts a little, mostly at the front.
+    /// </summary>
+    [Fact]
+    public void At_speed_the_V8_presses_down_and_the_eighties_car_lifts()
+    {
+        (float Total, float Front) Loads(VehicleSpec spec)
+        {
+            var sim = new VehicleSim(spec, HandlingRig.Proving(6000f));
+            sim.LaunchAt(250f / MathUtil.KmhPerMps);
+            float total = 0f, front = 0f;
+            var samples = 0;
+            for (var t = 0f; t < 2f; t += HandlingRig.Dt)
+            {
+                // Hold the speed against the drag with a force on the body's balance only: no throttle, no gear.
+                sim.Step(new DriverInputs { Gear = 0 }, HandlingRig.Dt);
+                if (t < 1f) continue;
+                total += sim.Wheels.Sum(w => w.Load);
+                front += sim.Wheels[0].Load + sim.Wheels[1].Load;
+                samples++;
+            }
+            var weight = spec.MassKg * MathUtil.Gravity;
+            return (total / samples / weight, (front / samples - (spec.RearAxle + spec.CentreOfMassOffset.Z) / (spec.FrontAxle + spec.RearAxle) * weight) / weight);
+        }
+        var v8 = Loads(VehicleSpec.V8Evo);
+        var flat = Loads(VehicleSpec.FlatTwelve);
+        output.WriteLine($"tyre load at speed as a share of the weight: V8 {v8.Total:P1} (front {v8.Front:+0.0%;-0.0%}), flat-twelve {flat.Total:P1} (front {flat.Front:+0.0%;-0.0%})");
+        Assert.True(v8.Total > 1.03f, "the V8 should carry downforce");
+        Assert.True(flat.Total < 0.99f, "the flat-twelve should lift");
+        Assert.True(flat.Front < 0f, "the flat-twelve's lift is mostly at the front");
     }
 
     /// <summary>

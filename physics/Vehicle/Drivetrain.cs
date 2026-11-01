@@ -189,7 +189,7 @@ public sealed class Drivetrain
 
         Gear = target;
         ClutchLocked = false;
-        _shiftTimer = 0.28f;
+        _shiftTimer = _spec.ShiftSeconds;
         _autoShiftCooldown = 0.9f;
     }
 
