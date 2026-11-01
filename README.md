@@ -180,7 +180,7 @@ best lap's ghost out of the picture.
   a wood beyond the fields, fields, textured buildings, the green fork gantry with its traffic light, the
   red checkpoint banner, signs, the train on its railway), real car models with their own cabins (0.16: CC BY
   models of a Ferrari Testarossa (with a Lotus Esprit's cabin), a McLaren 570S, a Peugeot 205 GTi, a Lancia Delta
-  Integrale, a Volkswagen Golf R32 (with a SAAB 9-5's cabin), a VAZ-2106 and a Mercedes-Benz E-Class, set to
+  Integrale, a Volkswagen Golf R32 (with a SAAB 9-5's cabin), a VAZ-2106, a Renault 12 and a Mercedes-Benz E-Class, set to
   the simulation's wheelbase, their wheels and steering wheel turning, the live dials in their binnacles, the
   rear-view mirror on their own; `tools/prepare_car_models.py`), and where a car has none, lofted car bodies
   with rounded character lines, panel seams, the hatchbacks' lamps, grilles and tail lamps laid on the skin,

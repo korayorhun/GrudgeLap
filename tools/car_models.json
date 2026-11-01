@@ -234,5 +234,33 @@
         0.065
       ]
     }
+  },
+  "estate": {
+    "file": "renault-12-boitaloran.glb",
+    "forward": "+z",
+    "split": [
+      "=object_11",
+      "=object_12",
+      "=object_13",
+      "=object_14",
+      "=object_15"
+    ],
+    "tyres": "auto",
+    "drop": [
+      "=object_23"
+    ],
+    "eye_at": [
+      -0.37,
+      0.45,
+      0.3
+    ],
+    "paint": [
+      "==Material"
+    ],
+    "dials": {
+      "nodes": [
+        "=object_41"
+      ]
+    }
   }
 }

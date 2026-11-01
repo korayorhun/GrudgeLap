@@ -108,6 +108,7 @@ internal sealed partial class CarView
         if (model.GetNodeOrNull<Node3D>("Dials") is { } dials) MountModelDials(dials);
         DressModel(model);
         _modelBounds = ModelBounds(model.GetNodeOrNull<Node3D>("Body") ?? model);
+        SetPaintCabin();
         CollectModelDents(model.GetNodeOrNull<Node3D>("Body") ?? model);
         if (_modelEye is null)
         {
@@ -203,6 +204,7 @@ internal sealed partial class CarView
     private void DressModel(Node3D model)
     {
         var paint = ModelPaint(_paint);
+        _modelPaint = paint;
         _windowOutside ??= new StandardMaterial3D
         {
             AlbedoColor = new Color(0.05f, 0.08f, 0.11f, 0.80f),
@@ -251,8 +253,10 @@ internal sealed partial class CarView
 
     /// <summary>
     /// Car paint for a model: the lofted body's coated dielectric (metallic 0.05, roughness 0.38 under a near-mirror
-    /// clearcoat) on the outside of a panel, and a dark lining on its inside. Models draw their panels from both faces
-    /// and few have a headlining, so from the seat the underside of the roof showed in the body colour.
+    /// clearcoat). Models draw their panels from both faces and few have a headlining, so from the seat the underside
+    /// of the roof showed in the body colour: the back face of a panel is a dark lining, but only inside the cabin
+    /// (a box in the car's frame, kept up to date by UpdatePaintFrame). Outside it a back face is paint too, because
+    /// some models have whole panels wound the wrong way (a Renault 12's boot lid and door showed black).
     /// </summary>
     private static ShaderMaterial ModelPaint(Color colour)
     {
@@ -263,8 +267,17 @@ internal sealed partial class CarView
                 render_mode cull_disabled;
                 uniform vec3 paint : source_color = vec3(0.76, 0.03, 0.05);
                 uniform vec3 lining : source_color = vec3(0.045, 0.045, 0.05);
+                uniform mat4 to_car = mat4(1.0);
+                uniform vec3 cabin_min = vec3(1.0);
+                uniform vec3 cabin_max = vec3(-1.0);
+                varying vec3 world_position;
+                void vertex() {
+                    world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+                }
                 void fragment() {
-                    if (FRONT_FACING) {
+                    vec3 local = (to_car * vec4(world_position, 1.0)).xyz;
+                    bool in_cabin = all(greaterThan(local, cabin_min)) && all(lessThan(local, cabin_max));
+                    if (FRONT_FACING || !in_cabin) {
                         ALBEDO = paint;
                         METALLIC = 0.05;
                         ROUGHNESS = 0.38;
@@ -280,6 +293,26 @@ internal sealed partial class CarView
         var material = new ShaderMaterial { Shader = _paintShader };
         material.SetShaderParameter("paint", colour);
         return material;
+    }
+
+    private ShaderMaterial? _modelPaint;
+
+    /// <summary>
+    /// The cabin the paint lines from inside: from the eyes, a box over the seats and under the roof, from the
+    /// dashboard to behind the seats' backs, as wide as the inside of the doors. A model without a cabin of its own
+    /// keeps the empty box: its paint is paint on both faces.
+    /// </summary>
+    private void SetPaintCabin()
+    {
+        if (_modelPaint is null || _modelEye is not { } eye) return;
+        _modelPaint.SetShaderParameter("cabin_min", new Vector3(-0.86f, eye.Y - 0.55f, eye.Z - 1.1f));
+        _modelPaint.SetShaderParameter("cabin_max", new Vector3(0.86f, eye.Y + 0.6f, eye.Z + 0.75f));
+    }
+
+    /// <summary>World to this car's frame, for the paint's cabin test: every frame the car moves.</summary>
+    public override void _Process(double delta)
+    {
+        if (_modelPaint is not null && IsInsideTree()) _modelPaint.SetShaderParameter("to_car", new Projection(GlobalTransform.AffineInverse()));
     }
 
     /// <summary>The model's box in this node's frame, for the contact shadow (MarkPlayer).</summary>

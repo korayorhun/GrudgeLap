@@ -129,6 +129,9 @@ def mesh_points(doc, blob, mesh_index, matrix):
     out = []
     for primitive in doc["meshes"][mesh_index]["primitives"]:
         p = accessor_array(doc, blob, primitive["attributes"]["POSITION"])
+        if "indices" in primitive:
+            # Only the vertices its triangles use: a piece split off a mesh (split_nodes) shares the whole vertex list.
+            p = p[np.unique(accessor_array(doc, blob, primitive["indices"]).astype(np.int64).reshape(-1))]
         out.append((np.c_[p, np.ones(len(p))] @ matrix.T)[:, :3])
     return np.vstack(out) if out else np.zeros((0, 3))
 

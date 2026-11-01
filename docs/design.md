@@ -339,6 +339,11 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   Delta Integrale (its cabin is one black mesh, so its wheel does not turn; `eye_at` gives the eyes), the turbo
   hatch a Golf R32 Mk4 with the SAAB 9-5's cabin moved 15 cm forward. Models lying along x turn about y first
   (`forward: -x`); untextured pure black is lifted to 0.035, as nothing real is black as 0.
+- 0.18: the 1.4 estate is a Renault 12 (boitaloran's saloon: the Toros shares everything ahead of the B-pillar; 1.7
+  million triangles, its wheels in five shared meshes split by corner, its steering wheel part of the dashboard). The
+  paint's lining on a panel's back face is now only inside the cabin (a box from the eyes, in the car's frame, which
+  `CarView._Process` hands the shader every frame): the Renault's boot lid and a door are wound the wrong way and
+  showed black from outside. Split pieces are measured by the vertices their own triangles use.
 - Real car models (0.16, `tools/prepare_car_models.py`, `CarView.Model.cs`). The lofted bodies and the boxes of
   their cabins read as toys, from the seat most of all, so the catalogue's cars are drawn as CC BY models of real
   cars with cabins of their own (THIRD_PARTY.md): the flat-twelve a Lotus Esprit Turbo 1983 (right-hand drive,

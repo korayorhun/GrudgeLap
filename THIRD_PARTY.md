@@ -38,6 +38,7 @@
 | "FREE Lancia Delta HF Integrale evo 2" by TARANTULA (begemot.988888) | the five-cylinder hatch's body and cabin | CC BY 4.0 — https://sketchfab.com/3d-models/85614131e0dc4613a948472aaa935fc7; modified: re-scaled and re-rigged for GrudgeLap |
 | "Golf R32" by Nick Broad (nickbroad) | the turbo hatch's body (with the SAAB 9-5's cabin) | CC BY 4.0 — https://sketchfab.com/3d-models/8171332b39be45e896a7fdf3c3e66354; modified: re-scaled and re-rigged for GrudgeLap |
 | "SAAB 9-5 sedan 1997-2001" by blendffnike | the turbo hatch's cabin | CC BY 4.0 — https://sketchfab.com/3d-models/4db0bcbc183a452eb3ef692cce2fe36f; modified: re-scaled and re-rigged for GrudgeLap |
+| "Renault 12" by boitaloran | the 1.4 estate's body and cabin (the saloon: the Toros shares everything ahead of the B-pillar) | CC BY 4.0 — https://sketchfab.com/3d-models/f8c26a68a3dd45b492d6d9a33cda6fcd; modified: re-scaled and re-rigged for GrudgeLap |
 | "VAZ-2106" by domhathair | the 1990s saloon's body and cabin | CC BY 4.0 — https://sketchfab.com/3d-models/a73b3cdeddd846209bf7c73d5f04d20f; modified: re-scaled, re-rigged and lit for GrudgeLap |
 | "Mercedes-Benz E-Class W212" by Peter_D (better_peter) | the fleet saloon's body and cabin | CC BY 4.0 — https://sketchfab.com/3d-models/119c5e10733142b197aa53b86f6aeb04; modified: re-scaled and re-rigged for GrudgeLap |
 | xunit, Microsoft.NET.Test.Sdk | tests only, not shipped | Apache-2.0 / MIT |
@@ -47,7 +48,7 @@
 The track, the world and every other mesh in the game are generated at run time by the code in this
 repository, but for the cars: the CC BY models above are drawn in their place (fetched from the Objaverse
 mirror by `unreal/Scripts/fetch_models.py` and prepared by `tools/prepare_car_models.py` at build time; a build
-without them draws the game's own lofted bodies, as does the 1.4 estate). The only other files brought in are the
+without them draws the game's own lofted bodies). The only other files brought in are the
 CC0 textures, the CC0 sky, the engine grain banks, the tyre and road loops, the exhaust pops, the train's steam
 and whistle and the crashes (the grass-tuft atlas, the road
 wear sheet and the cloud sheet are drawn by scripts in `tools/`; the drones' engine loop is the game's own
@@ -59,7 +60,7 @@ The car names ("FLAT-12 GT '84", "V8 GTB '12 SPORT EXHAUST", "HOT HATCH 2.0 16V 
 '97", "TURBO HATCH 2.0T '08", "SALOON 1.6 '91", "ESTATE 1.4 '93", "SALOON 1.4 16V '17") are descriptions of an engine layout, a body style and a year; they are not the
 names of any make or model. The lofted bodies are our own, keyed on the proportions of the period cars; the
 models drawn in their place show real cars (a Ferrari, a McLaren, a Peugeot, a Lancia, a Volkswagen, a VAZ, a
-Mercedes-Benz, and cabins of a Lotus and a SAAB), whose names
+Renault, a Mercedes-Benz, and cabins of a Lotus and a SAAB), whose names
 and designs belong to their makers, as stand-ins for the catalogue's cars.
 
 Not affiliated with, endorsed by, or derived from the assets of any arcade manufacturer or car maker. The

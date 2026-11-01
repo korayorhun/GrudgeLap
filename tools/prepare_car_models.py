@@ -569,7 +569,9 @@ def prepare(car, entry, inspect=False, config=None):
         if material.get("alphaMode") == "BLEND" and not glassy and not contains(lower, LAMP_WORDS) and (len(alpha) < 4 or alpha[3] >= 0.99):
             material["alphaMode"] = "MASK"
             material["alphaCutoff"] = 0.5
-        if (contains(lower, paint_words) if paint_words else is_paint(name)):
+        # "==Name" names a paint material exactly, case and all (the Renault 12 has both "Material" and "material").
+        painted = any((name == w[2:]) if w.startswith("==") else (w in lower) for w in entry.get("paint", [])) if paint_words else is_paint(name)
+        if painted:
             material["name"] = "GLP_Paint"
         elif glassy and contains(lower, LAMP_WORDS):
             material["name"] = "GLP_Lens"

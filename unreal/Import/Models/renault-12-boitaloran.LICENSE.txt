@@ -1,0 +1,23 @@
+Title:          Renault 12
+Catalogue role: Estate - pick (Renault 12 SALOON body; no Toros/break model available)
+Author:         boitaloran (Sketchfab user 'boitaloran', https://sketchfab.com/boitaloran)
+Source URL:     https://sketchfab.com/3d-models/f8c26a68a3dd45b492d6d9a33cda6fcd
+Licence:        Creative Commons Attribution 4.0 International (CC BY 4.0)
+Licence URL:    https://creativecommons.org/licenses/by/4.0/
+Licence (snapshot, Objaverse 1.0 metadata, collected 2022): by
+Licence (live check 2026-11-01): by
+Live check:     HTTP 200 on api.sketchfab.com/v3/models/f8c26a68a3dd45b492d6d9a33cda6fcd; licence slug 'by'; isDownloadable=True; published 2022-09-09; 67 likes
+Download URL:   https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-074/f8c26a68a3dd45b492d6d9a33cda6fcd.glb
+                (Objaverse 1.0 mirror on Hugging Face, dataset allenai/objaverse; no login needed)
+File:           renault-12-boitaloran.glb, 62,544,296 bytes, SHA-256 4839a511a6d4dcb2dac1273b7412825d465522276177362c17837f359021df2c
+Date checked:   2026-11-01
+Real-size note: measured wheelbase 2.433 m at file scale x0.1; real Renault 12 wheelbase 2.441 m -> extra factor x1.003
+Notes:
+  - Saloon, not the estate (break/Toros). Front, cabin and dashboard are the same car; the rear body differs.
+  - About 1.73 M triangles: decimate.
+  - Tyre and rim meshes each span several wheels: split them by loose parts.
+  - The steering wheel is merged into the dashboard mesh.
+  - Units are decimetres (scale 0.1, true size).
+
+Credit line (CC BY 4.0 requires attribution, a licence link and a note of changes):
+  "Renault 12" by boitaloran (boitaloran), licensed under CC BY 4.0, https://sketchfab.com/3d-models/f8c26a68a3dd45b492d6d9a33cda6fcd; modified: re-scaled and re-rigged for GrudgeLap
