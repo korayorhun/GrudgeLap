@@ -41,6 +41,7 @@ public sealed partial class RaceSession
         Track = track;
         Options = options ?? new RaceOptions();
         Car = new VehicleSim(spec, track) { Weather = Options.Weather };
+        Weather = Options.Weather;
         ReturnPath = track.Common;
         ReturnDistance = 0f;
         Phase = SessionPhase.SelectTransmission;
@@ -56,8 +57,15 @@ public sealed partial class RaceSession
     public TrackGeometry Track { get; }
     public VehicleSim Car { get; }
     public RaceOptions Options { get; }
-    /// <summary>The weather of this credit (<see cref="RaceOptions.Weather"/>).</summary>
-    public Weather Weather => Options.Weather;
+    /// <summary>The weather of this credit: the options' at the start, the menu's after <see cref="SetWeather"/>.</summary>
+    public Weather Weather { get; private set; }
+
+    /// <summary>Changes the weather during the credit (the menu's choice, 0.15): the car's grip follows at once.</summary>
+    public void SetWeather(Weather weather)
+    {
+        Weather = weather;
+        Car.Weather = weather;
+    }
     /// <summary>Drone cars, or null when the options ask for an empty road.</summary>
     public Traffic? Traffic { get; }
     /// <summary>The cows in the fields.</summary>

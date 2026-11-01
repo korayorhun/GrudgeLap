@@ -1115,7 +1115,7 @@ def dress_track(actors):
     asphalt = surface_material("M_Asphalt", "asphalt_02", 11.0 / 3.0, 1 / 3.0, tint=(0.9, 0.9, 0.9), macro=19.0, vertex_colour=True, wear=wear,
                                anti_tiling=True, wet={"dark": 0.5, "puddles": True})
     # Red-brown earth, as the Godot version's shoulders (0.13) and the orange dirt of the original; the grass path read as lawn.
-    verge = surface_material("M_Verge", "brown_mud_dry", 3.2, 1.0, tint=(1.25, 0.88, 0.62), vertex_colour=True, anti_tiling=True, wet={"dark": 0.4, "rough": 0.3})
+    verge = surface_material("M_Verge", "brown_mud_dry", 2.6, 1.0, tint=(1.0, 0.96, 0.9), vertex_colour=True, anti_tiling=True, wet={"dark": 0.4, "rough": 0.3})
     # The earthworks (the fork hill, the cuttings' walls) are bare earth in the game: its TerrainEarth mesh shares
     # the terrain's UVs (5 km across), so the mud scan tiles every 4 m there, tinted to the hill's red-brown.
     earth = surface_material("M_Earth", "brown_mud_dry", 5000 / 4.0, 5000 / 4.0, tint=(1.15, 0.78, 0.55))

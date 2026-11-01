@@ -3,8 +3,8 @@ using Godot;
 namespace GrudgeLap.Game;
 
 /// <summary>
-/// The menu Esc (or the pad's Back) opens over the game: carry on, a new game, the camera, the picture, the units,
-/// full screen and quitting. While it is open the race stands still and the sound is off; the arrow keys, the d-pad
+/// The menu Esc (or the pad's Back) opens over the game: carry on, a new game, the camera, the picture, the weather,
+/// the units, full screen, the replay music's folder and quitting. While it is open the race stands still and the sound is off; the arrow keys, the d-pad
 /// and the mouse move its cursor instead of the car.
 /// </summary>
 /// <remarks>
@@ -20,9 +20,13 @@ internal sealed class PauseMenu
         NewGame,
         Camera,
         Graphics,
+        /// <summary>Clear, overcast, wet road, rain, or random for every credit (0.15); clear by default.</summary>
+        Weather,
         Retro,
         Units,
         Fullscreen,
+        /// <summary>The replay music: the built-in tune or the player's own file; taking it opens the user folder (0.15).</summary>
+        Music,
         Quit,
     }
 
@@ -50,7 +54,7 @@ internal sealed class PauseMenu
         if (index >= 0 && index < Items.Length) Cursor = index;
     }
 
-    public static Rect2 Panel(Vector2 size) => new(size.X * 0.5f - 300f, size.Y * 0.5f - 270f, 600f, 540f);
+    public static Rect2 Panel(Vector2 size) => new(size.X * 0.5f - 340f, size.Y * 0.5f - 320f, 680f, 640f);
 
     public static Rect2 ItemRect(Vector2 size, int index)
     {

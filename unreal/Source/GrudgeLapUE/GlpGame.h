@@ -59,6 +59,12 @@ public:
 	const FString& Message() const { return MessageText; }
 	const FString& CarName() const { return CarNameText; }
 	int32 Gearbox() const { return Transmission; }
+	/** The player's weather choice for the title screen (H steps it). */
+	const TCHAR* WeatherName() const
+	{
+		static const TCHAR* Names[] = { TEXT("CLEAR"), TEXT("OVERCAST"), TEXT("WET ROAD"), TEXT("RAIN"), TEXT("RANDOM") };
+		return Names[FMath::Clamp(WeatherChoice, 0, 4)];
+	}
 	bool InCockpit() const;
 	bool UsesKmh() const { return bKmh; }
 	float DrivingSeconds() const { return DrivingTime; }
@@ -174,7 +180,8 @@ private:
 	FLinearColor FogColour = FLinearColor::White;
 	float ExposureEv = -1.f;
 	int32 WeatherShown = -1;
-	int32 FixedWeather = -1;   // -GlpWeather=0..3 fixes the credit's weather for automated runs; otherwise the core draws one
+	int32 FixedWeather = -1;   // -GlpWeather=0..4 fixes the credit's weather for automated runs; otherwise WeatherChoice
+	int32 WeatherChoice = 0;   // the player's weather (settings): 0 clear, 1 overcast, 2 wet, 3 rain, 4 random for every credit
 
 	// Automated runs (see the class comment).
 	TArray<float> ShotTimes;

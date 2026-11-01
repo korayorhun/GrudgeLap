@@ -2,6 +2,7 @@
 
 #include "GlpLibrary.h"
 #include "HAL/FileManager.h"
+#include "HAL/PlatformMisc.h"
 #include "Misc/CommandLine.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -18,6 +19,10 @@ namespace
 	const TCHAR* PopFiles[] = { TEXT("v8/pop1.wav"), TEXT("v8/pop2.wav"), TEXT("v8/pop3.wav"), TEXT("v8/pop4.wav"), TEXT("v8/pop5.wav"), TEXT("v8/crackle.wav") };
 	const TCHAR* CrashFiles[] = { TEXT("crash/crash1.wav"), TEXT("crash/crash2.wav"), TEXT("crash/crash3.wav") };
 	const TCHAR* SteamFile = TEXT("train/steam.wav");
+	// The replay's music plays alone (the engine is silent in the replay): -5 dB, as the Godot version's ReplayMusicDb;
+	// it fades out over a third of a second when the replay ends or is skipped.
+	constexpr float MusicGain = 0.56f;
+	constexpr float MusicRamp = 1.f / (0.33f * MixRate);
 
 	// Levels of the Godot mix: engine and loops at 0.9 (SampledEngine.Volume, TyreAudio.Volume), the pops' player
 	// at -8 dB, the synthesis at 0.8 into a player at -6 dB, and a limiter on the master bus at -0.5 dB.
@@ -106,6 +111,11 @@ void UGlpAudio::EndPlay(const EEndPlayReason::Type Reason)
 	{
 		UE_LOG(LogGlpAudio, Log, TEXT("mix recorded: %s (%.1f s)"), *DumpFile, Dump.Num() / static_cast<float>(MixRate));
 	}
+}
+
+FString UGlpAudio::MusicFolder()
+{
+	return FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("GrudgeLap"), TEXT("music"));
 }
 
 FString UGlpAudio::AudioDirectory()
@@ -245,6 +255,19 @@ void UGlpAudio::SetCar(int32 Style)
 		}
 	}
 	LoadClip(FPaths::Combine(Directory, SteamFile), Loaded->Steam);
+	// The instant replay's music (as the Godot version's EngineAudio): the player's own replay.wav first, from this
+	// version's music folder or the Godot version's (one file serves both), else the game's own tune. Only the first
+	// channel of a WAV file is read (PCM 16-bit or float), as for every recording here.
+	const FString Godot = FPaths::Combine(FPlatformMisc::GetEnvironmentVariable(TEXT("APPDATA")), TEXT("Godot"), TEXT("app_userdata"), TEXT("GrudgeLap"), TEXT("music"), TEXT("replay.wav"));
+	const FString Repository = FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectDir(), TEXT(".."), TEXT("game"), TEXT("assets"), TEXT("audio"), TEXT("music"), TEXT("replay.wav")));
+	for (const FString& File : { FPaths::Combine(MusicFolder(), TEXT("replay.wav")), Godot, FPaths::Combine(Directory, TEXT("music"), TEXT("replay.wav")), Repository })
+	{
+		if (IFileManager::Get().FileExists(*File) && LoadClip(File, Loaded->Music))
+		{
+			UE_LOG(LogGlpAudio, Log, TEXT("replay music: %s (%.1f s)"), *File, Loaded->Music.Samples.Num() / FMath::Max(Loaded->Music.Rate, 1.f));
+			break;
+		}
+	}
 	UE_LOG(LogGlpAudio, Log, TEXT("recordings from %s: engine %s, %d tyre loops, %d pops, %d crashes, steam %s"), *Directory, Loaded->Engine != 0 ? TEXT("loaded") : TEXT("missing"), Loaded->Tyres.Num(), Loaded->Pops.Num(), Loaded->Crashes.Num(), Loaded->Steam.Samples.Num() > 1 ? TEXT("loaded") : TEXT("missing"));
 	GameClips = Loaded;
 	PopsPending.Reset();
@@ -277,6 +300,15 @@ void UGlpAudio::Update(const glp_state& State, float TrainDistance, bool bInteri
 	else if (State.phase == GLP_PHASE_FINISHED && LastPhase != GLP_PHASE_FINISHED)
 	{
 		Frame.Jingle = EJingle::GameOver;
+	}
+	// The instant replay's music starts with the replay and fades when it ends or is skipped.
+	if (State.phase == GLP_PHASE_REPLAY && LastPhase != GLP_PHASE_REPLAY)
+	{
+		Frame.bMusicStart = true;
+	}
+	else if (State.phase != GLP_PHASE_REPLAY && LastPhase == GLP_PHASE_REPLAY)
+	{
+		Frame.bMusicStop = true;
 	}
 	LastPhase = State.phase;
 
@@ -449,6 +481,16 @@ void UGlpAudio::Apply(const FFrame& Frame)
 		ChimeLevel = 1.f;
 		ChimePhase = 0.f;
 	}
+	if (Frame.bMusicStart)
+	{
+		MusicPosition = 0.0;
+		MusicFade = 1.f;
+		bMusicOn = true;
+	}
+	if (Frame.bMusicStop)
+	{
+		bMusicOn = false;
+	}
 	Thump = FMath::Max(Thump, Frame.Thump);
 	if (Frame.bCrash)
 	{
@@ -572,8 +614,31 @@ int32 UGlpAudio::OnGenerateAudio(float* OutAudio, int32 NumSamples)
 			Steam = Loop(Set->Steam, SteamVoice.Position, Set->Steam.Rate / MixRate) * FMath::Lerp(SteamFrom, SteamTarget, T);
 		}
 
+		// The replay's music, from its start while the replay runs, then faded out.
+		float Music = 0.f;
+		const int32 MusicCount = Set->Music.Samples.Num();
+		if (MusicCount > 1 && (bMusicOn || MusicFade > 0.f))
+		{
+			if (!bMusicOn)
+			{
+				MusicFade = FMath::Max(0.f, MusicFade - MusicRamp);
+			}
+			const int32 Index = static_cast<int32>(MusicPosition);
+			if (Index + 1 < MusicCount)
+			{
+				const float Fraction = static_cast<float>(MusicPosition - Index);
+				Music = FMath::Lerp(Set->Music.Samples[Index], Set->Music.Samples[Index + 1], Fraction) * MusicFade * MusicGain;
+				MusicPosition += Set->Music.Rate / MixRate;
+			}
+			else
+			{
+				bMusicOn = false;
+				MusicFade = 0.f;
+			}
+		}
+
 		// Godot's master-bus limiter: instant attack, so nothing passes the ceiling, instead of clipping.
-		const float Mix = EngineBuffer[i] + Tyres + Shots + Steam + Synth() * SynthLevel;
+		const float Mix = EngineBuffer[i] + Tyres + Shots + Steam + Music + Synth() * SynthLevel;
 		const float Peak = FMath::Abs(Mix);
 		Limiter = Peak > Limiter ? Peak : Limiter + (Peak - Limiter) * Release;
 		OutAudio[i] = Limiter > Ceiling ? Mix * Ceiling / Limiter : Mix;

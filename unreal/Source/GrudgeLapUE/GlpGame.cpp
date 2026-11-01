@@ -16,6 +16,8 @@
 #include "Materials/MaterialParameterCollection.h"
 #include "GameFramework/GameUserSettings.h"
 #include "GameFramework/PlayerController.h"
+#include "HAL/FileManager.h"
+#include "HAL/PlatformProcess.h"
 #include "GlpAudio.h"
 #include "GlpHud.h"
 #include "GlpInstruments.h"
@@ -362,8 +364,10 @@ void AGlpGame::NewSession()
 	Scores.Dismiss();
 	bScoreOffered = false;
 	CloseSession(true);
-	// The credit's weather: the core draws one as the Godot version does, unless an automated run fixed it.
-	const int32 WeatherFlags = FixedWeather >= 0 ? (FMath::Clamp(FixedWeather, 0, 3) << GLP_WEATHER_SHIFT) : GLP_RANDOM_WEATHER;
+	// The credit's weather: -GlpWeather for an automated run, otherwise the player's choice (clear by default; 4 has
+	// the core draw one for every credit, as the Godot version's RANDOM does).
+	const int32 Choice = FixedWeather >= 0 ? FixedWeather : WeatherChoice;
+	const int32 WeatherFlags = Choice == 4 ? GLP_RANDOM_WEATHER : (FMath::Clamp(Choice, 0, 3) << GLP_WEATHER_SHIFT);
 	Session = Library->Create(CarIndex, (bTraffic ? GLP_TRAFFIC : 0) | (bSpeedRoute ? GLP_SPEED_ROUTE : 0) | WeatherFlags);
 	if (!Session)
 	{
@@ -755,6 +759,26 @@ bool AGlpGame::HandleMenu()
 		}
 		return false;
 	}
+	// H steps the weather on the title screen (0.15): clear, overcast, wet road, rain, random; the session is rebuilt in it.
+	if (Input.Pressed(EKeys::H))
+	{
+		WeatherChoice = (WeatherChoice + 1) % 5;
+		SaveSettings();
+		NewSession();
+		if (Audio)
+		{
+			Audio->Chime();
+		}
+		return false;
+	}
+	// M opens the folder for the player's own replay music (replay.wav, read when a car is chosen), made if missing.
+	if (Input.Pressed(EKeys::M))
+	{
+		const FString Folder = UGlpAudio::MusicFolder();
+		IFileManager::Get().MakeDirectory(*Folder, true);
+		FPlatformProcess::ExploreFolder(*Folder);
+		return false;
+	}
 	// The cabinet chimed at every choice.
 	if (Input.Pressed(EKeys::One))
 	{
@@ -1080,6 +1104,10 @@ void AGlpGame::LoadSettings()
 		{
 			Transmission = FMath::Clamp(FCString::Atoi(*Value), 0, 2);
 		}
+		else if (Key == TEXT("weather"))
+		{
+			WeatherChoice = FMath::Clamp(FCString::Atoi(*Value), 0, 4);
+		}
 		else if (Key == TEXT("units"))
 		{
 			// Metric by default since 0.14: the old "kmh" key is left unread, so a copy that never chose gets km/h once.
@@ -1090,7 +1118,7 @@ void AGlpGame::LoadSettings()
 
 void AGlpGame::SaveSettings() const
 {
-	const FString Text = FString::Printf(TEXT("car=%d\ntransmission=%d\nunits=%s\n"), CarIndex, Transmission, bKmh ? TEXT("kmh") : TEXT("mph"));
+	const FString Text = FString::Printf(TEXT("car=%d\ntransmission=%d\nunits=%s\nweather=%d\n"), CarIndex, Transmission, bKmh ? TEXT("kmh") : TEXT("mph"), WeatherChoice);
 	FFileHelper::SaveStringToFile(Text, *SavedFile(TEXT("settings.ini")));
 }
 

@@ -66,6 +66,7 @@ private:
 		TArray<FClip> Pops;
 		TArray<FClip> Crashes;   // crash/crash*.wav
 		FClip Steam;             // train/steam.wav, looped
+		FClip Music;             // the instant replay's tune: the player's replay.wav (MusicFolder), else music/replay.wav
 		~FClips();
 	};
 
@@ -125,6 +126,8 @@ private:
 		int32 Pop = INDEX_NONE;   // a pop to fire now: clip index
 		float PopPitch = 1.f;
 		float PopGain = 1.f;
+		bool bMusicStart = false;   // the instant replay began: its music from the top
+		bool bMusicStop = false;    // it ended or was skipped: the music fades
 	};
 
 	struct FVoice
@@ -144,6 +147,12 @@ private:
 
 	static bool LoadClip(const FString& File, FClip& Clip);
 	static FString AudioDirectory();
+
+public:
+	/** The folder for the player's own replay music (Saved/GrudgeLap/music/replay.wav); the title screen's M opens it. */
+	static FString MusicFolder();
+
+private:
 	static FJingleNote JingleNote(float Beat, float Beats, int32 Midi, int32 Voice, float Level, float Bpm);
 	static const TArray<FJingleNote>& FanfareSong();
 	static const TArray<FJingleNote>& GameOverSong();
@@ -205,6 +214,9 @@ private:
 	bool bSteam = false;   // the steam loop is loaded: it stands in for the synthesised clack
 	float WindLp = 0.f, Thump = 0.f, ThumpPhase = 0.f;
 	float RainLp = 0.f, RainLp2 = 0.f;
+	double MusicPosition = 0.0;
+	float MusicFade = 0.f;
+	bool bMusicOn = false;
 
 	// Automated checks (see the class comment); the recording is shared between the threads under DumpLock.
 	FString DumpFile;

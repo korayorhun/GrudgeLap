@@ -31,10 +31,10 @@ internal static class WorldBuilder
     private const float ShoulderDrop = RoadClearance - 0.01f;
     private const float TerrainMargin = 2400f;
     /// <summary>
-    /// White edge lines and marker posts along the roads. Off since 0.13: the 1989 plain had neither, and with them the
-    /// road read as a modern highway; the code stays for a "today's road" look.
+    /// White edge lines and marker posts along the roads: on, as on a rural road of today (0.13 took them off for the
+    /// arcade's bare road; the player found the road less real without them, and 0.15 put them back).
     /// </summary>
-    private static readonly bool RoadFurniture = false;
+    private static readonly bool RoadFurniture = true;
     /// <summary>Metres one tile of the grass's macro-variation noise spans (the terrain's second UV set; see <see cref="Grass"/>).</summary>
     private const float MacroTile = 90f;
 
@@ -50,9 +50,8 @@ internal static class WorldBuilder
     // cuttings' earth a natural brown (0.9.1; before, the orange of the original was kept in both).
     private static readonly Color OrangeShoulder = new(0.95f, 0.46f, 0.12f);
     private static readonly Color OrangeEarth = new(0.86f, 0.50f, 0.27f);
-    // The shoulders are the red-brown earth of the original's plain again (0.13; the compacted gravel of 0.10-0.12 read as
-    // a modern highway): the dirt photo under a red clay tint.
-    private static readonly Color GravelTint = new(0.86f, 0.56f, 0.36f);
+    // The shoulders are compacted grey-brown gravel (0.15 again; 0.13's red earth, the arcade's, read as paint on the ground).
+    private static readonly Color GravelTint = new(0.80f, 0.77f, 0.72f);
     private static readonly Color SoilTint = new(0.72f, 0.58f, 0.46f);
     private static Godot.Environment? _environment;
     private static Godot.Environment? _mirrorEnvironment;
@@ -61,7 +60,9 @@ internal static class WorldBuilder
     // for SDFGI, which lit the scene the same way but cost a third of the GPU's frame (see SetQuality).
     private const float SkyAmbientShare = 0.8f;
     private static readonly Color GroundBounce = new(0.62f, 0.58f, 0.46f);
-    private const float AmbientEnergy = 0.95f;   // 0.11: a little less fill, so the sun's side and the shade differ as they do outdoors
+    // 0.15: back to the fill of 0.10. 0.11 took it down to 0.95 with the sun up at 1.75 for a harder contrast, and
+    // the track read less like a real place than before; the player said so, and the light of 0.10 is restored.
+    private const float AmbientEnergy = 1.15f;
     private static StandardMaterial3D? _steel;
     private static MeshInstance3D? _clouds;
     private static Node3D? _forest;
@@ -76,13 +77,13 @@ internal static class WorldBuilder
     private static Material? _clearSky;              // the photo sky, kept while the overcast one shows
     private static ProceduralSkyMaterial? _overcastSky;
     private static NoiseTexture2D? _puddles;
-    private static readonly Color DryAsphalt = new(0.33f, 0.33f, 0.34f);
+    private static readonly Color DryAsphalt = new(0.52f, 0.52f, 0.53f);
     private static readonly Color WetAsphalt = new(0.15f, 0.15f, 0.16f);
     private static readonly Color DryGrass = new(0.56f, 0.66f, 0.39f);
     private static readonly Color WetGrass = new(0.40f, 0.50f, 0.28f);
     private static readonly Color DrySun = new(1f, 0.96f, 0.90f);
     private static readonly Color CloudSun = new(0.84f, 0.87f, 0.93f);
-    private const float SunEnergy = 1.75f;
+    private const float SunEnergy = 1.45f;
     /// <summary>How fast the cloud sheet drifts, in tiles per second: about five metres a second on a 2.8 km tile.</summary>
     private const float CloudDrift = 0.0018f;
     private static readonly List<(StandardMaterial3D Material, Texture2D? Albedo, Texture2D? Normal, Texture2D? Roughness)> _textured = new();
@@ -90,9 +91,9 @@ internal static class WorldBuilder
     /// <summary>Sun direction measured from the brightest patch of the sky HDRI (see assets/textures/SOURCES.md): elevation 43.0, panorama u 0.600.</summary>
     private static readonly Vector3 SunDirection = new(-0.431f, 0.682f, -0.591f);
     /// <summary>The mountain range on the horizon (<see cref="BuildMountains"/>): where its foot, its ridge and its far side lie, metres from the circuit's centre.</summary>
-    private const float MountainFoot = 2900f;
-    private const float MountainRidge = 3900f;
-    private const float MountainBack = 5900f;
+    private const float MountainFoot = 3200f;
+    private const float MountainRidge = 4400f;
+    private const float MountainBack = 6400f;
 
     /// <summary>
     /// Drops the shared materials. Called when the game quits: a Godot resource still held by a static field
@@ -275,7 +276,7 @@ internal static class WorldBuilder
         if (_asphalt is not null)
         {
             _asphalt.AlbedoColor = DryAsphalt.Lerp(WetAsphalt, wet);
-            _asphalt.Roughness = Mathf.Lerp(0.95f, 0.30f, wet);
+            _asphalt.Roughness = Mathf.Lerp(0.8f, 0.30f, wet);
             _asphalt.RoughnessTexture = wet > 0f ? Puddles : null;
         }
         if (_gravel is not null && !_retro)
@@ -306,10 +307,10 @@ internal static class WorldBuilder
             environment.AmbientLightSkyContribution = overcast ? 0.95f : SkyAmbientShare;
             environment.AmbientLightEnergy = overcast ? 1.1f : AmbientEnergy;
             environment.FogLightColor = overcast ? new Color(0.70f, 0.72f, 0.76f) : new Color(0.72f, 0.80f, 0.94f);
-            environment.FogDensity = !overcast ? 0.00006f : WeatherModel.Raining(_weather) ? 0.00032f : 0.00016f;
-            environment.FogAerialPerspective = overcast ? 0.8f : 0.5f;
+            environment.FogDensity = !overcast ? 0.00004f : WeatherModel.Raining(_weather) ? 0.00032f : 0.00016f;
+            environment.FogAerialPerspective = overcast ? 0.8f : 0.35f;
             environment.VolumetricFogDensity = overcast ? 0.00035f : 0.00012f;
-            environment.TonemapExposure = overcast ? 1.15f : 0.95f;
+            environment.TonemapExposure = overcast ? 1.15f : 0.9f;
         }
     }
 
@@ -426,19 +427,19 @@ internal static class WorldBuilder
             if (_asphalt is not null) return _asphalt;
             _asphalt = Textured(new StandardMaterial3D
             {
-                // Darkened photo asphalt: aged asphalt reflects about a fifth of the light, and at 0.46 (until 0.10) the
-                // road read as fresh concrete in the sun. The slab shade, the wheel tracks, the patches and the potholes
+                // The grey photo asphalt of 0.10 (0.46; 0.11-0.14 darkened it to 0.33, and the road read as fresh
+                // black tarmac, less real than before). The slab shade, the wheel tracks, the patches and the potholes
                 // come from the vertex colour multiplied in. Rough all over, without the photo's roughness map: that
                 // map averages 0.52, and under the screen-space reflections a dry road mirrored the car and the sky
                 // as if it had just rained (0.11). A dry road only shines at a grazing angle towards a low sun.
-                AlbedoColor = new Color(0.33f, 0.33f, 0.34f),
+                AlbedoColor = new Color(0.52f, 0.52f, 0.53f),
                 VertexColorUseAsAlbedo = true,
-                Roughness = 0.95f,
+                Roughness = 0.8f,
                 Uv1Scale = new Vector3(2f, 0.18f, 1f),      // u spans the 11 m width, v is metres along: a 5.5 m tile
                 // Both faces: on the bridges, the ramps and the loop this ribbon is the whole deck, seen from below too.
                 CullMode = BaseMaterial3D.CullModeEnum.Disabled,
             }, Photo("asphalt_color") ?? Noise(9f, 4, new[] { (0f, new Color(0.82f, 0.82f, 0.82f)), (0.5f, new Color(0.98f, 0.98f, 0.98f)), (1f, new Color(1.15f, 1.15f, 1.15f)) }, seed: 5),
-               Photo("asphalt_normal") ?? Noise(16f, 4, null, seed: 17, asNormal: true), normalScale: 0.35f);
+               Photo("asphalt_normal") ?? Noise(16f, 4, null, seed: 17, asNormal: true), normalScale: 0.5f);
             // The wear sheet (tools/make-road-wear.py): tar snakes, sealed cracks and stains multiplied in on the
             // second UV set, which runs 160 m along the road (40 until 0.13) and drifts across it so the sheet's repeat
             // does not read.
@@ -478,9 +479,8 @@ internal static class WorldBuilder
        Photo("dirt_normal"), 0.6f, Photo("dirt_roughness"));
 
     /// <summary>
-    /// Shoulders: the red-brown earth of the original's plain along the road (u across, v in metres along; the dirt
-    /// photo under a clay tint); the vertex colour only varies the shade every couple of metres. 1989 mode shows them
-    /// in the cabinet's flat orange (SetRetro).
+    /// Shoulders: compacted grey-brown gravel along the road (u across, v in metres along); the vertex colour only
+    /// varies the shade every couple of metres. 1989 mode shows them in the cabinet's flat orange (SetRetro).
     /// </summary>
     private static StandardMaterial3D Gravel => _gravel ??= Textured(new StandardMaterial3D
     {
@@ -490,8 +490,8 @@ internal static class WorldBuilder
         Uv1Scale = new Vector3(0.9f, 0.45f, 1f),
         // Both faces: the shoulders run along the bridge decks too, seen from below.
         CullMode = BaseMaterial3D.CullModeEnum.Disabled,
-    }, Photo("dirt_color") ?? Noise(4f, 3, new[] { (0f, new Color(0.7f, 0.65f, 0.55f)), (1f, new Color(1f, 0.95f, 0.85f)) }, seed: 41),
-       Photo("dirt_normal"), 0.8f);
+    }, Photo("shoulder_color") ?? Photo("dirt_color") ?? Noise(4f, 3, new[] { (0f, new Color(0.7f, 0.65f, 0.55f)), (1f, new Color(1f, 0.95f, 0.85f)) }, seed: 41),
+       Photo("shoulder_normal") ?? Photo("dirt_normal"), 0.8f);
 
     /// <summary>
     /// A photo material for props and foliage, cached by texture, tint and scale and tracked for the retro
@@ -595,11 +595,11 @@ internal static class WorldBuilder
             AmbientLightEnergy = AmbientEnergy,
             // AgX keeps the saturated paint and the sky from clipping the way ACES does.
             TonemapMode = Godot.Environment.ToneMapper.Agx,
-            TonemapExposure = 0.95f,
+            TonemapExposure = 0.9f,
             TonemapWhite = 6f,
             SsaoEnabled = true,
             SsaoRadius = 1.5f,
-            SsaoIntensity = 2f,
+            SsaoIntensity = 1.5f,
             SsilEnabled = true,
             SsilRadius = 3f,
             SsilIntensity = 1f,
@@ -615,8 +615,8 @@ internal static class WorldBuilder
             // plain of the 1989 game, where nothing faded. Denser fog washed everything past the next bend to grey.
             FogEnabled = true,
             FogLightColor = new Color(0.72f, 0.80f, 0.94f),
-            FogDensity = 0.00006f,
-            FogAerialPerspective = 0.5f,
+            FogDensity = 0.00004f,
+            FogAerialPerspective = 0.35f,
             FogSkyAffect = 0.05f,
             // A trace of haze near the ground, so the sun still has something to light in the dips.
             VolumetricFogEnabled = true,
@@ -625,8 +625,8 @@ internal static class WorldBuilder
             VolumetricFogLength = 300f,
             VolumetricFogSkyAffect = 0.1f,
             AdjustmentEnabled = true,
-            AdjustmentContrast = 1.08f,
-            AdjustmentSaturation = 1.02f,
+            AdjustmentContrast = 1.05f,
+            AdjustmentSaturation = 1.12f,
         };
         return new WorldEnvironment { Environment = _environment };
     }
@@ -776,11 +776,10 @@ internal static class WorldBuilder
         var ridge = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth, Frequency = 1f, FractalOctaves = 4, Seed = 1989 };
         var relief = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth, Frequency = 1f / 420f, FractalOctaves = 5, FractalLacunarity = 2.3f, Seed = 7 };
 
-        // The ridge's height at a bearing: a ring of peaks between 360 and 800 m, ridged noise so the summits are sharp
-        // and the saddles rounded, continuous round the horizon. Its crest also wanders in and out by 500 m. The arcade's
-        // snow peaks stand well up over its plain (its attract frames); at 240-560 m and 4.4 km (until 0.12) ours were a
-        // low chain, and much taller still they read as a fence of teeth.
-        float RidgeHeight(float bearing) => 360f + 440f * (1f - MathF.Abs(ridge.GetNoise2D(MathF.Cos(bearing) * 3.5f, MathF.Sin(bearing) * 3.5f)));
+        // The ridge's height at a bearing: a ring of peaks between 240 and 560 m, ridged noise so the summits are sharp
+        // and the saddles rounded, continuous round the horizon. Its crest also wanders in and out by 500 m. A low distant
+        // chain: 0.13 raised it to the arcade's 360-800 m at 3.9 km, and it stood over the plain like a fence of teeth (0.15).
+        float RidgeHeight(float bearing) => 240f + 320f * (1f - MathF.Abs(ridge.GetNoise2D(MathF.Cos(bearing) * 3.5f, MathF.Sin(bearing) * 3.5f)));
         float RidgeRadius(float bearing) => MountainRidge + 500f * ridge.GetNoise2D(MathF.Cos(bearing) * 3f + 9f, MathF.Sin(bearing) * 3f);
 
         float Height(float bearing, float r)
@@ -1027,14 +1026,17 @@ internal static class WorldBuilder
             r = MathUtil.Lerp(r, shade * 0.36f, wooded);
             g = MathUtil.Lerp(g, shade * 0.50f, wooded);
             b = MathUtil.Lerp(b, shade * 0.34f, wooded);
-            // Earthworks: where the ground has been pulled well off the plain (which rolls by half a metre) to meet a
-            // road, inside the circuit's box, it is bare earth (BuildEarth); the grass beside it browns towards it.
-            var earth = outside < 0f ? MathUtil.Clamp01((MathF.Abs(relief) - 1.8f) / 0.6f) : 0f;
+            // Earthworks: where the ground has been pulled off the plain to meet a road, inside the circuit's box. The
+            // cuttings and embankments of a farm road are grassed over, so only a deep, steep cut shows bare earth
+            // (BuildEarth) and a graded slope's grass is a little drier; from 0.13 every slope over 1.8 m was bare
+            // brown earth, and on the rolling plain the roads ran between wedges of it that read as unreal (0.15).
+            var steep = MathUtil.Clamp01((0.90f - normal.Y) / 0.12f);
+            var earth = outside < 0f ? MathUtil.Clamp01((MathF.Abs(relief) - 4.5f) / 1.0f) * steep : 0f;
             vertexEarth[v] = earth;
-            var brown = MathUtil.Clamp01((MathF.Abs(relief) - 1.0f) / 0.8f) * (outside < 0f ? 1f : 0f);
-            r = MathUtil.Lerp(r, shade * 0.88f, brown * 0.55f);
-            g = MathUtil.Lerp(g, shade * 0.70f, brown * 0.55f);
-            b = MathUtil.Lerp(b, shade * 0.45f, brown * 0.55f);
+            var brown = MathUtil.Clamp01((MathF.Abs(relief) - 1.5f) / 2.5f) * (outside < 0f ? 1f : 0f);
+            r = MathUtil.Lerp(r, shade * 0.95f, brown * 0.30f);
+            g = MathUtil.Lerp(g, shade * 0.86f, brown * 0.30f);
+            b = MathUtil.Lerp(b, shade * 0.58f, brown * 0.30f);
             vertexColour[v] = new Color(r, g, b);
             st.SetColor(vertexColour[v]);
             var gNormal = Convert.ToGodot(normal);
@@ -1208,7 +1210,7 @@ internal static class WorldBuilder
             var shared = sink > 0f && SiblingSide(track, path, f) != 0;
             // Alternate the shade every original slab length: the stripey look of the 1989 road, softened.
             var slab = (int)MathF.Floor(f.Distance / TrackBuilder.Slab);
-            var slabShade = slab % 2 == 0 ? 1f : 0.94f;
+            var slabShade = slab % 2 == 0 ? 1f : 0.88f;
             var tint = f.Kind == SegmentKind.Loop ? loopTint : Colors.White;
             var gLateral = Convert.ToGodot(f.Lateral);
             var sign = Convert.ToGodot(f.Normal).Cross(gLateral).Dot(Convert.ToGodot(f.Tangent)) < 0f ? -1f : 1f;
@@ -1225,7 +1227,7 @@ internal static class WorldBuilder
                 var tone = slabShade * TrackShade(fraction)
                     * RoadWear.PatchTone(path.Kind, f.Kind, f.Distance, lateral, f.HalfWidth)
                     * MathF.Max(1f - 9f * MathF.Max(depth - 0.004f, 0f), 0.6f)
-                    * (1f + 0.025f * grain.GetNoise2D(f.Distance * 3.7f, lateral * 2.1f));
+                    * (1f + 0.05f * grain.GetNoise2D(f.Distance * 3.7f, lateral * 2.1f));
                 var colour = tint * tone;
                 colour.A = 1f;
                 st.SetColor(colour);
@@ -1324,9 +1326,9 @@ internal static class WorldBuilder
     {
         var st = new MeshBuilder();
         var frames = path.Frames;
-        // The original's dirt shoulders are broad: a car's width of earth beside the asphalt (3.2 m since 0.13, 2.2 before);
-        // the ground field keeps its plane out past this (TerrainField.Verge).
-        const float width = 3.2f;
+        // A broad gravel shoulder (2.6 m: 0.13's 3.2 m of earth read as a second road, 0.12's 2.2 m as a kerb); the ground
+        // field keeps its plane out past this (TerrainField.Verge).
+        const float width = 2.6f;
         for (var i = 0; i < frames.Count - 1; i++)
         {
             var a = frames[i];
@@ -1362,16 +1364,16 @@ internal static class WorldBuilder
             var b = frames[i + 1];
             if (a.Surface == SurfaceType.Chasm || b.Surface == SurfaceType.Chasm) continue;
             var shared = SiblingSide(track, path, a);
-            // One dashed yellow centre line and no edge lines, as on the 1989 circuit, where the orange shoulders mark
-            // the edges; the dashes long and 20 cm wide as the arcade drew them (4.5 m every 12 m since 0.13). Paint
-            // wears: every dash is a little brighter or duller than the next, a few are gone. Where the branches share
-            // the road, only the one on the right paints the centre line.
-            var dash = (int)MathF.Floor(a.Distance / 12f);
+            // One dashed yellow centre line, as on the 1989 circuit: a 3 m dash every 9 m, 16 cm wide, the rural road's
+            // own measure (0.13's 4.5 m every 12 m, the arcade's, read as oversized; 0.15). Paint wears: every dash is a
+            // little brighter or duller than the next, a few are gone. Where the branches share the road, only the one
+            // on the right paints the centre line.
+            var dash = (int)MathF.Floor(a.Distance / 9f);
             var dashTone = 0.55f + 0.45f * RoadWear.Hash(dash, (int)path.Kind, 41);
-            if (a.Distance % 12f < 4.5f && shared != 1 && RoadWear.Hash(dash, (int)path.Kind, 42) > 0.08f)
+            if (a.Distance % 9f < 3f && shared != 1 && RoadWear.Hash(dash, (int)path.Kind, 42) > 0.08f)
             {
-                Quad(st, a.Origin - a.Lateral * 0.10f + a.Normal * 0.012f, a.Origin + a.Lateral * 0.10f + a.Normal * 0.012f,
-                    b.Origin - b.Lateral * 0.10f + b.Normal * 0.012f, b.Origin + b.Lateral * 0.10f + b.Normal * 0.012f,
+                Quad(st, a.Origin - a.Lateral * 0.08f + a.Normal * 0.012f, a.Origin + a.Lateral * 0.08f + a.Normal * 0.012f,
+                    b.Origin - b.Lateral * 0.08f + b.Normal * 0.012f, b.Origin + b.Lateral * 0.08f + b.Normal * 0.012f,
                     a.Normal, b.Normal, (yellow * dashTone) with { A = 1f }, a.Distance, b.Distance);
             }
         }

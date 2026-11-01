@@ -332,6 +332,13 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   loop the ribbon is the whole deck and is seen from below; the centre line and the far ground only from above.
   The hot hatch's and the five's mirror housings are black plastic, the turbo hatch's in paint: from the seat
   the housing's back shows through the side glass, and in red paint it read as a ball beside the screen.
+- The look of 0.15: the player found the track less real after 0.11-0.14 than in 0.10, and the light and the road
+  of 0.10 came back, compared frame by frame against 0.10.0 at the same moments of the attract lap: the grey photo
+  asphalt (0.52 with the slab shade 0.88, the grain 5 % and the normal map at 0.5), sun 1.45, ambient 1.15, exposure
+  0.9, SSAO 1.5, fog 0.00004 with aerial perspective 0.35, contrast 1.05 and saturation 1.12. What made the dry road
+  of 0.10 look wet stays gone: no roughness map, roughness 0.8 all over, a broad sheen towards the horizon that
+  mirrors neither the car nor the sky. The grass's macro variation, the car's paint, probe and contact shadow of
+  0.11 stay.
 - The look of 0.11 (a step towards a photograph, after the plain photo textures of 0.10): the asphalt darkened to the
   albedo of aged asphalt (0.33) and made matte all over (its photo roughness map, mean 0.52, had the road mirroring
   the car and the sky under the screen-space reflections as if it had rained), the gravel darkened and matte, the
@@ -498,8 +505,10 @@ new-package requests were withdrawn).
 - The cabin (`CarView.Cabin.cs`): two shadowless fill lights stand in for the light bouncing round a cabin (seen from
   the seat only), the A-pillars are trimmed panels, the dashboard has a top pad and a lighter fascia with vents,
   glovebox and trim strip, the doors have their trims, the seats bolsters and headrests, and the airbag cars a padded hub.
-- Weather (0.12, `physics/Race/Weather.cs`): every credit draws its weather (dry 55 %, overcast 20 %, wet 12 %,
-  rain 13 %; `--weather=` fixes it for automation, the native API's flags for the Unreal version). The simulation
+- Weather (0.12, `physics/Race/Weather.cs`): clear by default since 0.15; the menu's WEATHER line chooses clear,
+  overcast, wet road, rain or random (a draw for every credit: dry 55 %, overcast 20 %, wet 12 %, rain 13 %), kept
+  under `weather` in the settings and applied at once (`RaceSession.SetWeather`); `--weather=` fixes it for
+  automation, the native API's flags for the Unreal version (its title screen: H). The simulation
   scales every surface's peak friction by `WeatherModel.Grip` (wet asphalt 0.74, rain 0.68; grass 0.80 / 0.75), and
   the scripted driver plans its corners and braking with the same figures, so the attract lap and the tests hold in
   the rain. The view (`WorldBuilder.ApplyWeather`): a grey procedural sky in place of the photo one, the sun a wide
@@ -514,7 +523,10 @@ new-package requests were withdrawn).
   lines or marker posts (`WorldBuilder.RoadFurniture`); the centre dashes 4.5 m every 12 m and 20 cm wide; the
   mountains taller and nearer (360-800 m at 3.9 km); and the road rolls over two more gentle crests (the speed
   route after the drawbridge, the stunt route's run to the merge). The plan itself was already the original's: its
-  attract map and ours agree on every feature and its order. The plain itself rolls like farmland (0.13:
+  attract map and ours agree on every feature and its order. 0.15 took the arcade's dressing back where it had
+  read as less real than 0.12's road: the gravel shoulders (2.6 m), the white edge lines and the marker posts
+  returned, the centre dashes went back to 3 m every 9 m, the mountains to the low chain at 4.4 km, the wood to
+  260 m from the roads, and the plain's swell eased to 2 m. The plain itself rolls like farmland (0.13:
   `rollingGround` 2.6 m with a 620 m swell under the 230/95/38 m octaves, half a metre and no swell until then); the
   roads keep their profile and the ground field grades the embankments and cuttings, the buildings stand on levelled
   pads (`TerrainField.AddFlat`), and the terrain mesh paints bare earth by the relief the roads cut into the plain,
@@ -523,5 +535,10 @@ new-package requests were withdrawn).
   kept under `units` in the settings (the Unreal version the same, under a new key so an old copy gets metric once).
 - Instant replay music: eleven seconds of a CC0 FM tune; 1989 mode keeps the synthesised one. A file of the player's
   own under `user://music/replay.ogg|.mp3|.wav` takes its place (0.11, `EngineAudio.CustomReplayMusic`): nothing
-  copyrighted ships with the game, but a copy can play what its owner remembers.
+  copyrighted ships with the game, but a copy can play what its owner remembers. The menu's REPLAY MUSIC line shows
+  which plays and opens the folder (0.15); a file dropped in while the game runs is picked up when the menu opens,
+  and a file dragged onto the game's window is copied in and taken at once (`EngineAudio.AdoptReplayMusic`; the
+  name it had is kept in `replay-name.txt` for the menu). The Unreal version plays the same tune (GlpAudio: its own
+  `Saved/GrudgeLap/music/replay.wav`, the Godot folder's `replay.wav`, else the built-in recording), from the start
+  of the replay, fading when it ends.
 

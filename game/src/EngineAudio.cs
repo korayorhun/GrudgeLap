@@ -78,6 +78,48 @@ internal sealed partial class EngineAudio : Node
     public bool Interior { get; set; }
     /// <summary>How hard it rains, 0 to 1 (0.12): a steady hiss of low-passed noise, half as loud through the glass.</summary>
     public float Rain { get; set; }
+    /// <summary>The file name of the player's own replay tune when one plays (<see cref="CustomReplayMusic"/>), for the menu; null for the built-in tune.</summary>
+    public string? CustomReplayMusicName { get; private set; }
+
+    /// <summary>
+    /// Makes a music file the instant replay's tune (0.15: a file dropped on the game's window): copied into the user
+    /// folder as replay.ogg, .mp3 or .wav, the other two taken away so this one plays, and its own name written beside
+    /// it for the menu. Returns that name, or null when the file is not ogg, mp3 or wav, cannot be copied or does not
+    /// decode.
+    /// </summary>
+    public string? AdoptReplayMusic(string path)
+    {
+        var extension = System.IO.Path.GetExtension(path).ToLowerInvariant();
+        if (extension is not (".ogg" or ".mp3" or ".wav")) return null;
+        var folder = ProjectSettings.GlobalizePath("user://music");
+        try
+        {
+            System.IO.Directory.CreateDirectory(folder);
+            foreach (var old in new[] { ".ogg", ".mp3", ".wav" })
+            {
+                var file = System.IO.Path.Combine(folder, "replay" + old);
+                if (System.IO.File.Exists(file)) System.IO.File.Delete(file);
+            }
+            System.IO.File.Copy(path, System.IO.Path.Combine(folder, "replay" + extension));
+            System.IO.File.WriteAllText(System.IO.Path.Combine(folder, "replay-name.txt"), System.IO.Path.GetFileName(path));
+        }
+        catch (System.Exception ex)
+        {
+            GD.PrintErr($"replay music {path} could not be copied: {ex.Message}");
+            return null;
+        }
+        CustomReplayMusicName = null;
+        RefreshReplayMusic();
+        return CustomReplayMusicName;
+    }
+
+    /// <summary>Looks in the user folder again (the menu opened): a tune dropped in while the game runs plays from the next replay.</summary>
+    public void RefreshReplayMusic()
+    {
+        var custom = CustomReplayMusic();
+        if (custom is null || _replayMusic is null || _replayMusic.Playing) return;
+        _replayMusic.Stream = custom;
+    }
 
     /// <summary>Selects the recordings of the chosen car's engine, and its turbo if it has one.</summary>
     public void SetCar(VehicleSpec spec)
@@ -308,7 +350,7 @@ internal sealed partial class EngineAudio : Node
     /// folder is made on the first run so it is easy to find), decoded from the file, or null when there is none or
     /// it does not decode. Only this copy of the game plays it: nothing in the folder is part of the game.
     /// </summary>
-    private static AudioStream? CustomReplayMusic()
+    private AudioStream? CustomReplayMusic()
     {
         const string folder = "user://music";
         DirAccess.MakeDirRecursiveAbsolute(folder);
@@ -328,6 +370,10 @@ internal sealed partial class EngineAudio : Node
                 if (stream is not null)
                 {
                     GD.Print($"replay music: {ProjectSettings.GlobalizePath(path)}");
+                    // The name the file had when it was dropped on the window (AdoptReplayMusic), else its own.
+                    var label = $"{folder}/replay-name.txt";
+                    var original = Godot.FileAccess.FileExists(label) ? Godot.FileAccess.GetFileAsString(label).Trim() : "";
+                    CustomReplayMusicName = original.Length > 0 ? original : name;
                     return stream;
                 }
             }

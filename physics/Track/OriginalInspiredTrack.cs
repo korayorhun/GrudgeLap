@@ -137,7 +137,7 @@ public static class OriginalInspiredTrack
         var pad = new SkidPad(PadCentre, PadRadius);
         // The plain rolls like real farmland (0.13; half a metre until then): the roads keep their own profile and the
         // ground field grades embankments and cuttings to meet them.
-        var track = new TrackGeometry(common.Path, speed.Path, stunt.Path, final.Path, [pad], rollingGround: 2.6f) { Name = "Farm Circuit" };
+        var track = new TrackGeometry(common.Path, speed.Path, stunt.Path, final.Path, [pad], rollingGround: 2.0f) { Name = "Farm Circuit" };
         PlaceProps(track);
         // The buildings stand on levelled pads in the rolling ground (TerrainField.AddFlat); every prop then takes its
         // height again, so the pumps beside the shop and the cows in the fields stand on the ground as it now lies.

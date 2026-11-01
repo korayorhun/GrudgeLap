@@ -117,13 +117,16 @@ at the end of the credit, as the cabinet did (up and down turn the letter, Enter
 ships with ten names to beat.
 
 **Your own replay music.** Put a file named `replay.ogg`, `replay.mp3` or `replay.wav` into
-`%APPDATA%\Godot\app_userdata\GrudgeLap\music\` (the folder is created on the first run) and the instant replay
-plays it instead of the built-in tune; 1989 mode keeps its synthesised one. The game itself ships only CC0 music, so
-whatever you put there stays on your machine.
+`%APPDATA%\Godot\app_userdata\GrudgeLap\music\` (the menu's REPLAY MUSIC line opens the folder and shows what plays)
+and the instant replay plays it instead of the built-in tune; 1989 mode keeps its synthesised one. Easier still: drag
+the music file onto the game's window, and it is copied there and named in the menu. The game itself ships only CC0
+music, so whatever you put there stays on your machine. The Unreal version plays a `replay.wav` from its own
+`Saved\GrudgeLap\music\` folder (M on its title screen opens it) or from the folder above.
 
-**Weather.** Every credit draws its own: most days are clear, some overcast, and now and then the road is wet or it
-rains. A wet road is dark and mirror-like and takes about a third of the grip: brake earlier, turn in gentler, and
-mind the loop. The screen names the weather under the clock when it is not a clear day.
+**Weather.** Clear by default. The menu's WEATHER line (Esc) picks clear, overcast, a wet road, rain, or random, which
+draws a weather for every credit; the choice is remembered. A wet road is dark and mirror-like and takes about a
+third of the grip: brake earlier, turn in gentler, and mind the loop. The screen names the weather under the clock
+when it is not a clear day.
 
 ## Build from source
 

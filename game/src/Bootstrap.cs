@@ -58,6 +58,7 @@ public sealed partial class Bootstrap : Node3D
     private float _creditSeconds = -1f;
     private float _newGameAt = -1f;   // automation: a second credit, as F5 starts one (--new-game-after)
     private float _menuAt = -1f;      // automation: the menu opened for a picture of it (--menu-after)
+    private string? _dropFile;        // automation: a file dropped on the window two seconds in (--drop=)
     private string? _jingle;          // automation: a jingle played a second in, to check the synth (--jingle)
     private readonly HashSet<string> _soundFaults = new();
     private readonly PauseMenu _menu = new();
@@ -70,7 +71,8 @@ public sealed partial class Bootstrap : Node3D
     private bool _leaving;      // a second launch on its way out: nothing was built
     private bool _noGhost;
     private bool _noTraffic;
-    private Weather? _weather;   // --weather=: a fixed weather for automated runs; otherwise every credit draws one
+    private Weather? _weather;   // --weather=: a fixed weather for automated runs; otherwise the menu's choice
+    private int _weatherChoice;  // the menu's weather: 0-3 a fixed Weather, 4 random for every credit; kept in the settings
     private bool _noHud;        // pictures of the 3D scene alone, e.g. to compare it with another engine's
     private Vector3? _orbit;
     private bool _showAll;      // debug: draw the whole car from the driver's seat too
@@ -91,9 +93,12 @@ public sealed partial class Bootstrap : Node3D
     public override void _Ready()
     {
         InputSetup.Register();
+        GetWindow().FilesDropped += OnFilesDropped;
         _carIndex = Math.Clamp(LoadChoice("car", 0), 0, VehicleSpec.Catalogue.Length - 1);
         _gearbox = (TransmissionMode)Math.Clamp(LoadChoice("transmission", (int)TransmissionMode.Automatic), 0, 2);
         _quality = (GraphicsQuality)Math.Clamp(LoadChoice("quality", (int)GraphicsQuality.High), 0, 2);
+        // The weather (0.15): clear by default; the menu chooses clear, overcast, wet road, rain or random, and keeps it.
+        _weatherChoice = Math.Clamp(LoadChoice("weather", 0), 0, 4);
         ParseArgs();   // may override the saved car with --car=
         if (_invisible)
         {
@@ -243,6 +248,7 @@ public sealed partial class Bootstrap : Node3D
             else if (arg.StartsWith("--at=", System.StringComparison.Ordinal)) float.TryParse(arg["--at=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _screenshotAt);
             else if (arg.StartsWith("--quit-after=", System.StringComparison.Ordinal)) float.TryParse(arg["--quit-after=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _quitAfter);
             else if (arg.StartsWith("--new-game-after=", System.StringComparison.Ordinal)) float.TryParse(arg["--new-game-after=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _newGameAt);
+            else if (arg.StartsWith("--drop=", System.StringComparison.Ordinal)) _dropFile = arg["--drop=".Length..];
             else if (arg.StartsWith("--menu-after=", System.StringComparison.Ordinal)) float.TryParse(arg["--menu-after=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _menuAt);
             else if (arg.StartsWith("--jingle=", System.StringComparison.Ordinal)) _jingle = arg["--jingle=".Length..];
             else if (arg == "--auto") _attractMode = TransmissionMode.Automatic;
@@ -283,8 +289,9 @@ public sealed partial class Bootstrap : Node3D
     {
         var options = _noTraffic ? RaceOptions.MediumNoTraffic : RaceOptions.Medium;
         if (_creditSeconds > 0f) options = options with { InitialTime = _creditSeconds };
-        // The weather of the credit (0.12): drawn for every credit unless --weather= fixes it for an automated run.
-        options = options with { Weather = _weather ?? WeatherModel.Draw(System.Random.Shared) };
+        // The weather of the credit (0.12): --weather= for an automated run, otherwise the menu's choice (0.15: clear
+        // by default, or drawn for every credit when the menu says random).
+        options = options with { Weather = _weather ?? (_weatherChoice == 4 ? WeatherModel.Draw(System.Random.Shared) : (Weather)_weatherChoice) };
         var spec = VehicleSpec.Catalogue[_carIndex];
         _session = new RaceSession(_track, spec, options);
         WorldBuilder.SetWeather(_session.Weather);
@@ -435,6 +442,11 @@ public sealed partial class Bootstrap : Node3D
         {
             _menuAt = -1f;
             ShowMenu(true);
+        }
+        if (_dropFile is not null && _elapsed >= 2f)
+        {
+            OnFilesDropped([_dropFile]);
+            _dropFile = null;
         }
         if (_jingle is not null && _elapsed >= 1f)
         {
@@ -809,9 +821,48 @@ public sealed partial class Bootstrap : Node3D
     }
 
     /// <summary>Opens or closes the menu; the race and its sound stand still while it is open.</summary>
+    /// <summary>
+    /// The menu's weather (0.15): left and right step through clear, overcast, wet road, rain and random (a draw for every
+    /// credit). A fixed choice takes effect at once, on the road's grip and in the air; the choice is kept.
+    /// </summary>
+    private void CycleWeather(int step)
+    {
+        _weatherChoice = (_weatherChoice + step + 5) % 5;
+        SaveChoice("weather", _weatherChoice);
+        if (_weatherChoice < 4)
+        {
+            _session.SetWeather((Weather)_weatherChoice);
+            WorldBuilder.SetWeather(_session.Weather);
+            ApplyRain();
+        }
+    }
+
+    private string WeatherLabel() => _weatherChoice switch { 0 => "CLEAR", 1 => "OVERCAST", 2 => "WET ROAD", 3 => "RAIN", _ => "RANDOM" };
+
+    /// <summary>A long file name cut to fit the menu's panel, with an ellipsis.</summary>
+    private static string Shorten(string text, int length) => text.Length <= length ? text : text[..(length - 3)] + "...";
+
+    /// <summary>
+    /// A music file dropped on the game's window becomes the instant replay's tune (0.15, EngineAudio.AdoptReplayMusic);
+    /// the menu opens on its line so the player sees it was taken.
+    /// </summary>
+    private void OnFilesDropped(string[] files)
+    {
+        foreach (var file in files)
+        {
+            if (_audio.AdoptReplayMusic(file) is null) continue;
+            GD.Print($"replay music taken from {file}");
+            ShowMenu(true);
+            _menu.Select((int)PauseMenu.Item.Music);
+            return;
+        }
+    }
+
     private void ShowMenu(bool open)
     {
         if (open == _menu.Open) return;
+        // A tune dropped into the music folder while the game runs is picked up when the menu opens.
+        if (open) _audio.RefreshReplayMusic();
         if (open) _menu.Show();
         else _menu.Hide();
         AudioServer.SetBusMute(0, open);
@@ -848,8 +899,15 @@ public sealed partial class Bootstrap : Node3D
             case PauseMenu.Item.Graphics:
                 CycleQuality(left ? -1 : 1);
                 break;
+            case PauseMenu.Item.Weather:
+                CycleWeather(left ? -1 : 1);
+                break;
             case PauseMenu.Item.Retro:
                 SetRetro(!_retro);
+                break;
+            case PauseMenu.Item.Music when take:
+                // The player's own replay tune goes into the user folder (EngineAudio.CustomReplayMusic): open it for them.
+                OS.ShellOpen(ProjectSettings.GlobalizePath("user://music"));
                 break;
             case PauseMenu.Item.Units:
                 _instruments.UseKmh = !_instruments.UseKmh;
@@ -871,7 +929,12 @@ public sealed partial class Bootstrap : Node3D
         labels[(int)PauseMenu.Item.NewGame] = "NEW GAME";
         labels[(int)PauseMenu.Item.Camera] = $"CAMERA:  {(_cameraRig.Mode == CameraMode.Cockpit ? "DRIVER'S SEAT" : "BEHIND THE CAR")}";
         labels[(int)PauseMenu.Item.Graphics] = $"GRAPHICS:  {_quality.ToString().ToUpperInvariant()}";
+        labels[(int)PauseMenu.Item.Weather] = $"WEATHER:  {WeatherLabel()}";
         labels[(int)PauseMenu.Item.Retro] = $"1989 MODE:  {(_retro ? "ON" : "OFF")}";
+        // The player's own tune by name (without its extension); the built-in one with the hint that Enter opens the folder.
+        labels[(int)PauseMenu.Item.Music] = _audio.CustomReplayMusicName is { } tune
+            ? $"REPLAY MUSIC:  {Shorten(System.IO.Path.GetFileNameWithoutExtension(tune).ToUpperInvariant(), 26)}"
+            : "REPLAY MUSIC:  BUILT-IN  (ENTER: FOLDER)";
         labels[(int)PauseMenu.Item.Units] = $"UNITS:  {(_instruments.UseKmh ? "KM/H" : "MPH")}";
         labels[(int)PauseMenu.Item.Fullscreen] = $"FULL SCREEN:  {(GetWindow().Mode == Window.ModeEnum.Fullscreen ? "ON" : "OFF")}";
         labels[(int)PauseMenu.Item.Quit] = "QUIT GAME";
