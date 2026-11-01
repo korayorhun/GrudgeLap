@@ -24,9 +24,9 @@ GRAVITY = 9.81
 SPECS = {
     "flat12": dict(front=1.27, rear=1.28, track=0.78, hub=-0.12, rest=0.26, mass=1580.0, stiffness=38000.0, radius=0.33),
     "v8": dict(front=1.32, rear=1.33, track=0.80, hub=-0.12, rest=0.26, mass=1485.0, stiffness=46000.0, radius=0.33),
-    "hothatch": dict(front=0.95, rear=1.52, track=0.73, hub=-0.20, rest=0.22, mass=1140.0, stiffness=30000.0, radius=0.296),
-    "five": dict(front=0.95, rear=1.59, track=0.73, hub=-0.20, rest=0.23, mass=1310.0, stiffness=30000.0, radius=0.298),
-    "turbohatch": dict(front=0.98, rear=1.60, track=0.765, hub=-0.20, rest=0.22, mass=1480.0, stiffness=38000.0, radius=0.319),
+    "hothatch": dict(front=0.95, rear=1.52, track=0.73, hub=-0.20, rest=0.22, mass=985.0, stiffness=25920.0, radius=0.292),
+    "five": dict(front=0.95, rear=1.59, track=0.73, hub=-0.20, rest=0.23, mass=1375.0, stiffness=31490.0, radius=0.293),
+    "turbohatch": dict(front=0.98, rear=1.60, track=0.765, hub=-0.20, rest=0.22, mass=1550.0, stiffness=39800.0, radius=0.319),
     "saloon": dict(front=1.17, rear=1.32, track=0.678, hub=-0.20, rest=0.25, mass=1050.0, stiffness=24000.0, radius=0.2875),
     "estate": dict(front=1.00, rear=1.441, track=0.656, hub=-0.20, rest=0.26, mass=1045.0, stiffness=22000.0, radius=0.289),
     "fleet": dict(front=1.028, rear=1.608, track=0.771, hub=-0.20, rest=0.24, mass=1170.0, stiffness=30000.0, radius=0.317),
