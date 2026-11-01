@@ -117,6 +117,7 @@ internal sealed partial class CarView : Node3D
     public void MarkPlayer()
     {
         foreach (var geometry in Descendants(this).OfType<GeometryInstance3D>()) geometry.Layers = 3;
+        if (_model is not null && _modelEye is { } eye) BuildCabinShade(eye);
         Aabb bounds;
         Vector3 centre;
         if (_shell is not null && _body is not null)

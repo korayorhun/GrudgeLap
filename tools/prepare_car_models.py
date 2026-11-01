@@ -310,17 +310,23 @@ def borrow_cabin(model, blob, r, world, boxes, car, spec, donor_entry, cabin):
         to_car = np.diag([-1.0, 1.0, 1.0, 1.0]) @ to_car
     shift = matrix(translation=cabin.get("offset", [0.0, 0.0, 0.0]), scale=cabin.get("scale", [1.0, 1.0, 1.0]))
     words = [s.lower() for s in cabin["nodes"]]
+    # Parts drawn only from the driver's seat (CarView: nodes named "Inside_..."): a donor's part that pokes through
+    # the shell, as the Esprit's door cards stand out over the Testarossa's doors as a cream bar from outside.
+    inside_words = [s.lower() for s in cabin.get("inside_only", [])]
     picked = [i for i in rd["body_nodes"] if cm.matches(i, rd["name_of"](i), words)]
     offsets = cm.merge(model, blob, donor, donor_blob)
     added = []
     for i in picked:
-        model["nodes"].append({"name": rd["name_of"](i), "mesh": donor["nodes"][i]["mesh"] + offsets["meshes"]})
+        name = rd["name_of"](i)
+        if inside_words and cm.matches(i, name, inside_words):
+            name = "Inside_" + name
+        model["nodes"].append({"name": name, "mesh": donor["nodes"][i]["mesh"] + offsets["meshes"]})
         k = len(model["nodes"]) - 1
         world[k] = shift @ to_car @ rd["worlds"][i]
         lo, hi = cm.mesh_bounds(model, model["nodes"][k]["mesh"], world[k])
         boxes[k] = (np.minimum(lo, hi), np.maximum(lo, hi))
         r["body_nodes"].append(k)
-        added.append(rd["name_of"](i))
+        added.append(name)
     print(f"  cabin from {donor_entry['file']}: {len(added)} part(s) {added[:12]}")
 
 

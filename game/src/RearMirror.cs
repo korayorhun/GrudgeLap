@@ -22,6 +22,19 @@ internal sealed partial class RearMirror : Node3D
     private bool _skipFrame;
     private readonly List<MeshInstance3D> _housing = [];
     private QuadMesh? _glassMesh;
+    private Material? _picture;
+
+    /// <summary>
+    /// The glass seen from outside the car (SetActive false): silvered glass reflecting the car's probe. The camera's
+    /// frozen picture is unshaded, and from the chase view, through the rear window, it glared as a white block on the
+    /// tail on a dark, rainy day.
+    /// </summary>
+    private static readonly StandardMaterial3D Silvered = new()
+    {
+        AlbedoColor = new Color(0.55f, 0.56f, 0.58f),
+        Metallic = 1f,
+        Roughness = 0.06f,
+    };
 
     public static RearMirror Create(Material housing)
     {
@@ -56,6 +69,7 @@ internal sealed partial class RearMirror : Node3D
             Uv1Scale = new Vector3(-1f, 1f, 1f),
             Uv1Offset = new Vector3(1f, 0f, 0f),
         };
+        _picture = glass;
         _glassMesh = new QuadMesh { Size = new Vector2(GlassWidth, glassHeight), Material = glass };
         AddChild(new MeshInstance3D
         {
@@ -96,10 +110,13 @@ internal sealed partial class RearMirror : Node3D
         foreach (var part in _housing) part.Visible = false;
     }
 
-    /// <summary>Runs the mirror's camera only while the driver can look into it; from outside the glass keeps its last picture.</summary>
+    /// <summary>Runs the mirror's camera only while the driver can look into it; from outside the glass is plain silvered glass.</summary>
     public void SetActive(bool active)
     {
         _active = active;
         _viewport.RenderTargetUpdateMode = active ? SubViewport.UpdateMode.Once : SubViewport.UpdateMode.Disabled;
+        // Called every frame: only a change of view swaps the glass's material.
+        var glass = active ? _picture : Silvered;
+        if (_glassMesh is not null && _glassMesh.Material != glass) _glassMesh.Material = glass;
     }
 }
