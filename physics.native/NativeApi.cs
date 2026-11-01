@@ -36,6 +36,13 @@ internal static class NativeApi
     /// The engine voice of a car from the grain banks in <paramref name="folder"/>: engine_drive.wav/.json, and
     /// engine_idle and engine_overrun .wav/.json when the folder has them (tools/make-engine-bank.py writes the pairs).
     /// </summary>
+    /// <remarks>
+    /// glp_engine_create names no car, so the car is found by the folder's name (its <see cref="EngineSpec.SoundFolder"/>)
+    /// and the voice is made as the Godot version's SampledEngine makes it: voiced for that car's body and trimmed over
+    /// its redline. Without that the flat-twelve and the V8 were voiced as front-engined hatchbacks (a 2.2 kHz cabin
+    /// booming at 75 Hz where theirs is 4 kHz at 132 Hz) and every car trimmed over its recording's revs (0.20 review). A
+    /// folder no car uses gets a front-engined hatchback's voicing, trimmed over its recording.
+    /// </remarks>
     public static GranularEngine CreateEngine(string folder, int cylinders)
     {
         GrainBank? Bank(string name)
@@ -45,8 +52,29 @@ internal static class NativeApi
             return File.Exists(wav) && File.Exists(marks) ? GrainBank.FromFiles(wav, marks) : null;
         }
         var drive = Bank("engine_drive") ?? throw new FileNotFoundException($"no engine_drive.wav and .json in {folder}");
-        return new GranularEngine(Bank("engine_idle"), drive, cylinders, overrun: Bank("engine_overrun"));
+        var car = CarOfSoundFolder(folder);
+        var voicing = car is null ? EngineVoicing.FrontEngined : VoicingOf(car);
+        return new GranularEngine(Bank("engine_idle"), drive, cylinders, voicing, car?.Engine.RedlineRpm ?? 0f, overrun: Bank("engine_overrun"));
     }
+
+    /// <summary>The catalogue's car whose engine sounds from <paramref name="folder"/> (by its last name), if any.</summary>
+    internal static VehicleSpec? CarOfSoundFolder(string folder)
+    {
+        var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(folder));
+        return VehicleSpec.Catalogue.FirstOrDefault(c => string.Equals(c.Engine.SoundFolder, name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// How a car's body passes its engine's sound: the same as the Godot version's SampledEngine.VoicingOf (keep the two
+    /// alike; the audio library does not know the cars, and the game does not reference this library).
+    /// </summary>
+    internal static EngineVoicing VoicingOf(VehicleSpec spec) => spec.Style switch
+    {
+        CarStyle.FlatTwelve or CarStyle.V8 => new EngineVoicing(EnginePlacement.Mid, 1.3f, TailpipeRadius: 0.035f),
+        CarStyle.Saloon or CarStyle.Fleet => new EngineVoicing(EnginePlacement.Front, 1.9f),
+        CarStyle.Estate => new EngineVoicing(EnginePlacement.Front, 2.8f),
+        _ => new EngineVoicing(EnginePlacement.Front, 2.3f),
+    };
 
     public static string CarName(int car) => Spec(car).Name;
 
