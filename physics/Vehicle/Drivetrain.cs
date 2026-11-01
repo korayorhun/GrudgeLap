@@ -180,6 +180,24 @@ public sealed class Drivetrain
         Engine.Tick(dt);
     }
 
+    /// <summary>
+    /// Whether changing down one gear now would pull harder (0.19): the gear below lands the engine under 0.82 of its
+    /// redline (so the next upshift does not come straight back) and gives at least 5 % more torque at the wheels, from
+    /// the full-throttle curve times the ratio. What a driver, or an automatic's kick-down, does before a long pull: until
+    /// 0.18 the scripted driver went up a gear over the drawbridge's crest (the wheels in the air over-rev) and then ran
+    /// the stunt route's run-up to the loop in fifth at 2,900 rpm.
+    /// </summary>
+    public bool KickDownPullsHarder()
+    {
+        if (Gear <= 1) return false;
+        var rpm = Engine.Rpm;
+        var lowerRpm = rpm * _spec.RatioForGear(Gear - 1) / _spec.RatioForGear(Gear);
+        if (lowerRpm > Engine.Spec.RedlineRpm * 0.82f) return false;
+        var now = Engine.Spec.CurveTorque(rpm) * _spec.RatioForGear(Gear);
+        var lower = Engine.Spec.CurveTorque(lowerRpm) * _spec.RatioForGear(Gear - 1);
+        return lower > now * 1.05f;
+    }
+
     private void HandleIgnition(in DriverInputs input)
     {
         if (!input.Ignition || Engine.Running) return;
@@ -204,6 +222,7 @@ public sealed class Drivetrain
                 var redline = Engine.Spec.RedlineRpm;
                 if (rpm > redline * 0.885f && Gear < _spec.ForwardGearCount) target = Gear + 1;
                 else if (rpm < redline * 0.333f && Gear > 1 && input.Throttle < 0.9f) target = Gear - 1;
+                else if (input.Throttle > 0.95f && KickDownPullsHarder()) target = Gear - 1;   // kick-down
                 else if (rpm < redline * 0.246f && Gear > 1) target = Gear - 1;
             }
             if (input.Gear == -1 && groundSpeed < 1f) target = -1;        // reverse is allowed at standstill only

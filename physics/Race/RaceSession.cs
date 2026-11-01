@@ -20,6 +20,13 @@ public sealed partial class RaceSession
     /// speed road by a full road width only about 38 m on, and until then the cursor may sit on either.
     /// </summary>
     private const float RouteChoiceDistance = 45f;
+    /// <summary>
+    /// Metres before the fork at which a car without the pull for the loop is told to take the speed route (0.19): about
+    /// six seconds at the speed the climb is taken, time to read it and stay left of the stunt route's turn-off.
+    /// </summary>
+    private const float LoopWarningBeforeFork = 150f;
+    /// <summary>The message for a car that cannot make the loop (<see cref="LoopRunUp"/>).</summary>
+    public const string LoopWarning = "CAN'T MAKE THE LOOP - TAKE SPEED TRACK";
 
     private readonly List<RaceEvent> _events = new();
     private readonly List<PoseSample> _replay = new();
@@ -56,6 +63,11 @@ public sealed partial class RaceSession
 
     public TrackGeometry Track { get; }
     public VehicleSim Car { get; }
+    /// <summary>
+    /// Whether this car has the pull to make the stunt route's loop (<see cref="LoopRunUp"/>); when it has not, the
+    /// session says so before the fork and on the stunt route, rather than let the player fall off the loop every lap.
+    /// </summary>
+    public bool CanMakeTheLoop => LoopRunUp.CanMakeTheLoop(Car.Spec);
     public RaceOptions Options { get; }
     /// <summary>The weather of this credit: the options' at the start, the menu's after <see cref="SetWeather"/>.</summary>
     public Weather Weather { get; private set; }
@@ -303,9 +315,16 @@ public sealed partial class RaceSession
             if (Route != route)
             {
                 Route = route;
-                SetMessage(route == RouteKind.Speed ? "SPEED TRACK" : "STUNT TRACK");
+                SetMessage(route == RouteKind.Speed ? "SPEED TRACK" : CanMakeTheLoop ? "STUNT TRACK" : "STUNT TRACK - TOO SLOW FOR THE LOOP", CanMakeTheLoop ? 3f : 5f);
                 _events.Add(RaceEvent.RouteChosen);
             }
+        }
+
+        // Climbing to the fork in a car that cannot make the loop: the advice, once a lap, while there is time to act on it.
+        var warnAt = path.Length - LoopWarningBeforeFork;
+        if (path.Kind == PathKind.Common && !CanMakeTheLoop && !WrongWay && _lastDistance < warnAt && distance >= warnAt)
+        {
+            SetMessage(LoopWarning, 5f);
         }
 
         foreach (var marker in path.Markers)
