@@ -34,8 +34,13 @@ namespace GrudgeLap.Audio;
 /// </remarks>
 public sealed class GranularEngine
 {
-    /// <summary>The loudness every voice is trimmed to at full throttle and full volume, LUFS (about the 0.19 cars' average).</summary>
-    public const double ReferenceLufs = -15.0;
+    /// <summary>
+    /// The loudness every voice is trimmed to at full throttle and full volume, LUFS. At -15 (the 0.19 voices' mean at
+    /// full throttle) the game in attract mode came out 2.4 LU under 0.19's mean level, the loud small cars having been
+    /// brought down; -14 gives back half of that and lifts the engine over the wind at top speed, and any higher the
+    /// turbo hatch's run-up recording, its sharpest edges brought up with it, starts to click.
+    /// </summary>
+    public const double ReferenceLufs = -14.0;
     /// <summary>
     /// The loudness the idle is brought to, outside, LUFS: 10 LU under <see cref="ReferenceLufs"/>, the middle of the
     /// 0.19 cars (their idles lay 7 to 15 LU under them pulling at 60 % of the redline, the saloon's 25: its idle recording

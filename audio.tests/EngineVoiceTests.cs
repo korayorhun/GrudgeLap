@@ -309,8 +309,8 @@ public class EngineVoiceTests(ITestOutputHelper output)
     /// and the wind together (at 250 km/h a cabin is loud with wind, as real ones are), and in the third-octave band
     /// where it stands out most it is at least 4 dB over them: well over the masked threshold, which for a tone in noise
     /// lies a few decibels under the noise's own level in the same critical band (Zwicker and Fastl, Psychoacoustics, the
-    /// masking of tones by noise). Measured in 0.20: overall from 3.2 LU under (the fleet saloon's cabin) to 2.7 over
-    /// (the flat-twelve from behind), the prominent band from 4.3 dB over (the hot hatch's cabin, the closest) to 15.9.
+    /// masking of tones by noise). Measured in 0.20: overall from 2.2 LU under (the fleet saloon's cabin) to 3.7 over
+    /// (the flat-twelve from behind), the prominent band from 5.3 dB over (the hot hatch's cabin, the closest) to 16.9.
     /// </summary>
     [Fact]
     public void The_engine_stays_audible_over_the_roar_and_the_wind_at_top_speed()
