@@ -28,6 +28,8 @@ public sealed class GrainBank
     private const float TiltPivot = 1000f;
     /// <summary>The largest tilt and gain a segment is given either way, dB: more than that is a recording to replace, not to correct.</summary>
     private const float MaxTilt = 6f, MaxGain = 9f;
+    /// <summary>The most <see cref="LevelGains"/> moves a pulse either way, dB.</summary>
+    private const float MaxDrift = 6f;
 
     private readonly int[] _byFiring;
     /// <summary>The samples above the tilt's pivot, for <see cref="Brightness"/> (made when first needed).</summary>
@@ -186,6 +188,46 @@ public sealed class GrainBank
     /// pushed down until pulling at 3000 rpm it was barely louder than its idle.
     /// </remarks>
     public (float A, float B) LevelTrend() => Trend(Level, 3f);
+
+    /// <summary>
+    /// For every pulse, the gain that brings the level around it (the median <see cref="Level"/> of its own and its
+    /// segment's pulses up to <paramref name="reach"/> either side) onto <paramref name="trend"/> at its firing frequency,
+    /// within <see cref="MaxDrift"/> either way; 1 for a pulse that cannot be a grain.
+    /// </summary>
+    /// <remarks>
+    /// Evening a segment as a whole sets its mean on the trend, but a level that drifts within it stays: a blip of the
+    /// throttle whose last pulses fade as the revs hang at its top (the V6 hatch's run-up, its highest pulses half as
+    /// loud as those twenty before), a run-up recorded as the car draws away (the rally hatch's last segment, 4 dB over
+    /// the trend at 4000 rpm and 4 dB under it at 5500). Held at those revs the voice strings exactly those pulses
+    /// together, and it rose and sagged with them (the rally hatch held at full throttle 4 LU quieter at 5500 rpm than at
+    /// 4300). Averaged over a dozen pulses the drift goes, and what differs from one pulse to the next, the cylinders' own
+    /// beat, stays. The median, not the mean: a few pulses of the MP3 decoder's silence at a segment's start (the V8's
+    /// overrun) dragged a mean of their decibels down by tens of dB, and lifted their neighbours to the limit, 6 dB over
+    /// the rest, popping. Another bank's trend levels this bank onto that one (the voice levels its overrun onto its
+    /// run-up).
+    /// </remarks>
+    public float[] LevelGains((float A, float B) trend, int reach = 6)
+    {
+        var level = new float[Marks.Length];
+        foreach (var i in _byFiring) level[i] = Level(i);
+        var gains = new float[Marks.Length];
+        var around = new List<float>(2 * reach + 1);
+        for (var i = 0; i < Marks.Length; i++)
+        {
+            gains[i] = 1f;
+            if (!Usable[i]) continue;
+            around.Clear();
+            for (var k = Math.Max(i - reach, 1); k <= Math.Min(i + reach, Marks.Length - 2); k++)
+            {
+                if (Usable[k] && Segment[k] == Segment[i]) around.Add(level[k]);
+            }
+            around.Sort();
+            var median = around.Count % 2 == 1 ? around[around.Count / 2] : 0.5f * (around[around.Count / 2 - 1] + around[around.Count / 2]);
+            var drift = median - (trend.A + trend.B * MathF.Log2(Firing[i]));
+            gains[i] = MathF.Pow(10f, Math.Clamp(-drift, -MaxDrift, MaxDrift) / 20f);
+        }
+        return gains;
+    }
 
     /// <summary>How far a segment's grains sit above a trend of a measure on average, dB.</summary>
     public float SegmentOffset(int segment, Func<int, float> measure, (float A, float B) trend)

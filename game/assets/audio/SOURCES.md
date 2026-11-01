@@ -32,7 +32,8 @@ engine stops firing and what is left is the exhaust's rasp, which no filter on t
 
 The files are used as cut. Since 0.20 the voice evens a bank when it loads it (`GrainBank`: each segment tilted and
 levelled onto the bank's trend across the revs, so the joins between recordings do not step) and trims each car to
-one loudness (`GranularEngine`, BS.1770); nothing is written back.
+one loudness (`GranularEngine`, BS.1770); since soundfix it also levels every grain of the run-up and the overrun onto
+the run-up's trend, against the drift of level within a recording (`GrainBank.LevelGains`). Nothing is written back.
 
 The Internet Archive item **"Car Engine Sounds"** (identifier `car-engines`, uploaded 2015-09-01, dated
 2011-02-22) was published by its uploader under **CC0 1.0 Universal** (`licenseurl` in the item's metadata:
@@ -73,8 +74,8 @@ for 40 ms (steps of nearly full scale between samples, which the voice replayed 
 pulses), and the stretch at the limiter is the ignition cut every 150 ms with the throttle partly shut, 10 dB duller
 than the run-up. The run-up is cut from each blip's start to just before its crackle (up to about 3,600 rpm), the
 overrun from where the revs leave the limiter (from about 3,800 rpm; 1 November 2026). Past 3,600 rpm the voice lays
-the run-up's highest pulses closer, up to 1.8 times at the R32's 6,600 rpm, at their recorded strength
-(`GranularEngine`: past a bank's top the overlap of its grains is no longer divided out).
+the run-up's 16 highest pulses closer, up to 1.8 times at the R32's 6,600 rpm, each held to the period it is laid at
+so it plays at its recorded strength (`GranularEngine`); a recording of those revs would serve better.
 
 The rally hatch's run-up leaves out 22.2-23.1 s of the Pulsar track: a compressor's flutter, a band at 1.3 kHz beating
 ten times a second with bursts of hiss, whose pulses were up to 30 dB brighter than their neighbours at 3,300-3,500

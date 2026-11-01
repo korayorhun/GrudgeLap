@@ -93,16 +93,20 @@ public class EngineVoiceTests(ITestOutputHelper output)
         Assert.False(follower.Cut);
         // All three at the follower's revs, so that only the load differs: the follower is still a rev or two short of
         // the engine after 0.6 s, and a rev apart the voice strings other grains together, whose level varies by more than
-        // the 0.3 LU compared here (the rally hatch's run-up at 4,080 rpm: 0.7 LU between two holds 1 rpm apart).
+        // the 0.3 LU compared here (the rally hatch's holds a rev apart within 40 rpm of 4,080: over 0.8 LU, 3.3 before
+        // its run-up was levelled grain by grain).
         var heard = HeldLufs(Voice(car, index), follower.Rpm, follower.Load);
         var full = HeldLufs(Voice(car, index), follower.Rpm, 1f);
         var byTorque = HeldLufs(Voice(car, index), follower.Rpm, Math.Clamp(engine.LastTorque / 500f, 0f, 1f));
         output.WriteLine($"{car}: {heard:0.0} LUFS at the follower's load, {full:0.0} at full load, {byTorque:0.0} at the torque over 500 N m ({engine.LastTorque / 500f:0.00})");
         Assert.InRange(heard, full - 0.3, full + 0.3);
-        // The small cars: where the old load was under a half, the voice's level law alone (CutLevel at a shut throttle)
-        // takes 3 dB off. Picked by torque under 300 N m, the test came to hold the rally hatch to it too, whose turbo four
-        // makes 274 N m at 4,080 rpm: its old load of 0.55 is 2.6 dB down by the level law, and measured 2.7.
-        if (engine.LastTorque / 500f < 0.5f) Assert.True(byTorque < full - 3, "the old load would not have been quieter");
+        // The old load would have played every car under its torque of 500 N m quieter by at least what the voice's level
+        // law gives it (CutLevel at a shut throttle, rising with the load), the throttle's filter and below 0.4 the overrun
+        // taking more: 7.5 dB at a load of 0, 2.6 at the rally hatch's 0.55. Each car is held to its own figure (a cut-off
+        // by torque held the rally hatch, 2.7 dB down, to the 3 dB meant for the loads under a half).
+        var oldLoad = Math.Clamp(engine.LastTorque / 500f, 0f, 1f);
+        var law = 20 * Math.Log10(GranularEngine.CutLevel + (1f - GranularEngine.CutLevel) * oldLoad);
+        Assert.True(byTorque < full + law + 0.3, $"the old load ({oldLoad:0.00}) is {full - byTorque:0.0} dB down, the level law {-law:0.0}");
     }
 
     /// <summary>
@@ -139,10 +143,50 @@ public class EngineVoiceTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// Pulling hard the voice is a tone, the firing frequency and its harmonics, and not a noise between them, all the
+    /// way to the redline. Past the top of the V6 hatch's re-cut run-up (3,600 rpm, its redline 6,600) every pulse was a
+    /// pick at random among 32 from four blips of the throttle and several of them sounded at every sample: pulling at
+    /// 90 % of the redline the harmonics held a sixth of the sound (-7.7 dB), where the run-up of 0.20 had held 0.6
+    /// (-2.2 dB), and the strongest peak still sat at the firing frequency. Held at full throttle from half the redline
+    /// to the redline, outside: within 3 % of the first six harmonics lies at least a third of the sound between half and
+    /// six and a half times the firing frequency (measured: at least 0.43, -3.7 dB, the hot hatch at 60 and 80 % of its
+    /// redline; the V6 hatch 0.44, -3.6 dB, at 90 and 100 %, and 0.32, -5.0 dB, at 80 % before its fix).
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Cars))]
+    public void Pulls_as_a_tone_up_to_the_redline(string car, int index)
+    {
+        var spec = VehicleSpec.Catalogue[index].Engine;
+        var voice = Voice(car, index);
+        const int n = 32768;
+        var shares = new List<string>();
+        foreach (var part in new[] { 0.5f, 0.6f, 0.7f, 0.8f, 0.9f, 1f })
+        {
+            var firing = part * spec.RedlineRpm * spec.Cylinders / 120.0;
+            var power = Spectrum.Power(Hold(voice, part * spec.RedlineRpm, 1f, 4f).AsSpan(Rate), n);
+            double Band(double lo, double hi)
+            {
+                var sum = 0.0;
+                for (var k = (int)Math.Ceiling(lo * n / Rate); k <= (int)(hi * n / Rate) && k < power.Length; k++) sum += power[k];
+                return sum;
+            }
+            var harmonics = 0.0;
+            for (var h = 1; h <= 6; h++) harmonics += Band(h * firing * 0.97, h * firing * 1.03);
+            var tone = 10 * Math.Log10(harmonics / Band(0.5 * firing, 6.5 * firing));
+            shares.Add($"{part * 100:0} % {tone:0.0} dB");
+            Assert.True(tone >= -4.77, $"{car} at {part * spec.RedlineRpm:0} rpm: its harmonics hold {tone:0.0} dB of the sound");
+        }
+        output.WriteLine($"{car}: the harmonics' share of the sound pulling at " + string.Join(", ", shares));
+    }
+
+    /// <summary>
     /// The limiter stutters (audit finding 12): with the cut set for 60 ms in every 100, as the simulation's limiter does
-    /// at the redline, the voice's level, averaged over twenty cycles in step with them, drops at least 6 dB and falls
+    /// at the redline, the voice's level, averaged over a hundred cycles in step with them, drops at least 6 dB and falls
     /// within a few milliseconds of each cut (a firing period or two and the 2 ms blocks it is measured in); the same cut
-    /// followed through the load, as in 0.19, swung by less and took tens of milliseconds to fall.
+    /// followed through the load, as in 0.19, swung by less and took tens of milliseconds to fall. Over twenty cycles the
+    /// grains a run happened to pick moved the swing by a decibel or two and the fall by up to 20 ms either way (eight
+    /// seeds of the rally hatch: its crisp cut fell in 6 to 26 ms; the V8 of 0.20 swung 6.6 dB over twenty and 5.3 over
+    /// a hundred), and any change to the picks passed or failed one of the three cars.
     /// </summary>
     [Theory]
     [InlineData("turbohatch")]
@@ -207,9 +251,9 @@ public class EngineVoiceTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Two seconds on the limiter, cut 60 ms in every 100, rendered in 2 ms blocks (the load through an
+    /// Ten seconds on the limiter, cut 60 ms in every 100, rendered in 2 ms blocks (the load through an
     /// <see cref="EngineFollower"/> at 60 frames a second, as the game feeds it), and the mean power of each 2 ms of the
-    /// cycle over the twenty cycles, in dB.
+    /// cycle over its hundred cycles, in dB.
     /// </summary>
     private static double[] Stutter(GranularEngine voice, float redline, bool crisp)
     {
@@ -219,7 +263,8 @@ public class EngineVoiceTests(ITestOutputHelper output)
         var block = new float[88];
         var power = new double[50];
         var frame = 0f;
-        for (var step = 0; step < 1000; step++)
+        const int cycles = 100;
+        for (var step = 0; step < cycles * 50; step++)
         {
             var cut = step % 50 < 30;
             frame += 0.002f;
@@ -233,7 +278,7 @@ public class EngineVoiceTests(ITestOutputHelper output)
             voice.Render(block, redline, crisp ? 1f : follower.Load, true);
             power[step % 50] += Spectrum.Rms(block) * Spectrum.Rms(block);
         }
-        return power.Select(p => 10 * Math.Log10(p / 20 + 1e-20)).ToArray();
+        return power.Select(p => 10 * Math.Log10(p / cycles + 1e-20)).ToArray();
     }
 
     /// <summary>
@@ -298,7 +343,8 @@ public class EngineVoiceTests(ITestOutputHelper output)
     /// fleet saloon peaked at +2.8 dBFS, the V8 at +1.2 and the turbo hatch at +1.1, and the mix's limiter ducked the
     /// whole mix with them. The trims are held under <see cref="GranularEngine.PeakCeiling"/> by their own renders' peaks;
     /// what those miss is rounded off above <see cref="GranularEngine.PeakKnee"/>, which must stay rare: at most one
-    /// sample in a thousand (measured: at most 3 in 10,000, the V8's cabin, and none at all on three of the cars).
+    /// sample in a thousand (measured: at most 18 in 952,560, the saloon's cabin, and none at all on five of the cars:
+    /// the flat-twelve, the V8, the hot hatch, the rally hatch and the V6 hatch).
     /// </summary>
     [Theory]
     [MemberData(nameof(Cars))]

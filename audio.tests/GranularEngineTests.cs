@@ -181,8 +181,12 @@ public class GranularEngineTests
         var loudest = 0f;
         for (var i = 1; i < (int)(9.0 * rate); i++) loudest = MathF.Max(loudest, MathF.Abs(x[i] - x[i - 1]));
         Assert.True(loudest < 0.5f, $"a step of {loudest:0.00} between samples is a click");
-        var tail = x.AsSpan((int)(9.8 * rate));
-        Assert.True(tail.ToArray().Max(MathF.Abs) < 0.01f, "the engine still sounds after it stopped");
+        // Stopped, the voice fades with a quarter of a second's time constant: 0.8 s on it is 28 dB under the idle it
+        // stopped from (measured 28 to 34 dB). Held to an absolute 0.01, the estate's idle, peaking at 0.26, passed or
+        // failed by the grains it happened to pick last (its tail 0.0085 or 0.0102 as the run-up's picks changed).
+        var tail = x.AsSpan((int)(9.8 * rate)).ToArray().Max(MathF.Abs);
+        var idle = x.AsSpan(8 * rate, rate).ToArray().Max(MathF.Abs);
+        Assert.True(tail < idle * 0.056f, $"the engine still sounds after it stopped ({20 * Math.Log10(tail / idle):0.0} dB under its idle)");
 
         var demo = Environment.GetEnvironmentVariable("GRUDGELAP_AUDIO_DEMO");
         if (!string.IsNullOrEmpty(demo))

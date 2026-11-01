@@ -182,7 +182,8 @@ public class TurboNoiseTests(ITestOutputHelper output)
     /// the engine in its third-octave band (2.5 kHz), outside and in the cabin (both heard through the cabin's low-pass
     /// there): a tone level with the noise of its own band is well over its masked threshold (Zwicker and Fastl,
     /// Psychoacoustics). With the whine at a quarter of its gain the turbo was under the engine in every band on boost
-    /// outside (7.5 dB under at best, its rush at 6.4 kHz) and the whine 11 dB under in its own band.
+    /// outside (7.5 dB under at best, its rush at 6.4 kHz) and the whine 11 dB under in its own band. (Measured on the
+    /// rally hatch, the one car with boost: the whine 1.9 dB over the engine in its band outside, 0.8 dB in the cabin.)
     /// </summary>
     [Theory]
     [MemberData(nameof(BoostedCars))]

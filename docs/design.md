@@ -800,27 +800,64 @@ fixed in 0.19, each pinned by a test (`TyreMixTests`, `BodyNoiseTests`, `Granula
     real VR6 recording would replace the V6's.
 17. **The hatchbacks' voices after the merge** (soundfix, after cars3 and sound3 met). Six audio tests failed and the
     R32 clicked: (a) the V6's run-up was cut through the crackle of its overloaded recording at the top of every blip
-    (steps of 0.69 between samples at 3,500-3,600 rpm) and through the stretch at the standing car's limiter (cut
-    every 150 ms, 10 dB duller), and its segments began with the MP3 decoder's silence, which the tool's seek left
-    there; re-cut to the crackle (up to about 3,600 rpm) with the tool seeking exactly and warning of crackles
-    (SOURCES.md), its overrun from the limiter (3,800 rpm, was 3,100). (b) Past the top of its recording the voice
-    laid the run-up's pulses closer and divided their overlap out, taking each pulse down with it: the R32 fell 8 dB
-    from half its redline to the redline (-16.0 LUFS pulling hard, the floor -16.0; 4.9 LU under the roar and the wind
-    at top speed in the cabin). The overlap of the run-up's grains past its top now counts only for its share, so the
-    pulses keep their recorded strength; the idle's and the overrun's are left normalised (their levels are set
-    against the run-up's). Now -14.3 LUFS pulling hard (the cars' mean -14.2), -17.2 to -12.3 LUFS held at 30-100 % of
-    its revs (before: -13.3 at half its redline falling to -21.3 at the redline), its brightness rising steadily with
-    the revs (energy above 1 kHz against below, -17 dB at 30 % to -5 dB at 90 %), the engine 0.2 LU under the roar and
-    wind at top speed in the cabin and 2.4 over outside. The largest step of its sweep is 0.41, at 6,400 rpm where the
-    run-up's clipped top pulses are laid 1.8 times closer: a loud, bright stretch, not a click (no step over 1.3 times
-    the RMS of the 5 ms around it, as on the hot hatch). (c) The Delta's run-up held a compressor's flutter (22.2-23.1
-    s of the Pulsar track, pulses up to 30 dB brighter), cut out: its timbre's spread about its trend fell from 2.3 to
-    1.0 dB, and its trim, no longer held down by that stretch's peaks, brings it to -13.5 LUFS pulling hard (was
-    -15.4); its turbo's whine, tuned against the quieter voice, went from 0.085 to 0.1 to stay level with the engine
-    in its band. (d) Tests that named cars by catalogue index (the turbo four as index 4, the R32's now) look them up
-    by sound folder or by boost; the full-throttle test compares the loads at the follower's revs (a rev apart the
-    Delta's voice strings other grains together, 0.7 LU apart), and its check of the old load applies where that load
-    was under a half, the level law's 3 dB (the Delta's turbo four makes 274 N m at 4,080 rpm: 0.55, 2.6 dB).
+    (steps of 0.69 between samples at 3,500-3,600 rpm) and through the stretch at the standing car's limiter (cut every
+    150 ms, 10 dB duller), and its segments began with the MP3 decoder's silence, which the tool's seek left there;
+    re-cut to the crackle (up to about 3,600 rpm) with the tool seeking exactly and warning of crackles (SOURCES.md),
+    its overrun from the limiter (3,800 rpm, was 3,100). (b) Past the top of its recording (3,600 rpm, its redline
+    6,600) the voice laid the run-up's pulses closer and divided their overlap out, the pulses taking each other down:
+    the R32 fell 8 dB from half its redline to the redline (-16.0 LUFS pulling hard; 4.9 LU under the roar and the wind
+    at top speed in the cabin). A first fix kept the whole grains and counted their overlap only for its share: the
+    level came back, but several grains sounded at every sample, each a pick at random among the 32 highest pulses from
+    four blips, and their sum was a noise between the harmonics (review: pulling at 90 % of the redline the harmonics
+    held a sixth of the sound, -7.7 dB, against 0.6, -2.2 dB, on 0.20's banks, the bed at a third, half and two thirds
+    of the firing frequency 2.7 dB under it, against 11.3, and some 50 peaks within 14 dB of the firing tone, against
+    one). Now a run-up grain laid past the top has its window held to the period it is laid at, so the windows sum to
+    one and each pulse plays at its recorded strength alone, and it is picked among the 16 highest pulses
+    (`GranularEngine.TopSpread`): at 90 % of the redline -3.3 dB of harmonics, the bed 13.8 dB under, two peaks (at 100
+    %: -3.5 dB, 12.2 dB, two; 0.20 -3.3, 7.4, one). This changes every car whose redline lies past its run-up's top (the
+    saloon 1.38 times, the estate 1.24, the Delta 1.12, the fleet saloon 1.04, the V8 1.03), only up there;
+    `Pulls_as_a_tone_up_to_the_redline` holds the harmonics to a third of the sound on every car (measured: at least
+    -3.7 dB, the hot hatch's own recording at 60 and 80 %; the first fix failed it, -5.0 dB at 80 %). (c) The Delta's
+    run-up held a compressor's flutter (22.2-23.1 s of the Pulsar track, pulses up to 30 dB brighter), cut out: its
+    timbre's spread about its trend fell from 2.3 to 1.0 dB; its turbo's whine, tuned against a voice the flutter's
+    peaks had held 1.5 LU down, went from 0.085 to 0.1 to stay level with the engine in its band. (d) Every car's level
+    across its revs (review): within each recording a run-up's level drifts (the car draws away, a blip fades at its
+    top: the Delta's last segment 4 dB over the bank's trend at 4,000 rpm and 4 dB under it at 5,500, the V6's highest
+    pulses half as loud as those twenty before), and held at a given rpm the voice played that stretch's level. Held at
+    full throttle the Delta sagged 3 to 5 LU between 5,000 and 5,600 rpm, the R32 dipped to -17.9 LUFS at 2,700 rpm, the
+    estate moved 7 LU from 45 to 50 % of its redline. Every grain of the run-up is now levelled onto the run-up's trend
+    (`GrainBank.LevelGains`: the median level of its segment's dozen pulses around it, so the cylinders' beat stays and
+    a few pulses of decoder silence do not lift their neighbours), and every grain of the overrun onto the same trend.
+    Held at full throttle every 100 rpm the Delta now rises from -20.1 LUFS at 2,000 rpm to -12.5 at the redline, never
+    more than 0.5 LU down from one step to the next, the R32 from -16.0 to -13.6 at 3,900 and level to the redline
+    (-13.9); within 40 rpm of 4,080 the Delta's holds a rev apart range over 0.8 LU (3.3 before). The overrun levelled
+    onto the run-up replaces the cut's match by the recordings' overall loudness: what a shut throttle or a cut takes
+    away is the level law, the throttle's filter and the overrun's own sound. (Levelling the run-up alone left the
+    Delta's overrun at 4,500 rpm 4.6 dB under its full throttle and the V8's at 5,600 2.2 dB, against the 5 dB
+    `Overrun_is_quieter_than_the_throttle_at_the_same_revs_in_every_band` asks; now 9.0 and 6.6.) The cut is therefore
+    no longer "as deep on every car", and was not before: held on the limiter, cut 60 ms in 100, the level swings 7.2 dB
+    on the estate, whose overrun recording reaches its redline (the level law's 7.5 dB), and 11 to 19 dB on the cars
+    whose overrun is laid past its top there and averaged, as it is with the throttle shut (the flat-twelve 17.4, the V8
+    12.9, the hot hatch 15.6, the Delta 19.0, the R32 15.9, the saloon 14.6, the fleet saloon 11.3; in 0.20 6.6 to 15.8
+    dB, matched by loudness). In the game (hidden, silent 40 s attract runs, dry, no traffic, cabin and chase views,
+    against 0.20): the R32 -14.1 and -14.2 LUFS (0.20 -15.5 and -16.3), its loudness range 5.0 and 5.6 LU (4.1 and 4.6;
+    the first fix 6.5 and 7.0), its sharp transients 0 and 5 (15 and 68), its largest sample step 0.22 (0.46); the Delta
+    -14.0 and -14.1 (-14.1, -14.5); the other cars within 0.8 LU of 0.20 (the hot hatch 0.8 and 0.6 quieter, its trim
+    taken at levelled revs), their loudness range narrower on the cars whose recordings drifted most (the estate 3.6 to
+    1.4 LU in the cabin, the fleet saloon 9.2 to 5.9) and up to 1.4 LU wider on the hot hatch and the Delta, the fleet
+    saloon's chase transients 60 to 16; every peak at -0.6 dBFS per channel or under. (e) Tests that named cars by
+    catalogue index (the turbo four as index 4, the R32's now) look them up by sound folder or by boost; the
+    full-throttle test compares the loads at the follower's revs, and holds the old load (the torque over 500 N m) to
+    the level law's own figure on every car instead of 3 dB under a cut-off (which held the Delta, 0.55, to more than
+    its law's 2.6 dB). Two tests passed or failed by the grains a run happened to pick, and any change to the picks
+    moved them: the limiter's, averaged over twenty cycles (the Delta's crisp cut fell in 6 to 26 ms over eight seeds,
+    the V8 of 0.20 swung 6.6 dB over twenty and 5.3 over a hundred), now over a hundred; and the stopped engine's tail,
+    held to an absolute 0.01 (the estate's 0.0085 or 0.0102), now to 25 dB under the idle it stopped from (measured 28
+    to 34 dB). Left: past the top of its recording the R32's run-up is its 16 highest pulses (3,560-3,620 rpm, eleven of
+    them from one blip) spaced up to 1.8 times closer, a tone but no recording of those revs; lifting off from the
+    redline it plays its overrun (recorded up to 3,800 rpm) past its top as well, averaged, with 28 sharp transients in
+    five seconds outside and in the cabin (0.20 9 and 16; its overrun bank itself has two in its 5.7 s); a VR6 recorded
+    through its revs would replace both.
 
 ### Sound, 0.20: the audit's open findings and the balance between cars
 
@@ -859,7 +896,7 @@ ffmpeg's `ebur128` (integrated loudness, mono, everything in the mix: engine, ty
   tone heard on boost (review): the turbo four is on full boost within half a second of flooring it, its blade tone
   then at 15 kHz, past the game's 22.05 kHz mix, and with the whine at a quarter of its present gain the whole turbo
   was under the engine in every third-octave band (the whine 11 dB under in its own). Now the whine is level with the
-  engine in its band, +1.2 dB outside and +0.3 dB in the cabin at a shaft gain of 0.1 (`The_turbo_is_heard_on_boost`,
+  engine in its band, +1.9 dB outside and +0.8 dB in the cabin at a shaft gain of 0.1 (`The_turbo_is_heard_on_boost`,
   through `EngineModel`'s boost, on the Delta's run-up; soundfix), and both tones fade to 0.3 with the throttle shut,
   as they leave mostly through the compressor's inlet with the air it draws. The turbo sits in the engine bay, so the
   cabin hears it through the same panels as the engine: low-passed at the body's corner (`TurboState.CabinCutoff`, 2.2
@@ -870,9 +907,11 @@ ffmpeg's `ebur128` (integrated loudness, mono, everything in the mix: engine, ty
   (the follower holds its last revs there).
 - **The limiter** (finding 12). `EngineModel.LimiterCut` says when the ignition is cut; `EngineFollower` holds the load
   through it and `GranularEngine.Cut` makes every pulse laid while it lasts an overrun pulse at the closed throttle's
-  level (the overrun recording brought to the run-up's loudness so the cut is as deep on every car). Averaged over
-  twenty 60-in-100 ms cuts, the level swings 13.6 dB on the turbo hatch, 7.4 on the estate and 6.6 on the V8 and falls
-  in 4-10 ms; through the load, as in 0.19, it swung 1.5-2.4 dB and took 14-24 ms. The V8's pops are set off by the
+  level (the overrun's grains levelled onto the run-up's trend since soundfix, item 17 (d) of the 0.19 list: the cut
+  takes the level law's 7.5 dB, more where the overrun is laid past the top of its recording). Averaged over a
+  hundred 60-in-100 ms cuts (twenty before soundfix, too few: the grains a run picked moved the figures), the level
+  swings 18.5 dB on the turbo hatch, 6.5 on the estate and 10.8 on the V8 and falls in 2-6 ms; through the load, as in
+  0.19, it swings 0.7-1.4 dB and takes 24-54 ms. The V8's pops are set off by the
   driver lifting, not by the cut. (The cut is heard as late as the voice follows the revs, its latency: a grain's
   lead, up to 45 ms for the turbo hatch's 22 Hz idle grains.) The cut is latched in `EngineModel.Torque` with the
   throttle it shuts (review): read from its countdown, which `Tick` runs after `Torque`, the step that ended a cut
