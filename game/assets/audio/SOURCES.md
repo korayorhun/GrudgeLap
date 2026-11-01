@@ -30,6 +30,10 @@ overlap-adds them; nothing loops and nothing is pitch-shifted.
 The overrun banks play in place of the run-up as the throttle closes (`GranularEngine`): off the throttle a real
 engine stops firing and what is left is the exhaust's rasp, which no filter on the run-up gave.
 
+The files are used as cut. Since 0.20 the voice evens a bank when it loads it (`GrainBank`: each segment tilted and
+levelled onto the bank's trend across the revs, so the joins between recordings do not step) and trims each car to
+one loudness (`GranularEngine`, BS.1770); nothing is written back.
+
 The Internet Archive item **"Car Engine Sounds"** (identifier `car-engines`, uploaded 2015-09-01, dated
 2011-02-22) was published by its uploader under **CC0 1.0 Universal** (`licenseurl` in the item's metadata:
 http://creativecommons.org/publicdomain/zero/1.0/). Item page: https://archive.org/details/car-engines
@@ -51,7 +55,8 @@ CC BY-NC and were not used): its drive and overrun banks are cut from the S2000 
 laid down at the five's firing frequency (rpm x 5 / 120), and `GranularEngine` weights every fifth pulse in a
 fixed pattern (`FivePattern`) to give the five's warble back. The hot hatch and the turbo hatch are cut from
 the Civic Type R and the Pulsar tracks of the same CC0 item; the turbo's whistle and blow-off valve are
-synthesised (`EngineAudio.Turbo`).
+synthesised (`audio/TurboNoise.cs`, 0.20: the compressor's whistle from the shaft's speed, the vent of
+a blow-off valve or the flutter of a surging compressor).
 
 ## The everyday cars (`saloon/`, `estate/`, `fleet/`, 0.10.0)
 

@@ -1,4 +1,5 @@
 using Godot;
+using GrudgeLap.Audio;
 using GrudgeLap.Physics;
 using GrudgeLap.Physics.Race;
 using GrudgeLap.Physics.Vehicle;
@@ -23,8 +24,8 @@ internal sealed partial class EngineAudio : Node
     private readonly System.Random _random = new(7);
 
     private double _phase;
-    private float _rpm = 950f;
-    private float _load;
+    // The revs, the load and the limiter's cut as the voices follow them (EngineFollower: the load is the engine's throttle).
+    private readonly EngineFollower _follower = new();
     private float _squeal;
     private float _lowpass;
     private float _bp1, _bp2;
@@ -56,12 +57,11 @@ internal sealed partial class EngineAudio : Node
     private SampledEngine _sampled = null!;
     private TyreAudio _tyres = null!;
     private CarStyle _style = CarStyle.FlatTwelve;
-    private bool _turbo;
-    private float _boost;
-    private float _whistlePhase;
-    private float _blowOff;
-    private float _blowLp;
-    private float _hissLp;
+    private EngineSpec _engineSpec = EngineSpec.FlatTwelve;
+    private readonly TurboNoise _turbo = new(MixRate);
+    private TurboState _turboState;
+    private float _turboDt;
+    private float[] _turboBlock = [];
     private float _thump, _thumpPhase;
     private float _rainLp, _rainLp2;
     private float _lastLoad;
@@ -122,14 +122,17 @@ internal sealed partial class EngineAudio : Node
         _replayMusic.Stream = custom;
     }
 
-    /// <summary>Selects the recordings of the chosen car's engine, and its turbo if it has one.</summary>
+    /// <summary>Selects the recordings of the chosen car's engine, voiced for its body, and its turbo if it has one.</summary>
     public void SetCar(VehicleSpec spec)
     {
         _style = spec.Style;
-        _turbo = spec.Engine.BoostShare > 0f;
-        _sampled.Load(spec.Engine);
+        _engineSpec = spec.Engine;
+        _sampled.Load(spec);
         _tyres.SetCar(spec);
     }
+
+    /// <summary>Any engine with a turbo's share of torque has its turbo heard (<see cref="TurboNoise"/>).</summary>
+    private bool HasTurbo => _engineSpec.BoostShare > 0f;
 
     /// <summary>
     /// The cabinet's jingles, in its spirit: it drove in silence and sang only at the moments that mattered. A
@@ -406,11 +409,10 @@ internal sealed partial class EngineAudio : Node
         // The instant replay has no engine: the car stands wrecked while the crash is shown (the simulation holds
         // its last revs through the replay, which played on as a frozen note).
         _running = engine.Running && session.Phase != SessionPhase.Replay;
-        _rpm += (MathF.Max(engine.Rpm, 0f) - _rpm) * MathUtil.Clamp01(dt * 12f);
-        // The engine's load is its throttle (0.19). Until 0.18 it was the torque over 500 N m, which a V12 reaches and a
-        // 1.4 four never comes near: the small cars at full throttle played as if coasting, on the overrun recording.
+        // The engine's load is its throttle (0.19), held through the limiter's cut, which the voice plays pulse by pulse.
         var load = engine.Throttle;
-        _load += (load - _load) * MathUtil.Clamp01(dt * 16f);
+        var cut = engine.LimiterCut;
+        _follower.Update(engine.Rpm, load, cut, dt);
 
         var squeal = 0f;
         foreach (var w in car.Wheels)
@@ -440,10 +442,16 @@ internal sealed partial class EngineAudio : Node
                 case RaceEvent.Knocked: Knock(session.LastKnock); break;
             }
         }
-        // A turbo: its whistle follows the boost; shutting the throttle on boost vents it through the blow-off valve.
-        var boost = _turbo && _running ? car.Drivetrain.Engine.Boost : 0f;
-        if (_turbo && _running && _boost > 0.55f && load < 0.1f && _blowOff <= 0.05f) _blowOff = _boost;
-        _boost += (boost - _boost) * MathUtil.Clamp01(dt * 10f);
+        // A turbo: its whistle follows the shaft, and shutting the throttle on boost vents it or makes it surge (TurboNoise).
+        _turboState = new TurboState(
+            Boost: _running ? engine.Boost : 0f,
+            Throttle: _running ? _follower.Load : 0f,
+            RevShare: _follower.Rpm / _engineSpec.RedlineRpm,
+            BoostShare: _engineSpec.BoostShare,
+            BlowOffValve: _engineSpec.BlowOffValve,
+            Interior: Interior);
+        // Accumulated until the block is rendered: a frame whose generator was full renders nothing and passes its time on.
+        _turboDt += dt;
         // The credit's end: the tune of the original's high-score screen, once.
         if (session.Phase == SessionPhase.Finished && _lastPhase != SessionPhase.Finished) PlayJingle(Jingle.GameOver);
         // The instant replay has its tune; skipped or over, it fades out in a third of a second.
@@ -485,8 +493,9 @@ internal sealed partial class EngineAudio : Node
             _lastCompression[i] = c;
         }
         if (jolt > 0.8f) _thump = MathF.Max(_thump, MathUtil.Clamp01((jolt - 0.8f) / 2.5f));
-        // Sport exhaust: lifting off at high revs sets off two to four pops over the next half second.
-        if (_style == CarStyle.V8 && _running && _lastLoad > 0.5f && load < 0.15f && _rpm > 4800f && _popsPending.Count == 0)
+        // Sport exhaust: lifting off at high revs sets off two to four pops over the next half second (the driver lifting,
+        // not the limiter's cut, which shuts the throttle for a moment too).
+        if (_style == CarStyle.V8 && _running && !cut && _lastLoad > 0.5f && load < 0.15f && _follower.Rpm > 4800f && _popsPending.Count == 0)
         {
             var count = 2 + _random.Next(3);
             var at = 0.04f;
@@ -504,9 +513,9 @@ internal sealed partial class EngineAudio : Node
             // 1989 mode has no exhaust pops, as the cabinet had none.
             if (!Retro) _pops?.Play();
         }
-        _lastLoad = load;
+        if (!cut) _lastLoad = load;
         _sampled.Interior = Interior;
-        _sampled.Update(_rpm, _load, _running, muted: Retro);
+        _sampled.Update(_follower.Rpm, _follower.Load, _follower.Cut, _running, muted: Retro);
         _tyres.Interior = Interior;
         _tyres.Update(session, dt, muted: Retro, running: _running);
         Fill();
@@ -519,12 +528,22 @@ internal sealed partial class EngineAudio : Node
         if (frames <= 0) return;
 
         // Twelve cylinders fire six times per revolution; the fundamental is rpm / 60 * 6.
-        var frequency = _running ? _rpm / 60.0 * 6.0 : 0.0;
+        var frequency = _running ? _follower.Rpm / 60.0 * 6.0 : 0.0;
         var step = frequency / MixRate;
         // The synthesised engine only plays in 1989 mode; otherwise the recordings carry the engine note.
-        var engineGain = _running && Retro ? 0.22f + 0.28f * _load : 0f;
-        var cutoff = 0.08f + 0.5f * _load; // one-pole low-pass opens with the throttle: the "wide open" growl
+        var load = _follower.Load;
+        var engineGain = _running && Retro ? 0.22f + 0.28f * load : 0f;
+        var cutoff = 0.08f + 0.5f * load; // one-pole low-pass opens with the throttle: the "wide open" growl
         var buffer = new Vector2[frames];
+        // The turbo for the whole block at once; silent in 1989 mode, which had no turbo.
+        var turbo = HasTurbo && !Retro;
+        if (turbo)
+        {
+            if (_turboBlock.Length < frames) _turboBlock = new float[frames];
+            System.Array.Clear(_turboBlock, 0, frames);
+            _turbo.Render(_turboBlock.AsSpan(0, frames), _turboState, _turboDt);
+            _turboDt = 0f;
+        }
 
         for (var i = 0; i < frames; i++)
         {
@@ -558,7 +577,7 @@ internal sealed partial class EngineAudio : Node
                 _bleep -= 1f / MixRate;
             }
 
-            var music = Song() + ChimeSample() + Starter(noise) + Turbo(noise);
+            var music = Song() + ChimeSample() + Starter(noise) + (turbo ? _turboBlock[i] : 0f);
             var extras = Moo() + Clang(noise) + Clunk(noise) + (Retro ? TrainClack(noise) : Road(noise) + RainHiss(noise));
             var sample = MathF.Tanh((engine + squeal + crash + bleep + music + extras) * Volume);
             buffer[i] = new Vector2(sample, sample);
@@ -640,33 +659,6 @@ internal sealed partial class EngineAudio : Node
         var phase = _trainClock % 0.42f;
         var burst = MathF.Exp(-phase * 60f) + 0.5f * MathF.Exp(-MathF.Max(phase - 0.11f, 0f) * 60f) * (phase > 0.11f ? 1f : 0f);
         return noise * burst * 0.5f * _trainLevel + noise * 0.04f * _trainLevel;
-    }
-
-    /// <summary>
-    /// The turbo: a whistle that climbs with the boost (the compressor wheel, two to four kilohertz here) over a
-    /// breath of rushing air, and the blow-off valve's hiss when the throttle shuts on boost, which decays in about
-    /// half a second. Silent in 1989 mode, which had no turbo.
-    /// </summary>
-    private float Turbo(float noise)
-    {
-        if (!_turbo || Retro) return 0f;
-        var sample = 0f;
-        if (_boost > 0.02f)
-        {
-            _whistlePhase += (2000f + 2000f * _boost) / MixRate;
-            if (_whistlePhase >= 1f) _whistlePhase -= 1f;
-            _hissLp += (noise - _hissLp) * 0.35f;
-            var rush = (noise - _hissLp) * 0.05f * _boost;
-            sample += MathF.Sin(_whistlePhase * MathF.Tau) * 0.028f * _boost * _boost + rush;
-        }
-        if (_blowOff > 0.01f)
-        {
-            // High-passed noise: the valve's psssh.
-            _blowLp += (noise - _blowLp) * 0.25f;
-            sample += (noise - _blowLp) * 0.22f * _blowOff;
-            _blowOff -= _blowOff * 4.5f / MixRate;
-        }
-        return sample;
     }
 
     /// <summary>One sample of the jingle playing, if any: notes start on their beat and sound through their voice's envelope.</summary>
