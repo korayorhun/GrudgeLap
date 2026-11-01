@@ -83,12 +83,16 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   lane just past the fork followed the stunt branch's steeper descent under the speed road and fell through it.
   The road the cursor has just left is not a candidate there: on the crest a few metres past the fork its last
   frame was the higher surface, the cursor hopped back onto it and the rules replayed its start line.
-- **Vehicle** — rigid body on four raycast wheels (spring/damper/bump stop), Pacejka-style tyres with a
-  friction circle, load sensitivity and relaxation, a per-car grip multiplier, rolling resistance as a
+- **Vehicle** — rigid body on four raycast wheels (spring/damper/bump stop, anti-roll bars, each axle sprung for
+  its load) with its mass where the real car carries it (`CentreOfMassOffset`), Magic Formula tyres with combined
+  slip along the normalised slip vector, a fall-off past the peak, load-sensitive friction and cornering stiffness
+  from the published tyre sizes and lateral relaxation, wheel spin solved implicitly against the tyre, a per-car grip
+  multiplier, rolling resistance as a
   body force (much higher on grass: grip 0.66 and resistance 0.11 of the load since 0.9, from 0.55 and 0.16,
   which made the verge a trap), aerodynamic drag, speed-sensitive steering lock, optional traction
-  control that eases the throttle as the driven wheels spin up. Rear- or front-wheel drive
-  (`VehicleSpec.FrontWheelDrive`) through an open differential; a turbo engine's torque builds with its boost
+  control that cuts the engine's torque as the driven wheels spin up, optional anti-lock brakes, brakes
+  proportioned to lock the fronts first. Rear- or front-wheel drive
+  (`VehicleSpec.FrontWheelDrive`) through an open differential or, on the flat-twelve, a limited-slip one; a turbo engine's torque builds with its boost
   (`EngineModel.Boost`: half a second of lag above a threshold rpm, falling at a third of that rate so a
   shift does not lose it), and the view whistles and vents it.
 - **Cars** — `VehicleSpec` presets: the 1984 flat-twelve (1580 kg, four speeds, 6900 rpm), the 2012 V8
@@ -133,6 +137,103 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
 - High scores (`HighScoreTable`): ten lines in order, a factory table to beat, three initials of a 27-letter
   alphabet, one text form shared with the Unreal version. The session keeps the credit's own best lap
   (`CreditBestLap`) apart from the loaded ghost's time for it.
+
+### Vehicle dynamics audit (0.17)
+
+The car model was held against established vehicle-dynamics practice (Pacejka, *Tyre and Vehicle Dynamics*;
+Milliken, *Race Car Vehicle Dynamics*; Gillespie, *Fundamentals of Vehicle Dynamics*) and against the published
+figures of the cars the catalogue follows. Findings, ranked by how much each changes how the cars feel and how real
+they are; the first eleven were fixed in 0.17, each pinned by a test in `HandlingTests` (proving-ground instruments in
+`physics.tests/HandlingRig.cs`: a 160 m asphalt pad, a constant-radius circle driver after SAE J266, straight stops
+and standing sprints).
+
+1. **Tyre curves never fell past their peak** (fixed). The Magic Formula shapes (lateral C 1.35, E 0.95;
+   longitudinal C 1.6, E 0.97) only saturated: a locked wheel braked with 99 % of the peak friction, a wheel
+   spinning at three times the road speed drove as hard as one at the ideal slip, and the side force at 20 degrees
+   of slip was still rising. Real road tyres on dry asphalt peak near 10-12 % slip and 5-8 degrees, then fall to
+   about 0.75 (locked) and 0.9 (sliding sideways) of the peak. Now: normalised curves with slope 1 and the peak at
+   u = 2 (`TireModel`), so ABS has something to gain (locked stops are 22-26 % longer than ABS ones,
+   `Locked_wheels_stop_longer_than_anti_lock_brakes`), wheelspin costs drive and a slide past the limit lets go.
+2. **Combined slip clipped the two pure forces** (fixed). The friction circle scaled the longitudinal and lateral
+   forces only when their sum exceeded the peak, so a locked front wheel at 7 degrees still gave two thirds of its
+   side force: a car steered with its wheels locked. Now the slips are normalised by stiffness and friction and
+   combined as one vector, the force lying along it (a friction ellipse that also points the right way): with the
+   fronts locked the car slides straight on (`Locked_front_wheels_do_not_steer_and_anti_lock_brakes_do`: 0.6 m
+   sideways from 80 km/h with the wheel turned, against 9.9 m with ABS).
+3. **Cornering stiffness proportional to the load** (fixed). With K = B C D and D = mu Fz every tyre used its load
+   equally well, which makes any car steer exactly neutral whatever its weight distribution (the old pad figures:
+   0.5-0.7 deg/g for every car, front-heavy hatches included). Now K follows Pacejka's load dependence
+   (c Fz0 sin(2 atan(Fz / 2 Fz0))), with the nominal load from the tyre's width and the stiffness per load from its
+   aspect ratio (`TireSize`, the published sizes on every spec, staggered 225/255 and 225/285 on the mid-engined
+   cars), and it no longer scales with the road's friction (a wet tyre is as stiff, it just lets go sooner).
+4. **Centre of mass 0.6 m up and halfway between the axles** (fixed). The body's reference point (hubs, footprint,
+   view, models) stands 0.6 m above the road and midway along, and the mass was there too: SUV-high load transfer
+   and 50/50 for cars that were 40/60 (the Testarossa) and 42/58 (the 570S). `VehicleSpec.CentreOfMassOffset` now
+   puts the mass where the real cars carry it (0.45-0.57 m, rearward on the mid-engined cars) without moving the
+   reference point the view and the models are fitted to; each axle is sprung for its load so the cars sit level
+   (`Static_weight_distribution_matches_the_car`). Braking load transfer agrees with statics to a per cent
+   (`Weight_moves_forward_under_braking_as_statics_says`).
+5. **No anti-roll bars** (fixed). Roll came from the corner springs alone, 4-10 deg/g (a 1970s saloon's lean on a
+   sports car), and the front-to-rear split of the roll stiffness, the main tuning of a car's balance, was always
+   the springs' 50/50. `FrontAntiRoll` / `RearAntiRoll` (wheel rates, N/m) now give 1.5 deg/g (V8), 2.2 (flat-twelve),
+   2.5-3.2 (hatchbacks), 3.8 (fleet saloon) and 5-6 (the 1990s saloon and estate), with 55 % of the roll stiffness
+   in front on the mid-engined cars and 58-66 % on the others. On the pad (`Understeer_and_roll_on_the_skid_pad`) the
+   front-heavy cars now understeer (0.8-2.5 deg/g) and the mid-engined ones stay near neutral (0.2-0.4); lifting off
+   at 92 % of the limit tightens their line by 15-20 % (`Lifting_off_at_the_limit_tucks_the_tail_of_a_mid_engined_car`).
+6. **Brakes** (fixed). No anti-lock brakes anywhere: `AntiLockBrakes` now on the three cars whose specs carry
+   traction control or ESC (the V8, the turbo hatch and the fleet saloon), a per-wheel release-and-reapply
+   modulator at the tyre's peak slip. The rear brakes of the front-heavy cars locked first once the mass moved
+   down to where it belongs; they are now proportioned so the fronts lock first at each car's limit
+   (`The_front_wheels_lock_before_the_rears`). Stops from 100 km/h: 31.5 m (V8; Car and Driver's 570S, 144 ft from
+   70 mph, is about 35 m), 36-40 m (turbo hatch, fleet saloon), 44-49 m for the 1980s-2000s cars without ABS on
+   locked wheels, 53-56 m for the 1990s saloon and estate; rain adds about 45 %
+   (`Sprints_and_stops_within_the_real_cars_ranges`).
+7. **Wheel spin integrated explicitly against a stiff tyre** (fixed). The slip ratio was relaxed over 0.3 m only to
+   keep the wheel stable; with tyres that fall past their peak that lag let the wheel ring against the tyre and the
+   slipping clutch at the step rate (a V8 sat at the limiter in first gear with its clutch hammering). The wheel's
+   speed is now solved implicitly each step (the speed at which inertia, drive, brake and the tyre force of that
+   speed balance, by a bracketed regula falsi), the clutch is told the axle's true one-step inertia and the road's
+   load torque, and only the slip angle keeps its 0.3 m relaxation length. The step costs about 20 us at 240 Hz, of
+   which 12 us are the five surface probes it always had.
+8. **Differential and traction control** (fixed). Every car had an open differential; the flat-twelve now has its
+   40 % clutch-type limited-slip unit with a 60 N m preload (`Limited_slip_differential_holds_the_inside_wheel`: the
+   inside rear runs 1.3 m/s ahead of the outside one out of a tight bend, 9.2 with an open differential). Traction
+   control eased the driver's pedal by the slip ratio, which near standstill opened the assisted clutch on every cut;
+   it now cuts the engine's torque (`Drivetrain.TorqueCut`) by the slip speed, and not while the clutch slips.
+   Since wheelspin now costs drive, the scripted driver and the keys feather the throttle against it and the brake
+   off a locking wheel the way a driver's foot does (`ScriptedDriver.FeatherThrottle` / `FeatherBrake`; a pad's
+   triggers are passed as they are).
+
+9. **Aerodynamic lift and downforce** (fixed). Drag only: the V8 at 200 mph carried no downforce and the 1980s
+   cars no lift. `FrontLiftArea` / `RearLiftArea` (lift coefficient times area per axle) now lift the older cars a
+   little, mostly at the front (the flat-twelve's tyres carry 97 % of its weight at 250 km/h), and press the V8 down,
+   more at the back (104 %; `At_speed_the_V8_presses_down_and_the_eighties_car_lifts`).
+10. **Shifts** (fixed in part). Every gearbox took 0.28 s per change with the drive cut; the V8's dual-clutch box now
+    takes 0.1 s (`ShiftSeconds`), which brought its 0-100 km/h from 4.5 s to 3.9 (the real car, with launch
+    control, 3.2).
+11. **Dampers** (fixed). Linear and symmetric; they now rebound 2.2 times harder than they bump
+    (`DamperReboundRatio`, the mean unchanged), as road dampers do: a bump is let through softly and the spring's
+    return is checked, so a car settles after a crest instead of bouncing.
+
+Still open, in the same order:
+
+12. **Launches** — the V8 is 0.7 s slow to 100 km/h (no launch control: a torque-cut traction control and the
+    assisted clutch's feed-in), the front-wheel-drive cars 0.5-1 s (the turbo hatch 7.5 s against 6.4). A launch
+    mode in the assisted clutch, holding the driven wheels at their peak slip, would close it.
+13. **Steering** — parallel steer (no Ackermann), no caster trail or self-aligning torque (nothing to feel without
+    force feedback), and the speed-sensitive lock remains the keyboard's stand-in for a three-turn wheel. Understeer
+    of the front-heavy hot hatch (0.8 deg/g) is at the low end of the 1-4 deg/g of such cars, the share real cars get
+    from steering compliance and roll steer, which the model does not have.
+14. **The 570S's brake steer** (it brakes a spinning inside wheel instead of locking the axle) and the hatchbacks'
+    electronic equivalents are not modelled; their differentials are open.
+15. **Camber and tyre temperature** — none; the grip is the same on the first lap as on the tenth.
+16. **The stunt route for the 1990s saloon and estate** — 75 PS and 61 PS cannot gather the loop's 60 mph in the
+    140 m after the bend before it, so the scripted driver crashes there and respawns 40 m short of it (it did
+    before 0.17 too); `Every_car_laps_both_routes` holds them to the speed route. A track matter, not a physics one.
+
+Kept, as earlier decisions: the fixed 240 Hz step with semi-implicit Euler for the body, the raycast wheels, the
+grass's grip and rolling resistance (0.9), the weather's grip figures (0.12), the speed-sensitive steering lock,
+the clutch's lock/slip machine and launch assist, and the low-speed fades of the slip angle (no jitter at rest).
 
 ## View (`game/`)
 

@@ -20,6 +20,11 @@ public sealed class Drivetrain
     public TransmissionMode Mode { get; set; } = TransmissionMode.ManualAutoClutch;
     /// <summary>Torque delivered to the driven axle (sum of both wheels) during the last step.</summary>
     public float AxleTorque { get; private set; }
+    /// <summary>
+    /// Share of the throttle the engine is allowed (1 = all of it): traction control's cut, applied to the engine only,
+    /// so the clutch and the gearbox go by the driver's pedal.
+    /// </summary>
+    public float TorqueCut { get; set; } = 1f;
     /// <summary>Extra inertia the driven wheels carry while the clutch is locked, already reflected through the gearing.</summary>
     public float ReflectedInertia { get; private set; }
 
@@ -38,6 +43,7 @@ public sealed class Drivetrain
         Engagement = 0f;
         AxleTorque = 0f;
         ReflectedInertia = 0f;
+        TorqueCut = 1f;
         Engine.Stop();
     }
 
@@ -54,16 +60,21 @@ public sealed class Drivetrain
 
     /// <summary>
     /// Steps the drivetrain. <paramref name="axleSpeed"/> is the mean angular velocity of the driven wheels (rad/s).
+    /// <paramref name="axleInertia"/> is the inertia (kg m^2) the driven axle presents to the clutch over one step: its
+    /// wheels plus what their tyres hold them to (see VehicleSim.IntegrateWheelSpin); zero or less means unknown, and
+    /// the wheels are then taken as tied to the car through the tyres. <paramref name="axleLoadTorque"/> is the torque the
+    /// road puts on the driven wheels through the tyres (N m, positive when it holds them back), so the clutch knows what
+    /// the wheels have to work against to speed up.
     /// Returns nothing; read <see cref="AxleTorque"/> and <see cref="ReflectedInertia"/> afterwards.
     /// </summary>
-    public void Step(in DriverInputs input, float axleSpeed, float groundSpeed, float dt)
+    public void Step(in DriverInputs input, float axleSpeed, float groundSpeed, float dt, float axleInertia = 0f, float axleLoadTorque = 0f)
     {
         HandleIgnition(input);
         SelectGear(input, groundSpeed, dt);
         var pedal = ResolveClutchPedal(input, groundSpeed, dt);
         Engagement = 1f - pedal;
 
-        var throttle = input.Throttle;
+        var throttle = input.Throttle * MathUtil.Clamp01(TorqueCut);
         if (Mode != TransmissionMode.ManualClutch && _shiftTimer > 0f) throttle = 0f; // lift fully during assisted shifts
         var engineTorque = Engine.Torque(throttle);
         var ratio = Ratio;
@@ -108,10 +119,13 @@ public sealed class Drivetrain
                 // is delivered as a hammer blow to the wheels and the engine can never stall.
                 // Two-inertia synchronisation: the torque that would bring engine and input shaft to the same
                 // speed by the end of this step (axle inertia seen through the gearing).
-                // The axle side carries the wheels and, through the tyres, the car itself (m r^2); without the car
-                // the estimate is tiny, the clutch transmits almost nothing and slips for seconds.
-                var axleInertia = 2f * _spec.WheelInertia + _spec.MassKg * _spec.WheelRadius * _spec.WheelRadius;
-                var syncTorque = (slip + engineTorque * dt / _spec.EngineInertia)
+                // The axle side carries the wheels and what the tyres tie them to. The caller knows that from the tyres'
+                // stiffness: a gripping tyre makes the wheel heavy to turn within a step, a spinning one leaves it light.
+                // Without that, the axle was taken as the wheels plus the whole car (m r^2), which is right for a
+                // gripping tyre and badly wrong for a spinning one: once the tyre's force fell past its peak (0.17),
+                // the clutch overshot every step and hammered the wheels back and forth.
+                if (axleInertia <= 0f) axleInertia = 2f * _spec.WheelInertia + _spec.MassKg * _spec.WheelRadius * _spec.WheelRadius;
+                var syncTorque = (slip + engineTorque * dt / _spec.EngineInertia + ratio * axleLoadTorque * dt / axleInertia)
                                  / (dt * (1f / _spec.EngineInertia + ratio * ratio * _spec.DrivelineEfficiency / axleInertia));
                 var clutchTorque = MathUtil.Clamp(syncTorque, -capacity, capacity);
                 var engineAccel = (engineTorque - clutchTorque) / _spec.EngineInertia;
@@ -175,7 +189,7 @@ public sealed class Drivetrain
 
         Gear = target;
         ClutchLocked = false;
-        _shiftTimer = 0.28f;
+        _shiftTimer = _spec.ShiftSeconds;
         _autoShiftCooldown = 0.9f;
     }
 

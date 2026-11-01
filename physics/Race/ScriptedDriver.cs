@@ -111,13 +111,57 @@ public sealed class ScriptedDriver
         return new DriverInputs
         {
             Steer = steer,
-            Throttle = sliding ? 0f : MathUtil.Clamp01(error * 0.5f + 0.1f),
+            Throttle = sliding ? 0f : FeatherThrottle(car, MathUtil.Clamp01(error * 0.5f + 0.1f)),
             // Braking in the air only locks the wheels; wait for the landing.
-            Brake = car.Airborne || sliding ? 0f : MathUtil.Clamp01(-error * 0.4f - 0.3f),
+            Brake = car.Airborne || sliding ? 0f : FeatherBrake(car, MathUtil.Clamp01(-error * 0.4f - 0.3f)),
             Gear = DriverInputs.NoGearChange,
             ShiftUp = shiftUp,
             ShiftDown = shiftDown,
         };
+    }
+
+    /// <summary>
+    /// The throttle a competent driver actually holds when asking for <paramref name="throttle"/>: eased in proportion
+    /// to how far a driven wheel spins past what its tyre can use, the way a driver feels the tail squirm or the front
+    /// scrabble and feeds the power in. Since 0.17 the tyre's force falls once it spins past its peak (to about three
+    /// quarters at full wheelspin), so a launch on the stop and a second-gear exit lose more than they did on the old
+    /// tyre, which kept almost all of its force however fast the wheel spun. Used by the scripted driver and by the
+    /// tests' magazine-style launches.
+    /// </summary>
+    public static float FeatherThrottle(VehicleSim car, float throttle)
+    {
+        var spec = car.Spec;
+        var (a, b) = spec.FrontWheelDrive ? (car.Wheels[0], car.Wheels[1]) : (car.Wheels[2], car.Wheels[3]);
+        var excess = MathF.Max(Excess(a), Excess(b));
+        return throttle * MathUtil.Clamp(1f - excess / (1.5f + 0.1f * MathF.Abs(car.Speed)), 0.2f, 1f);
+
+        float Excess(WheelState w)
+        {
+            if (!w.InContact) return 0f;
+            var slipSpeed = w.AngularVelocity * spec.WheelRadius - w.GroundSpeed;
+            // A tenth of the road speed and half a metre a second: about the slip at the tyre's peak, a little over.
+            return MathF.Max(0f, slipSpeed - (0.12f * MathF.Abs(w.GroundSpeed) + 0.5f));
+        }
+    }
+
+    /// <summary>
+    /// The brake pedal a driver actually holds when asking for <paramref name="brake"/> in a car without anti-lock
+    /// brakes: eased as a wheel slides past the tyre's peak slip, so the car stops near its best and keeps some steering
+    /// (cadence braking, as drivers were taught). Since 0.17 a locked tyre brakes with only about three quarters of its
+    /// peak and steers not at all, which a key or the scripted driver's hard stop would otherwise get every time.
+    /// </summary>
+    public static float FeatherBrake(VehicleSim car, float brake)
+    {
+        if (car.Spec.AntiLockBrakes || brake <= 0f) return brake;
+        var worst = 0f;
+        foreach (var w in car.Wheels)
+        {
+            if (!w.InContact || MathF.Abs(w.GroundSpeed) < 3f) continue;
+            var peak = TireModel.PeakSlipRatio(w.Friction);
+            worst = MathF.Max(worst, -w.SlipRatio * MathF.Sign(w.GroundSpeed) / MathF.Max(peak, 0.02f));
+        }
+        // Up to 1.5 times the peak slip the foot stays; by four times it has come off to half.
+        return brake * MathUtil.Clamp(1f - (worst - 1.5f) * 0.2f, 0.5f, 1f);
     }
 
     /// <summary>

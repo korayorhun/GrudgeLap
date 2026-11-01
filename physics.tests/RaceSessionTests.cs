@@ -126,17 +126,29 @@ public sealed class RaceSessionTests
     }
 
     /// <summary>
-    /// The hatchbacks round both routes: 147 hp and front-wheel drive still make the drawbridge's 60-80 mph and the
-    /// loop's 60 at the speeds the scripted driver plans.
+    /// Every car of the catalogue round both routes: 75 PS and a live axle, or 147 hp and front-wheel drive, still make
+    /// the drawbridge's 60-80 mph and the loop's 60 at the speeds the scripted driver plans, and the mid-engined cars
+    /// hold their line on the tyres that fall away past their peak (0.17). The two everyday cars of the 1990s lap the
+    /// speed route only: from the bend 140 m before the loop, 75 PS and 61 PS cannot gather the loop's 60 mph (the
+    /// estate would need 1.1 m/s^2 at 50 mph and has 0.9), so the scripted driver crashes there and respawns 40 m
+    /// short of it; they could not before 0.17 either, and neither could the fleet saloon, which now does.
     /// </summary>
     [Theory]
+    [InlineData(0, true)]
+    [InlineData(0, false)]
+    [InlineData(1, true)]
+    [InlineData(1, false)]
+    [InlineData(5, false)]
+    [InlineData(6, false)]
+    [InlineData(7, true)]
+    [InlineData(7, false)]
     [InlineData(2, true)]
     [InlineData(2, false)]
     [InlineData(3, true)]
     [InlineData(3, false)]
     [InlineData(4, true)]
     [InlineData(4, false)]
-    public void Every_hatchback_laps_both_routes(int car, bool stunt)
+    public void Every_car_laps_both_routes(int car, bool stunt)
     {
         var spec = VehicleSpec.Catalogue[car];
         var track = OriginalInspiredTrack.Build();
@@ -550,7 +562,10 @@ public sealed class RaceSessionTests
         session.Car.Drivetrain.Engine.Start();
         for (var i = 0; i < 60 * 25; i++)
         {
-            session.Step(new DriverInputs { Throttle = 0.55f, Steer = 0.8f, Gear = DriverInputs.NoGearChange }, Dt);
+            // Round and round at about 35 km/h. Held at 55 % throttle in first gear the car wound itself up to 70 km/h
+            // and, since the tyres lose grip past their peak slip (0.17), slid off the pad's edge in a wide arc.
+            var throttle = session.Car.Speed < 9.5f ? 0.55f : 0.15f;
+            session.Step(new DriverInputs { Throttle = throttle, Steer = 0.8f, Gear = DriverInputs.NoGearChange }, Dt);
             Assert.Equal(SessionPhase.Driving, session.Phase);
             Assert.False(session.OffRoad, $"off-road clock started at step {i}");
             Assert.False(session.WrongWay, $"wrong way at step {i}");

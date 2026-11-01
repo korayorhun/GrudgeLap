@@ -74,7 +74,13 @@ public sealed class VehicleTests
                        $"contact={w.Count(x => x.InContact)} loadRL={w[2].Load,6:F0} kR={w[2].SlipRatio,6:F2} aF={w[0].SlipAngle * MathUtil.Rad2Deg,5:F1} lat={car.BodyHit.Lateral,5:F1} {extra}");
     }
 
-    /// <summary>Drives flat out with keyboard-style sequential shifts near the redline (key pressed once per shift).</summary>
+    /// <summary>
+    /// Drives flat out with keyboard-style sequential shifts near the redline (key pressed once per shift), the throttle
+    /// fed in against wheelspin the way a magazine tester launches (<see cref="ScriptedDriver.FeatherThrottle"/>): since
+    /// the tyre loses force when it spins past its peak, a launch on the stop with the wheels at three times the road
+    /// speed is no longer nearly as quick as a clean one. The driver keeps the car in the middle of the road: left alone
+    /// for a two-minute top-speed run, the potholes' knocks walked it off the road.
+    /// </summary>
     private static void DriveFlatOut(VehicleSim car, float seconds, Action<VehicleSim>? each = null)
     {
         var steps = (int)(seconds / Dt);
@@ -82,7 +88,7 @@ public sealed class VehicleTests
         for (var i = 0; i < steps; i++)
         {
             var shift = car.Drivetrain.Engine.Rpm > car.Spec.Engine.RedlineRpm * 0.93f && car.Drivetrain.ClutchLocked && car.Drivetrain.Gear < car.Spec.ForwardGearCount && car.Drivetrain.Gear == lastGear;
-            car.Step(new DriverInputs { Throttle = 1f, Gear = DriverInputs.NoGearChange, ShiftUp = shift }, Dt);
+            car.Step(new DriverInputs { Throttle = ScriptedDriver.FeatherThrottle(car, 1f), Steer = FollowRoad(car), Gear = DriverInputs.NoGearChange, ShiftUp = shift }, Dt);
             if (shift) lastGear = car.Drivetrain.Gear;
             each?.Invoke(car);
         }
@@ -138,7 +144,7 @@ public sealed class VehicleTests
 
     /// <summary>
     /// The hatchbacks against the figures of the cars they follow: 0-60 mph and top speed, driven flat out from a
-    /// standing start with the shifts at the redline (a launch with wheelspin, as most magazine runs were not).
+    /// standing start with the shifts at the redline and the throttle fed in against wheelspin.
     /// </summary>
     [Theory]
     [InlineData(2, 6.0f, 8.2f, 124f, 145f)]   // hot hatch: 7.2 s to 62 mph, 220 km/h

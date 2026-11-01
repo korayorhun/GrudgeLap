@@ -35,8 +35,23 @@ public sealed record VehicleSpec
     public float BodyFront { get; init; } = 2.355f;
     public float BodyRear { get; init; } = 2.13f;
     public float BodyHalfWidth { get; init; } = 0.99f;
+    /// <summary>
+    /// Where the mass is centred, from the body's reference point (m; x right, y up, z forward). The reference point is
+    /// the one the hubs, the body and the view are measured from, set midway between the axles and 0.6 m up; the real cars
+    /// carry their weight lower, and the mid-engined ones towards the back (40/60 for the flat-twelve, 42/58 for the V8),
+    /// which is what makes a car squat, roll and turn the way it does.
+    /// </summary>
+    public System.Numerics.Vector3 CentreOfMassOffset { get; init; } = new(0f, -0.14f, -0.26f);
     public float DragCoefficient { get; init; } = 0.36f;
     public float FrontalArea { get; init; } = 1.95f;         // m^2
+    /// <summary>
+    /// Aerodynamic lift at each axle as lift coefficient times area, m^2 (positive lifts, negative presses down): the
+    /// force is that times the dynamic pressure, applied over the axle. Road cars of the 1980s and 1990s lift a
+    /// little (whole-car lift coefficients of 0.1-0.3, mostly at the front; Hucho, Aerodynamics of Road Vehicles,
+    /// ch. 4); the V8 of the 2010s is shaped to press itself down a little, more at the back.
+    /// </summary>
+    public float FrontLiftArea { get; init; } = 0.12f;
+    public float RearLiftArea { get; init; } = 0.06f;
     public float RollingResistance { get; init; } = 0.015f;
     /// <summary>Multiplier on the surface friction: modern tyres grip harder than 1984's.</summary>
     public float TireGrip { get; init; } = 1.0f;
@@ -44,6 +59,9 @@ public sealed record VehicleSpec
     public bool TractionControl { get; init; }
     /// <summary>The engine drives the front wheels (a transverse engine in a hatchback) instead of the rear.</summary>
     public bool FrontWheelDrive { get; init; }
+    /// <summary>Tyre sizes as published, front and rear: they set each axle's nominal load and cornering stiffness (<see cref="TireSize"/>).</summary>
+    public TireSize FrontTire { get; init; } = new(225f, 50f, 16f);
+    public TireSize RearTire { get; init; } = new(255f, 50f, 16f);
 
     // Suspension (raycast model per wheel)
     public float WheelRadius { get; init; } = 0.33f;
@@ -52,6 +70,20 @@ public sealed record VehicleSpec
     public float SuspensionDamping { get; init; } = 3800f;   // N s/m
     public float BumpStopStiffness { get; init; } = 260000f; // N/m beyond MaxCompression
     public float MaxCompression { get; init; } = 0.17f;      // m
+    /// <summary>
+    /// How much harder the dampers resist extension (rebound) than compression (bump), as a ratio. Road dampers rebound
+    /// two to three times harder than they bump (Milliken, ch. 21; Dixon, The Shock Absorber Handbook): a bump is
+    /// let through softly and the spring's return is checked. <see cref="SuspensionDamping"/> is the mean of the two.
+    /// </summary>
+    public float DamperReboundRatio { get; init; } = 2.2f;
+    /// <summary>
+    /// Anti-roll bars as a wheel rate, N/m: the force pushing the more compressed wheel of an axle down (and its partner
+    /// up) per metre of compression difference, so an axle's roll stiffness from its bar is this times the track
+    /// squared. The front-to-rear split of the roll stiffness is the main tuning of a car's balance: the stiffer end
+    /// takes more of the load transfer in a bend and, its tyres using load less well, gives up grip first.
+    /// </summary>
+    public float FrontAntiRoll { get; init; } = 27400f;
+    public float RearAntiRoll { get; init; } = 12000f;
 
     // Steering
     public float MaxSteerLowSpeedDeg { get; init; } = 32f;
@@ -60,7 +92,16 @@ public sealed record VehicleSpec
 
     // Brakes
     public float FrontBrakeTorque { get; init; } = 2700f;    // N m per wheel at full pedal
+    /// <summary>
+    /// Rear brake torque per wheel at full pedal, after the proportioning valve: set so that the front wheels lock first
+    /// at the car's grip limit (the front's share of the braking a little above its share of the load in a stop at that
+    /// limit, static share + h / L x mu), as brake systems are designed; a car whose rears lock first spins in a hard stop.
+    /// For the front-heavy hatchbacks that leaves the rear little: in a 1.1 g stop their rear axle carries a seventh of
+    /// the weight.
+    /// </summary>
     public float RearBrakeTorque { get; init; } = 1700f;
+    /// <summary>Anti-lock brakes: each wheel's pressure is eased when it slips past the tyre's peak, so the car stops short and still steers.</summary>
+    public bool AntiLockBrakes { get; init; }
 
     // Drivetrain
     public float[] GearRatios { get; init; } = [-3.0f, 0f, 3.14f, 2.11f, 1.46f, 1.0f]; // index = gear + 1 (R, N, 1..4)
@@ -68,7 +109,20 @@ public sealed record VehicleSpec
     public float DrivelineEfficiency { get; init; } = 0.9f;
     public float ClutchMaxTorque { get; init; } = 900f;       // N m
     public float EngineInertia { get; init; } = 0.28f;        // kg m^2 (flywheel + clutch)
+    /// <summary>
+    /// Seconds a gear change takes in the assisted modes, the drive interrupted: about a quarter of a second for a
+    /// quick hand on a manual gate, a tenth for a dual-clutch box that hands the drive from one clutch to the other.
+    /// </summary>
+    public float ShiftSeconds { get; init; } = 0.28f;
     public float WheelInertia { get; init; } = 1.3f;          // kg m^2 per wheel + half shaft
+    /// <summary>
+    /// Limited-slip differential: the share of the torque into the differential that its clutches can pass from the
+    /// faster driven wheel to the slower one (0 = open differential, which always splits the torque evenly and so lets
+    /// an unloaded inside wheel spin away the drive). The flat-twelve's is a 40 % clutch-type unit.
+    /// </summary>
+    public float LimitedSlipLocking { get; init; } = 0.4f;
+    /// <summary>Torque (N m) the limited-slip clutches pass with no drive at all, from their spring preload.</summary>
+    public float LimitedSlipPreload { get; init; } = 60f;
 
     public int ForwardGearCount => GearRatios.Length - 2;
     public float RatioForGear(int gear) => GearRatios[gear + 1];
@@ -80,6 +134,20 @@ public sealed record VehicleSpec
     {
         Name = "V8 GTB '12 SPORT EXHAUST",
         Style = CarStyle.V8,
+        // The 570S's seven-speed dual-clutch box: the next gear is engaged on its own clutch and taken up as the other
+        // lets go, so a shift costs a fraction of the drive a manual's does.
+        ShiftSeconds = 0.1f,
+        FrontLiftArea = -0.06f,
+        RearLiftArea = -0.12f,
+        // 225/35 R19 front, 285/35 R20 rear; an open differential (the real car brakes a spinning inside wheel instead).
+        FrontTire = new(225f, 35f, 19f),
+        RearTire = new(285f, 35f, 20f),
+        FrontAntiRoll = 33300f,
+        RearAntiRoll = 16300f,
+        CentreOfMassOffset = new(0f, -0.19f, -0.22f),
+        AntiLockBrakes = true,
+        LimitedSlipLocking = 0f,
+        LimitedSlipPreload = 0f,
         Engine = EngineSpec.V8,
         SpeedoMaxMph = 220f,
         MassKg = 1485f,
@@ -94,13 +162,14 @@ public sealed record VehicleSpec
         BodyHalfWidth = 0.97f,
         DragCoefficient = 0.33f,
         FrontalArea = 1.98f,
-        TireGrip = 1.25f,
+        // Car and Driver's 570S held 1.05 g on its 300 ft skidpad (2016).
+        TireGrip = 1.15f,
         TractionControl = true,
         SuspensionStiffness = 46000f,
         SuspensionDamping = 4200f,
         MaxSteerLowSpeedDeg = 30f,
         FrontBrakeTorque = 3200f,
-        RearBrakeTorque = 2000f,
+        RearBrakeTorque = 1750f,
         GearRatios = [-3.1f, 0f, 3.08f, 2.19f, 1.63f, 1.29f, 1.03f, 0.84f, 0.69f],
         FinalDrive = 4.9f,
         ClutchMaxTorque = 1200f,
@@ -115,6 +184,13 @@ public sealed record VehicleSpec
     {
         Name = "HOT HATCH 2.0 16V '01",
         Style = CarStyle.HotHatch,
+        FrontTire = new(205f, 45f, 16f),
+        RearTire = new(205f, 45f, 16f),
+        FrontAntiRoll = 16000f,
+        RearAntiRoll = 9700f,
+        CentreOfMassOffset = new(0f, -0.10f, 0f),
+        LimitedSlipLocking = 0f,
+        LimitedSlipPreload = 0f,
         Engine = EngineSpec.HotHatch,
         SpeedoMaxMph = 150f,
         MassKg = 1140f,
@@ -130,6 +206,8 @@ public sealed record VehicleSpec
         HubHeight = -0.20f,
         DragCoefficient = 0.34f,
         FrontalArea = 1.95f,
+        FrontLiftArea = 0.10f,
+        RearLiftArea = 0.07f,
         TireGrip = 1.08f,
         WheelRadius = 0.296f,
         SuspensionRest = 0.22f,
@@ -139,7 +217,7 @@ public sealed record VehicleSpec
         MaxSteerLowSpeedDeg = 34f,
         MaxSteerHighSpeedDeg = 7.5f,
         FrontBrakeTorque = 2100f,
-        RearBrakeTorque = 800f,
+        RearBrakeTorque = 290f,
         GearRatios = [-3.55f, 0f, 3.09f, 1.84f, 1.32f, 1.03f, 0.86f],
         FinalDrive = 4.21f,
         ClutchMaxTorque = 360f,
@@ -156,6 +234,13 @@ public sealed record VehicleSpec
     {
         Name = "FIVE 2.0 20V HATCH '97",
         Style = CarStyle.FiveHatch,
+        FrontTire = new(195f, 55f, 15f),
+        RearTire = new(195f, 55f, 15f),
+        FrontAntiRoll = 19000f,
+        RearAntiRoll = 8200f,
+        CentreOfMassOffset = new(0f, -0.09f, 0f),
+        LimitedSlipLocking = 0f,
+        LimitedSlipPreload = 0f,
         Engine = EngineSpec.FiveCylinder,
         SpeedoMaxMph = 150f,
         MassKg = 1310f,
@@ -171,6 +256,8 @@ public sealed record VehicleSpec
         HubHeight = -0.20f,
         DragCoefficient = 0.32f,
         FrontalArea = 2.0f,
+        FrontLiftArea = 0.10f,
+        RearLiftArea = 0.07f,
         TireGrip = 1.0f,
         WheelRadius = 0.298f,
         SuspensionRest = 0.23f,
@@ -180,7 +267,7 @@ public sealed record VehicleSpec
         MaxSteerLowSpeedDeg = 33f,
         MaxSteerHighSpeedDeg = 7f,
         FrontBrakeTorque = 2100f,
-        RearBrakeTorque = 850f,
+        RearBrakeTorque = 310f,
         GearRatios = [-3.71f, 0f, 3.35f, 2.05f, 1.41f, 1.03f, 0.82f],
         FinalDrive = 4.07f,
         ClutchMaxTorque = 330f,
@@ -197,6 +284,14 @@ public sealed record VehicleSpec
     {
         Name = "TURBO HATCH 2.0T '08",
         Style = CarStyle.TurboHatch,
+        FrontTire = new(225f, 40f, 18f),
+        RearTire = new(225f, 40f, 18f),
+        FrontAntiRoll = 25000f,
+        RearAntiRoll = 15300f,
+        CentreOfMassOffset = new(0f, -0.09f, 0f),
+        AntiLockBrakes = true,
+        LimitedSlipLocking = 0f,
+        LimitedSlipPreload = 0f,
         Engine = EngineSpec.TurboFour,
         SpeedoMaxMph = 170f,
         MassKg = 1480f,
@@ -212,7 +307,9 @@ public sealed record VehicleSpec
         HubHeight = -0.20f,
         DragCoefficient = 0.33f,
         FrontalArea = 2.15f,
-        TireGrip = 1.18f,
+        FrontLiftArea = 0.08f,
+        RearLiftArea = 0.05f,
+        TireGrip = 1.08f,
         TractionControl = true,
         WheelRadius = 0.319f,
         SuspensionRest = 0.22f,
@@ -222,7 +319,7 @@ public sealed record VehicleSpec
         MaxSteerLowSpeedDeg = 33f,
         MaxSteerHighSpeedDeg = 7f,
         FrontBrakeTorque = 3000f,
-        RearBrakeTorque = 1300f,
+        RearBrakeTorque = 370f,
         GearRatios = [-3.18f, 0f, 3.36f, 2.09f, 1.47f, 1.10f, 0.87f, 0.73f],
         FinalDrive = 3.65f,
         ClutchMaxTorque = 520f,
@@ -241,6 +338,13 @@ public sealed record VehicleSpec
     {
         Name = "SALOON 1.6 '91",
         Style = CarStyle.Saloon,
+        FrontTire = new(175f, 70f, 13f),
+        RearTire = new(175f, 70f, 13f),
+        FrontAntiRoll = 7000f,
+        RearAntiRoll = 3000f,
+        CentreOfMassOffset = new(0f, -0.10f, 0f),
+        LimitedSlipLocking = 0f,
+        LimitedSlipPreload = 0f,
         Engine = EngineSpec.SaloonFour,
         SpeedoMaxMph = 112f,
         MassKg = 1050f,
@@ -256,6 +360,8 @@ public sealed record VehicleSpec
         HubHeight = -0.20f,
         DragCoefficient = 0.43f,
         FrontalArea = 1.90f,
+        FrontLiftArea = 0.16f,
+        RearLiftArea = 0.10f,
         TireGrip = 0.86f,
         WheelRadius = 0.2875f,
         SuspensionRest = 0.25f,
@@ -265,7 +371,7 @@ public sealed record VehicleSpec
         MaxSteerLowSpeedDeg = 33f,
         MaxSteerHighSpeedDeg = 7f,
         FrontBrakeTorque = 1500f,
-        RearBrakeTorque = 700f,
+        RearBrakeTorque = 500f,
         GearRatios = [-3.526f, 0f, 3.667f, 2.100f, 1.361f, 1.000f, 0.881f],
         FinalDrive = 4.10f,
         ClutchMaxTorque = 220f,
@@ -283,6 +389,14 @@ public sealed record VehicleSpec
     {
         Name = "ESTATE 1.4 '93",
         Style = CarStyle.Estate,
+        // 155 R13: an 80-series radial.
+        FrontTire = new(155f, 80f, 13f),
+        RearTire = new(155f, 80f, 13f),
+        FrontAntiRoll = 7000f,
+        RearAntiRoll = 2250f,
+        CentreOfMassOffset = new(0f, -0.08f, 0f),
+        LimitedSlipLocking = 0f,
+        LimitedSlipPreload = 0f,
         Engine = EngineSpec.EstateFour,
         SpeedoMaxMph = 112f,
         MassKg = 1045f,
@@ -298,6 +412,8 @@ public sealed record VehicleSpec
         HubHeight = -0.20f,
         DragCoefficient = 0.46f,
         FrontalArea = 1.95f,
+        FrontLiftArea = 0.16f,
+        RearLiftArea = 0.12f,
         TireGrip = 0.82f,
         WheelRadius = 0.289f,
         SuspensionRest = 0.26f,
@@ -307,7 +423,7 @@ public sealed record VehicleSpec
         MaxSteerLowSpeedDeg = 32f,
         MaxSteerHighSpeedDeg = 7f,
         FrontBrakeTorque = 1450f,
-        RearBrakeTorque = 600f,
+        RearBrakeTorque = 340f,
         GearRatios = [-3.083f, 0f, 3.818f, 2.235f, 1.478f, 1.036f, 0.852f],
         FinalDrive = 3.777f,
         ClutchMaxTorque = 190f,
@@ -326,6 +442,15 @@ public sealed record VehicleSpec
     {
         Name = "SALOON 1.4 16V '17",
         Style = CarStyle.Fleet,
+        FrontTire = new(195f, 65f, 15f),
+        RearTire = new(195f, 65f, 15f),
+        FrontAntiRoll = 7800f,
+        RearAntiRoll = 3000f,
+        CentreOfMassOffset = new(0f, -0.10f, 0f),
+        // ESC brings anti-lock brakes with it.
+        AntiLockBrakes = true,
+        LimitedSlipLocking = 0f,
+        LimitedSlipPreload = 0f,
         Engine = EngineSpec.FleetFour,
         SpeedoMaxMph = 143f,
         // The 1,150 kg is the EU kerb weight, which counts a 75 kg driver and most of a tank already.
@@ -342,7 +467,9 @@ public sealed record VehicleSpec
         HubHeight = -0.20f,
         DragCoefficient = 0.30f,
         FrontalArea = 2.20f,
-        TireGrip = 1.0f,
+        FrontLiftArea = 0.08f,
+        RearLiftArea = 0.05f,
+        TireGrip = 0.94f,
         TractionControl = true,
         WheelRadius = 0.317f,
         SuspensionRest = 0.24f,
@@ -352,7 +479,7 @@ public sealed record VehicleSpec
         MaxSteerLowSpeedDeg = 34f,
         MaxSteerHighSpeedDeg = 7f,
         FrontBrakeTorque = 2100f,
-        RearBrakeTorque = 750f,
+        RearBrakeTorque = 400f,
         GearRatios = [-3.818f, 0f, 3.545f, 2.158f, 1.480f, 1.121f, 0.921f, 0.766f],
         FinalDrive = 4.071f,
         ClutchMaxTorque = 260f,
