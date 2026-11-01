@@ -1,6 +1,6 @@
 # Feel checklist
 
-What "drives like the cabinet" means in numbers. Every line is pinned by a test in `physics.tests`, so a
+What "drives like the cabinet" means in numbers. Every line is pinned by a test in `physics.tests` (the sound's lines in `audio.tests`), so a
 tuning change that breaks one shows up before anyone sits in the car. Values are the current baseline; since 0.18 the handling as a proving ground measures it (0-100 km/h, 100-0 km/h dry and
 wet with and without ABS, understeer and roll on a skid pad, lift-off oversteer, lift at speed, for all eight cars) is
 pinned in `HandlingTests` against real-car ranges, and the figures there are the reference.
@@ -41,6 +41,11 @@ pinned in `HandlingTests` against real-car ranges, and the figures there are the
 | Fields | every field patch clear of every road by half a road width plus 6 m | holds | `Fields_stay_clear_of_every_road` |
 | Train | crosses the speed route on its schedule, pauses, comes back; the scripted driver still laps | holds | `Train_runs_across_the_speed_route_on_a_schedule` |
 | Soft props | a cow moos and a sign tips over, no crash; the train at the crossing is a crash | holds | `Train_at_the_crossing_is_a_crash_and_signs_and_cows_are_not` |
+| Engine loudness between cars (sound, `audio.tests`) | within 1.5 LU of the cars' mean in a full-throttle run-up from 40 to 95 % of the redline, outside and in the cabin | within 1.2 LU, the V8 the loudest (0.20; 0.19 in attract: estate 5.5 LU over the flat-twelve) | `Every_engine_is_about_as_loud_pulling_hard` |
+| Engine peaks (sound) | -1 dBFS or under at full throttle from 30 % of the redline to the redline at the game's volume, outside and in the cabin; at most 1 sample in 1,000 rounded off | -1.0 dBFS at worst (V8, turbo hatch, fleet saloon outside), at most 5 in 10,000 rounded (0.20; before the review +2.8 dBFS) | `Full_throttle_peaks_under_minus_one_dbfs` |
+| Engine at top speed (sound) | at most 4 LU under the roar and the wind at 250 km/h, its loudest third-octave 4 dB over them | 2.2 LU under at worst (fleet saloon's cabin), 5.3 dB (hot hatch's cabin) | `The_engine_stays_audible_over_the_roar_and_the_wind_at_top_speed` |
+| Rev limiter (sound) | a stutter: 6 dB or more, falling within 10 ms; through the simulated engine the held load stays at 0.9 or more | 6.6-13.6 dB in 4-10 ms, load 1.0 (0.20) | `The_limiter_cuts_crisply`, `The_simulated_limiter_holds_the_load_through_its_cuts` |
+| Turbo (sound) | whistle at the blades' passing frequency; flutter at 6-15 Hz without a valve; 12 LU under the engine on boost, yet its whine level with the engine in its own band | 5.2-8.8 kHz as it spools, 9.8 Hz surge, 14 LU under, whine +0.7 dB outside and +0.1 in the cabin | `TurboNoiseTests` |
 
 Known gaps (next tuning passes): loop entry still spikes the suspension (a clothoid entry would soften it);
 the keyboard steering rates are a first guess; the scripted driver corners at 68 % of grip, a human will push harder.

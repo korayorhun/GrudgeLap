@@ -33,6 +33,24 @@ internal struct Biquad
         Set(alpha / a0, 0f, -alpha / a0, -2f * cos / a0, (1f - alpha) / a0);
     }
 
+    /// <summary>High shelf of <paramref name="gainDb"/> above <paramref name="corner"/> (the cookbook's form, shelf slope 1: 6 dB per octave at the corner).</summary>
+    public void SetHighShelf(float corner, float gainDb, float rate)
+    {
+        var a = MathF.Pow(10f, gainDb / 40f);
+        var w = 2f * MathF.PI * MathF.Min(corner, rate * 0.45f) / rate;
+        var cos = MathF.Cos(w);
+        // Shelf slope S = 1: alpha = sin(w) / 2 * sqrt((A + 1 / A) (1 / S - 1) + 2) = sin(w) / sqrt(2).
+        var alpha = MathF.Sin(w) / MathF.Sqrt(2f);
+        var root = 2f * MathF.Sqrt(a) * alpha;
+        var a0 = (a + 1f) - (a - 1f) * cos + root;
+        Set(
+            a * ((a + 1f) + (a - 1f) * cos + root) / a0,
+            -2f * a * ((a - 1f) + (a + 1f) * cos) / a0,
+            a * ((a + 1f) + (a - 1f) * cos - root) / a0,
+            2f * ((a - 1f) - (a + 1f) * cos) / a0,
+            ((a + 1f) - (a - 1f) * cos - root) / a0);
+    }
+
     public void SetPeak(float centre, float q, float gainDb, float rate)
     {
         var a = MathF.Pow(10f, gainDb / 40f);

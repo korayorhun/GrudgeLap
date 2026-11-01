@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using GrudgeLap.Audio;
 using GrudgeLap.Physics.Native;
 using GrudgeLap.Physics.Race;
 using GrudgeLap.Physics.Track;
@@ -242,6 +243,34 @@ public sealed unsafe class NativeApiTests
         {
             NativeLibrary.Free(library);
         }
+    }
+
+    /// <summary>
+    /// The voice glp_engine_create makes is the Godot version's for the same car (0.20 review, problem 6): found by its
+    /// sound folder, voiced for its body (the flat-twelve and the V8 mid-engined, their cabins at 4 kHz booming at 132 Hz;
+    /// the estate's at 61 Hz) and trimmed over its redline, so it is as loud as the game's and peaks no higher (the trims
+    /// equal a voice made with the car's voicing and redline). A folder no car uses keeps the front-engined default.
+    /// </summary>
+    [Fact]
+    public void EngineVoiceIsVoicedAndTrimmedForItsCar()
+    {
+        foreach (var car in VehicleSpec.Catalogue)
+        {
+            var folder = FindInRepository(Path.Combine("game", "assets", "audio", car.Engine.SoundFolder));
+            Assert.NotNull(folder);
+            var voice = NativeApi.CreateEngine(folder + Path.DirectorySeparatorChar, car.Engine.Cylinders);
+            var voicing = NativeApi.VoicingOf(car);
+            Assert.Equal(voicing, voice.Voicing);
+            GrainBank? Bank(string name) =>
+                File.Exists(Path.Combine(folder, name + ".wav")) ? GrainBank.FromFiles(Path.Combine(folder, name + ".wav"), Path.Combine(folder, name + ".json")) : null;
+            var game = new GranularEngine(Bank("engine_idle"), Bank("engine_drive")!, car.Engine.Cylinders, voicing, car.Engine.RedlineRpm, overrun: Bank("engine_overrun"));
+            _out.WriteLine($"{car.Engine.SoundFolder}: {voicing.Placement}, cabin {voicing.CabinCutoff:0} Hz, boom {voicing.BoomHz:0} Hz; trims {voice.Trims}");
+            Assert.Equal(game.Trims, voice.Trims);
+        }
+        var flat12 = NativeApi.VoicingOf(VehicleSpec.Catalogue[0]);
+        Assert.Equal(EnginePlacement.Mid, flat12.Placement);
+        Assert.InRange(flat12.BoomHz, 125f, 140f);
+        Assert.Null(NativeApi.CarOfSoundFolder(Path.GetTempPath()));
     }
 
     private static string? FindPublishedLibrary() => FindInRepository(Path.Combine("artifacts", "physics-native", "GrudgeLap.Physics.Native.dll"));

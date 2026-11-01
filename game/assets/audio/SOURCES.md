@@ -30,6 +30,10 @@ overlap-adds them; nothing loops and nothing is pitch-shifted.
 The overrun banks play in place of the run-up as the throttle closes (`GranularEngine`): off the throttle a real
 engine stops firing and what is left is the exhaust's rasp, which no filter on the run-up gave.
 
+The files are used as cut. Since 0.20 the voice evens a bank when it loads it (`GrainBank`: each segment tilted and
+levelled onto the bank's trend across the revs, so the joins between recordings do not step) and trims each car to
+one loudness (`GranularEngine`, BS.1770); nothing is written back.
+
 The Internet Archive item **"Car Engine Sounds"** (identifier `car-engines`, uploaded 2015-09-01, dated
 2011-02-22) was published by its uploader under **CC0 1.0 Universal** (`licenseurl` in the item's metadata:
 http://creativecommons.org/publicdomain/zero/1.0/). Item page: https://archive.org/details/car-engines
@@ -50,8 +54,9 @@ Which bank a car plays is its engine's `EngineSpec.SoundFolder` (physics/Vehicle
 
 The three hatchbacks follow the cars the game draws (cars3). The hot hatch (the 205 GTi's eight-valve 1.9) plays the
 Civic Type R's four of the same CC0 item. The rally hatch (the Delta Integrale's two-litre turbo four) plays the
-turbo four of the `turbohatch` banks, the Pulsar track of the same item, with the whistle and the blow-off valve the
-view synthesises for any engine with boost (`EngineAudio.Turbo`). The same item holds a `Lancia Delta HF
+turbo four of the `turbohatch` banks, the Pulsar track of the same item, with the turbo synthesised for any engine
+with boost (`audio/TurboNoise.cs`, 0.20: the compressor's whistle from the shaft's speed, the vent of a blow-off
+valve or the flutter of a surging compressor). The same item holds a `Lancia Delta HF
 Integrale.mp3`; it is a 15-second drive-by, Doppler-shifted, with no idle and no steady run-up, and the voice could
 not be cut from it (its spectrogram and pitch track, 1 November 2026). A Commons recording of an Integrale ("Lancia
 Delta Integrale - engine and exhaust sound", Grzegorz Kalinecki, CC BY 3.0, its licence review pending) is left for a
