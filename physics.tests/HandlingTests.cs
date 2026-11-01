@@ -28,8 +28,8 @@ public sealed class HandlingTests(ITestOutputHelper output)
     [Theory]
     // Flat-twelve: Ferrari quoted 5.8 s; Car and Driver timed 5.0 s to 60 mph (September 1986), which is about 5.5 s to
     // 100 km/h without the magazine's one-foot rollout. The assist's launch is cleaner than a test driver's on a heavy
-    // single-plate clutch, so the model sits at the quick end (about 4.9 s). No ABS.
-    [InlineData(0, 4.7f, 5.9f, 39f, 50f)]
+    // single-plate clutch, so the model sits at the quick end (about 5.05 s, with the gated gearbox's 0.45 s shifts). No ABS.
+    [InlineData(0, 4.9f, 5.9f, 39f, 50f)]
     // V8: McLaren quotes 3.2 s for the 570S with its launch control (Car and Driver: 2.9 s to 60 mph); about 3.4 here,
     // traction-limited at 0.89 g throughout. ABS.
     [InlineData(1, 3.1f, 3.7f, 29f, 37f)]
@@ -451,5 +451,67 @@ public sealed class HandlingTests(ITestOutputHelper output)
         output.WriteLine($"inside wheel ahead of the outside by up to: open {open.SpinGap:F1} m/s, LSD {lsd.SpinGap:F1} m/s; speed gained: open {open.Gained:F2}, LSD {lsd.Gained:F2} m/s");
         Assert.True(open.SpinGap > 2f, $"the open differential should let the inside wheel spin ({open.SpinGap:F1} m/s)");
         Assert.True(lsd.SpinGap < open.SpinGap * 0.4f);
+    }
+
+    /// <summary>
+    /// A car sliding broadside scrubs its speed off on all four tyres. Until 0.19 the tyre model faded the slip angle by
+    /// the speed along the wheel alone, so a wheel moving straight sideways had no slip angle, no side force, and a car
+    /// spun across the road slid on as if on ice; the deceleration fell from about 0.6 g at 60 degrees to nothing at 90.
+    /// </summary>
+    [Theory]
+    [InlineData(6)]
+    [InlineData(0)]
+    public void A_car_sliding_broadside_scrubs_its_speed_off(int car)
+    {
+        var spec = VehicleSpec.Catalogue[car];
+        float Slowing(float angleDeg)
+        {
+            var sim = HandlingRig.OnCircle(spec, HandlingRig.Proving(), 0f);
+            sim.LaunchAt(0f);
+            for (var t = 0f; t < 0.5f; t += HandlingRig.Dt) sim.Step(new DriverInputs { Gear = DriverInputs.NoGearChange }, HandlingRig.Dt);
+            var a = angleDeg * MathUtil.Deg2Rad;
+            const float start = 15f;
+            sim.SetVelocity((sim.Forward * MathF.Cos(a) + sim.Right * MathF.Sin(a)) * start);
+            foreach (var w in sim.Wheels) w.AngularVelocity = start * MathF.Cos(a) / spec.WheelRadius;
+            const float seconds = 0.6f;
+            for (var t = 0f; t < seconds; t += HandlingRig.Dt) sim.Step(new DriverInputs { Gear = DriverInputs.NoGearChange }, HandlingRig.Dt);
+            var flat = new Vector3(sim.Velocity.X, 0f, sim.Velocity.Z).Length();
+            return (start - flat) / seconds / MathUtil.Gravity;
+        }
+        var at60 = Slowing(60f);
+        var at80 = Slowing(80f);
+        var at90 = Slowing(90f);
+        output.WriteLine($"{spec.Style}: slowing at 60 deg {at60:F2} g, 80 deg {at80:F2} g, 90 deg {at90:F2} g");
+        Assert.True(at90 > 0.5f, $"a broadside slide should scrub speed off ({at90:F2} g)");
+        Assert.True(at90 > 0.7f * at80, "the grip should not fall away as the slide nears broadside");
+    }
+
+    /// <summary>
+    /// The other side of the broadside fix: a parked car nudged sideways at walking pace comes to rest and stays there.
+    /// The slip angle now fades with the contact patch's whole speed, so a slow sideways creep meets side force where
+    /// it met none; that force must not set the car rocking from side to side.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(6)]
+    public void A_parked_car_nudged_sideways_settles(int car)
+    {
+        var spec = VehicleSpec.Catalogue[car];
+        var sim = HandlingRig.OnCircle(spec, HandlingRig.Proving(), 0f);
+        sim.LaunchAt(0f);
+        for (var t = 0f; t < 0.5f; t += HandlingRig.Dt) sim.Step(new DriverInputs { Gear = DriverInputs.NoGearChange }, HandlingRig.Dt);
+        sim.SetVelocity(sim.Right * 1.2f);
+        float late = 0f;
+        var stopped = -1f;
+        for (var t = 0f; t < 3f; t += HandlingRig.Dt)
+        {
+            sim.Step(new DriverInputs { Gear = DriverInputs.NoGearChange }, HandlingRig.Dt);
+            var speed = new Vector3(sim.Velocity.X, 0f, sim.Velocity.Z).Length();
+            if (stopped < 0f && speed < 0.05f) stopped = t;
+            if (t > 2f) late = MathF.Max(late, speed);
+        }
+        output.WriteLine($"{spec.Style}: nudged sideways at 1.2 m/s, under 0.05 m/s after {stopped:F2} s, at most {late:F3} m/s in the last second");
+        Assert.True(stopped >= 0f && stopped < 1.5f, "the car should come to rest");
+        Assert.True(late < 0.05f, "the car should stay at rest, not rock");
     }
 }

@@ -27,15 +27,23 @@ public readonly record struct TyreContact(
     float BrakePressure)
 {
     /// <summary>
-    /// A wheel from the simulation's own figures: the slip ratio and slip angle give the sliding speed of the contact
-    /// patch (with the same 1.2 m/s floor under the slip ratio's denominator as the tyre model).
+    /// A wheel from the simulation's own figures: the slip ratio gives the patch's sliding speed along the wheel (with
+    /// the same 1.2 m/s floor under the slip ratio's denominator as the tyre model), and the ground's speed across the
+    /// wheel is its sliding speed sideways, as rolling moves the patch only along. The wheel's travel is the ground's
+    /// whole speed under it.
     /// </summary>
-    public static TyreContact Of(TyreGround ground, float slipToPeak, float slipRatio, float slipAngle, float groundSpeed, float loadShare, float brakePressure)
+    /// <remarks>
+    /// The sideways slide is taken as measured, not rebuilt from the slip angle: the speed along the wheel times the
+    /// tangent of the slip angle collapsed as a slide neared broadside (the speed along falls to nothing and the
+    /// simulation fades the angle), so a tyre sliding at 85 degrees went quiet (0.19 review).
+    /// </remarks>
+    public static TyreContact Of(TyreGround ground, float slipToPeak, float slipRatio, float lateralSpeed, float longitudinalSpeed, float loadShare, float brakePressure)
     {
-        var speed = MathF.Abs(groundSpeed);
-        var along = MathF.Abs(slipRatio) * MathF.Max(speed, 1.2f);
-        var across = speed * MathF.Abs(MathF.Tan(Math.Clamp(slipAngle, -1.4f, 1.4f)));
-        return new TyreContact(ground, slipToPeak, along, across, speed, loadShare, brakePressure);
+        var alongSpeed = MathF.Abs(longitudinalSpeed);
+        var along = MathF.Abs(slipRatio) * MathF.Max(alongSpeed, 1.2f);
+        var across = MathF.Abs(lateralSpeed);
+        var travel = MathF.Sqrt(alongSpeed * alongSpeed + across * across);
+        return new TyreContact(ground, slipToPeak, along, across, travel, loadShare, brakePressure);
     }
 
     /// <summary>Speed of the rubber sliding over the road, m/s.</summary>

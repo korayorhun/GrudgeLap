@@ -27,7 +27,7 @@ public class TyreMixTests(ITestOutputHelper output)
 
     /// <summary>A tyre at <paramref name="toPeak"/> of its peak slip, sliding sideways (cornering) at 25 m/s.</summary>
     private static TyreContact Cornering(float toPeak) =>
-        TyreContact.Of(TyreGround.Asphalt, toPeak, 0f, MathF.Atan(0.07f * toPeak), 25f, 1f, 1f);
+        TyreContact.Of(TyreGround.Asphalt, toPeak, 0f, 25f * 0.07f * toPeak, 25f, 1f, 1f);
 
     [Fact]
     public void Squeal_grows_to_the_tyres_limit_and_gives_way_to_a_howl_past_it()
@@ -169,7 +169,7 @@ public class TyreMixTests(ITestOutputHelper output)
             var ground = !w.InContact ? TyreGround.Air : w.Surface is SurfaceType.Road or SurfaceType.Pad ? TyreGround.Asphalt : TyreGround.Loose;
             var tyre = w.IsFront ? spec.FrontTire : spec.RearTire;
             var toPeak = ground == TyreGround.Air ? 0f : TireModel.SlipToPeak(w.SlipRatio, w.SlipAngle, w.Load, w.Friction, tyre);
-            contacts[i] = TyreContact.Of(ground, toPeak, w.SlipRatio, w.SlipAngle, w.GroundSpeed, w.Load / staticLoad, w.BrakePressure);
+            contacts[i] = TyreContact.Of(ground, toPeak, w.SlipRatio, w.LateralSpeed, w.GroundSpeed, w.Load / staticLoad, w.BrakePressure);
         }
     }
 
@@ -181,5 +181,28 @@ public class TyreMixTests(ITestOutputHelper output)
         var stunt = TrackBuilder.ContinueFrom(common.Path, PathKind.Stunt).Straight(50f);
         var final = TrackBuilder.ContinueFrom(speed.Path, PathKind.Final).Straight(50f);
         return new TrackGeometry(common.Path, speed.Path, stunt.Path, final.Path, [], rollingGround: 0f);
+    }
+
+    /// <summary>
+    /// A tyre sliding near broadside howls as loud as one sliding at 80 degrees: the sideways slide is the contact
+    /// patch's own speed across the wheel. Rebuilt from the speed along the wheel and the slip angle, it collapsed as the
+    /// slide neared 90 degrees and the howl went quiet past 85 (0.19 review).
+    /// </summary>
+    [Fact]
+    public void A_slide_near_broadside_keeps_its_howl()
+    {
+        float HowlAt(float angleDeg)
+        {
+            var a = angleDeg * MathF.PI / 180f;
+            const float speed = 15f;
+            var mix = Hold(TyreContact.Of(TyreGround.Asphalt, 8f, 0f, speed * MathF.Sin(a), speed * MathF.Cos(a), 1f, 1f));
+            return mix.Howl.Level;
+        }
+        var at80 = HowlAt(80f);
+        var at88 = HowlAt(88f);
+        var at90 = HowlAt(90f);
+        output.WriteLine($"howl at 80 deg {at80:0.00}, 88 deg {at88:0.00}, 90 deg {at90:0.00}");
+        Assert.True(at80 > 0.5f);
+        Assert.True(at88 > 0.85f * at80 && at90 > 0.85f * at80, "the howl should hold as the slide nears broadside");
     }
 }

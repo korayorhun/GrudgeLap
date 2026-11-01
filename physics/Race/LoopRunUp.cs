@@ -10,7 +10,7 @@ namespace GrudgeLap.Physics.Race;
 /// (25^2 - 21^2) / (2 x 65), about 1.4 m/s^2 at 50 mph on the flat, in the car's best gear, after drag and rolling
 /// resistance. The 1.6 saloon of the 1990s has 1.55 (75 PS, if the driver changes down to third for the run-up); the
 /// 1.4 estate has 1.2 (61 PS and a tall, boxy body) and cannot make it, as the real car would not: it falls off the top.
-/// <c>RaceSessionTests.Every_car_laps_both_routes</c> holds this verdict to what the scripted driver actually does.
+/// <c>RaceSessionTests.Only_the_estate_lacks_the_pull_for_the_loop</c> holds this verdict to what the scripted driver actually does.
 /// </summary>
 /// <remarks>
 /// The track's geometry is the original's and is not changed for the slower cars; the game tells the player instead

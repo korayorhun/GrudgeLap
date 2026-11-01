@@ -186,10 +186,20 @@ public static class TireModel
 
     public static float SlipAngle(float lateralSpeed, float longitudinalSpeed)
     {
-        // Below walking pace the slip angle is meaningless; fade it out so the car does not jitter when parked.
-        var fade = MathUtil.Clamp01((MathF.Abs(longitudinalSpeed) - 0.3f) / 1.5f);
-        return MathF.Atan2(lateralSpeed, MathF.Max(MathF.Abs(longitudinalSpeed), 0.5f)) * fade;
+        return MathF.Atan2(lateralSpeed, MathF.Max(MathF.Abs(longitudinalSpeed), 0.5f)) * SlipAngleFade(lateralSpeed, longitudinalSpeed);
     }
+
+    /// <summary>
+    /// Share of the slip angle a tyre has at a contact-patch speed: none below 0.3 m/s, all of it from 1.8 m/s. Below
+    /// walking pace the slip angle is meaningless and would make a parked car jitter; there the vehicle holds the tyre
+    /// sideways by its standing grip instead (<c>VehicleSim</c>), for the share this leaves.
+    /// </summary>
+    /// <remarks>
+    /// The fade follows the contact patch's whole speed. Faded by the speed along the wheel alone (until 0.19), a tyre
+    /// sliding broadside had no slip angle and so no side force, and a car spun sideways kept its speed.
+    /// </remarks>
+    public static float SlipAngleFade(float lateralSpeed, float longitudinalSpeed) =>
+        MathUtil.Clamp01((MathF.Sqrt(lateralSpeed * lateralSpeed + longitudinalSpeed * longitudinalSpeed) - 0.3f) / 1.5f);
 }
 
 public enum SurfaceType

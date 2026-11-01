@@ -66,7 +66,6 @@ public sealed class BodyNoise
     private readonly float _rate;
     private uint _noise = 0x9E3779B9u;
     private Biquad _windBand, _windLow, _spray, _absTone;
-    private bool _started;
     private float _gust = 1f, _gustTarget = 1f;
     private int _gustCountdown;
     private double _pairPhase, _meshPhase, _finalPhase, _shaftPhase, _pumpPhase;
@@ -90,10 +89,6 @@ public sealed class BodyNoise
     /// </summary>
     public void Render(Span<float> output, in BodyState state)
     {
-        if (!_started)
-        {
-            _started = true;
-        }
         if (output.IsEmpty) return;
         var n = output.Length;
         // Levels and frequencies are taken at the block's ends and glided linearly per sample; the filters are retuned

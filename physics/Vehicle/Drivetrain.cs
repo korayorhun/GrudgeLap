@@ -9,6 +9,7 @@ namespace GrudgeLap.Physics.Vehicle;
 public sealed class Drivetrain
 {
     private readonly VehicleSpec _spec;
+    private readonly float _launchRpm;
     private float _shiftTimer;
     private float _autoShiftCooldown;
 
@@ -48,6 +49,8 @@ public sealed class Drivetrain
     {
         _spec = spec;
         Engine = new EngineModel(spec.Engine);
+        // Read once: LaunchRpm walks the torque curve, and a pre-rev on the brake would ask for it every step.
+        _launchRpm = spec.Engine.LaunchRpm;
     }
 
     public float Ratio => _spec.RatioForGear(Gear) * _spec.FinalDrive;
@@ -301,7 +304,7 @@ public sealed class Drivetrain
     private float LaunchTarget(float pedal)
     {
         var low = Engine.Spec.IdleRpm * 1.6f;
-        return low + (Engine.Spec.LaunchRpm - low) * MathUtil.Clamp01(pedal);
+        return low + (_launchRpm - low) * MathUtil.Clamp01(pedal);
     }
 
     /// <summary>

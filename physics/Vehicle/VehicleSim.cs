@@ -13,6 +13,8 @@ public sealed class VehicleSim
     public const float FixedStep = 1f / 240f;
     private const float AirDensity = 1.2f;
     private const float LateralRelaxationLength = 0.3f;     // m
+    /// <summary>Share of a crawling contact patch's sideways speed the standing grip takes off each step.</summary>
+    private const float StandingGripShare = 0.1f;
 
     private readonly VehicleSpec _spec;
     private readonly WheelContact[] _contacts = new WheelContact[4];
@@ -153,6 +155,9 @@ public sealed class VehicleSim
     /// Test/debug helper: puts the car in motion at <paramref name="speedMps"/> from its current pose, engine
     /// running and clutch locked in a sensible gear, optionally shifted sideways by <paramref name="lateralOffset"/> metres.
     /// </summary>
+    /// <summary>Test rigs only: sets the body's velocity as it stands, keeping its spin and the wheels' speeds.</summary>
+    internal void SetVelocity(Vector3 velocity) => Velocity = velocity;
+
     public void LaunchAt(float speedMps, float lateralOffset = 0f)
     {
         Position += Right * lateralOffset;
@@ -373,8 +378,21 @@ public sealed class VehicleSim
             w.SlipAngle += (TireModel.SlipAngle(vLat, vLong) - w.SlipAngle) * relax;
             w.Friction = TireModel.FrictionFor(hit.Surface) * _spec.TireGrip * WeatherModel.Grip(Weather, hit.Surface);
             w.GroundSpeed = vLong;
+            w.LateralSpeed = vLat;
             var tire = w.IsFront ? _spec.FrontTire : _spec.RearTire;
             var (fx, fy) = SpinGroundedWheel(w, driveTorque, wheelInertia, brakeMax, vLong, fs, tire, dt);
+            // Standing grip: where the slip angle fades out at a crawl, the tyre still holds the road sideways by static
+            // friction. It takes a share of the patch's sideways speed off each step (as much force as stops a quarter
+            // wheel's mass by that share), capped by the grip: without it a parked car nudged sideways slid on, and one
+            // stopped on a bank crept down it. The share stays well inside the explicit step's limit of one, with four
+            // wheels acting on the one body.
+            var standing = 1f - TireModel.SlipAngleFade(vLat, vLong);
+            if (standing > 0f)
+            {
+                var hold = standing * StandingGripShare * fs / MathUtil.Gravity / dt * vLat;
+                var grip = w.Friction * fs;
+                fy = MathUtil.Clamp(fy - hold, -grip, grip);
+            }
 
             // Rolling resistance (much higher on grass: the original's off-road "mud" feel, eased in 0.9 from
             // 0.16 with the grass grip raised from 0.55, players found the car hard to bring back) acts on the
@@ -693,6 +711,8 @@ public sealed class WheelState
     public float Friction;
     /// <summary>Speed of the ground along the wheel's heading at the contact patch, m/s.</summary>
     public float GroundSpeed;
+    /// <summary>Speed of the ground across the wheel at the contact patch, m/s, positive to the wheel's right: how fast the patch slides sideways.</summary>
+    public float LateralSpeed;
     /// <summary>Share of the driver's brake pressure the anti-lock modulator lets through, 1 without ABS.</summary>
     public float BrakePressure = 1f;
     /// <summary>Growth of the tyre's drag torque on the wheel with the wheel's speed this step, N m s/rad (never negative).</summary>
@@ -716,6 +736,7 @@ public sealed class WheelState
         LateralForce = 0f;
         Friction = 0f;
         GroundSpeed = 0f;
+        LateralSpeed = 0f;
         BrakePressure = 1f;
         SpinStiffness = 0f;
         SteerAngle = 0f;

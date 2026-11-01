@@ -152,7 +152,12 @@ public sealed record VehicleSpec
     public int ForwardGearCount => GearRatios.Length - 2;
     public float RatioForGear(int gear) => GearRatios[gear + 1];
 
-    public static VehicleSpec FlatTwelve => new();
+    /// <summary>
+    /// The flat-twelve keeps the defaults but for its gear change: a gated five-speed with a dog-leg first and a heavy
+    /// single-plate clutch, slower across the gate than a modern manual (0.19: at the default quarter second the car ran
+    /// 0-100 km/h in 4.9 s, half a second under every published figure).
+    /// </summary>
+    public static VehicleSpec FlatTwelve => new() { ShiftSeconds = 0.45f };
 
     /// <summary>Mid-engined V8 of the 2010s with a sports exhaust: lighter, stiffer, 570 hp at 8000, seven gears.</summary>
     public static VehicleSpec V8Evo => new()

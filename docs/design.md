@@ -241,13 +241,15 @@ Items 12, 13 and 16 were taken up in 0.19, 15 was decided against, 14 stays open
     can take and the engine eased down to the shaft's speed (`Synchronising`; it bit with its whole capacity, which
     spun the V8's tyres past their peak in second), and the V8's dual-clutch box hands the drive over in 0.03 s.
     The rig times the sprint as a road test does, from the release of the brake (it timed the shift into first and
-    the revs rising from idle too). 0-100 km/h now: flat-twelve 4.9 s (Ferrari quoted 5.8, Car and Driver timed
-    5.0 to 60 mph in 1986), V8 3.4 (3.2; traction-limited at 0.89 g throughout), hot hatch 7.5 (7.2), five 9.1
+    the revs rising from idle too). 0-100 km/h now: flat-twelve 5.05 s (Ferrari quoted 5.8, Car and Driver timed
+    5.0 to 60 mph in 1986; its gated gearbox takes 0.45 s a change, the default quarter second gave 4.9), V8 3.4 (3.2; traction-limited at 0.89 g throughout), hot hatch 7.5 (7.2), five 9.1
     (8.5), turbo hatch 7.0 (6.4), 1.6 saloon 13.5 (13.9), estate 17.1 (16-17), fleet saloon 12.3 (11.5); the ranges
     in `Sprints_and_stops_within_the_real_cars_ranges` came in to about a tenth either side of those figures, and
     `Standing_starts_hold_the_launch_revs_and_the_tyres_short_of_their_peak` and
-    `Flooring_it_from_rest_launches_without_a_bog` pin the launch itself. Still quick on the flat-twelve: its
-    magazine figures include a test driver on a heavy single-plate clutch.
+    `Flooring_it_from_rest_launches_without_a_bog` pin the launch itself. Still a little quick on the flat-twelve:
+    its magazine figures include a test driver on a heavy single-plate clutch. The ranges are about a tenth of the
+    figure either side, not a tenth of a second: the five, the turbo hatch and the fleet saloon run 0.6-0.8 s slower
+    than quoted.
 13. **Steering** (fixed in 0.19). Parallel steer, no trail, no compliance. Each front wheel now has its own angle
     (`WheelState.SteerAngle`, drawn by the view; the cockpit's wheel shows the command): Ackermann geometry
     (`AckermannShare`, full on every car) turns the inner wheel more, so on full lock at walking pace the two front
@@ -287,6 +289,15 @@ Items 12, 13 and 16 were taken up in 0.19, 15 was decided against, 14 stays open
     loop left no car the run-up after a fall (the V8 reached 44 mph there): it is gone, and a fall now sets the car
     down after the drawbridge, from where every car that makes the loop on a flying lap makes it from rest
     (`A_car_set_down_after_falling_off_the_loop_has_the_run_up_to_make_it`). The track's geometry is unchanged.
+17. **A broadside slide** (fixed in 0.19, found in review). The tyre faded its slip angle by the speed along the
+    wheel alone (to keep a parked car still), so a wheel moving straight sideways had no slip angle and no side force:
+    a car spun across the road slid on as if on ice (0.6 g of scrub at 60 degrees, nothing at 90). The fade now follows
+    the contact patch's whole speed; a broadside slide scrubs 0.86 g on the flat-twelve and 0.70 g on the estate
+    (`A_car_sliding_broadside_scrubs_its_speed_off`). Below 0.3 m/s the slip angle still fades out (it would make a
+    parked car jitter), and there a standing grip holds the patch sideways: a share of its sideways speed taken off
+    each step, capped by the grip, as the rolling resistance already did along the wheel. Before it, a parked car
+    nudged sideways at 1.2 m/s slid on at 1.2 m/s; it now stops in 0.12-0.18 s and stays put
+    (`A_parked_car_nudged_sideways_settles`).
 
 Kept, as earlier decisions: the fixed 240 Hz step with semi-implicit Euler for the body, the raycast wheels, the
 grass's grip and rolling resistance (0.9), the weather's grip figures (0.12), the speed-sensitive steering lock,
@@ -664,6 +675,10 @@ fixed in 0.19, each pinned by a test (`TyreMixTests`, `BodyNoiseTests`, `Granula
 14. **The Unreal version** (open): GlpAudio still takes the torque over 500 N m as the load and keeps the old tyre
     mapping. The throttle has to be passed through (its inputs are known there) and `TyreMix` and `BodyNoise` exposed
     through `physics.native` as new functions, which keeps its ABI.
+15. **A slide near broadside went quiet** (fixed in review). The sideways slide was rebuilt as the speed along the
+    wheel times the tangent of the slip angle, which collapses as a slide nears 90 degrees: the howl fell from 1.2 at
+    80 degrees to nothing at 88. The wheel now reports the ground's speed across it (`WheelState.LateralSpeed`), and
+    the howl, the tyres' travel and the roar take the contact patch's own speeds (`A_slide_near_broadside_keeps_its_howl`).
 
 ## Unreal Engine version (`unreal/`)
 

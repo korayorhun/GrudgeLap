@@ -102,7 +102,7 @@ internal sealed partial class TyreAudio : Node
             };
             var tyre = w.IsFront ? spec.FrontTire : spec.RearTire;
             var toPeak = ground == TyreGround.Air ? 0f : TireModel.SlipToPeak(w.SlipRatio, w.SlipAngle, w.Load, w.Friction, tyre);
-            _contacts[i] = TyreContact.Of(ground, toPeak, w.SlipRatio, w.SlipAngle, w.GroundSpeed, w.Load / staticLoad, w.BrakePressure);
+            _contacts[i] = TyreContact.Of(ground, toPeak, w.SlipRatio, w.LateralSpeed, w.GroundSpeed, w.Load / staticLoad, w.BrakePressure);
         }
         _mix.Update(_contacts.AsSpan(0, count), WeatherModel.Wetness(session.Weather), dt);
 
