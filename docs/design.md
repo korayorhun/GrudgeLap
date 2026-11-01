@@ -519,7 +519,7 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
   lens per car); `keep` leaves a material alone though its name says glass (the Testarossa's red tail lenses had
   turned into dark window glass). The Unreal level's model script now rigs with the same `tools/car_models.py`,
   so its flat-twelve is the Testarossa too. Switch: `--hold-brake`.
-- 0.19 look (the cars and the cabin, after 0.19.0, judged on A/B screenshots of the orbit, chase and seat views):
+- 0.20 look (the cars and the cabin, judged on A/B screenshots of the orbit, chase and seat views):
   the models' own materials are corrected where the exporters left the glTF defaults (`CarView.CorrectModelMaterial`):
   metallic 1 and roughness 1 with no texture to drive them (the McLaren's cabin plastic and carbon, the Renault's
   dials, the Delta's black) becomes a matt dielectric, a wing mirror's glass left that way (a white blot from the
