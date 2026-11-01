@@ -128,16 +128,17 @@ public sealed class RaceSessionTests
     /// <summary>
     /// Every car of the catalogue round both routes: 75 PS and a live axle, or 147 hp and front-wheel drive, still make
     /// the drawbridge's 60-80 mph and the loop's 60 at the speeds the scripted driver plans, and the mid-engined cars
-    /// hold their line on the tyres that fall away past their peak (0.18). The two everyday cars of the 1990s lap the
-    /// speed route only: from the bend 140 m before the loop, 75 PS and 61 PS cannot gather the loop's 60 mph (the
-    /// estate would need 1.1 m/s^2 at 50 mph and has 0.9), so the scripted driver crashes there and respawns 40 m
-    /// short of it; they could not before 0.18 either, and neither could the fleet saloon, which now does.
+    /// hold their line on the tyres that fall away past their peak (0.18). Since 0.19 the 1.6 saloon of the 1990s makes the
+    /// loop too, now that the driver changes down for the run-up (it ran it in fifth before) and does not change up in
+    /// the air over the drawbridge; the 1.4 estate has not the pull (<see cref="LoopRunUp"/>) and its stunt lap is
+    /// <see cref="A_car_that_cannot_make_the_loop_is_told_and_takes_the_speed_route"/>.
     /// </summary>
     [Theory]
     [InlineData(0, true)]
     [InlineData(0, false)]
     [InlineData(1, true)]
     [InlineData(1, false)]
+    [InlineData(5, true)]
     [InlineData(5, false)]
     [InlineData(6, false)]
     [InlineData(7, true)]
@@ -160,6 +161,115 @@ public sealed class RaceSessionTests
         Assert.Contains(RaceEvent.CheckpointPassed, events);
         Assert.Contains(RaceEvent.LapCompleted, events);
         Assert.True(session.CrashCount == 0, $"crashes {session.CrashCount} (last {session.LastCrash})");
+    }
+
+    /// <summary>
+    /// The run-up verdict (<see cref="LoopRunUp"/>): every car of the catalogue has the pull for the loop but the 1.4
+    /// estate of the 1990s (61 PS, Cd 0.46), whose stunt lap the scripted driver showed to end on the loop's roof.
+    /// </summary>
+    [Fact]
+    public void Only_the_estate_lacks_the_pull_for_the_loop()
+    {
+        foreach (var spec in VehicleSpec.Catalogue)
+        {
+            var accel = LoopRunUp.Acceleration(spec, LoopRunUp.JudgedAt);
+            _out.WriteLine($"{spec.Name}: {accel:F2} m/s^2 at 50 mph, {(LoopRunUp.CanMakeTheLoop(spec) ? "makes" : "cannot make")} the loop");
+            Assert.Equal(spec.Style != CarStyle.Estate, LoopRunUp.CanMakeTheLoop(spec));
+        }
+        // And the estate really cannot: driven at the loop as hard as the scripted driver goes, it falls off the top.
+        var track = OriginalInspiredTrack.Build();
+        var session = new RaceSession(track, VehicleSpec.Estate, RaceOptions.MediumNoTraffic);
+        session.ChooseTransmission(TransmissionMode.ManualAutoClutch);
+        var crashedInLoop = RunUpToTheLoopAndOver(session, track, fromStandstill: false);
+        Assert.True(crashedInLoop, "the estate should not make the loop");
+    }
+
+    /// <summary>
+    /// A car that cannot make the loop is told so before the fork (once a lap, on the climb) and the attract mode's
+    /// scripted driver takes the speed route with it even when asked for the stunt route; until 0.18 it drove the estate
+    /// off the top of the loop every lap.
+    /// </summary>
+    [Fact]
+    public void A_car_that_cannot_make_the_loop_is_told_and_takes_the_speed_route()
+    {
+        var track = OriginalInspiredTrack.Build();
+        var session = new RaceSession(track, VehicleSpec.Estate, RaceOptions.MediumNoTraffic);
+        var driver = new ScriptedDriver { PreferStunt = true };
+        session.ChooseTransmission(TransmissionMode.ManualAutoClutch);
+        Assert.False(session.CanMakeTheLoop);
+        var warned = false;
+        var route = RouteKind.Undecided;
+        for (var t = 0f; t < 240f && session.CompletedLaps == 0; t += Dt)
+        {
+            session.Step(driver.Next(session), Dt);
+            warned |= session.Message == RaceSession.LoopWarning && session.CurrentPathKind == PathKind.Common;
+            if (session.Events.Contains(RaceEvent.RouteChosen)) route = session.Route;
+            if (session.Phase == SessionPhase.Replay) session.Abort();
+        }
+        Assert.True(warned, "the player should be told before the fork");
+        Assert.Equal(1, session.CompletedLaps);
+        Assert.Equal(RouteKind.Speed, route);
+        Assert.Equal(0, session.CrashCount);
+
+        // A car that can make it is not nagged.
+        var fleet = new RaceSession(OriginalInspiredTrack.Build(), VehicleSpec.Fleet, RaceOptions.MediumNoTraffic);
+        Assert.True(fleet.CanMakeTheLoop);
+    }
+
+    /// <summary>
+    /// After a crash in the loop the car is set down at the last return point and has to gather the loop's speed from a
+    /// standstill. Until 0.19 that point lay 26 m short of the loop, where not even the V8 reaches more than 44 mph, so
+    /// one fall off the loop meant falling off it again until the time ran out; the return point is now the one after
+    /// the drawbridge, and from there every car that makes the loop on a flying lap makes it from rest.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    [InlineData(5)]
+    [InlineData(7)]
+    public void A_car_set_down_after_falling_off_the_loop_has_the_run_up_to_make_it(int car)
+    {
+        var track = OriginalInspiredTrack.Build();
+        var session = new RaceSession(track, VehicleSpec.Catalogue[car], RaceOptions.MediumNoTraffic);
+        session.ChooseTransmission(TransmissionMode.ManualAutoClutch);
+        var crashed = RunUpToTheLoopAndOver(session, track, fromStandstill: true);
+        Assert.False(crashed, $"{session.Car.Spec.Name} should make the loop from the return point before it");
+    }
+
+    /// <summary>
+    /// Sets the car down at the stunt route's last return point before the loop (from rest, or at the drawbridge's landing
+    /// speed) and lets the scripted driver run at the loop; true when the car crashed before getting past it.
+    /// </summary>
+    private bool RunUpToTheLoopAndOver(RaceSession session, TrackGeometry track, bool fromStandstill)
+    {
+        var stunt = track.Stunt;
+        var loopStart = stunt.Frames.First(f => f.Kind == SegmentKind.Loop).Distance;
+        var loopEnd = stunt.Frames.Last(f => f.Kind == SegmentKind.Loop).Distance;
+        var back = stunt.Markers.Where(m => m.Kind == MarkerKind.ReturnPoint && m.Distance < loopStart).Max(m => m.Distance);
+        var driver = new ScriptedDriver { PreferStunt = true };
+        session.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Ignition = true }, Dt);
+        session.Car.Reset(stunt.FrameAt(back), new PathCursor(stunt, stunt.FrameIndexAt(back)));
+        if (fromStandstill) session.Car.Drivetrain.ForceLocked(0, 0f);
+        else session.Car.LaunchAt(28f);
+        var entry = 0f;
+        for (var t = 0f; t < 60f; t += Dt)
+        {
+            session.Step(driver.Next(session), Dt);
+            if (session.Events.Contains(RaceEvent.Crashed))
+            {
+                _out.WriteLine($"{session.Car.Spec.Name}: from {back:F0} m ({loopStart - back:F0} m before the loop), entered at {entry:F1} mph and crashed ({session.LastCrash})");
+                return true;
+            }
+            var cursor = session.Car.Cursor;
+            if (cursor.Path == stunt && entry == 0f && cursor.Distance >= loopStart) entry = session.Car.SpeedMph;
+            if (cursor.Path == stunt && cursor.Distance > loopEnd + 20f)
+            {
+                _out.WriteLine($"{session.Car.Spec.Name}: from {back:F0} m ({loopStart - back:F0} m before the loop), entered at {entry:F1} mph and made it");
+                return false;
+            }
+        }
+        _out.WriteLine($"{session.Car.Spec.Name}: never got past the loop");
+        return true;
     }
 
     [Fact]

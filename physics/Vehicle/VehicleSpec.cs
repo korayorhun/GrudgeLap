@@ -58,6 +58,13 @@ public sealed record VehicleSpec
     public float TireGrip { get; init; } = 1.0f;
     /// <summary>Electronic traction control: the throttle is eased when the driven wheels spin up. Period-correct only on the modern cars.</summary>
     public bool TractionControl { get; init; }
+    /// <summary>
+    /// Launch control (0.19): on a standing start the engine is held at its launch revs and the clutch passes all but a
+    /// few per cent of what the tyres can take, reading the wheel speeds as it goes; without it the assisted clutch makes
+    /// the start a good driver makes, revs up and slips, a little short of the tyres' peak (VehicleSim.LaunchTraction).
+    /// Only the V8 of the 2010s has one.
+    /// </summary>
+    public bool LaunchControl { get; init; }
     /// <summary>The engine drives the front wheels (a transverse engine in a hatchback) instead of the rear.</summary>
     public bool FrontWheelDrive { get; init; }
     /// <summary>Tyre sizes as published, front and rear: they set each axle's nominal load and cornering stiffness (<see cref="TireSize"/>).</summary>
@@ -87,6 +94,23 @@ public sealed record VehicleSpec
     public float RearAntiRoll { get; init; } = 12000f;
 
     // Steering
+    /// <summary>
+    /// Share of Ackermann geometry in the steering linkage (0.19): 0 steers both front wheels by the same angle (parallel
+    /// steer, which until 0.18 every car had), 1 turns the inner wheel more, so that both wheels' axes meet on the line
+    /// of the rear axle and neither scrubs sideways at parking speed. Road cars are built close to it (Gillespie,
+    /// Fundamentals of Vehicle Dynamics, ch. 8); at speed the difference is a fraction of a degree.
+    /// </summary>
+    public float AckermannShare { get; init; } = 1f;
+    /// <summary>Caster (mechanical) trail, m: the steering axis meets the road this far ahead of the contact patch; 15-30 mm on road cars.</summary>
+    public float CasterTrail { get; init; } = 0.02f;
+    /// <summary>
+    /// Compliance of the steering at each front road wheel, rad per N m of aligning torque (0.19): the rack, the column,
+    /// the mounts and the tie-rod bushes give, so the aligning torque (side force times caster and pneumatic trail) steers
+    /// the wheel out of the bend a little. It is part of every road car's understeer, K_str = W_f (p + t) / K_ss in
+    /// Gillespie's ch. 6, and the share that falls off with the pneumatic trail at the limit; 1 / 14000 adds about half a
+    /// degree per g on the front-heavy hatchbacks and a little less on the mid-engined cars.
+    /// </summary>
+    public float SteeringCompliance { get; init; } = 1f / 14000f;
     public float MaxSteerLowSpeedDeg { get; init; } = 32f;
     public float MaxSteerHighSpeedDeg { get; init; } = 7f;
     public float SteerSpeedBlendMps { get; init; } = 55f;    // speed at which the high-speed limit applies
@@ -137,7 +161,9 @@ public sealed record VehicleSpec
         Style = CarStyle.V8,
         // The 570S's seven-speed dual-clutch box: the next gear is engaged on its own clutch and taken up as the other
         // lets go, so a shift costs a fraction of the drive a manual's does.
-        ShiftSeconds = 0.1f,
+        ShiftSeconds = 0.03f,
+        // Its launch control: brake, full throttle, release (McLaren's "Launch" mode of the Sports Series).
+        LaunchControl = true,
         FrontLiftArea = -0.06f,
         RearLiftArea = -0.12f,
         // 225/35 R19 front, 285/35 R20 rear; an open differential (the real car brakes a spinning inside wheel instead).

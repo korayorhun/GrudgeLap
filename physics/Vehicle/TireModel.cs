@@ -141,6 +141,30 @@ public static class TireModel
     private const float LateralPeak = 1.96f;
 
     /// <summary>
+    /// Pneumatic trail at zero slip, m: how far behind the centre of the contact patch the side force acts while the patch
+    /// still grips along most of its length. The brush model puts it at a sixth of the patch's length (Pacejka, Tyre and
+    /// Vehicle Dynamics, ch. 3), about 2.5 cm for a road tyre near its nominal load.
+    /// </summary>
+    public const float PneumaticTrailAtRest = 0.03f;
+    /// <summary>Normalised lateral slip at which the pneumatic trail has gone (u = 2.5, just past the side force's peak at u = 1.96).</summary>
+    private const float TrailVanishes = 2.5f;
+
+    /// <summary>
+    /// Pneumatic trail (m) at <paramref name="slipAngle"/>: it shrinks as the rear of the contact patch starts to slide
+    /// and is gone just past the peak of the side force, so the aligning torque (side force times trail) peaks at about
+    /// two thirds of the peak slip angle and falls away before the grip does. That is the "wheel going light" a driver
+    /// feels as the front tyres reach their limit (Milliken, Race Car Vehicle Dynamics, ch. 2). Linear in the normalised
+    /// slip, as the brush model's trail very nearly is.
+    /// </summary>
+    public static float PneumaticTrail(float slipAngle, float load, float friction, in TireSize tire)
+    {
+        if (load <= 0f || friction <= 0f) return 0f;
+        var peak = PeakFriction(load, friction, tire) * load;
+        var uy = MathF.Abs(MathF.Tan(MathUtil.Clamp(slipAngle, -1.4f, 1.4f)) * CorneringStiffness(load, tire) / peak);
+        return PneumaticTrailAtRest * MathF.Max(0f, 1f - uy / TrailVanishes);
+    }
+
+    /// <summary>
     /// Slip ratio at which the longitudinal force peaks on a surface of <paramref name="friction"/> (before load
     /// sensitivity, which moves it by a few per cent): where an anti-lock system holds a braked wheel.
     /// </summary>

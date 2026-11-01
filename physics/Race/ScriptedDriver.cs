@@ -34,7 +34,13 @@ public sealed class ScriptedDriver
     private float _lane = Lane;
     private TrafficCar? _passing;
 
+    /// <summary>
+    /// Whether the driver takes the stunt route at the fork; a car that cannot make the loop (<see cref="LoopRunUp"/>) takes
+    /// the speed route whatever this says, as a driver who knows the car would (0.19; up to 0.18 the attract mode drove
+    /// the 1.4 estate off the top of the loop every lap and set it down 26 m short of it, from where nothing makes it).
+    /// </summary>
     public bool PreferStunt { get; set; } = true;
+    private bool _stunt = true;
     public float CruiseMph { get; set; } = 80f;
     /// <summary>Target speed chosen during the last call, for HUD/debug.</summary>
     public float PlannedMph { get; private set; }
@@ -50,6 +56,7 @@ public sealed class ScriptedDriver
         if (session.Phase != SessionPhase.Driving) return DriverInputs.Idle;
 
         var car = session.Car;
+        _stunt = PreferStunt && session.CanMakeTheLoop;
         var path = car.Cursor.Path;
         var distance = car.Cursor.Distance;
         // The two branches share their first metres, so the cursor may sit on the wrong one just after the
@@ -57,7 +64,7 @@ public sealed class ScriptedDriver
         var branchUndecided = path.Kind == PathKind.Common;
         if (path.Kind is PathKind.Speed or PathKind.Stunt && distance < 45f)
         {
-            var preferred = PreferStunt ? PathKind.Stunt : PathKind.Speed;
+            var preferred = _stunt ? PathKind.Stunt : PathKind.Speed;
             if (path.Kind != preferred)
             {
                 path = session.Track.Paths.First(p => p.Kind == preferred);
@@ -104,8 +111,12 @@ public sealed class ScriptedDriver
             return new DriverInputs { Gear = 1, Steer = steer, Throttle = 0.3f };
         }
         var redline = car.Spec.Engine.RedlineRpm;
-        var shiftUp = !automatic && car.Drivetrain.Engine.Rpm > redline * 0.9f && car.Drivetrain.ClutchLocked && gear == _lastGear && gear < car.Spec.ForwardGearCount;
-        var shiftDown = !automatic && car.Drivetrain.Engine.Rpm < redline * 0.377f && car.Drivetrain.ClutchLocked && gear == _lastGear && gear > 1 && error > 0f;
+        // Not in the air: the driven wheels over-rev with nothing to push against, and the car lands a gear too tall.
+        var grounded = !car.Airborne && DrivenWheelsDown(car);
+        var shiftUp = !automatic && grounded && car.Drivetrain.Engine.Rpm > redline * 0.9f && car.Drivetrain.ClutchLocked && gear == _lastGear && gear < car.Spec.ForwardGearCount;
+        // Down when the revs sag, or a gear early when there is speed to gather and the gear below pulls harder.
+        var shiftDown = !automatic && grounded && car.Drivetrain.ClutchLocked && gear == _lastGear && gear > 1 && error > 0f
+                        && (car.Drivetrain.Engine.Rpm < redline * 0.377f || (error > 2.5f && car.Drivetrain.KickDownPullsHarder()));
         _lastGear = gear;
 
         return new DriverInputs
@@ -119,6 +130,9 @@ public sealed class ScriptedDriver
             ShiftDown = shiftDown,
         };
     }
+
+    private static bool DrivenWheelsDown(VehicleSim car) =>
+        car.Spec.FrontWheelDrive ? car.Wheels[0].InContact && car.Wheels[1].InContact : car.Wheels[2].InContact && car.Wheels[3].InContact;
 
     /// <summary>
     /// The throttle a competent driver actually holds when asking for <paramref name="throttle"/>: eased in proportion
@@ -280,7 +294,7 @@ public sealed class ScriptedDriver
         {
             if (distance <= path.Length || path.Next.Count == 0) return path.FrameAt(MathF.Min(distance, path.Length));
             var next = chooseBranch && path.Kind == PathKind.Common
-                ? path.Next.FirstOrDefault(p => p.Kind == (PreferStunt ? PathKind.Stunt : PathKind.Speed)) ?? path.Next[0]
+                ? path.Next.FirstOrDefault(p => p.Kind == (_stunt ? PathKind.Stunt : PathKind.Speed)) ?? path.Next[0]
                 : path.Next[0];
             distance -= path.Length;
             path = next;
@@ -298,7 +312,7 @@ public sealed class ScriptedDriver
         var here = car.Cursor.Distance;
         if (path.Kind is PathKind.Speed or PathKind.Stunt && here < 45f)
         {
-            var preferred = PreferStunt ? PathKind.Stunt : PathKind.Speed;
+            var preferred = _stunt ? PathKind.Stunt : PathKind.Speed;
             if (path.Kind != preferred) path = car.Track.Paths.First(p => p.Kind == preferred);
         }
         var allowed = CruiseMph / MathUtil.MphPerMps;

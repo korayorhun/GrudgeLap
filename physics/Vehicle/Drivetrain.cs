@@ -27,6 +27,22 @@ public sealed class Drivetrain
     public float TorqueCut { get; set; } = 1f;
     /// <summary>Extra inertia the driven wheels carry while the clutch is locked, already reflected through the gearing.</summary>
     public float ReflectedInertia { get; private set; }
+    /// <summary>
+    /// Torque (N m, both driven wheels together) the driven tyres can put down now short of spinning up past their peak,
+    /// set by the car each step from the tyres' loads and grip (see VehicleSim.LaunchTraction); infinite when unknown.
+    /// The launch assist slips the clutch so that no more than this reaches the wheels.
+    /// </summary>
+    public float TractionTorque { get; set; } = float.PositiveInfinity;
+    /// <summary>
+    /// True during a standing start in the assisted modes (0.19): from the first bite of the clutch until it locks, the
+    /// engine is held near <see cref="EngineSpec.LaunchRpm"/> and the clutch passes what the tyres can take. With the brake
+    /// held as well, the clutch stays open and the engine is held there ready (<see cref="PreRevving"/>).
+    /// </summary>
+    public bool Launching { get; private set; }
+    /// <summary>Brake and throttle together at a standstill in the assisted modes: the engine held at the launch revs, the clutch open.</summary>
+    public bool PreRevving { get; private set; }
+    /// <summary>The assisted clutch taking up a gear on the move (after a shift), not yet locked.</summary>
+    public bool Synchronising { get; private set; }
 
     public Drivetrain(VehicleSpec spec)
     {
@@ -44,6 +60,10 @@ public sealed class Drivetrain
         AxleTorque = 0f;
         ReflectedInertia = 0f;
         TorqueCut = 1f;
+        TractionTorque = float.PositiveInfinity;
+        Launching = false;
+        PreRevving = false;
+        Synchronising = false;
         Engine.Stop();
     }
 
@@ -76,6 +96,16 @@ public sealed class Drivetrain
 
         var throttle = input.Throttle * MathUtil.Clamp01(TorqueCut);
         if (Mode != TransmissionMode.ManualClutch && _shiftTimer > 0f) throttle = 0f; // lift fully during assisted shifts
+        if (Launching || PreRevving) throttle = MathF.Min(throttle, LaunchGovernor(input.Throttle));
+        else if (Synchronising)
+        {
+            // Taking up the next gear: the engine is brought down to the input shaft's speed with the throttle eased (the
+            // driver's lifted foot, a dual-clutch box's ignition cut) instead of being fought by the clutch.
+            var shaftRpm = MathF.Abs(axleSpeed * Ratio) * EngineModel.RpmPerRadPerSec;
+            // Aimed a little under the shaft's speed: held at or above it, the engine only balanced the clutch there, a few
+            // rpm short of the shaft, and the clutch never locked.
+            throttle = MathF.Min(throttle, MathUtil.Clamp01(1f - (Engine.Rpm - shaftRpm + 100f) / 200f));
+        }
         var engineTorque = Engine.Torque(throttle);
         var ratio = Ratio;
         var capacity = Engagement * _spec.ClutchMaxTorque;
@@ -133,15 +163,39 @@ public sealed class Drivetrain
                 AxleTorque = clutchTorque * ratio * _spec.DrivelineEfficiency;
 
                 var newSlip = Engine.AngularVelocity - inputShaftSpeed;
-                if (Engagement > 0.6f && MathF.Abs(newSlip) < 2f)
+                // A launch ends when the input shaft has caught the held engine up: the clutch locks there however lightly
+                // the assist was holding it, as a driver lets the pedal up once the car has the revs.
+                // In the assisted modes the clutch also locks once it can carry what the engine makes, however lightly it
+                // is held: a take-up limited to the tyres' grip (Synchronising) may never reach the pedal's 0.6.
+                var holds = Engagement > 0.6f || (Mode != TransmissionMode.ManualClutch && (Launching || capacity >= MathF.Abs(engineTorque)));
+                if (holds && MathF.Abs(newSlip) < 2f)
                 {
                     ClutchLocked = true;
+                    Launching = false;
                     Engine.AngularVelocity = MathF.Max(inputShaftSpeed, 0f);
                 }
             }
         }
 
         Engine.Tick(dt);
+    }
+
+    /// <summary>
+    /// Whether changing down one gear now would pull harder (0.19): the gear below lands the engine under 0.82 of its
+    /// redline (so the next upshift does not come straight back) and gives at least 5 % more torque at the wheels, from
+    /// the full-throttle curve times the ratio. What a driver, or an automatic's kick-down, does before a long pull: until
+    /// 0.18 the scripted driver went up a gear over the drawbridge's crest (the wheels in the air over-rev) and then ran
+    /// the stunt route's run-up to the loop in fifth at 2,900 rpm.
+    /// </summary>
+    public bool KickDownPullsHarder()
+    {
+        if (Gear <= 1) return false;
+        var rpm = Engine.Rpm;
+        var lowerRpm = rpm * _spec.RatioForGear(Gear - 1) / _spec.RatioForGear(Gear);
+        if (lowerRpm > Engine.Spec.RedlineRpm * 0.82f) return false;
+        var now = Engine.Spec.CurveTorque(rpm) * _spec.RatioForGear(Gear);
+        var lower = Engine.Spec.CurveTorque(lowerRpm) * _spec.RatioForGear(Gear - 1);
+        return lower > now * 1.05f;
     }
 
     private void HandleIgnition(in DriverInputs input)
@@ -168,6 +222,7 @@ public sealed class Drivetrain
                 var redline = Engine.Spec.RedlineRpm;
                 if (rpm > redline * 0.885f && Gear < _spec.ForwardGearCount) target = Gear + 1;
                 else if (rpm < redline * 0.333f && Gear > 1 && input.Throttle < 0.9f) target = Gear - 1;
+                else if (input.Throttle > 0.95f && KickDownPullsHarder()) target = Gear - 1;   // kick-down
                 else if (rpm < redline * 0.246f && Gear > 1) target = Gear - 1;
             }
             if (input.Gear == -1 && groundSpeed < 1f) target = -1;        // reverse is allowed at standstill only
@@ -195,6 +250,9 @@ public sealed class Drivetrain
 
     private float ResolveClutchPedal(in DriverInputs input, float groundSpeed, float dt)
     {
+        PreRevving = false;
+        Synchronising = false;
+        if (Mode == TransmissionMode.ManualClutch) Launching = false;
         switch (Mode)
         {
             case TransmissionMode.ManualClutch:
@@ -203,6 +261,7 @@ public sealed class Drivetrain
             default:
                 // Assisted clutch: open while shifting, open when the engine would otherwise die, and feed in
                 // progressively on launch so the revs stay in the fat part of the curve.
+                if (!Engine.Running || _shiftTimer > 0f || Gear == 0 || ClutchLocked || input.Throttle < 0.05f) Launching = false;
                 if (!Engine.Running) return 1f;
                 if (_shiftTimer > 0f) return 1f;
                 if (Gear == 0) return 0f;
@@ -210,6 +269,15 @@ public sealed class Drivetrain
                 // torque converter would, so the assisted modes can never stall.
                 var idle = Engine.Spec.IdleRpm;
                 if (Engine.Rpm < idle * 1.58f && groundSpeed > 5f && input.Throttle < 0.3f) return 1f;
+                // Brake and throttle at a standstill: the clutch waits open with the engine held at the launch revs (the
+                // two-footed start of a driver, the brake-throttle-release of a launch control).
+                if (input.Brake > 0.3f && input.Throttle > 0.3f && MathF.Abs(groundSpeed) < 0.5f && !ClutchLocked)
+                {
+                    PreRevving = true;
+                    return 1f;
+                }
+                if (!ClutchLocked && input.Throttle >= 0.05f && MathF.Abs(groundSpeed) < 3f) Launching = true;
+                if (Launching) return 1f - LaunchEngagement(input.Throttle);
                 // Slip the clutch the way a driver launches a sports car: feed it in between 2200 and 4000 rpm.
                 var launch = MathUtil.Clamp01((groundSpeed - 0.5f) / 6f);
                 var revBased = MathUtil.Clamp01((Engine.Rpm - idle * 2.3f) / (idle * 1.9f));
@@ -217,9 +285,56 @@ public sealed class Drivetrain
                 // its revs against it, instead of locking at once and dragging the engine down to a lugging start.
                 var engaged = MathF.Min(MathF.Max(launch, revBased), 0.35f + 0.65f * launch);
                 if (input.Throttle < 0.05f && groundSpeed < 2.5f) engaged = 0f; // creep-free idle at standstill
+                // Taking up a gear on the move (after a shift): the clutch passes no more than the tyres can put down, so the
+                // flywheel's revs go into the road instead of into wheelspin; up to 0.18 it bit with its whole capacity, and a
+                // V8 changing into second spun its rear tyres past their peak and lost a tenth of a second there.
+                Synchronising = !ClutchLocked && MathF.Abs(groundSpeed) >= 3f;
+                if (Synchronising) engaged = MathF.Min(engaged, TractionEngagement());
                 return 1f - engaged;
         }
     }
+
+    /// <summary>
+    /// Revs a standing start holds for the driver's <paramref name="pedal"/>: the launch revs at full throttle, a gentle
+    /// 1.6 times idle when only creeping off.
+    /// </summary>
+    private float LaunchTarget(float pedal)
+    {
+        var low = Engine.Spec.IdleRpm * 1.6f;
+        return low + (Engine.Spec.LaunchRpm - low) * MathUtil.Clamp01(pedal);
+    }
+
+    /// <summary>
+    /// Clutch engagement during a standing start: the clutch takes the engine's torque in proportion to how far the revs
+    /// stand above a band below the target (none at its foot, all of it at the target, more above it), so the engine
+    /// settles at the target with the clutch passing what it makes; and never more than the tyres can put down
+    /// (<see cref="TractionTorque"/>), so the wheels do not spin away the drive. That is what a driver's left foot does on
+    /// a good launch and what a launch control's clutch does on its own.
+    /// </summary>
+    private float LaunchEngagement(float pedal)
+    {
+        var target = LaunchTarget(pedal);
+        var band = 0.3f * target;
+        var share = MathUtil.Clamp((Engine.Rpm - (target - band)) / band, 0f, 2f);
+        var capacity = Engine.FullTorque(Engine.Rpm) * MathUtil.Clamp01(pedal) * share;
+        var ratio = MathF.Abs(Ratio);
+        if (ratio > 0f && float.IsFinite(TractionTorque)) capacity = MathF.Min(capacity, TractionTorque / (ratio * _spec.DrivelineEfficiency));
+        return MathUtil.Clamp01(capacity / _spec.ClutchMaxTorque);
+    }
+
+    /// <summary>Clutch engagement at which the clutch passes what the tyres can take (<see cref="TractionTorque"/>); 1 when that is unknown.</summary>
+    private float TractionEngagement()
+    {
+        var ratio = MathF.Abs(Ratio);
+        if (ratio <= 0f || !float.IsFinite(TractionTorque)) return 1f;
+        return MathUtil.Clamp01(TractionTorque / (ratio * _spec.DrivelineEfficiency) / _spec.ClutchMaxTorque);
+    }
+
+    /// <summary>
+    /// Throttle allowed while launching or held ready: eased as the revs pass the target so the engine waits there instead
+    /// of running to the limiter while the clutch slips (or is open); the driver's own pedal is never exceeded.
+    /// </summary>
+    private float LaunchGovernor(float pedal) => MathUtil.Clamp01(1f - (Engine.Rpm - LaunchTarget(pedal) - 150f) / 300f);
 
     private void IntegrateFreeEngine(float engineTorque, float dt)
     {
