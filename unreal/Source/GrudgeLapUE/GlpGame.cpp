@@ -289,8 +289,9 @@ void AGlpGame::ApplyWeather()
 		{
 			ExposureEv = Volume->Settings.AutoExposureMinBrightness;
 		}
-		// A grey day is a stop or two dimmer than a sunny one: the eye, and the camera, open up.
-		const float Ev = bOvercast ? ExposureEv - (bRaining ? 2.0f : 1.6f) : ExposureEv;
+		// A grey day is two or three stops dimmer than a sunny one: the eye, and the camera, open up (the sun above is
+		// down to an eighth; at 1.6 stops the first wet runs came out as dusk).
+		const float Ev = bOvercast ? ExposureEv - (bRaining ? 2.8f : 2.4f) : ExposureEv;
 		Volume->Settings.AutoExposureMinBrightness = Ev;
 		Volume->Settings.AutoExposureMaxBrightness = Ev;
 	}

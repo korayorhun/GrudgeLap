@@ -394,8 +394,10 @@ def weather_assets():
     sample.set_editor_property("texture", streaks)
     sample.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_COLOR)
     mel.connect_material_expressions(panner, "", sample, "UVs")
+    # Emissive light is scene-referred (nits): under the grey day's exposure (EV100 about 12) a streak needs a few
+    # hundred nits to show at all; at 0.35 the rain was invisible (0.13).
     glow = mel.create_material_expression(rain, unreal.MaterialExpressionMultiply, -350, -100)
-    glow.set_editor_property("const_b", 0.35)
+    glow.set_editor_property("const_b", 900.0)
     mel.connect_material_expressions(sample, "RGB", glow, "A")
     mel.connect_material_property(glow, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
     amount = mel.create_material_expression(rain, unreal.MaterialExpressionCollectionParameter, -600, 300)
