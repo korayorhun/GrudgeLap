@@ -58,6 +58,13 @@ public sealed record VehicleSpec
     public float TireGrip { get; init; } = 1.0f;
     /// <summary>Electronic traction control: the throttle is eased when the driven wheels spin up. Period-correct only on the modern cars.</summary>
     public bool TractionControl { get; init; }
+    /// <summary>
+    /// Launch control (0.19): on a standing start the engine is held at its launch revs and the clutch passes all but a
+    /// few per cent of what the tyres can take, reading the wheel speeds as it goes; without it the assisted clutch makes
+    /// the start a good driver makes, revs up and slips, a little short of the tyres' peak (VehicleSim.LaunchTraction).
+    /// Only the V8 of the 2010s has one.
+    /// </summary>
+    public bool LaunchControl { get; init; }
     /// <summary>The engine drives the front wheels (a transverse engine in a hatchback) instead of the rear.</summary>
     public bool FrontWheelDrive { get; init; }
     /// <summary>Tyre sizes as published, front and rear: they set each axle's nominal load and cornering stiffness (<see cref="TireSize"/>).</summary>
@@ -137,7 +144,9 @@ public sealed record VehicleSpec
         Style = CarStyle.V8,
         // The 570S's seven-speed dual-clutch box: the next gear is engaged on its own clutch and taken up as the other
         // lets go, so a shift costs a fraction of the drive a manual's does.
-        ShiftSeconds = 0.1f,
+        ShiftSeconds = 0.03f,
+        // Its launch control: brake, full throttle, release (McLaren's "Launch" mode of the Sports Series).
+        LaunchControl = true,
         FrontLiftArea = -0.06f,
         RearLiftArea = -0.12f,
         // 225/35 R19 front, 285/35 R20 rear; an open differential (the real car brakes a spinning inside wheel instead).

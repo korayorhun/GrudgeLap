@@ -14,7 +14,11 @@ namespace GrudgeLap.Physics.Tests;
 public sealed class HandlingTests(ITestOutputHelper output)
 {
     /// <summary>
-    /// 0-100 km/h and the stop from 100 km/h, dry and in the rain, pedal hard down. The three cars with anti-lock
+    /// 0-100 km/h and the stop from 100 km/h, dry and in the rain, pedal hard down. The sprint is a road test's
+    /// standing start (<see cref="HandlingRig.Sprint(VehicleSpec, float, float)"/>: revs up on the brake, timed from its
+    /// release); since 0.19 the assisted clutch launches at the engine's launch revs with the driven tyres just short of
+    /// their peak, the V8 with its launch control and its dual-clutch box handing the drive from gear to gear, which
+    /// brought the ranges in to about a tenth either side of the published figures. The three cars with anti-lock
     /// brakes stop at the tyres' peak; the others lock their wheels, which costs them a sixth or so on the dry road, as
     /// a locked tyre slides at about three quarters of its peak friction. Ranges: published sprints (see the specs);
     /// stops of contemporary road tests (Car and Driver's 570S: 144 ft from 70 mph, about 35 m from 100 km/h; road tests
@@ -22,14 +26,19 @@ public sealed class HandlingTests(ITestOutputHelper output)
     /// the stop grows by roughly half (a little less with the wheels locked, which slide on either surface).
     /// </summary>
     [Theory]
-    [InlineData(0, 5.0f, 6.5f, 39f, 50f)]    // flat-twelve: 5.8 s; no ABS
-    [InlineData(1, 3.4f, 4.5f, 29f, 37f)]    // V8: 3.2 s with launch control (see the design notes); ABS
-    [InlineData(2, 6.8f, 8.6f, 38f, 48f)]    // hot hatch: 7.2 s; no ABS
-    [InlineData(3, 8.0f, 10.2f, 41f, 52f)]   // five: 8.5 s; no ABS
-    [InlineData(4, 6.2f, 7.9f, 32f, 39f)]    // turbo hatch: 6.4 s; ABS
-    [InlineData(5, 12.5f, 15.5f, 46f, 58f)]  // 1.6 saloon: 13.9 s; discs and drums, no ABS
-    [InlineData(6, 15f, 19f, 48f, 62f)]      // 1.4 estate: about 16-17 s; no ABS
-    [InlineData(7, 11f, 13.5f, 35f, 43f)]    // fleet saloon: 11.5 s; ABS with its ESC
+    // Flat-twelve: Ferrari quoted 5.8 s; Car and Driver timed 5.0 s to 60 mph (September 1986), which is about 5.5 s to
+    // 100 km/h without the magazine's one-foot rollout. The assist's launch is cleaner than a test driver's on a heavy
+    // single-plate clutch, so the model sits at the quick end (about 4.9 s). No ABS.
+    [InlineData(0, 4.7f, 5.9f, 39f, 50f)]
+    // V8: McLaren quotes 3.2 s for the 570S with its launch control (Car and Driver: 2.9 s to 60 mph); about 3.4 here,
+    // traction-limited at 0.89 g throughout. ABS.
+    [InlineData(1, 3.1f, 3.7f, 29f, 37f)]
+    [InlineData(2, 6.9f, 7.9f, 38f, 48f)]    // hot hatch: 7.2 s quoted (2.0 16V of 2001); no ABS
+    [InlineData(3, 8.2f, 9.5f, 41f, 52f)]    // five: 8.5 s quoted (2.0 20V of 1997); no ABS
+    [InlineData(4, 6.2f, 7.3f, 32f, 39f)]    // turbo hatch: 6.4 s quoted (2.0 TFSI of 2008, 240 hp); ABS
+    [InlineData(5, 12.8f, 15.0f, 46f, 58f)]  // 1.6 saloon: 13.9 s (FIA form 5608's car); discs and drums, no ABS
+    [InlineData(6, 15.5f, 18.5f, 48f, 62f)]  // 1.4 estate: about 16-17 s; no ABS
+    [InlineData(7, 10.9f, 12.8f, 35f, 43f)]  // fleet saloon: 11.5 s quoted (Fiat's handbook); ABS with its ESC
     public void Sprints_and_stops_within_the_real_cars_ranges(int car, float sprintMin, float sprintMax, float stopMin, float stopMax)
     {
         var spec = VehicleSpec.Catalogue[car];
@@ -41,6 +50,75 @@ public sealed class HandlingTests(ITestOutputHelper output)
         Assert.InRange(dry.Distance, stopMin, stopMax);
         Assert.InRange(rain.Distance / dry.Distance, 1.25f, 1.65f);
         Assert.Equal(!spec.AntiLockBrakes, dry.Locked);
+    }
+
+    /// <summary>
+    /// The launch itself (0.19): with the brake and the throttle held at a standstill the engine waits at its launch revs
+    /// (the lowest giving 95 % of peak torque; full boost on the turbo) and the car does not creep; on the release the
+    /// clutch slips with the engine held there (never bogged below nine tenths of it) and the driven tyres at a slip short
+    /// of their peak (the peak slip ratio of a road tyre on dry asphalt is about 0.1-0.15, Pacejka ch. 1), until the
+    /// clutch locks. Launch control (the V8) holds them closer to the peak than the assist's driver's foot does. Up to
+    /// 0.18 the assisted clutch bit from about 2,000 rpm whatever the car: the revs collapsed, the tyres spun up to a slip
+    /// of 1.5 and the driver had to feather the throttle back to a fifth.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(4)]
+    [InlineData(6)]
+    public void Standing_starts_hold_the_launch_revs_and_the_tyres_short_of_their_peak(int car)
+    {
+        var spec = VehicleSpec.Catalogue[car];
+        var sim = new VehicleSim(spec, HandlingRig.Proving());
+        sim.Drivetrain.Mode = TransmissionMode.ManualAutoClutch;
+        sim.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Ignition = true }, HandlingRig.Dt);
+        sim.Step(new DriverInputs { Gear = 1, Brake = 1f }, HandlingRig.Dt);
+        for (var t = 0f; t < 1.5f; t += HandlingRig.Dt) sim.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Brake = 1f, Throttle = 1f }, HandlingRig.Dt);
+        var launchRpm = spec.Engine.LaunchRpm;
+        Assert.True(sim.Drivetrain.PreRevving);
+        Assert.InRange(sim.Drivetrain.Engine.Rpm, launchRpm, launchRpm + 600f);
+        Assert.InRange(sim.Speed, -0.05f, 0.05f);
+
+        var (a, b) = spec.FrontWheelDrive ? (sim.Wheels[0], sim.Wheels[1]) : (sim.Wheels[2], sim.Wheels[3]);
+        float lowestRpm = float.MaxValue, mostSlip = 0f, slipSum = 0f;
+        var samples = 0;
+        var t0 = 0f;
+        for (; t0 < 6f; t0 += HandlingRig.Dt)
+        {
+            sim.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Throttle = 1f }, HandlingRig.Dt);
+            if (!sim.Drivetrain.Launching) break;
+            if (t0 < 0.25f) continue;  // the first bite, as the load comes onto the driven wheels
+            lowestRpm = MathF.Min(lowestRpm, sim.Drivetrain.Engine.Rpm);
+            var slip = 0.5f * (a.SlipRatio + b.SlipRatio) / TireModel.PeakSlipRatio(a.Friction);
+            mostSlip = MathF.Max(mostSlip, slip);
+            slipSum += slip;
+            samples++;
+        }
+        var meanSlip = slipSum / samples;
+        output.WriteLine($"{spec.Name}: launch revs {launchRpm:F0}, held at least {lowestRpm:F0} rpm for {t0:F2} s to {sim.Speed * MathUtil.KmhPerMps:F0} km/h; driven slip {meanSlip:P0} of the peak on average, at most {mostSlip:P0}");
+        Assert.InRange(t0, 0.5f, 5f);
+        Assert.True(lowestRpm > 0.9f * launchRpm, $"the engine bogged to {lowestRpm:F0} rpm");
+        Assert.InRange(meanSlip, spec.LaunchControl ? 0.8f : 0.5f, 1.0f);
+        Assert.True(mostSlip < 1.15f, $"a driven tyre spun past its peak ({mostSlip:P0})");
+    }
+
+    /// <summary>
+    /// A standing start without the brake (the player simply floors it): the revs rise to the launch speed before the
+    /// clutch takes up, so the car is under way within half a second and no slower than a few tenths behind the
+    /// road-test start; it never stalls or bogs.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    [InlineData(5)]
+    public void Flooring_it_from_rest_launches_without_a_bog(int car)
+    {
+        var spec = VehicleSpec.Catalogue[car];
+        var tested = HandlingRig.Sprint(spec, 100f);
+        var floored = HandlingRig.Sprint(new VehicleSim(spec, HandlingRig.Proving()), 100f, preRev: false);
+        output.WriteLine($"{spec.Name}: 0-100 km/h {tested:F2} s revved on the brake, {floored:F2} s floored from idle");
+        Assert.InRange(floored - tested, 0f, 0.5f);
     }
 
     /// <summary>

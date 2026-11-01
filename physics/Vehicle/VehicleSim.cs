@@ -221,6 +221,7 @@ public sealed class VehicleSim
         var (driven0, driven1) = _spec.FrontWheelDrive ? (Wheels[0], Wheels[1]) : (Wheels[2], Wheels[3]);
         var axleSpeed = 0.5f * (driven0.AngularVelocity + driven1.AngularVelocity);
         UpdateTractionControl(driven0, driven1, input, dt);
+        Drivetrain.TractionTorque = LaunchTraction(driven0, driven1);
         // The inertia the clutch sees over one step: the driven wheels and, through their tyres' stiffness, what the
         // road holds them to (the terms of SpinGroundedWheel's balance); and the torque the road holds them back with.
         var axleInertia = 2f * _spec.WheelInertia + (driven0.InContact ? driven0.SpinStiffness * dt : 0f) + (driven1.InContact ? driven1.SpinStiffness * dt : 0f);
@@ -444,6 +445,33 @@ public sealed class VehicleSim
             if (!w.InContact) return 0f;
             var slipSpeed = w.AngularVelocity * _spec.WheelRadius - w.GroundSpeed;
             return slipSpeed - (0.1f * MathF.Abs(w.GroundSpeed) + 0.5f);
+        }
+    }
+
+    /// <summary>
+    /// The axle torque (N m) the driven tyres can put down now, for the launch assist (0.19): each grounded driven tyre's
+    /// peak force at its load from the last step, times the share the launch aims at (all but a few per cent of the peak
+    /// with launch control, which reads the wheel speeds a hundred times a second; nine tenths for a driver's foot, which
+    /// has to stay on the safe side of it), cut back while a wheel already spins past its peak slip so it comes back.
+    /// A tyre asked for its whole peak has no margin: the wheel's own inertia then carries it over the top and it spins
+    /// away, which is the bogged, smoking start the assisted clutch made up to 0.18.
+    /// </summary>
+    private float LaunchTraction(WheelState a, WheelState b)
+    {
+        if (!a.InContact && !b.InContact) return float.PositiveInfinity;
+        var aim = _spec.LaunchControl ? 0.995f : 0.92f;
+        // The wheels themselves take a little torque to speed up with the car (two wheels' inertia at the car's
+        // acceleration): what reaches the road is the rest.
+        var spinUp = 2f * _spec.WheelInertia * MathF.Max(LongitudinalAcceleration, 0f) / _spec.WheelRadius;
+        return (Share(a) + Share(b)) * _spec.WheelRadius + spinUp;
+
+        float Share(WheelState w)
+        {
+            if (!w.InContact || w.Load <= 0f) return 0f;
+            var tire = w.IsFront ? _spec.FrontTire : _spec.RearTire;
+            var peak = TireModel.PeakFriction(w.Load, w.Friction, tire) * w.Load;
+            var over = w.SlipRatio / MathF.Max(TireModel.PeakSlipRatio(w.Friction), 0.02f) - 1f;
+            return peak * aim * MathUtil.Clamp(1f - 0.6f * MathF.Max(over, 0f), 0.3f, 1f);
         }
     }
 

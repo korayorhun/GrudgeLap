@@ -138,13 +138,21 @@ internal static class HandlingRig
         return (Vector3.Distance(start, car.Position), t, locked);
     }
 
-    /// <summary>Standing start, flat out, shifts at the redline: seconds to <paramref name="kmh"/>.</summary>
-    public static float Sprint(VehicleSpec spec, float kmh, float limit = 40f)
+    /// <summary>
+    /// Standing start as a road test makes it, flat out with shifts at the redline: engine running and first gear in,
+    /// brake and throttle held together for a moment (the revs wait at the launch speed, the clutch open), then the brake
+    /// released; seconds from the release to <paramref name="kmh"/>. Up to 0.18 the clock started as first gear was
+    /// selected, so the shift into first (a quarter of a second on a manual) and the revs rising from idle were timed too.
+    /// </summary>
+    public static float Sprint(VehicleSpec spec, float kmh, float limit = 40f) => Sprint(new VehicleSim(spec, Proving()), kmh, limit);
+
+    /// <summary>The standing start of <see cref="Sprint(VehicleSpec, float, float)"/> with a car already placed (on the pad, in the rain...).</summary>
+    public static float Sprint(VehicleSim car, float kmh, float limit = 40f, bool preRev = true)
     {
-        var car = new VehicleSim(spec, Proving());
         car.Drivetrain.Mode = TransmissionMode.ManualAutoClutch;
         car.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Ignition = true, Clutch = 1f }, Dt);
-        car.Step(new DriverInputs { Gear = 1, Clutch = 1f }, Dt);
+        car.Step(new DriverInputs { Gear = 1, Clutch = 1f, Brake = 1f }, Dt);
+        for (var t = 0f; t < 1.5f; t += Dt) car.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Brake = 1f, Throttle = preRev ? 1f : 0f }, Dt);
         var lastGear = car.Drivetrain.Gear;
         for (var t = 0f; t < limit; t += Dt)
         {
