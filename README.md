@@ -144,7 +144,7 @@ dotnet test physics.tests/GrudgeLap.Physics.Tests.csproj   # the feel checklist,
 
 The installer needs [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`installer/GrudgeLap.iss`). The
 build also fetches the real car models (CC BY, credited in [THIRD_PARTY.md](THIRD_PARTY.md)) and prepares them
-for the game, which needs Python 3 with numpy and Pillow; `./tools/build.ps1 -SkipModels` builds without them, and the
+for the game, which needs Python 3 with numpy, Pillow and SciPy; `./tools/build.ps1 -SkipModels` builds without them, and the
 game then draws its own lofted bodies.
 Godot's editor opens the `game/` folder; the simulation lives in `physics/` with no engine dependency.
 Automated runs (screenshots, checks) take a few switches after Godot's `--`, listed in

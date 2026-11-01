@@ -32,7 +32,7 @@ if ($LASTEXITCODE -ne 0) { throw "game build failed" }
 
 New-Item -ItemType Directory -Force "$root/build" | Out-Null
 # The real car models (CC BY, THIRD_PARTY.md): fetched once into unreal/Import/Models, then prepared for the game
-# into game/assets/models (tools/prepare_car_models.py; build output, not in the repository). Needs Python with numpy and Pillow.
+# into game/assets/models (tools/prepare_car_models.py; build output, not in the repository). Needs Python with numpy, Pillow and SciPy.
 if (-not $SkipModels) {
     python "$root/unreal/Scripts/fetch_models.py" "$root/unreal/Import/Models"
     if ($LASTEXITCODE -ne 0) { throw "car model download failed (or pass -SkipModels for the lofted bodies)" }

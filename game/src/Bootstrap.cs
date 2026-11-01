@@ -37,6 +37,7 @@ public sealed partial class Bootstrap : Node3D
     private SN.Vector3? _ramTarget;
     private CarView? _ghostView;
     private readonly List<CarView> _droneViews = new();
+    private int _droneSerial;   // drones drawn so far, over the credits: the next one's car and colour (BuildDroneViews)
     private readonly Dictionary<int, Node3D> _propNodes = new();
     private readonly List<(Node3D Node, float Start, float Yaw, Vector3 Axis)> _tipping = new();
     private TrainView? _trainView;
@@ -306,8 +307,8 @@ public sealed partial class Bootstrap : Node3D
         return index >= 0 && index < CarView.Paints.Length ? index : current;
     }
 
-    /// <summary>The player's paint: a colour, or null for the car's own (its model's).</summary>
-    private Color? PlayerPaint => CarView.Paints[_paintChoice].Colour;
+    /// <summary>The player's paint: a colour and its finish, or null for the car's own (its model's).</summary>
+    private CarView.CarPaint? PlayerPaint => CarView.Paints[_paintChoice].Paint;
 
     /// <summary>
     /// What only the player's car has: the lit instruments in its binnacle, a working rear-view mirror, and the
@@ -370,20 +371,22 @@ public sealed partial class Bootstrap : Node3D
         _droneViews.Clear();
         if (_session.Traffic is null) return;
         // The traffic is the everyday cars of the road (0.9.1; until then every drone was the period sports car of the
-        // original): the saloon, the estate and the fleet saloon, and since 0.21 the 205 and the Golf too, as
-        // ordinary hatchbacks in ordinary colours. Each drone in turn takes the next car and the next colour of the
-        // road palette (CarView.TrafficPaints), so no two drones of a credit look alike: five cars and twelve colours
-        // repeat a pair only every sixty drones, and a credit has eight. Only the look: the drones move as before
-        // (physics/Race/Traffic.cs), whatever car is drawn.
+        // original): the saloon, the estate and the fleet saloon, and since 0.21 the 205 and the Golf too (the 205
+        // the GTi its model is, its red wheels, bucket seats and pinstripe with it) in the road's colours. Each drone
+        // in turn takes the next car and the next colour of the road palette (CarView.TrafficPaints), counting on
+        // from the last credit's, so no two drones of a credit look alike and the next credit's are others: five cars
+        // and twelve colours repeat a pair only every sixty drones, and a credit has eight. Only the look: the drones
+        // move as before (physics/Race/Traffic.cs), whatever car is drawn; their cabins are drawn only near
+        // (CarView.TrimCabinForTraffic).
         VehicleSpec[] everyday = [VehicleSpec.Saloon, VehicleSpec.Estate, VehicleSpec.Fleet, VehicleSpec.HotHatch, VehicleSpec.TurboHatch];
-        var index = 0;
         foreach (var drone in _session.Traffic.Cars)
         {
+            var index = _droneSerial++ % (everyday.Length * CarView.TrafficPaints.Length);
             var view = CarView.Create(everyday[index % everyday.Length], CarView.TrafficPaints[index % CarView.TrafficPaints.Length]);
-            index++;
             view.Name = "Drone";
             view.SetViewpoint(false);
             AddChild(view);
+            view.TrimCabinForTraffic();
             _world.AttachDrone(view, drone);
             _droneViews.Add(view);
         }

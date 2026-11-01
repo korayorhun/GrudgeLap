@@ -37,6 +37,7 @@ sys.path.append(site.getusersitepackages())
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
+from scipy import ndimage
 
 import car_models as cm
 
@@ -248,6 +249,7 @@ def paint_mask(model, blob, material, primitives, settings, label):
     # A median over 3 x 3 texels drops lone matches in the noise (a JPEG's blocks in a dark atlas) and keeps the
     # edges of the paint sharp.
     weight = np.asarray(Image.fromarray(np.round(weight * 255).astype(np.uint8)).filter(ImageFilter.MedianFilter(3)), dtype=np.float64) / 255.0
+    weight, specks = fill_specks(weight, luma, key_luma)
     # The lightness, smoothed a little more where the key is dark: a JPEG's noise in a navy is a tenth of its light,
     # which a light colour would show as mottling.
     ratio = Image.fromarray(np.round(np.clip(luma / key_luma, 0.0, 2.0) * 127.5).astype(np.uint8))
@@ -259,8 +261,34 @@ def paint_mask(model, blob, material, primitives, settings, label):
     spread = (np.percentile(luma[painted] / key_luma, 5), np.percentile(luma[painted] / key_luma, 95)) if painted.any() else (0.0, 0.0)
     print(f"  paint texture {label}: key {np.round(linear_to_srgb(key) * 255).astype(int).tolist()} (sRGB), "
           f"{painted.sum() / max(covered.sum(), 1):.0%} of the texels its triangles cover are paint, "
-          f"{spread[0]:.2f}-{spread[1]:.2f} of the key's lightness")
+          f"{spread[0]:.2f}-{spread[1]:.2f} of the key's lightness, {specks} specks of grime on it painted")
     return image, key
+
+
+def fill_specks(weight, luma, key_luma, largest=128, lightest=1.5):
+    """The grime on a paint texture counted as paint: the small patches that are not paint (or only partly), wholly
+    inside the paint and no lighter than it. The 205's navy has dozens of dirt specks and a smudge or two, greyer than
+    the paint, and the VAZ's beige hundreds: they kept their texel, invisible in the model's own colour but dark navy
+    dots and blotches in a white, a yellow or a silver. The paint's lightness (the mask's green) carries their
+    depth, so the grime darkens the new colour instead. A badge, chrome or a lamp is lighter than the paint and the
+    black trim and vents larger (the vent on the 205's nose is 508 texels of its 1024 x 1024, a speck at most 128); a
+    "no lighter" of half again the key's luminance (a fifth in sRGB) takes in the specks' grey on a navy as dark as
+    the 205's, a few times the JPEG's noise in it. Nor is a patch too dark to have a hue (the paint's own cut,
+    paint_mask's lit): the Delta's Martini lettering is a white texture's black, and a letter is a speck's size.
+    Returns the weight and how many patches were filled."""
+    patches, count = ndimage.label(weight < 0.98)
+    if count == 0:
+        return weight, 0
+    # A patch's size is that of its core, the texels that are not paint at all: the soft rim the median leaves round a
+    # speck would otherwise count a 96-texel smudge as 144.
+    sizes = np.bincount(patches.ravel(), weights=(weight < 0.5).ravel(), minlength=count + 1)
+    lightness = np.zeros(count + 1)
+    lightness[1:] = ndimage.mean(luma, patches, np.arange(1, count + 1))
+    speck = (sizes <= largest) & (lightness <= lightest * key_luma) & (lightness >= 0.12 * key_luma)
+    speck[0] = False
+    # A patch at the texture's edge may go on across the wrap: not known to be inside the paint.
+    speck[np.unique(np.concatenate([patches[0], patches[-1], patches[:, 0], patches[:, -1]]))] = False
+    return np.where(speck[patches], 1.0, weight), int(speck.sum())
 
 
 def embed_paint_mask(model, blob, material, image, key):
@@ -747,6 +775,15 @@ def prepare(car, entry, inspect=False, config=None):
             continue
         if texture.get("texCoord", 0) != 0 or "KHR_texture_transform" in texture.get("extensions", {}):
             print(f"  paint texture of material {index} is mapped by other coordinates: drawn in the flat paint")
+            continue
+        # The mask takes the emissive slot: a material that glows already (an atlas with lit lamps) keeps its glow, an
+        # atlas then drawn as the model has it and another paint texture in the flat paint, as before the masks.
+        if "emissiveTexture" in material or any(v > 0.0 for v in material.get("emissiveFactor", [0.0, 0.0, 0.0])):
+            if index in atlas_materials:
+                material["name"] = atlas_materials[index]
+                print(f"  paint_atlas {atlas_materials[index]} glows (an emissive texture or colour): left as the model has it, not recoloured")
+            else:
+                print(f"  paint texture of material {index} glows (an emissive texture or colour): drawn in the flat paint")
             continue
         label = atlas_materials.get(index, f"of material {index}")
         image, key = paint_mask(model, blob, material, primitives, atlas.get(label.lower(), {}), label)

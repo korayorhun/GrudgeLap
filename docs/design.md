@@ -638,23 +638,46 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
   (`prepare_car_models.paint_mask`): red the paint's weight, the texels whose chromaticity (r, g and b over their
   sum, in linear light, which shading leaves as it is) is the key's and which are neither too dark to have one nor a
   white badge; green the texel's lightness against the key, halved, smoothed a little where the key is dark (a
-  JPEG's noise in the navy). It rides in the material's emissive slot with a black emission (Godot's importer
-  extracts and mipmaps it with the model's textures; nothing glows if the material is drawn as it is) and the key in
-  its extras. The game (`CarView.TexturePaint`) draws paint times lightness where the mask says paint, under the flat
-  paint's coat (metallic 0.05, roughness 0.38, clearcoat), and the model's own texture, roughness, metallic and normal
-  maps everywhere else, so the trim, the lamps, the chrome, the badges and the lettering are untouched in any colour;
-  the lining of a panel's back face in the cabin is the flat paint's, and the faces the preparation lines inside
-  the glasshouse are only those whose texture is paint. The menu has a PAINT line (`CarView.Paints`, remembered;
-  `--paint=` for a run): the car's own colour by default (`ORIGINAL`: the model's flat paint colours, or the paint
-  texture as it is), or red, white, silver, black, dark blue, green, yellow; a model is repainted in place
-  (`CarView.Repaint`), a lofted body built again. The traffic is five everyday cars, the saloon, the estate, the
-  fleet saloon, the 205 and the Golf (not the Testarossa, the McLaren or the Delta), each drone the next car and the
-  next of twelve road colours of the 1970s to the 2000s (`CarView.TrafficPaints`, neighbours differing in hue or
-  lightness): a pair repeats every sixty drones and a credit has eight. The drones move as before; only the look
-  changed. Frame time with the traffic on, before and after (`--perf-log`, two 45 s runs each, the development
-  laptop): GPU 6.17 / 5.99 ms and CPU 8.91 / 8.63 ms on the attract lap, 5.95 / 5.93 and 9.04 / 9.25 on the speed
-  route; 5.6 ms of GPU with the camera at a 205 drone; loading the two more models adds about 6 ms to the first five
-  seconds' average CPU. Switch: `--look=drone:<n>[:distance[:bearing]]` (pictures of the traffic's cars).
+  JPEG's noise in the navy). The grime on the paint counts as paint (`fill_specks`): the small patches that are not
+  paint (at most 128 texels of a 1024 x 1024 texture), wholly inside it and no lighter than it (half again the key's
+  luminance at most) nor near black. The 205's navy has a hundred and sixty dirt specks and smudges, greyer than the
+  paint, and the VAZ's beige hundreds; kept as texels, they were invisible in the model's own colour but navy dots
+  along the sills and a blotchy front valance in a white, a yellow or a silver; painted, their lightness darkens the
+  new colour instead. Badges, chrome and lamps are lighter, the black trim and vents larger, and the Delta's Martini
+  letters black. The mask rides in the material's emissive slot with a black emission (Godot's importer extracts
+  and mipmaps it with the model's textures; nothing glows if the material is drawn as it is) and the key in its
+  extras, which is how the game tells it from a glow of the model's own (a material that glows already is left
+  unmasked, with a message). The game (`CarView.TexturePaint`) draws paint times lightness where the mask says
+  paint, with the paint's finish under the flat paint's clearcoat, and the model's own texture, roughness, metallic
+  and normal maps everywhere else, so the trim, the lamps, the chrome, the badges and the lettering are untouched in
+  any colour; the lining of a panel's back face in the cabin is the flat paint's, and the faces the preparation lines
+  inside the glasshouse are only those whose texture is paint. A paint is a colour and a finish (`CarView.CarPaint`):
+  the solid colours the coated dielectric (metallic 0.05, roughness 0.38), the silver a metallic (0.6, 0.3), which
+  as a solid was a flat light grey hardly told from the white. The menu has a PAINT line (`CarView.Paints`,
+  remembered; `--paint=` for a run): the car's own colour by default (`ORIGINAL`: the model's flat paint colours, or
+  the paint texture as it is with the model's own roughness and coat, so the 205's bonnet dust and the VAZ's matt
+  beige stay, and its own metallic dropped for the paint's, since the Delta's is glTF's default of 1; a near-white
+  texture lifted to the menu's white, as the Delta's sRGB 185 read as a dirty mid grey), or red, white, silver,
+  black, dark blue, green, yellow; a model is repainted in place (`CarView.Repaint`), a lofted body built again. A
+  model with two paints (the McLaren's orange and maroon) gives the crash's debris the one covering the most of it.
+  The traffic is five everyday cars, the saloon, the estate, the fleet saloon, the 205 (the GTi its model is, red
+  wheels, bucket seats and pinstripe with it) and the Golf (not the Testarossa, the McLaren or the Delta), each drone
+  the next car and the next of twelve road colours of the 1970s to the 2000s (`CarView.TrafficPaints`, neighbours
+  differing in hue or lightness; the silver and a gunmetal grey metallics), counting on from the last credit's
+  drones: a credit has eight, no two alike and others than the last credit's, and a pair comes back after sixty
+  drones (seven and a half credits). The drones move as before; only the look changed. Their cabins
+  (`CarView.TrimCabinForTraffic`: the meshes inside, not the paint, glass or lenses) cast no shadow and are drawn
+  within 25 m only: the 205 and the Golf brought 35 to 110 draw calls more than the three-car traffic (the shadow
+  cascades draw a mesh again), and trimmed the eight drones draw about 140 fewer. Measured with the traffic on
+  (`--perf-log` with the frame's draw calls added for the test, the development laptop, the same build with the old
+  three cars, the five, and the five trimmed): 3417 / 3452 / 3268 draw calls on the attract lap, 3476 / 3589 / 3338
+  on the speed route; the render thread's CPU 1.3-1.8 ms a frame in all; GPU 7.0-7.9 ms in all, within the runs'
+  noise. The CPU figure `--perf-log` prints (render plus the frame's process time, 10-14 ms here) varies by 1-2 ms
+  from run to run on this machine and is dominated by the process time, which the drawing does not touch (the
+  review's 0.3-1.1 ms over main is within that, against a main that also differs in its audio, the sound review's
+  fixes), and the first figures written here (8.91 / 8.63 ms) were two runs' noise, not a saving. 5.6 ms of GPU
+  with the camera at a 205 drone; loading the two more models adds about 6 ms to the first five seconds' average
+  CPU. Switch: `--look=drone:<n>[:distance[:bearing]]` (pictures of the traffic's cars).
 - Real car models (0.16, `tools/prepare_car_models.py`, `CarView.Model.cs`). The lofted bodies and the boxes of
   their cabins read as toys, from the seat most of all, so the catalogue's cars are drawn as CC BY models of real
   cars with cabins of their own (THIRD_PARTY.md): the flat-twelve a Lotus Esprit Turbo 1983 (right-hand drive,
@@ -925,7 +948,8 @@ new-package requests were withdrawn).
 - Everyday cars: `VehicleSpec.Saloon` (after the Tofas Sahin: FIA form 5608 for the engine, the Tofas five-speed
   ratios), `Estate` (after the Renault 12 Toros: FIA form 5396) and `Fleet` (after the Fiat Egea: Fiat's handbook);
   0-60 mph 13.1 / 16.2 / 12.1 s and 99 / 89 / 115 mph in the tests. Bodies in `CarView.Everyday.cs`, steel wheels under
-  plastic covers; the traffic is these three in turn, and since 0.21 the 205 and the Golf too, in twelve road colours.
+  plastic covers; the traffic is these three in turn, and since 0.21 the 205 and the Golf too, in twelve road colours
+  (their cabins drawn only near).
 - Roads: grey-brown gravel shoulders (ambientCG Ground110) and brown soil on the earthworks, white edge lines and
   marker posts every 50 m; 1989 mode restores the orange and hides the lines and posts.
 - Buildings (`BuildingBuilder`): the farmhouse (plinth, corner boards, shingled gable roof of real thickness, framed
