@@ -1,5 +1,5 @@
 {
-  "_comment": "The real car models the game draws (tools/prepare_car_models.py -> game/assets/models/<car>.glb), per catalogue car. file: the source in unreal/Import/Models (CC BY, its LICENSE.txt beside it); forward: the model's own nose axis; tyres: its tyre nodes (name or prefix); fixed: node-name parts that stay with the body though they sit at a wheel; drop: node-name parts left out; interior: false when the model has no cabin (the game builds its own inside the shell); steering: node-name parts of the steering wheel; mirror: of the rear-view mirror's housing (the game's glass goes on it), mirror_glass: of the model's own mirror glass (the game's glass covers it, at its size), mirror_box: that glass found by hand ({centre, size}), none of them: the game hangs its own mirror where the driver sees it; eye, dials (offset, width, past), mirror_offset: corrections in metres, car frame (x right, y up, z back). same_as: draw another car's prepared model (the game fits the wheels to this car's tyres). cabin_from: {car: a donor entry (a key starting with _ is only a donor), nodes, offset, scale}: a shell without a cabin takes the donor's parts.",
+  "_comment": "The real car models the game draws (tools/prepare_car_models.py -> game/assets/models/<car>.glb), per catalogue car. file: the source in unreal/Import/Models (CC BY, its LICENSE.txt beside it); forward: the model's own nose axis; tyres: its tyre nodes (name or prefix); fixed: node-name parts that stay with the body though they sit at a wheel; drop: node-name parts left out; interior: false when the model has no cabin (the game builds its own inside the shell); steering: node-name parts of the steering wheel; mirror: of the rear-view mirror's housing (the game's glass goes on it), mirror_glass: of the model's own mirror glass (the game's glass covers it, at its size), mirror_box: that glass found by hand ({centre, size}), none of them: the game hangs its own mirror where the driver sees it; eye, dials (offset, width, past), mirror_offset: corrections in metres, car frame (x right, y up, z back). same_as: draw another car's prepared model (the game fits the wheels to this car's tyres). cabin_from: {car: a donor entry (a key starting with _ is only a donor), nodes, offset, scale}: a shell without a cabin takes the donor's parts. brake: material-name parts of the rear lamps that light when braking; keep: materials left untouched though their names say glass.",
   "_esprit": {
     "file": "lotus-esprit-turbo-1983.glb",
     "forward": "+z",
@@ -83,7 +83,13 @@
       "nodes": [
         "instrumental_leather"
       ]
-    }
+    },
+    "brake": [
+      "red_glass"
+    ],
+    "keep": [
+      "org_glass"
+    ]
   },
   "v8": {
     "file": "mclaren-570s-mmcworks.glb",
@@ -111,7 +117,10 @@
       "nodes": [
         "=object_12"
       ]
-    }
+    },
+    "brake": [
+      "backights.off"
+    ]
   },
   "hothatch": {
     "file": "peugeot-205-gti-lafreizz.glb",
@@ -149,6 +158,9 @@
       -0.36,
       0.52,
       0.3
+    ],
+    "brake": [
+      "light_rear"
     ]
   },
   "turbohatch": {
@@ -182,6 +194,9 @@
     },
     "steering": [
       "wheel_steering"
+    ],
+    "brake": [
+      "taillightreddeep"
     ]
   },
   "saloon": {
@@ -261,6 +276,9 @@
       "nodes": [
         "=object_41"
       ]
-    }
+    },
+    "brake": [
+      "feu_arr"
+    ]
   }
 }

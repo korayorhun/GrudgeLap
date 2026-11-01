@@ -343,7 +343,11 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   million triangles, its wheels in five shared meshes split by corner, its steering wheel part of the dashboard). The
   paint's lining on a panel's back face is now only inside the cabin (a box from the eyes, in the car's frame, which
   `CarView._Process` hands the shader every frame): the Renault's boot lid and a door are wound the wrong way and
-  showed black from outside. Split pieces are measured by the vertices their own triangles use.
+  showed black from outside. Split pieces are measured by the vertices their own triangles use. Brake lamps: the
+  rear lenses named in a model's `brake` entry glow red while the driver brakes (`CarView.Braking`, a copy of the
+  lens per car); `keep` leaves a material alone though its name says glass (the Testarossa's red tail lenses had
+  turned into dark window glass). The Unreal level's model script now rigs with the same `tools/car_models.py`,
+  so its flat-twelve is the Testarossa too. Switch: `--hold-brake`.
 - Real car models (0.16, `tools/prepare_car_models.py`, `CarView.Model.cs`). The lofted bodies and the boxes of
   their cabins read as toys, from the seat most of all, so the catalogue's cars are drawn as CC BY models of real
   cars with cabins of their own (THIRD_PARTY.md): the flat-twelve a Lotus Esprit Turbo 1983 (right-hand drive,

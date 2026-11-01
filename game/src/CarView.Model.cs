@@ -34,6 +34,22 @@ internal sealed partial class CarView
     private static StandardMaterial3D? _lens;
     private static Shader? _paintShader;
     private readonly List<ModelDent> _modelDents = [];
+    private readonly List<BaseMaterial3D> _brakeLamps = [];
+    private bool _braking;
+
+    /// <summary>
+    /// The brake lamps of a real model (tools/car_models.json "brake"): lit while the driver brakes. Set every frame;
+    /// only a change touches the materials.
+    /// </summary>
+    public bool Braking
+    {
+        set
+        {
+            if (value == _braking) return;
+            _braking = value;
+            foreach (var lamp in _brakeLamps) lamp.EmissionEnergyMultiplier = value ? 3f : 0f;
+        }
+    }
 
     /// <summary>
     /// A painted mesh of the model that dents in a crash: its surfaces as imported (indexed, in the mesh's own frame,
@@ -245,6 +261,18 @@ internal sealed partial class CarView
                         break;
                     case "GLP_Lens":
                         mesh.SetSurfaceOverrideMaterial(s, _lens);
+                        break;
+                    case "GLP_Brake":
+                        // The model's own lens, glowing red when the car brakes; a copy per car, so one car braking
+                        // does not light another's.
+                        if (mesh.Mesh.SurfaceGetMaterial(s) is BaseMaterial3D lens && lens.Duplicate() is BaseMaterial3D lamp)
+                        {
+                            lamp.EmissionEnabled = true;
+                            lamp.Emission = new Color(1f, 0.06f, 0.03f);
+                            lamp.EmissionEnergyMultiplier = 0f;
+                            mesh.SetSurfaceOverrideMaterial(s, lamp);
+                            _brakeLamps.Add(lamp);
+                        }
                         break;
                 }
             }

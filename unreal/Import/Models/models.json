@@ -1,50 +1,119 @@
 {
   "_comment": "Real car models (CC BY 4.0, see the LICENSE.txt beside each file) in place of the game's lofted bodies, per catalogue car (prepare_car_model.py). forward: the model's own nose axis; tyres: its tyre nodes (name or prefix); fixed: node-name parts that stay with the body though they sit at a wheel; drop: a second interior and anything else left out; glass: node-name parts that take the clear glass.",
   "flat12": {
-    "file": "lotus-esprit-turbo-1983.glb",
-    "forward": "+z",
-    "tyres": ["tire_195_rubber_0", "tire_195_1_rubber_0", "tire_235_m_rubber_0", "tire_235_m002_rubber_0"],
-    "drop": ["dash_interior", "sheat", "shift_lever", "steering_leather"],
-    "glass": ["glass"]
+    "file": "testarossa-liosh.glb",
+    "forward": "-x",
+    "tyres": [
+      "=Object_87",
+      "=Object_92",
+      "=Object_62",
+      "=Object_82"
+    ],
+    "glass": [
+      "glass"
+    ]
   },
   "v8": {
     "file": "maserati-granturismo-mc.glb",
     "forward": "+z",
-    "tyres": ["Object_29", "Object_30", "Object_31", "Object_32"],
-    "glass": ["glass"]
+    "tyres": [
+      "Object_29",
+      "Object_30",
+      "Object_31",
+      "Object_32"
+    ],
+    "glass": [
+      "glass"
+    ]
   },
   "hothatch": {
     "file": "civic-type-r-ek9.glb",
     "forward": "+z",
-    "tyres": ["Wheel_FL_Tire", "Wheel_FR_Tire", "Wheel_RL_Tire", "Wheel_RR_Tire"],
-    "glass": ["glass"]
+    "tyres": [
+      "Wheel_FL_Tire",
+      "Wheel_FR_Tire",
+      "Wheel_RL_Tire",
+      "Wheel_RR_Tire"
+    ],
+    "glass": [
+      "glass"
+    ]
   },
   "five": {
     "file": "civic-type-r-ek9.glb",
     "forward": "+z",
-    "tyres": ["Wheel_FL_Tire", "Wheel_FR_Tire", "Wheel_RL_Tire", "Wheel_RR_Tire"],
-    "glass": ["glass"]
+    "tyres": [
+      "Wheel_FL_Tire",
+      "Wheel_FR_Tire",
+      "Wheel_RL_Tire",
+      "Wheel_RR_Tire"
+    ],
+    "glass": [
+      "glass"
+    ]
   },
   "turbohatch": {
     "file": "civic-type-r-ek9.glb",
     "forward": "+z",
-    "tyres": ["Wheel_FL_Tire", "Wheel_FR_Tire", "Wheel_RL_Tire", "Wheel_RR_Tire"],
-    "glass": ["glass"]
+    "tyres": [
+      "Wheel_FL_Tire",
+      "Wheel_FR_Tire",
+      "Wheel_RL_Tire",
+      "Wheel_RR_Tire"
+    ],
+    "glass": [
+      "glass"
+    ]
   },
   "saloon": {
     "file": "saab-9-5-sedan.glb",
     "forward": "+z",
-    "tyres": ["#Wheel_Tire_FL", "#Wheel_Tire_FR", "#Wheel_Tire_BL", "#Wheel_Tire_BR"],
-    "fixed": ["#wheel_spring", "#wheel_brakes"],
-    "drop": ["seat_", "inner_dashboard", "wheel_steering", "pedal"],
-    "glass": ["glass"]
+    "tyres": [
+      "#Wheel_Tire_FL",
+      "#Wheel_Tire_FR",
+      "#Wheel_Tire_BL",
+      "#Wheel_Tire_BR"
+    ],
+    "fixed": [
+      "#wheel_spring",
+      "#wheel_brakes"
+    ],
+    "drop": [
+      "seat_",
+      "inner_dashboard",
+      "wheel_steering",
+      "pedal"
+    ],
+    "glass": [
+      "glass"
+    ]
   },
   "fleet": {
     "file": "mercedes-e-w212.glb",
     "forward": "-z",
-    "tyres": ["mesh_WheelFL", "mesh_WheelFR", "mesh_WheelRL", "mesh_WheelRR"],
-    "fixed": ["mesh_brakefl_", "mesh_brakefr_", "mesh_brakerl_", "mesh_brakerr_"],
-    "drop": ["steeringwheel", "pedal", "seat", "mat_salon", "inside_panel", "console", "dash"],
-    "glass": ["glass"]
+    "tyres": [
+      "mesh_WheelFL",
+      "mesh_WheelFR",
+      "mesh_WheelRL",
+      "mesh_WheelRR"
+    ],
+    "fixed": [
+      "mesh_brakefl_",
+      "mesh_brakefr_",
+      "mesh_brakerl_",
+      "mesh_brakerr_"
+    ],
+    "drop": [
+      "steeringwheel",
+      "pedal",
+      "seat",
+      "mat_salon",
+      "inside_panel",
+      "console",
+      "dash"
+    ],
+    "glass": [
+      "glass"
+    ]
   }
 }

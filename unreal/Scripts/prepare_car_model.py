@@ -223,88 +223,17 @@ def main():
         return
     spec = SPECS[car]
     model, model_blob = load(os.path.join(os.path.dirname(config_path), entry["file"]))
-    worlds, _ = world_matrices(model)
-    nodes = model["nodes"]
-    mesh_nodes = [i for i in worlds if "mesh" in nodes[i]]
-    bounds = {i: mesh_bounds(model, nodes[i]["mesh"], worlds[i]) for i in mesh_nodes}
-    name_of = lambda i: nodes[i].get("name", f"node{i}")
-    drop = [s.lower() for s in entry.get("drop", [])]
-    fixed = [s.lower() for s in entry.get("fixed", [])]
-    dropped = {i for i in mesh_nodes if any(s in name_of(i).lower() for s in drop)}
-    mesh_nodes = [i for i in mesh_nodes if i not in dropped]
-
-    # The tyres: the named nodes, or the four wheel-like meshes (two equal extents, a smaller third, low) nearest the corners.
-    forward = 1.0 if entry.get("forward", "+z") == "+z" else -1.0
-    if entry.get("tyres") == "auto" or "tyres" not in entry:
-        candidates = []
-        for i in mesh_nodes:
-            size = bounds[i][1] - bounds[i][0]
-            order = np.sort(size)
-            if order[2] > 0 and order[1] / order[2] > 0.93 and order[0] / order[2] < 0.6 and order[2] > 0.08 * max(bounds[j][1][2] - bounds[j][0][2] for j in mesh_nodes):
-                candidates.append(i)
-        tyre_nodes = candidates
-    else:
-        tyre_nodes = [i for i in mesh_nodes if any(name_of(i) == n or name_of(i).startswith(n) for n in entry["tyres"])]
-    centres = {i: (bounds[i][0] + bounds[i][1]) * 0.5 for i in tyre_nodes}
-    if len(tyre_nodes) < 4:
-        raise SystemExit(f"{car}: only {len(tyre_nodes)} tyre node(s) found: {[name_of(i) for i in tyre_nodes]}")
-    # One tyre per corner, by position: front by the forward axis, left by x (right-handed glTF: left is +x when the
-    # car faces +z, -x when it faces -z), the largest tyre of each corner's cluster.
-    corners = {}
-    for i in tyre_nodes:
-        c = centres[i]
-        front = (c[2] * forward) > np.mean([centres[j][2] * forward for j in tyre_nodes])
-        left = (c[0] * forward) > 0
-        key = (front, left)
-        size = np.max(bounds[i][1] - bounds[i][0])
-        if key not in corners or size > corners[key][1]:
-            corners[key] = (i, size)
-    order = [(True, True), (True, False), (False, True), (False, False)]   # FL, FR, RL, RR
-    if any(k not in corners for k in order):
-        raise SystemExit(f"{car}: tyres do not cover four corners: {[(k, name_of(v[0])) for k, v in corners.items()]}")
-    tyres = [corners[k][0] for k in order]
-    pivots = [centres[i] for i in tyres]
-    # Everything that sits inside a wheel's reach and is no bigger than the tyre rolls with it (rims, discs, caps),
-    # unless its name says it stays (calipers, springs).
-    assemblies = [[i] for i in tyres]
-    assigned = set(tyres)
-    for i in mesh_nodes:
-        if i in assigned:
-            continue
-        size = bounds[i][1] - bounds[i][0]
-        centre = (bounds[i][0] + bounds[i][1]) * 0.5
-        for w, pivot in enumerate(pivots):
-            tyre_size = bounds[tyres[w]][1] - bounds[tyres[w]][0]
-            reach = 0.5 * np.max(tyre_size)
-            if np.linalg.norm(centre - pivot) < reach * 0.6 and np.max(size) <= np.max(tyre_size) * 1.05 and not any(s in name_of(i).lower() for s in fixed):
-                assemblies[w].append(i)
-                assigned.add(i)
-                break
-    body_nodes = [i for i in mesh_nodes if i not in assigned]
-
-    # The transform into the game's car frame: faced to -Z, scaled to the simulation's wheelbase, hubs at rest height.
-    front_z = np.mean([pivots[0][2], pivots[1][2]])
-    rear_z = np.mean([pivots[2][2], pivots[3][2]])
-    wheelbase = abs(front_z - rear_z)
-    scale = (spec["front"] + spec["rear"]) / wheelbase
-    sag = spec["mass"] * GRAVITY / 4.0 / spec["stiffness"]
-    hub_y = spec["hub"] - (spec["rest"] - sag)
-    turn = np.eye(4)
-    if forward > 0:
-        turn[0, 0] = -1.0
-        turn[2, 2] = -1.0
-    scaling = np.diag([scale, scale, scale, 1.0])
-    placed = scaling @ turn
-    front_after = placed @ np.array([0.0, 0.0, front_z, 1.0])
-    hub_after = placed @ np.array([0.0, np.mean([p[1] for p in pivots]), 0.0, 1.0])
-    centre_x = placed @ np.array([np.mean([p[0] for p in pivots]), 0.0, 0.0, 1.0])
-    translation = np.eye(4)
-    translation[0, 3] = -centre_x[0]
-    translation[1, 3] = hub_y - hub_after[1]
-    translation[2, 3] = -spec["front"] - front_after[2]
-    to_car = translation @ placed
-    length = (max(b[1][2] for b in bounds.values()) - min(b[0][2] for b in bounds.values())) * scale
-    print(f"{car}: {entry['file']} wheelbase {wheelbase:.3f} -> scale {scale:.3f} ({length:.2f} m long); hubs at y={hub_y:.3f}; "
+    # The rigging is shared with the game's own preparation (tools/car_models.py): models lying along x, wheels kept
+    # in one mesh per axle (split), unlit exports and node selectors (#index, =name) work the same in both.
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools"))
+    import car_models as cm
+    if entry.get("split"):
+        cm.split_nodes(model, model_blob, [s.lower() for s in entry["split"]])
+    cm.strip_unlit(model)
+    r = cm.rig(model, entry, spec, car)
+    worlds, nodes, name_of = r["worlds"], model["nodes"], r["name_of"]
+    tyres, assemblies, pivots, body_nodes, dropped, to_car = r["tyres"], r["assemblies"], r["pivots"], r["body_nodes"], r["dropped"], r["to_car"]
+    print(f"{car}: {entry['file']} wheelbase {r['wheelbase']:.3f} -> scale {r['scale']:.3f} ({r['length']:.2f} m long); hubs at y={r['hub_y']:.3f}; "
           f"tyres {[name_of(i) for i in tyres]}; {len(body_nodes)} body node(s), {sum(len(a) - 1 for a in assemblies)} wheel part(s), {len(dropped)} dropped")
 
     # The export's car: its lofted exterior and tyres go, the model comes in.

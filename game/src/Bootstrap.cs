@@ -61,6 +61,7 @@ public sealed partial class Bootstrap : Node3D
     private float _menuAt = -1f;      // automation: the menu opened for a picture of it (--menu-after)
     private string? _dropFile;        // automation: a file dropped on the window two seconds in (--drop=)
     private bool _perfLog;            // automation: GPU and CPU time per frame, logged every five seconds (--perf-log)
+    private bool _holdBrake;          // automation: the brake held down all the time, for pictures of the brake lamps (--hold-brake)
     private bool _dentTest;           // automation: a deep dent in the car's nose two seconds in, for pictures of it (--dent-test)
     private double _perfGpu, _perfCpu, _perfSince;
     private int _perfFrames;
@@ -273,6 +274,7 @@ public sealed partial class Bootstrap : Node3D
             else if (arg == "--lofted") CarView.UseModels = false;
             else if (arg == "--perf-log") _perfLog = true;
             else if (arg == "--dent-test") _dentTest = true;
+            else if (arg == "--hold-brake") _holdBrake = true;
             else if (arg.StartsWith("--ram-speed=", System.StringComparison.Ordinal)) float.TryParse(arg["--ram-speed=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _ramSpeed);
         }
     }
@@ -488,6 +490,8 @@ public sealed partial class Bootstrap : Node3D
         }
 
         var input = _ram is not null ? RamInputs() : _park ? DriverInputs.Idle : _attract ? _scripted.Next(_session) : _keyboard.Sample(dt, MathF.Abs(_session.Car.Speed));
+        if (_holdBrake) input.Brake = 1f;
+        _carView.Braking = input.Brake > 0.05f;
         if (!_attract && !_park && HandleMenuKeys()) input.Ignition = true;
 
         if (_session.Phase == SessionPhase.Replay && Input.IsActionJustPressed(InputSetup.Abort)) _session.Abort();

@@ -570,6 +570,13 @@ def prepare(car, entry, inspect=False, config=None):
             material["alphaMode"] = "MASK"
             material["alphaCutoff"] = 0.5
         # "==Name" names a paint material exactly, case and all (the Renault 12 has both "Material" and "material").
+        # The rear lamps' lenses that light up when the car brakes (CarView.Braking), and materials left as the model
+        # has them though their names say glass (the Testarossa's orange indicators, red_glass its tail lamps).
+        if any((name == w[2:]) if w.startswith("==") else (w in lower) for w in [s.lower() if not s.startswith("==") else s for s in entry.get("brake", [])]):
+            material["name"] = "GLP_Brake"
+            continue
+        if any(w.lower() in lower for w in entry.get("keep", [])):
+            continue
         painted = any((name == w[2:]) if w.startswith("==") else (w in lower) for w in entry.get("paint", [])) if paint_words else is_paint(name)
         if painted:
             material["name"] = "GLP_Paint"
