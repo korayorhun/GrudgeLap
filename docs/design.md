@@ -519,6 +519,8 @@ new-package requests were withdrawn).
   roads keep their profile and the ground field grades the embankments and cuttings, the buildings stand on levelled
   pads (`TerrainField.AddFlat`), and the terrain mesh paints bare earth by the relief the roads cut into the plain,
   not by the height itself.
+- Units: km/h by default since 0.14 (mph until then, as the cabinet's dial); U or the menu switches, and the choice is
+  kept under `units` in the settings (the Unreal version the same, under a new key so an old copy gets metric once).
 - Instant replay music: eleven seconds of a CC0 FM tune; 1989 mode keeps the synthesised one. A file of the player's
   own under `user://music/replay.ogg|.mp3|.wav` takes its place (0.11, `EngineAudio.CustomReplayMusic`): nothing
   copyrighted ships with the game, but a copy can play what its owner remembers.

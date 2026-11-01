@@ -153,7 +153,7 @@ private:
 	bool bScoreOffered = false;   // the credit's end has been put to the high-score table
 	int32 CarIndex = 0;
 	int32 Transmission = GLP_MANUAL_AUTO_CLUTCH;
-	bool bKmh = false;
+	bool bKmh = true;   // metric by default since 0.14 (the Godot version too); U toggles, the choice is kept
 	bool bAttract = false;
 	bool bTraffic = true;
 	bool bSpeedRoute = false;

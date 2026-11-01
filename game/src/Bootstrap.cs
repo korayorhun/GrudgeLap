@@ -164,6 +164,8 @@ public sealed partial class Bootstrap : Node3D
         AddChild(_updater);
         SubViewport panel;
         (panel, _instruments) = InstrumentCluster.Create();
+        // Metric by default since 0.14; U or the menu switches, and the choice is kept ("units": 1 km/h, 0 mph).
+        _instruments.UseKmh = LoadChoice("units", 1) != 0;
         AddChild(panel);
         _instrumentPanel = panel.GetTexture();
         _hud.Instruments = _instrumentPanel;
@@ -851,6 +853,7 @@ public sealed partial class Bootstrap : Node3D
                 break;
             case PauseMenu.Item.Units:
                 _instruments.UseKmh = !_instruments.UseKmh;
+                SaveChoice("units", _instruments.UseKmh ? 1 : 0);
                 break;
             case PauseMenu.Item.Fullscreen:
                 ToggleFullscreen();
@@ -897,7 +900,11 @@ public sealed partial class Bootstrap : Node3D
     {
         if (Input.IsActionJustPressed(InputSetup.Fullscreen)) ToggleFullscreen();
         if (Input.IsActionJustPressed(InputSetup.Camera)) ToggleCamera();
-        if (Input.IsActionJustPressed(InputSetup.Units)) _instruments.UseKmh = !_instruments.UseKmh;
+        if (Input.IsActionJustPressed(InputSetup.Units))
+        {
+            _instruments.UseKmh = !_instruments.UseKmh;
+            SaveChoice("units", _instruments.UseKmh ? 1 : 0);
+        }
         if (Input.IsActionJustPressed(InputSetup.NewGame))
         {
             ShowMenu(false);

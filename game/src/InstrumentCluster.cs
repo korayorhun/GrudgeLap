@@ -21,7 +21,7 @@ internal sealed partial class InstrumentCluster : Control
     private RaceSession? _session;
     private double _odometer;    // metres since the credit started
 
-    public bool UseKmh { get; set; }
+    public bool UseKmh { get; set; } = true;   // metric by default since 0.14
 
     /// <summary>Builds the viewport the panel is drawn into; add it to the tree and use its texture.</summary>
     public static (SubViewport Viewport, InstrumentCluster Cluster) Create()

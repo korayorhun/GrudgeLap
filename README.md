@@ -88,7 +88,7 @@ shows a replay and puts you back at the last return point; Enter turns the key a
 | Enter | turn the ignition key (start, and after every crash) |
 | Space | skip the instant replay / give up an off-road excursion |
 | C | cockpit / chase camera |
-| U | mph / km/h |
+| U | km/h / mph (metric by default, the choice remembered) |
 | F8 | 1989 mode: a third of the pixels, 20 frames a second, flat colours, synthesised engine and tyres |
 | F9 | attract mode (the scripted driver drives) |
 | F10 | check for / install an update |

@@ -1080,16 +1080,17 @@ void AGlpGame::LoadSettings()
 		{
 			Transmission = FMath::Clamp(FCString::Atoi(*Value), 0, 2);
 		}
-		else if (Key == TEXT("kmh"))
+		else if (Key == TEXT("units"))
 		{
-			bKmh = FCString::Atoi(*Value) != 0;
+			// Metric by default since 0.14: the old "kmh" key is left unread, so a copy that never chose gets km/h once.
+			bKmh = !Value.Equals(TEXT("mph"), ESearchCase::IgnoreCase);
 		}
 	}
 }
 
 void AGlpGame::SaveSettings() const
 {
-	const FString Text = FString::Printf(TEXT("car=%d\ntransmission=%d\nkmh=%d\n"), CarIndex, Transmission, bKmh ? 1 : 0);
+	const FString Text = FString::Printf(TEXT("car=%d\ntransmission=%d\nunits=%s\n"), CarIndex, Transmission, bKmh ? TEXT("kmh") : TEXT("mph"));
 	FFileHelper::SaveStringToFile(Text, *SavedFile(TEXT("settings.ini")));
 }
 
