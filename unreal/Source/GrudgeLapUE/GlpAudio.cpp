@@ -211,9 +211,10 @@ void UGlpAudio::SetCar(int32 Style)
 	const FString Directory = AudioDirectory();
 	TSharedPtr<FClips, ESPMode::ThreadSafe> Loaded = MakeShared<FClips, ESPMode::ThreadSafe>();
 	// SampledEngine.Load: the grain banks of the car's engine, by its body style (CarStyle: the twelve, the V8, the
-	// hot hatch's four, the five, the turbo hatch's four), with the cylinders that turn revs into firing pulses.
+	// hot hatch's four, the rally hatch's turbo four on the "turbohatch" recordings, the V6 hatch's six), with the
+	// cylinders that turn revs into firing pulses: EngineSpec.SoundFolder and Cylinders of physics/Vehicle/EngineModel.cs.
 	struct FEngineBank { const TCHAR* Folder; int32 Cylinders; };
-	static const FEngineBank EngineBanks[] = { { TEXT("flat12"), 12 }, { TEXT("v8"), 8 }, { TEXT("hothatch"), 4 }, { TEXT("five"), 5 }, { TEXT("turbohatch"), 4 },
+	static const FEngineBank EngineBanks[] = { { TEXT("flat12"), 12 }, { TEXT("v8"), 8 }, { TEXT("hothatch"), 4 }, { TEXT("turbohatch"), 4 }, { TEXT("v6"), 6 },
 		{ TEXT("saloon"), 4 }, { TEXT("estate"), 4 }, { TEXT("fleet"), 4 } };
 	const FEngineBank& Bank = EngineBanks[FMath::Clamp(Style, 0, (int32)UE_ARRAY_COUNT(EngineBanks) - 1)];
 	if (const FGlpLibrary* Library = FGlpLibrary::Get())
