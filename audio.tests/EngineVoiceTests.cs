@@ -235,9 +235,11 @@ public class EngineVoiceTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Every engine is about as loud at comparable driving (pulling at full throttle between 45 and 90 % of its redline),
-    /// outside and in the cabin: within 1.5 LU of the cars' mean, where in 0.19 the estate was some 5 LU over the
-    /// flat-twelve. A big engine still differs, in its sound (lower firing, the mid engine's cabin), not its level.
+    /// Every engine is about as loud at comparable driving, outside and in the cabin: run up at full throttle from 40 to
+    /// 95 % of its redline over four seconds, the revs gliding as in a gear (not the trim's own steady holds at four revs,
+    /// so the test does not just read back the trim; the cap on its peaks may also hold a car under it), every car is
+    /// within 1.5 LU of the cars' mean, where in 0.19 the estate was some 5 LU over the flat-twelve. A big engine still
+    /// differs, in its sound (lower firing, the mid engine's cabin), not its level.
     /// </summary>
     [Fact]
     public void Every_engine_is_about_as_loud_pulling_hard()
@@ -249,8 +251,15 @@ public class EngineVoiceTests(ITestOutputHelper output)
             {
                 var (car, index) = ((string)row[0], (int)row[1]);
                 var redline = VehicleSpec.Catalogue[index].Engine.RedlineRpm;
-                var power = new[] { 0.45f, 0.6f, 0.75f, 0.9f }.Average(f => Math.Pow(10, HeldLufs(Voice(car, index, interior), redline * f, 1f) / 10));
-                levels[car] = 10 * Math.Log10(power);
+                var voice = Voice(car, index, interior);
+                Hold(voice, 0.4f * redline, 1f, 0.5f);
+                var x = new float[4 * Rate];
+                for (var at = 0; at < x.Length; at += 512)
+                {
+                    var rpm = redline * (0.4f + 0.55f * (at + 512f) / x.Length);
+                    voice.Render(x.AsSpan(at, Math.Min(512, x.Length - at)), rpm, 1f, true);
+                }
+                levels[car] = Loudness.Lufs(x, Rate);
             }
             var mean = levels.Values.Average();
             output.WriteLine($"{(interior ? "cabin" : "outside")}: {string.Join(", ", levels.Select(l => $"{l.Key} {l.Value:0.0}"))} LUFS");
@@ -259,9 +268,45 @@ public class EngineVoiceTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// No engine peaks over -1 dBFS at full throttle (0.20 review, problem 2): held from 30 % of its redline to the
+    /// redline in steps of 2 %, at the game's volume of 0.9, outside and in the cabin. Trimmed to the reference alone the
+    /// fleet saloon peaked at +2.8 dBFS, the V8 at +1.2 and the turbo hatch at +1.1, and the mix's limiter ducked the
+    /// whole mix with them. The trims are held under <see cref="GranularEngine.PeakCeiling"/> by their own renders' peaks;
+    /// what those miss is rounded off above <see cref="GranularEngine.PeakKnee"/>, which must stay rare: at most one
+    /// sample in a thousand (measured: at most 5 in 10,000, the turbo hatch's cabin, and none at all on four of the cars).
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Cars))]
+    public void Full_throttle_peaks_under_minus_one_dbfs(string car, int index)
+    {
+        var redline = VehicleSpec.Catalogue[index].Engine.RedlineRpm;
+        foreach (var interior in new[] { false, true })
+        {
+            var voice = Voice(car, index, interior);
+            voice.Volume = 0.9f;
+            var (peak, at) = (0f, 0f);
+            long rounded = 0, count = 0;
+            for (var share = 0.3f; share <= 1.001f; share += 0.02f)
+            {
+                var x = Hold(voice, share * redline, 1f, 0.8f).AsSpan(Rate / 5);
+                foreach (var s in x)
+                {
+                    var magnitude = MathF.Abs(s);
+                    if (magnitude > peak) (peak, at) = (magnitude, share * redline);
+                    if (magnitude > GranularEngine.PeakKnee) rounded++;
+                }
+                count += x.Length;
+            }
+            output.WriteLine($"{car} {(interior ? "cabin" : "outside")}: peaks at {20 * Math.Log10(peak):+0.0;-0.0} dBFS ({at:0} rpm), {rounded} of {count} samples rounded off");
+            Assert.True(20 * Math.Log10(peak) <= -1.0, $"{car} peaks at {20 * Math.Log10(peak):+0.0;-0.0} dBFS");
+            Assert.True(rounded <= count / 1000, $"{car}: {rounded} of {count} samples rounded off");
+        }
+    }
+
+    /// <summary>
     /// Each bank's segments (recorded apart) are evened onto one trend of brightness and level across the revs (audit
     /// finding 9): after evening no segment's grains sit more than 1.5 dB off the trend unless its correction reached its
-    /// limit, and none is moved away from it.
+    /// limit, none is moved away from it, and the bank peaks no higher than its raw recording but for its rarest samples.
     /// </summary>
     [Theory]
     [MemberData(nameof(Cars))]
@@ -283,6 +328,12 @@ public class EngineVoiceTests(ITestOutputHelper output)
                 if (MathF.Abs(done.Tilt) < 5.9f) Assert.InRange(after, -1.5f, 1.5f);
                 Assert.True(MathF.Abs(after) <= MathF.Abs(before) + 0.1f, "a segment was moved away from the trend");
             }
+            // No segment's peaks are raised past the raw recording's but for the rarest samples, a click (PeakMeter): the
+            // fleet saloon's Bravo segment, tilted and raised whole, reached 1.49 against 0.99.
+            var rawPeak = raw.Samples.Max(MathF.Abs);
+            var evenPeak = PeakMeter.Of(even.Samples);
+            output.WriteLine($"{car} {name}: peaks at {rawPeak:0.00} raw, {evenPeak:0.00} evened but for the rarest samples ({even.Samples.Max(MathF.Abs):0.00} with them)");
+            Assert.True(evenPeak <= rawPeak + 0.002f, $"{car} {name} peaks at {evenPeak:0.00} evened against {rawPeak:0.00} raw");
         }
     }
 

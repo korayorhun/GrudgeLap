@@ -16,7 +16,11 @@ namespace GrudgeLap.Audio;
 /// gentle shelf about 1 kHz, level kept) until its grains sit on the trend on average. The rise of brightness with the
 /// revs, which is the engine's own, is kept; the steps at the joins go. The segments' levels are then evened the same
 /// way onto a trend of level (<see cref="LevelTrend"/>): the fleet saloon's run-up joins a Punto's to a Bravo's recorded
-/// 4 dB quieter, which left it buried by the wind at the top of its revs. A bank of one segment is left as it is.
+/// 4 dB quieter, which left it buried by the wind at the top of its revs. No segment's peaks are raised past the raw
+/// recording's peak, though, but for its rarest samples (<see cref="PeakMeter"/>: a click, which the voice rounds off):
+/// tilted 6 dB, the fleet saloon's Bravo segment is peakier than it was, and with its whole gain its typical peaks
+/// would have gone over the recording's (0.20 review: the bank peaked at 1.49, the voice at +2.8 dBFS). A bank of one
+/// segment is left as it is.
 /// </remarks>
 public sealed class GrainBank
 {
@@ -57,7 +61,10 @@ public sealed class GrainBank
     public bool[] Usable { get; }
     /// <summary>The segment (the recording) every pulse was cut from.</summary>
     public int[] Segment { get; }
-    /// <summary>The tilt and the gain each segment was given to even out the timbre and the level, dB (none when it was not evened).</summary>
+    /// <summary>
+    /// The tilt and the gain each segment was given to even out the timbre and the level, dB (none when it was not evened);
+    /// the gain is held so that the segment's peaks, but for its rarest samples, stay under the raw recording's peak.
+    /// </summary>
     public IReadOnlyDictionary<int, (float Tilt, float Gain)> Evened { get; } = new Dictionary<int, (float, float)>();
     public float MinFiring { get; }
     public float MaxFiring { get; }
@@ -205,6 +212,7 @@ public sealed class GrainBank
         if (segments.Length < 2) return done;
         var brightness = BrightnessTrend();
         var original = (float[])Samples.Clone();
+        var rawPeak = Peak(original, 0, original.Length);
         var stretches = segments.ToDictionary(s => s, s =>
         {
             // The stretch of samples the segment's grains cover: from its first pulse's predecessor to its last one's successor.
@@ -229,18 +237,28 @@ public sealed class GrainBank
             }
             done[s] = (tilt, 0f);
         }
-        // The level is evened on the tilted segments: a gain each, straight from its offset.
+        // The level is evened on the tilted segments: a gain each, straight from its offset, but none that lifts the
+        // segment's peaks over the raw recording's (the tilt may already have, by up to half of it, which this takes back).
         var level = LevelTrend();
         foreach (var s in segments)
         {
-            var gain = Math.Clamp(-SegmentOffset(s, Level, level), -MaxGain, MaxGain);
             var (from, to) = stretches[s];
+            var headroom = 20f * MathF.Log10(rawPeak / PeakMeter.Of(Samples.AsSpan(from, to - from)));
+            var gain = Math.Clamp(MathF.Min(-SegmentOffset(s, Level, level), headroom), -MaxGain, MaxGain);
             var scale = MathF.Pow(10f, gain / 20f);
             for (var j = from; j < to; j++) Samples[j] *= scale;
             if (_high is not null) for (var j = from; j < to; j++) _high[j] *= scale;
             done[s] = (done[s].Item1, gain);
         }
         return done;
+    }
+
+    /// <summary>The largest magnitude among <paramref name="x"/>[from..to).</summary>
+    private static float Peak(float[] x, int from, int to)
+    {
+        var peak = 0f;
+        for (var j = from; j < to; j++) peak = MathF.Max(peak, MathF.Abs(x[j]));
+        return peak;
     }
 
     /// <summary>

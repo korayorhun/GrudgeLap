@@ -31,6 +31,17 @@ namespace GrudgeLap.Audio;
 /// every car is about as loud at comparable driving, and what differs is the sound, not the level. The idle recording is
 /// brought to <see cref="IdleLufs"/> the same way.
 /// </para>
+/// <para>
+/// Peaks (0.20 review): trimmed to the reference alone, three cars peaked over full scale at the game's volume of 0.9 (the
+/// fleet saloon at +2.8 dBFS, the turbo hatch at +1.1, the V8 at +1.2), and the mix's limiter pulled everything down with
+/// them, tyres and wind included, by up to 3.3 dB. Neither trim may now lift the voice's peaks at full throttle and full
+/// <see cref="Volume"/> over <see cref="PeakCeiling"/>: the trim's renders, taken on every 5 % from 30 % of the redline
+/// to the redline, give the peak (but for its rarest samples, <see cref="PeakMeter"/>), and a car whose recording is
+/// peakier than it is loud plays a little under the reference rather than over full scale. A rarer peak (a click in a
+/// recording, a grain with a sharper edge than the renders met) is rounded off above <see cref="PeakKnee"/> instead,
+/// so the voice never leaves <see cref="PeakCeiling"/>: at full throttle that touches no more than a few samples in
+/// 10,000 at the game's volume.
+/// </para>
 /// </remarks>
 public sealed class GranularEngine
 {
@@ -47,6 +58,11 @@ public sealed class GranularEngine
     /// is a Niva's, made quietly).
     /// </summary>
     public const double IdleLufs = ReferenceLufs - 10.0;
+    /// <summary>
+    /// The voice's peaks: never over <see cref="PeakCeiling"/> (-1 dBFS), and above <see cref="PeakKnee"/> (-1.9 dBFS,
+    /// the trimmed peaks at the game's volume of 0.9) softly rounded off towards it (see the remarks).
+    /// </summary>
+    public const float PeakCeiling = 0.89f, PeakKnee = 0.8f;
     /// <summary>The level a closed throttle plays at against an open one; a cut pulse plays at it too.</summary>
     public const float CutLevel = 0.42f;
 
@@ -70,6 +86,8 @@ public sealed class GranularEngine
     private readonly float _cutMatch = 1f;
     /// <summary>Brings the idle recording to <see cref="IdleLufs"/> (see the remarks).</summary>
     private readonly float _idleGain = 1f;
+    /// <summary>Peaks are rounded off (<see cref="Round"/>); not in the twins the trims are measured on, which must see them whole.</summary>
+    private readonly bool _rounded;
     private long _time;
     private double _nextPulse;
     private int _idlePulse = 1;
@@ -131,15 +149,25 @@ public sealed class GranularEngine
         _idleTopRpm = idle is null ? 0f : idle.MaxFiring * 120f / cylinders * 1.12f;
         _driveBottomRpm = MathF.Max(drive.MinFiring * 120f / cylinders, _idleTopRpm + 200f);
         _nextPulse = _latency;
+        _rounded = trim;
         if (overrun is not null) _cutMatch = Math.Clamp((float)Math.Pow(10.0, (drive.Lufs() - overrun.Lufs()) / 20.0), 0.25f, 4f);
         if (trim)
         {
-            // The revs it is trimmed at: four points over 45-90 % of the redline, or five over the run-up's recording.
-            float[] revs = redlineRpm > 0f
-                ? [0.45f * redlineRpm, 0.6f * redlineRpm, 0.75f * redlineRpm, 0.9f * redlineRpm]
-                : RunUpRevs();
-            _outsideTrim = Trim(interior: false, revs);
-            _cabinTrim = Trim(interior: true, revs);
+            // The revs it is trimmed at: four points over 45-90 % of the redline, or five over the run-up's recording; its
+            // peaks are taken over those and every 5 % from 30 % of the redline to the redline (or over the recording).
+            float[] revs, peakRevs;
+            if (redlineRpm > 0f)
+            {
+                revs = [0.45f * redlineRpm, 0.6f * redlineRpm, 0.75f * redlineRpm, 0.9f * redlineRpm];
+                peakRevs = [.. Enumerable.Range(0, 15).Select(k => (0.3f + 0.05f * k) * redlineRpm)];
+            }
+            else
+            {
+                revs = RunUpRevs(5);
+                peakRevs = RunUpRevs(11);
+            }
+            _outsideTrim = Trim(interior: false, revs, peakRevs);
+            _cabinTrim = Trim(interior: true, revs, peakRevs);
             if (idle is not null) _idleGain = IdleGain(idle);
         }
     }
@@ -208,7 +236,7 @@ public sealed class GranularEngine
             // The level: CutLevel of full at a closed throttle, rising with the load, and a little with the revs.
             var target = running ? Volume * (CutLevel + (1f - CutLevel) * _smoothLoad) * (0.72f + 0.28f * Math.Clamp((nowRpm - 1000f) / 6000f, 0f, 1f)) : 0f;
             _level += (target - _level) * levelFollow;
-            output[i] = value * _level;
+            output[i] = _rounded ? Round(value * _level) : value * _level;
             _time++;
         }
         _rpm = rpm;
@@ -285,20 +313,21 @@ public sealed class GranularEngine
         _tailpipe.SetHighShelf(voicing.TailpipeHz, EngineVoicing.TailpipeDb, rate);
     }
 
-    /// <summary>Five revs spread over the run-up's recording.</summary>
-    private float[] RunUpRevs()
+    /// <summary><paramref name="count"/> revs spread evenly over the run-up's recording, half a spacing in from its ends.</summary>
+    private float[] RunUpRevs(int count)
     {
         var low = MathF.Max(_drive.MinFiring * 120f / _cylinders, _driveBottomRpm);
         var high = MathF.Max(_drive.MaxFiring * 120f / _cylinders, low);
-        return [.. Enumerable.Range(0, 5).Select(k => low + (high - low) * (0.1f + 0.2f * k))];
+        return [.. Enumerable.Range(0, count).Select(k => low + (high - low) * (0.5f + k) / count)];
     }
 
     /// <summary>
     /// The gain that brings this voice to <see cref="ReferenceLufs"/> at full throttle at <paramref name="revs"/>, heard
     /// outside or in the cabin: a twin of it is rendered for a third of a second at each, and its loudness taken over all
-    /// of them (BS.1770, ungated). Held between a quarter and four times.
+    /// of them (BS.1770, ungated). No more than keeps its peaks, there and at <paramref name="peakRevs"/> (a quarter of a
+    /// second each), under <see cref="PeakCeiling"/> but for the rarest samples; held between a quarter and four times.
     /// </summary>
-    private float Trim(bool interior, float[] revs)
+    private float Trim(bool interior, float[] revs, float[] peakRevs)
     {
         var twin = new GranularEngine(_idle, _drive, _cylinders, 1, _overrun, Voicing, trim: false, 0f) { Interior = interior };
         var rate = SampleRate;
@@ -306,21 +335,29 @@ public sealed class GranularEngine
         var each = rate / 3;
         var block = new float[settle + each];
         var heard = new float[revs.Length * each];
+        var peaks = new PeakMeter();
+        void Hold(float rpm, int length)
+        {
+            for (var at = 0; at < length; at += 512) twin.Render(block.AsSpan(at, Math.Min(512, length - at)), rpm, 1f, true);
+            peaks.Add(block.AsSpan(settle, length - settle));
+        }
         for (var k = 0; k < revs.Length; k++)
         {
-            for (var at = 0; at < block.Length; at += 512) twin.Render(block.AsSpan(at, Math.Min(512, block.Length - at)), revs[k], 1f, true);
+            Hold(revs[k], block.Length);
             block.AsSpan(settle).CopyTo(heard.AsSpan(k * each));
         }
+        foreach (var rpm in peakRevs) Hold(rpm, settle + rate / 4);
         var lufs = Loudness.Lufs(heard, rate);
-        return Math.Clamp((float)Math.Pow(10.0, (ReferenceLufs - lufs) / 20.0), 0.25f, 4f);
+        var gain = MathF.Min((float)Math.Pow(10.0, (ReferenceLufs - lufs) / 20.0), PeakCeiling / peaks.Peak);
+        return Math.Clamp(gain, 0.25f, 4f);
     }
 
     /// <summary>
     /// The gain that brings the idle to <see cref="IdleLufs"/> outside: a twin rendered at the idle recording's middle
     /// revs under the idle governor's tenth of throttle, its loudness taken with the outside trim. Held between a
-    /// quarter and four times, and low enough that the recording's sharpest edge stays under a step of 0.45 between
-    /// samples at the idle's level (the five's idle, recorded under the bonnet, has a valve's tick of nearly full scale
-    /// that would click).
+    /// quarter and four times, low enough that the recording's sharpest edge stays under a step of 0.45 between samples at
+    /// the idle's level (the five's idle, recorded under the bonnet, has a valve's tick of nearly full scale that would
+    /// click), and low enough that the rendered idle peaks under <see cref="PeakCeiling"/> (but for its rarest samples).
     /// </summary>
     private float IdleGain(GrainBank idle)
     {
@@ -332,8 +369,23 @@ public sealed class GranularEngine
         var sharpest = 1e-3f;
         for (var j = 1; j < idle.Samples.Length; j++) sharpest = MathF.Max(sharpest, MathF.Abs(idle.Samples[j] - idle.Samples[j - 1]));
         var level = CutLevel + (1f - CutLevel) * 0.1f;
-        var clickFree = 0.45f / (sharpest * level * MathF.Max(_outsideTrim, _cabinTrim));
-        return Math.Clamp((float)Math.Pow(10.0, (IdleLufs - lufs) / 20.0), 0.25f, MathF.Max(MathF.Min(4f, clickFree), 0.25f));
+        var trim = MathF.Max(_outsideTrim, _cabinTrim);
+        var clickFree = 0.45f / (sharpest * level * trim);
+        var unclipped = PeakCeiling / (PeakMeter.Of(heard.AsSpan(SampleRate / 2)) * trim);
+        var most = MathF.Max(MathF.Min(4f, MathF.Min(clickFree, unclipped)), 0.25f);
+        return Math.Clamp((float)Math.Pow(10.0, (IdleLufs - lufs) / 20.0), 0.25f, most);
+    }
+
+    /// <summary>
+    /// A sample past <see cref="PeakKnee"/> bent towards <see cref="PeakCeiling"/> (a tanh above the knee, its slope 1 at
+    /// the knee so nothing under it changes): the rare peak the trim's renders did not meet.
+    /// </summary>
+    private static float Round(float x)
+    {
+        var magnitude = MathF.Abs(x);
+        if (magnitude <= PeakKnee) return x;
+        const float room = PeakCeiling - PeakKnee;
+        return MathF.CopySign(PeakKnee + room * MathF.Tanh((magnitude - PeakKnee) / room), x);
     }
 
     private static float SmoothStep(float x)
