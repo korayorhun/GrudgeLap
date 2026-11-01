@@ -519,6 +519,26 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
   lens per car); `keep` leaves a material alone though its name says glass (the Testarossa's red tail lenses had
   turned into dark window glass). The Unreal level's model script now rigs with the same `tools/car_models.py`,
   so its flat-twelve is the Testarossa too. Switch: `--hold-brake`.
+- 0.19 look (the cars and the cabin, after 0.19.0, judged on A/B screenshots of the orbit, chase and seat views):
+  the models' own materials are corrected where the exporters left the glTF defaults (`CarView.CorrectModelMaterial`):
+  metallic 1 and roughness 1 with no texture to drive them (the McLaren's cabin plastic and carbon, the Renault's
+  dials, the Delta's black) becomes a matt dielectric, a wing mirror's glass left that way (a white blot from the
+  Testarossa's seat) becomes silvered glass, tyres become matt rubber (they were glossy, 0.15 on the Testarossa and a
+  third metallic on the Renault: wet plastic toys' tyres), a grey dielectric wheel a painted alloy, and a rear lamp unit
+  exported glowing white (the McLaren's) a red tail lamp. The Esprit's door cards in the Testarossa stood out over its
+  doors as a cream bar; `cabin_from.inside_only` names donor parts that poke through a shell, prepared as `Inside_...`
+  nodes the game draws from the seat only. From the seat a reflection probe the size of the cabin
+  (`CarView.BuildCabinShade`, captures nothing, so it costs an empty capture as it moves with the car, about 0.3 ms)
+  gives the cabin a dim constant ambient light instead of the open sky's: the dashboard is in shadow where the roof
+  shades it and lit where the sun comes through the glass, and the dark dashboards lost the white streaks of a sky they
+  cannot see. Under cloud the windows and the lamp lenses take no highlight from the sun, which the overcast weather
+  widens to ten degrees (the V8's rear window glared white in the rain), and the rear-view mirror's glass is silvered
+  glass from outside rather than its frozen picture. GPU time unchanged within the noise (chase about 6.3 ms, seat
+  7.2, orbit 6.7 on the development laptop, before and after). Tried and left out: a disc of blurred spokes over each
+  wheel at speed (on the Testarossa's star wheel it read as a photograph's blur, on the Mercedes as a smoked cover and on
+  the McLaren's concave rims it floated off the spokes), the paint's base layer smoother or duller under the
+  clearcoat (no visible difference: the base's 4 % reflection is lost under the sunlit red), and the cabin shade on
+  the cabin's own meshes from outside as well (the seats through the glass barely changed).
 - Real car models (0.16, `tools/prepare_car_models.py`, `CarView.Model.cs`). The lofted bodies and the boxes of
   their cabins read as toys, from the seat most of all, so the catalogue's cars are drawn as CC BY models of real
   cars with cabins of their own (THIRD_PARTY.md): the flat-twelve a Lotus Esprit Turbo 1983 (right-hand drive,
