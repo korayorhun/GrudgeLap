@@ -2,7 +2,9 @@
 # Usage: ./tools/build.ps1 [-Godot <path to Godot_v4.x_mono_win64_console.exe>] [-SkipTests]
 param(
     [string]$Godot = "",
-    [switch]$SkipTests
+    [switch]$SkipTests,
+    # Leaves the real car models out (no Python here): the export draws the game's own lofted bodies.
+    [switch]$SkipModels
 )
 
 $ErrorActionPreference = "Stop"
@@ -29,7 +31,15 @@ dotnet build "$root/game/GrudgeLap.csproj" -c Release --nologo -v q
 if ($LASTEXITCODE -ne 0) { throw "game build failed" }
 
 New-Item -ItemType Directory -Force "$root/build" | Out-Null
-# Import the assets (audio loops) first; a fresh checkout has no .godot/imported cache and the export would ship nothing.
+# The real car models (CC BY, THIRD_PARTY.md): fetched once into unreal/Import/Models, then prepared for the game
+# into game/assets/models (tools/prepare_car_models.py; build output, not in the repository). Needs Python with numpy.
+if (-not $SkipModels) {
+    python "$root/unreal/Scripts/fetch_models.py" "$root/unreal/Import/Models"
+    if ($LASTEXITCODE -ne 0) { throw "car model download failed (or pass -SkipModels for the lofted bodies)" }
+    python "$root/tools/prepare_car_models.py"
+    if ($LASTEXITCODE -ne 0) { throw "car model preparation failed (or pass -SkipModels for the lofted bodies)" }
+}
+# Import the assets (audio loops, car models) first; a fresh checkout has no .godot/imported cache and the export would ship nothing.
 & $Godot --headless --path "$root/game" --import 2>&1 | Out-Null
 & $Godot --headless --path "$root/game" --export-release "Windows Desktop" "$root/build/GrudgeLap.exe"
 if ($LASTEXITCODE -ne 0) { throw "export failed (are the export templates for this Godot version installed?)" }

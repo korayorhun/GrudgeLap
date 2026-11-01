@@ -14,6 +14,7 @@ view from the meadow) with a level sequence each, and a Movie Render Queue manif
 """
 import itertools
 import json
+import re
 import math
 import os
 import random
@@ -1010,6 +1011,18 @@ def car_materials():
             "cabin": cabin_material(), "cabin_instances": {}}
 
 
+
+PAINT_WORDS = {"paint", "pintura", "carrosserie", "lack", "carpaint", "bodypaint"}
+BODY_WORDS = {"m", "mat", "material", "body", "color", "colour", "paint"}
+
+
+def paint_material_name(name):
+    """A model material that is the body paint, by whole words of its name (as tools/prepare_car_models.py): "lack"
+    inside "black" had every black part of a model painted, and "Painted Black" is trim; a name that is only "body"
+    with "m", "mat" or "color" around it (M_Body, mat_body, Body_MAT, Body Color) is the paint too."""
+    tokens = {w for w in re.split(r"[^a-z]+", name.lower()) if w}
+    return bool(tokens & PAINT_WORDS) or ("body" in tokens and tokens <= BODY_WORDS)
+
 def dress_car(car, materials):
     """Paint and glass on one car. The game's paint is flat red in the vertex colour (with darker panel seams);
     here it is a clear-coated metallic paint over that colour (paint_material). The glass, which the cockpit view
@@ -1063,7 +1076,7 @@ def dress_car(car, materials):
             for slot in range(component.get_num_materials()):
                 material = component.get_material(slot)
                 name = material.get_name().lower() if material else ""
-                if any(key in name for key in ("paint", "pintura", "body_mat", "mat_body", "m_body", "carrosserie", "lack")) or name.endswith("_body"):
+                if paint_material_name(name):
                     component.set_material(slot, materials["paint_solid"])
                     model_paint += 1
     if model_glass or model_paint:

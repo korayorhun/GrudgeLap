@@ -13,6 +13,10 @@ MODELS = {
     "civic-type-r-ek9.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-066/b9604dd71c6546ec842702682019492a.glb",
     "saab-9-5-sedan.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-127/4db0bcbc183a452eb3ef692cce2fe36f.glb",
     "mercedes-e-w212.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-132/119c5e10733142b197aa53b86f6aeb04.glb",
+    # The game's (tools/car_models.json, 0.16): the V8, the hatchbacks and the 1990s saloon, each with its cabin.
+    "mclaren-570s-mmcworks.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-132/869feee8011d4803894318f6f0ddf2c6.glb",
+    "peugeot-205-gti-lafreizz.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-079/b52c8e5e8070463ab1485039246f527c.glb",
+    "vaz-2106-domhathair.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-047/a73b3cdeddd846209bf7c73d5f04d20f.glb",
 }
 
 folder = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "Import", "Models")

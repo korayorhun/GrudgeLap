@@ -1,0 +1,22 @@
+Title:          Peugeot 205 Gti
+Catalogue role: HotHatch - stand-in pick (no Clio II RS model available)
+Author:         la_freizz (Sketchfab user 'la_freizz', https://sketchfab.com/la_freizz)
+Source URL:     https://sketchfab.com/3d-models/b52c8e5e8070463ab1485039246f527c
+Licence:        Creative Commons Attribution 4.0 International (CC BY 4.0)
+Licence URL:    https://creativecommons.org/licenses/by/4.0/
+Licence (snapshot, Objaverse 1.0 metadata, collected 2022): by
+Licence (live check 2026-11-01): by
+Live check:     HTTP 200 on api.sketchfab.com/v3/models/b52c8e5e8070463ab1485039246f527c; licence slug 'by'; isDownloadable=True; published 2018-12-27; 15 likes
+Download URL:   https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-079/b52c8e5e8070463ab1485039246f527c.glb
+                (Objaverse 1.0 mirror on Hugging Face, dataset allenai/objaverse; no login needed)
+File:           peugeot-205-gti-lafreizz.glb, 44,998,816 bytes, SHA-256 a8e6748c5e38a0cd096044d0c1786123bbed56e8a9fe2a6f1553bbd8da4f9e9c
+Date checked:   2026-11-01
+Real-size note: measured wheelbase 2.48 m at file scale x1.8535; real Peugeot 205 GTi wheelbase 2.42 m -> extra factor x0.976
+Notes:
+  - 1980s car, not the 2001 Clio.
+  - Modified interior: Sparco bucket seats, no rear seats (carpeted rear floor).
+  - About 1.03 M triangles: decimate.
+  - The file has no real units: scale 1.8535 gives the real 3.705 m length.
+
+Credit line (CC BY 4.0 requires attribution, a licence link and a note of changes):
+  "Peugeot 205 Gti" by la_freizz (la_freizz), licensed under CC BY 4.0, https://sketchfab.com/3d-models/b52c8e5e8070463ab1485039246f527c; modified: re-scaled and re-rigged for GrudgeLap

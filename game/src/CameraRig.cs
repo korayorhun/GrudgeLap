@@ -32,6 +32,8 @@ internal sealed partial class CameraRig : Node3D
     public float Roughness { get; set; }
     /// <summary>The driver's eyes in the car node's space (<see cref="CarView.Eye"/>).</summary>
     public Vector3 Eye { get; set; } = new(-0.38f, 0.39f, -0.05f);
+    /// <summary>Automation: the cockpit view turned by yaw (left positive) and pitch (up positive), degrees (<c>--seat-look=</c>).</summary>
+    public Vector2 SeatLook { get; set; }
     /// <summary>The car's lateral and longitudinal acceleration, m/s², which the driver's head lags.</summary>
     public Vector2 Acceleration { get; set; }
     private readonly Random _rng = new(3);
@@ -134,7 +136,9 @@ internal sealed partial class CameraRig : Node3D
                 Mathf.Clamp(Acceleration.Y * 0.0028f, -0.04f, 0.03f));
             _head += (headTarget - _head) * MathUtil.Clamp01(dt * 6f);
             var eye = car * (Eye + _head + _jolt + new Vector3(0f, 0f, -lean) + shake);
-            var look = car * (Eye + new Vector3(_head.X * 0.5f, -0.70f, -14f));
+            var ahead = new Vector3(_head.X * 0.5f, -0.70f, -14f);
+            if (SeatLook != Vector2.Zero) ahead = new Basis(Vector3.Up, Mathf.DegToRad(SeatLook.X)) * new Basis(Vector3.Right, Mathf.DegToRad(SeatLook.Y)) * ahead;
+            var look = car * (Eye + ahead);
             _camera.GlobalTransform = new Transform3D(Basis.LookingAt(look - eye, car.Basis.Y), eye);
             // 62 degrees vertical is about what a windscreen frames; a little more at speed.
             _camera.Fov = 62f + 6f * MathUtil.Clamp01(speedMps / 75f);

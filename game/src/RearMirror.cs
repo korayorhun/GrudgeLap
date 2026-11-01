@@ -20,6 +20,8 @@ internal sealed partial class RearMirror : Node3D
     private Camera3D _camera = null!;
     private bool _active = true;
     private bool _skipFrame;
+    private readonly List<MeshInstance3D> _housing = [];
+    private QuadMesh? _glassMesh;
 
     public static RearMirror Create(Material housing)
     {
@@ -32,8 +34,9 @@ internal sealed partial class RearMirror : Node3D
     {
         var glassHeight = GlassWidth * GlassPixels.Y / GlassPixels.X;
         // Stalk up to the roof, the housing, and the glass on its rear face (towards the driver, +z).
-        AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.008f, BottomRadius = 0.008f, Height = 0.07f, Material = housing }, Position = new Vector3(0f, 0.045f, -0.01f) });
-        AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(GlassWidth + 0.02f, glassHeight + 0.02f, 0.03f), Material = housing } });
+        _housing.Add(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.008f, BottomRadius = 0.008f, Height = 0.07f, Material = housing }, Position = new Vector3(0f, 0.045f, -0.01f) });
+        _housing.Add(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(GlassWidth + 0.02f, glassHeight + 0.02f, 0.03f), Material = housing } });
+        foreach (var part in _housing) AddChild(part);
 
         _viewport = new SubViewport
         {
@@ -53,9 +56,10 @@ internal sealed partial class RearMirror : Node3D
             Uv1Scale = new Vector3(-1f, 1f, 1f),
             Uv1Offset = new Vector3(1f, 0f, 0f),
         };
+        _glassMesh = new QuadMesh { Size = new Vector2(GlassWidth, glassHeight), Material = glass };
         AddChild(new MeshInstance3D
         {
-            Mesh = new QuadMesh { Size = new Vector2(GlassWidth, glassHeight), Material = glass },
+            Mesh = _glassMesh,
             Position = new Vector3(0f, 0f, 0.016f),
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         });
@@ -73,6 +77,23 @@ internal sealed partial class RearMirror : Node3D
         if (!_active) return;
         _skipFrame = !_skipFrame;
         if (!_skipFrame) _viewport.RenderTargetUpdateMode = SubViewport.UpdateMode.Once;
+    }
+
+    /// <summary>
+    /// The glass made the size of a real car model's own mirror glass, which it covers (CarView.MountMirror); the
+    /// picture keeps its pixel width and takes the glass's shape, so the road behind is not stretched.
+    /// </summary>
+    public void FitGlass(Vector2 size)
+    {
+        if (_glassMesh is null || size.X <= 0.01f || size.Y <= 0.005f) return;
+        _glassMesh.Size = size;
+        _viewport.Size = new Vector2I(GlassPixels.X, Math.Clamp((int)MathF.Round(GlassPixels.X * size.Y / size.X), 64, 256));
+    }
+
+    /// <summary>Only the glass: a real car model's own housing and stalk hold it (CarView.MountMirror).</summary>
+    public void HideHousing()
+    {
+        foreach (var part in _housing) part.Visible = false;
     }
 
     /// <summary>Runs the mirror's camera only while the driver can look into it; from outside the glass keeps its last picture.</summary>

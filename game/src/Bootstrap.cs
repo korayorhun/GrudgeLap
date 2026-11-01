@@ -31,6 +31,7 @@ public sealed partial class Bootstrap : Node3D
     private float _ramSpeed;
     /// <summary>--look=kind[:n[:distance[:bearing]]]: the camera on the n-th prop of a kind (House, Barn, Cow...), for inspection shots.</summary>
     private string? _look;
+    private Vector2 _seatLook;        // automation: the cockpit view turned, yaw and pitch in degrees (--seat-look=)
     private readonly KnockSmoke _knockSmoke = new() { Name = "KnockSmoke" };
     private string? _ram;
     private SN.Vector3? _ramTarget;
@@ -59,6 +60,10 @@ public sealed partial class Bootstrap : Node3D
     private float _newGameAt = -1f;   // automation: a second credit, as F5 starts one (--new-game-after)
     private float _menuAt = -1f;      // automation: the menu opened for a picture of it (--menu-after)
     private string? _dropFile;        // automation: a file dropped on the window two seconds in (--drop=)
+    private bool _perfLog;            // automation: GPU and CPU time per frame, logged every five seconds (--perf-log)
+    private bool _dentTest;           // automation: a deep dent in the car's nose two seconds in, for pictures of it (--dent-test)
+    private double _perfGpu, _perfCpu, _perfSince;
+    private int _perfFrames;
     private string? _jingle;          // automation: a jingle played a second in, to check the synth (--jingle)
     private readonly HashSet<string> _soundFaults = new();
     private readonly PauseMenu _menu = new();
@@ -155,6 +160,7 @@ public sealed partial class Bootstrap : Node3D
         AddChild(WorldBuilder.BuildCarProbe());
         _cameraRig = new CameraRig { Mode = _orbit is not null ? CameraMode.Orbit : _startChase ? CameraMode.Chase : CameraMode.Cockpit };
         if (_orbit is { } orbit) _cameraRig.Orbit = orbit;
+        _cameraRig.SeatLook = _seatLook;
         AddChild(_cameraRig);
         _hud = new Hud { Gearbox = _gearbox, ShowFps = LoadChoice("fps", 0) != 0 };
         _scores = new ScoreBoard();
@@ -254,9 +260,19 @@ public sealed partial class Bootstrap : Node3D
             else if (arg == "--auto") _attractMode = TransmissionMode.Automatic;
             else if (arg == "--show-all") _showAll = true;
             else if (arg == "--save-best") _saveBest = true;   // debug: let an attract lap become the saved best lap
-            else if (arg.StartsWith("--export-world=", System.StringComparison.Ordinal)) _exportWorld = arg["--export-world=".Length..];
+            else if (arg.StartsWith("--export-world=", System.StringComparison.Ordinal))
+            {
+                _exportWorld = arg["--export-world=".Length..];
+                // The Unreal level takes the lofted car and puts its own copy of the real model in its place
+                // (unreal/Scripts/prepare_car_model.py): the export keeps the lofted bodies.
+                CarView.UseModels = false;
+            }
             else if (arg.StartsWith("--car=", System.StringComparison.Ordinal)) _carIndex = CarIndex(arg["--car=".Length..], _carIndex);
             else if (arg.StartsWith("--look=", System.StringComparison.Ordinal)) _look = arg["--look=".Length..];
+            else if (arg.StartsWith("--seat-look=", System.StringComparison.Ordinal)) _seatLook = ParseVector2(arg["--seat-look=".Length..]);
+            else if (arg == "--lofted") CarView.UseModels = false;
+            else if (arg == "--perf-log") _perfLog = true;
+            else if (arg == "--dent-test") _dentTest = true;
             else if (arg.StartsWith("--ram-speed=", System.StringComparison.Ordinal)) float.TryParse(arg["--ram-speed=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _ramSpeed);
         }
     }
@@ -442,6 +458,13 @@ public sealed partial class Bootstrap : Node3D
         {
             _menuAt = -1f;
             ShowMenu(true);
+        }
+        if (_perfLog) LogPerformance();
+        if (_dentTest && _elapsed >= 2f)
+        {
+            _dentTest = false;
+            var (nose, _, halfWidth, _) = _carView.Extent;
+            _carView.Dent(new Vector3(halfWidth * 0.35f, 0f, nose + 0.15f), new Vector3(0f, -0.2f, 1f), 0.14f, 0.5f);
         }
         if (_dropFile is not null && _elapsed >= 2f)
         {
@@ -837,7 +860,35 @@ public sealed partial class Bootstrap : Node3D
         }
     }
 
+    /// <summary>"a,b" as a vector, invariant culture; zero when it does not parse.</summary>
+    private static Vector2 ParseVector2(string text)
+    {
+        var parts = text.Split(',');
+        return parts.Length == 2
+            && float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var x)
+            && float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var y)
+            ? new Vector2(x, y) : Vector2.Zero;
+    }
+
     private string WeatherLabel() => _weatherChoice switch { 0 => "CLEAR", 1 => "OVERCAST", 2 => "WET ROAD", 3 => "RAIN", _ => "RANDOM" };
+
+    /// <summary>
+    /// Automation (--perf-log): the main view's measured GPU time and the frame's CPU time, averaged over five
+    /// seconds, under the game's own frame cap (an uncapped run has crashed the development laptop's GPU).
+    /// </summary>
+    private void LogPerformance()
+    {
+        var viewport = GetViewport().GetViewportRid();
+        if (_perfFrames == 0 && _perfSince == 0.0) RenderingServer.ViewportSetMeasureRenderTime(viewport, true);
+        _perfGpu += RenderingServer.ViewportGetMeasuredRenderTimeGpu(viewport);
+        _perfCpu += RenderingServer.ViewportGetMeasuredRenderTimeCpu(viewport) + Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000.0;
+        _perfFrames++;
+        if (_elapsed - _perfSince < 5.0) return;
+        GD.Print($"perf: {_perfFrames / (_elapsed - _perfSince):0.0} fps, gpu {_perfGpu / _perfFrames:0.00} ms, cpu {_perfCpu / _perfFrames:0.00} ms a frame");
+        _perfGpu = _perfCpu = 0.0;
+        _perfFrames = 0;
+        _perfSince = _elapsed;
+    }
 
     /// <summary>A long file name cut to fit the menu's panel, with an ellipsis.</summary>
     private static string Shorten(string text, int length) => text.Length <= length ? text : text[..(length - 3)] + "...";

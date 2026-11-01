@@ -54,8 +54,9 @@ internal sealed partial class CarView : Node3D
     private float _wheelAngle;
     private Node3D? _steeringSpin;
 
-    /// <summary>The driver's eyes in this node's space (origin at the centre of gravity), for the cockpit camera.</summary>
-    public Vector3 Eye => new(DriverX, _style.EyeH - _cgHeight, _style.EyeZ);
+    /// <summary>The driver's eyes in this node's space (origin at the centre of gravity), for the cockpit camera: the
+    /// model's driver's seat when the car is a real model with a cabin (CarView.Model.cs), the lofted cabin's otherwise.</summary>
+    public Vector3 Eye => _modelEye ?? new(DriverX, _style.EyeH - _cgHeight, _style.EyeZ);
 
     public static CarView Create(VehicleSpec spec, Color? paint = null)
     {
@@ -78,8 +79,11 @@ internal sealed partial class CarView : Node3D
         };
         var sag = spec.MassKg * MathUtil.Gravity / 4f / spec.SuspensionStiffness;
         view._cgHeight = spec.SuspensionRest + spec.WheelRadius - sag - spec.HubHeight;
-        view.BuildBody(spec);
-        view.BuildWheels(spec);
+        if (!view.TryBuildModel(spec))
+        {
+            view.BuildBody(spec);
+            view.BuildWheels(spec);
+        }
         return view;
     }
 
@@ -99,6 +103,7 @@ internal sealed partial class CarView : Node3D
             foreach (var mesh in Descendants(node).OfType<GeometryInstance3D>()) mesh.CastShadow = cast;
         }
         if (_glass is not null) _glass.Visible = !insideCar;
+        SetModelWindows(insideCar);
         foreach (var node in _cockpitOnly) node.Visible = insideCar;
     }
 
@@ -112,9 +117,22 @@ internal sealed partial class CarView : Node3D
     public void MarkPlayer()
     {
         foreach (var geometry in Descendants(this).OfType<GeometryInstance3D>()) geometry.Layers = 3;
-        if (_shell is null || _body is null) return;
-        var bounds = _shell.GetAabb();
-        var centre = _body.Transform * bounds.GetCenter();
+        Aabb bounds;
+        Vector3 centre;
+        if (_shell is not null && _body is not null)
+        {
+            bounds = _shell.GetAabb();
+            centre = _body.Transform * bounds.GetCenter();
+        }
+        else if (_model is not null)
+        {
+            bounds = _modelBounds;
+            centre = bounds.GetCenter();
+        }
+        else
+        {
+            return;
+        }
         var shade = new Gradient();
         shade.SetColor(0, new Color(0f, 0f, 0f, 0.80f));
         shade.SetColor(1, new Color(0f, 0f, 0f, 0f));
@@ -158,6 +176,21 @@ internal sealed partial class CarView : Node3D
     /// <summary>Hangs the rear-view mirror under the roof at the top of the windscreen, angled towards the driver.</summary>
     public void MountMirror(RearMirror mirror)
     {
+        if (_modelMirror is not null)
+        {
+            // On a model's own housing only the glass (16 mm ahead of the mirror's origin) goes on the model's; where
+            // the game hangs its own (MirrorHung) the housing and stalk come too. The mirror itself goes on this
+            // node, whose basis its camera looks back along.
+            if (!_modelMirrorHung) mirror.HideHousing();
+            // The prepared node's x and y scale are the model's glass size, when it names one.
+            var frame = FrameOf(_modelMirror);
+            var size = frame.Basis.Scale;
+            if (MathF.Abs(size.X - 1f) > 0.001f) mirror.FitGlass(new Vector2(size.X, size.Y));
+            frame.Basis = frame.Basis.Orthonormalized();
+            mirror.Transform = frame.TranslatedLocal(new Vector3(0f, 0f, -0.016f));
+            AddChild(mirror);
+            return;
+        }
         if (_body is null) return;
         // On the screen, 12 cm ahead of its top edge: under the roof it hung so close to the eyes that it filled a
         // third of the view.

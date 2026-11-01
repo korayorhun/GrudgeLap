@@ -169,5 +169,12 @@ source and the credit line the licence asks for in the `LICENSE.txt` beside `mod
 | the fleet saloon | Mercedes-Benz E-Class W212 | Peter_D |
 
 The estate keeps its lofted body (no suitable model was found). The models' makes are the authors' subjects; the
-game itself still names its cars by description, and this is a build input, not something the game ships. The
-Ferrari models found were taken down from Sketchfab since the dataset's snapshot and were not used.
+game itself still names its cars by description. The Ferrari models found were taken down from Sketchfab since
+the dataset's snapshot and were not used.
+
+Since 0.16 the Godot game draws real models too, with their own cabins (`tools/prepare_car_models.py` and
+`tools/car_models.json`, the shared rigging in `tools/car_models.py`; credited in `THIRD_PARTY.md`): there the V8
+is a McLaren 570S, the hatchbacks a Peugeot 205 GTi and the 1990s saloon a VAZ-2106, all fetched by
+`fetch_models.py` into this folder. The world export (`--export-world`) still carries the lofted car, which this
+level replaces as above, so the Unreal cockpit is still the game's lofted cabin. Paint is now found by whole words
+of a material's name (`paint_material_name`): "lack" inside "Black" had painted every black part of a model.

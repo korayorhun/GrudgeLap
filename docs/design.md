@@ -332,6 +332,29 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   loop the ribbon is the whole deck and is seen from below; the centre line and the far ground only from above.
   The hot hatch's and the five's mirror housings are black plastic, the turbo hatch's in paint: from the seat
   the housing's back shows through the side glass, and in red paint it read as a ball beside the screen.
+- Real car models (0.16, `tools/prepare_car_models.py`, `CarView.Model.cs`). The lofted bodies and the boxes of
+  their cabins read as toys, from the seat most of all, so the catalogue's cars are drawn as CC BY models of real
+  cars with cabins of their own (THIRD_PARTY.md): the flat-twelve a Lotus Esprit Turbo 1983 (right-hand drive,
+  mirrored to the left), the V8 a McLaren 570S, the three hatchbacks a Peugeot 205 GTi, the 1990s saloon a
+  VAZ-2106 (a 1.6 rear-driven Fiat-derived saloon, the nearest to the Sahin there is), the fleet saloon a
+  Mercedes-Benz E-Class W212; the 1.4 estate keeps its loft (the only Renault 12 is a saloon of 1.7 million
+  triangles). The search kept only models whose authors made them: an Aston Martin DB11 that looked right was
+  very probably ripped from a commercial game and was dropped. The preparation, at build time from the files
+  `unreal/Scripts/fetch_models.py` fetches (the outputs are not in the repository), puts each model in the car
+  node's frame (faced to -Z, scaled to the simulation's wheelbase, hubs at the rest height), splits meshes that
+  hold an axle's or all four wheels (`split`), scales each wheel to the simulation's tyre radius (measured from
+  the tyre's vertices, as a wheel stored turned has a swollen box), finds the steering wheel's column axis
+  (its thinnest direction), and places the eyes (half a metre behind the wheel's centre and 28 cm over it, 13 cm
+  under the headlining), the dials (on the named instrument meshes, or where the line of sight over the hub meets
+  the dashboard) and the mirror (the model's own glass, sized to it, or hung by the game under the windscreen 36
+  degrees right of straight ahead when the model's is out of view, as in the Esprit). Paint is found by whole
+  words of a material's name ("lack" inside "Black" had painted every black part) and drawn in the car's colour
+  with a dark lining on the back of a panel; painted faces inside the glasshouse that face the cabin take a dark
+  trim (`GLP_Lining`), and painted parts that face into the car (a mirrored door) are turned out. The game hangs
+  the wheels on its own pivots, turns the steering wheel, mounts the live instrument panel and the mirror, and
+  dents the model's paint in a crash as it dents the loft. A checkout without the prepared models, `--lofted`,
+  and the world export for the Unreal level draw the lofts. From the seat the models cost what the lofts cost
+  (6.2 ms of GPU from the seat, 8.4 in the chase view, at 32 fps on the development laptop).
 - The look of 0.15: the player found the track less real after 0.11-0.14 than in 0.10, and the light and the road
   of 0.10 came back, compared frame by frame against 0.10.0 at the same moments of the attract lap: the grey photo
   asphalt (0.52 with the slab shade 0.88, the grain 5 % and the normal map at 0.5), sun 1.45, ambient 1.15, exposure
@@ -366,6 +389,10 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   scripted driver runs the course until a thing of that kind is near and drives into it, or into a tree planted
   on the start straight: the crash replay on film),
   `--no-traffic`, `--weather=dry|overcast|wet|rain` (the credit's weather; otherwise every credit draws one),
+  `--lofted` (the lofted bodies instead of the real models), `--seat-look=<yaw>,<pitch>` (the cockpit view turned,
+  degrees, left and up positive: pictures of a cabin), `--dent-test` (a deep dent in the nose two seconds in),
+  `--perf-log` (the measured GPU and CPU time a frame, every five seconds, under the frame cap),
+  `--drop=<file>` (a file dropped on the window two seconds in: the replay music's path),
   `--no-ghost` (the saved best lap is not raced, for pictures of the car), `--no-hud` (no
   overlay over the 3D scene, for comparing it with another engine's picture), `--retro`,
   `--screenshot=<file>`, `--at=<s>`, `--quit-after=<s>`, `--park` (the car waits at the start with its

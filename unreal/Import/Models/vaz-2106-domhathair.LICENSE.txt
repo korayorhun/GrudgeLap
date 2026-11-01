@@ -1,0 +1,21 @@
+Title:          VAZ-2106
+Catalogue role: Saloon - stand-in pick (no Tofas Sahin / Fiat 131 model available; VAZ-2106 is a Fiat 124 derivative)
+Author:         domhathair (Sketchfab user 'domhathair', https://sketchfab.com/domhathair)
+Source URL:     https://sketchfab.com/3d-models/a73b3cdeddd846209bf7c73d5f04d20f
+Licence:        Creative Commons Attribution 4.0 International (CC BY 4.0)
+Licence URL:    https://creativecommons.org/licenses/by/4.0/
+Licence (snapshot, Objaverse 1.0 metadata, collected 2022): by
+Licence (live check 2026-11-01): by
+Live check:     HTTP 200 on api.sketchfab.com/v3/models/a73b3cdeddd846209bf7c73d5f04d20f; licence slug 'by'; isDownloadable=True; published 2018-08-22; 114 likes
+Download URL:   https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-047/a73b3cdeddd846209bf7c73d5f04d20f.glb
+                (Objaverse 1.0 mirror on Hugging Face, dataset allenai/objaverse; no login needed)
+File:           vaz-2106-domhathair.glb, 19,426,488 bytes, SHA-256 2086fef5fb43328b8c2859109da5f5af51f87893847a6de3ac5995e26058058f
+Date checked:   2026-11-01
+Real-size note: measured wheelbase 2.598 m at file scale x1; real VAZ-2106 wheelbase 2.424 m -> extra factor x0.933
+Notes:
+  - Round quad headlamps, unlike the Sahin's rectangular lamps.
+  - Wheels are merged per axle (tyres, rims and hubs): split them before rigging.
+  - About 7 % oversize: scale x0.933.
+
+Credit line (CC BY 4.0 requires attribution, a licence link and a note of changes):
+  "VAZ-2106" by domhathair (domhathair), licensed under CC BY 4.0, https://sketchfab.com/3d-models/a73b3cdeddd846209bf7c73d5f04d20f; modified: re-scaled and re-rigged for GrudgeLap

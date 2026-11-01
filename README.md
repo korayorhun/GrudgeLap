@@ -140,7 +140,10 @@ dotnet test physics.tests/GrudgeLap.Physics.Tests.csproj   # the feel checklist,
 ./tools/release.ps1 -Version 0.4.0                         # bump, build, installer, zip, tag, GitHub release, Scoop, winget
 ```
 
-The installer needs [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`installer/GrudgeLap.iss`).
+The installer needs [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`installer/GrudgeLap.iss`). The
+build also fetches the real car models (CC BY, credited in [THIRD_PARTY.md](THIRD_PARTY.md)) and prepares them
+for the game, which needs Python 3 with numpy; `./tools/build.ps1 -SkipModels` builds without them, and the
+game then draws its own lofted bodies.
 Godot's editor opens the `game/` folder; the simulation lives in `physics/` with no engine dependency.
 Automated runs (screenshots, checks) take a few switches after Godot's `--`, listed in
 [docs/design.md](docs/design.md); `--invisible` keeps the window off the screen and `--no-ghost` leaves the
@@ -175,7 +178,10 @@ best lap's ghost out of the picture.
   the fork hill and in the cuttings, bridges with guardrails, the loop in its
   steel lattice, the drawbridge's white A-frame towers with cables, pad, grass tufts, trees from leaf cards,
   a wood beyond the fields, fields, textured buildings, the green fork gantry with its traffic light, the
-  red checkpoint banner, signs, the train on its railway), lofted car bodies
+  red checkpoint banner, signs, the train on its railway), real car models with their own cabins (0.16: CC BY
+  models of a Lotus Esprit, a McLaren 570S, a Peugeot 205 GTi, a VAZ-2106 and a Mercedes-Benz E-Class, set to
+  the simulation's wheelbase, their wheels and steering wheel turning, the live dials in their binnacles, the
+  rear-view mirror on their own; `tools/prepare_car_models.py`), and where a car has none, lofted car bodies
   with rounded character lines, panel seams, the hatchbacks' lamps, grilles and tail lamps laid on the skin,
   and a lined cabin behind tinted glass (leather dashboard, binnacle with live dials, a centre stack with its
   radio and heater knobs, gear lever and handbrake, sun visors, a three-spoke wheel that turns with the steering,

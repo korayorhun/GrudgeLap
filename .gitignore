@@ -23,3 +23,9 @@ Thumbs.db
 
 # Release artefacts
 dist/
+
+# Real car models prepared from the CC BY sources (tools/prepare_car_models.py) and Godot's import of them
+game/assets/models/
+
+# Python bytecode of the tools
+__pycache__/

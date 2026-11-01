@@ -1,0 +1,21 @@
+Title:          Mclaren 570S Coupè
+Catalogue role: V8Evo - pick
+Author:         MMC Works (Sketchfab user 'mmcworks', https://sketchfab.com/mmcworks)
+Source URL:     https://sketchfab.com/3d-models/869feee8011d4803894318f6f0ddf2c6
+Licence:        Creative Commons Attribution 4.0 International (CC BY 4.0)
+Licence URL:    https://creativecommons.org/licenses/by/4.0/
+Licence (snapshot, Objaverse 1.0 metadata, collected 2022): by
+Licence (live check 2026-11-01): by
+Live check:     HTTP 200 on api.sketchfab.com/v3/models/869feee8011d4803894318f6f0ddf2c6; licence slug 'by'; isDownloadable=True; published 2021-11-23; 48 likes
+Download URL:   https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-132/869feee8011d4803894318f6f0ddf2c6.glb
+                (Objaverse 1.0 mirror on Hugging Face, dataset allenai/objaverse; no login needed)
+File:           mclaren-570s-mmcworks.glb, 24,416,544 bytes, SHA-256 09ab5fe6a3c16ea9161802c0dde03379aa510f3d5f0c0556365eccdf56be5335
+Date checked:   2026-11-01
+Real-size note: measured wheelbase 2.947 m at file scale x1; real McLaren 570S wheelbase 2.67 m -> extra factor x0.906
+Notes:
+  - Author describes the interior as 'rough' and the materials as 'simple' (mostly flat colours).
+  - The model is about 10 % oversize: scale x0.906 for real size.
+  - Rear rims and rear brake discs are merged per axle: split them before rigging.
+
+Credit line (CC BY 4.0 requires attribution, a licence link and a note of changes):
+  "Mclaren 570S Coupè" by MMC Works (mmcworks), licensed under CC BY 4.0, https://sketchfab.com/3d-models/869feee8011d4803894318f6f0ddf2c6; modified: re-scaled and re-rigged for GrudgeLap

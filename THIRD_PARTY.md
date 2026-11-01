@@ -31,13 +31,21 @@
 | Freesound #237375 "Car Crash" by squareal | a crash (`crash/crash3.wav`) | CC0 1.0 — https://freesound.org/s/237375/ |
 | ambientCG textures Grass004, Asphalt004, Concrete034, Ground037, Bark012, WoodSiding009, RoofingTiles003, Bricks078, MetalPlates006, LeafSet001, Leather037, Carpet016, Fabric030 (1K) | ground, road, shoulders, fields, trees, buildings, the train, the cabin's leather, carpet and roof lining; the leaf-cluster atlas is composited from LeafSet001 (`game/assets/textures/SOURCES.md`) | CC0 1.0 — https://ambientcg.com |
 | Poly Haven HDRI "kloofendal_43d_clear_puresky" (2K) | sky, lighting and reflections | CC0 1.0 — https://polyhaven.com |
+| "Lotus Esprit Turbo 1983" by esprit3d.website (Shogos_esprit) | the flat-twelve's body and cabin (`tools/car_models.json`; mirrored to left-hand drive) | CC BY 4.0 — https://sketchfab.com/3d-models/886bcf8ce52f46e3b36115e01319ec44; modified: re-scaled and re-rigged for GrudgeLap |
+| "Mclaren 570S Coupè" by MMC Works (mmcworks) | the V8's body and cabin | CC BY 4.0 — https://sketchfab.com/3d-models/869feee8011d4803894318f6f0ddf2c6; modified: re-scaled and re-rigged for GrudgeLap |
+| "Peugeot 205 Gti" by la_freizz | the three hatchbacks' body and cabin | CC BY 4.0 — https://sketchfab.com/3d-models/b52c8e5e8070463ab1485039246f527c; modified: re-scaled and re-rigged for GrudgeLap |
+| "VAZ-2106" by domhathair | the 1990s saloon's body and cabin | CC BY 4.0 — https://sketchfab.com/3d-models/a73b3cdeddd846209bf7c73d5f04d20f; modified: re-scaled, re-rigged and lit for GrudgeLap |
+| "Mercedes-Benz E-Class W212" by Peter_D (better_peter) | the fleet saloon's body and cabin | CC BY 4.0 — https://sketchfab.com/3d-models/119c5e10733142b197aa53b86f6aeb04; modified: re-scaled and re-rigged for GrudgeLap |
 | xunit, Microsoft.NET.Test.Sdk | tests only, not shipped | Apache-2.0 / MIT |
 | Inno Setup 6 | builds the installer, not shipped | Inno Setup License |
 | ffmpeg, numpy, Pillow | offline tools (grain bank, loop and one-shot cutting, icon), not shipped | LGPL/GPL, BSD, MIT-CMU |
 
-Every mesh, the track and all other sounds in the game are generated at run time by the code in this
-repository; the only files brought in are the CC0 textures, the CC0 sky, the engine grain banks, the tyre and
-road loops, the exhaust pops, the train's steam and whistle and the crashes (the grass-tuft atlas, the road
+The track, the world and every other mesh in the game are generated at run time by the code in this
+repository, but for the cars: the five CC BY models above are drawn in their place (fetched from the Objaverse
+mirror by `unreal/Scripts/fetch_models.py` and prepared by `tools/prepare_car_models.py` at build time; a build
+without them draws the game's own lofted bodies, as does the 1.4 estate). The only other files brought in are the
+CC0 textures, the CC0 sky, the engine grain banks, the tyre and road loops, the exhaust pops, the train's steam
+and whistle and the crashes (the grass-tuft atlas, the road
 wear sheet and the cloud sheet are drawn by scripts in `tools/`; the drones' engine loop is the game's own
 voice recorded). These are the only recorded sound material; they were cut and normalised from the CC0 and CC BY recordings
 above (the slices are listed in `game/assets/audio/SOURCES.md`) and carry no other claim. If you own a cleaner recording of a flat-twelve and are willing
@@ -45,7 +53,9 @@ to license it CC0 or CC-BY, an issue is welcome.
 
 The car names ("FLAT-12 GT '84", "V8 GTB '12 SPORT EXHAUST", "HOT HATCH 2.0 16V '01", "FIVE 2.0 20V HATCH
 '97", "TURBO HATCH 2.0T '08", "SALOON 1.6 '91", "ESTATE 1.4 '93", "SALOON 1.4 16V '17") are descriptions of an engine layout, a body style and a year; they are not the
-names of any make or model, and the bodies are our own lofts, keyed on the proportions of the period cars.
+names of any make or model. The lofted bodies are our own, keyed on the proportions of the period cars; the
+models drawn in their place show real cars (a Lotus, a McLaren, a Peugeot, a VAZ, a Mercedes-Benz), whose names
+and designs belong to their makers, as stand-ins for the catalogue's cars.
 
 Not affiliated with, endorsed by, or derived from the assets of any arcade manufacturer or car maker. The
 game mechanics it pays homage to are described in expired U.S. patents (5,044,956; 5,005,148; 5,269,687;

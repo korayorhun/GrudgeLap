@@ -95,9 +95,26 @@ internal sealed partial class CarView
         ApplyDents();
     }
 
+    /// <summary>How far the dents so far move a point of the skin (the body's frame): deepest at a dent's centre,
+    /// nothing at its rim, wavering so the panel creases instead of sinking smoothly.</summary>
+    private Vector3 DentOffset(Vector3 v)
+    {
+        var offset = Vector3.Zero;
+        foreach (var dent in _dents)
+        {
+            var distanceSq = v.DistanceSquaredTo(dent.Centre);
+            if (distanceSq >= dent.Radius * dent.Radius) continue;
+            var f = 1f - distanceSq / (dent.Radius * dent.Radius);
+            var crease = 0.7f + 0.3f * MathF.Sin(v.X * 21f + dent.Seed) * MathF.Sin(v.Y * 17f + v.Z * 13f + 2f * dent.Seed);
+            offset += dent.Push * (dent.Depth * f * f * crease);
+        }
+        return offset;
+    }
+
     /// <summary>Rebuilds every dented mesh from its arrays as built, with all the dents so far.</summary>
     private void ApplyDents()
     {
+        ApplyModelDents();
         foreach (var d in _deformables)
         {
             if (d.Vertices is null)
@@ -255,6 +272,7 @@ internal sealed partial class CarView
     {
         _dents.Clear();
         foreach (var d in _deformables) d.Node.Mesh = d.Original;
+        foreach (var d in _modelDents) d.Node.Mesh = d.Original;
         foreach (var (part, parent, local) in _brokenOff)
         {
             part.GetParent()?.RemoveChild(part);
