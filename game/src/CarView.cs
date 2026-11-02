@@ -30,8 +30,42 @@ internal sealed partial class CarView : Node3D
     private const float SeamWidth = 0.014f;                // dark band of a panel shut line
     private const float SteeringRatio = 12f;               // turns of the wheel per turn of the road wheels
 
-    /// <summary>The lofted bodies' red, and the colour of a model's car when its own cannot be told.</summary>
+    /// <summary>
+    /// The lofted bodies' red (the cars13 stand-ins wear their own colours, <see cref="LoftPaint"/>), and the colour of
+    /// a model's car when its own cannot be told.
+    /// </summary>
     public static readonly Color DefaultPaint = new(0.76f, 0.03f, 0.05f);
+
+    /// <summary>
+    /// A lofted body's own paint, its ORIGINAL when the car has no model (or with --lofted): the default red, but for
+    /// the five cars of cars13, which wear their real cars' launch or press colours (cars13 stage 2). The sRGB values
+    /// are published approximations where there is one and readings of photographs where there is not; a paint's maker
+    /// publishes none.
+    /// </summary>
+    public static CarPaint LoftPaint(CarStyle style) => style switch
+    {
+        // Rosso Corsa: Ferrari unveiled the 458 Italia at Frankfurt in September 2009 with two cars on its stand, one in
+        // Rosso Corsa and one in Giallo Modena (CAR magazine, "Ferrari 458 Italia (2010): new photos"). Never codified
+        // by Ferrari; Pantone 185 C, #E4002B, is the usual match (Wikipedia, "Rosso corsa"). Its model is drawn in the
+        // same red (tools/car_models.json's "materials"), so this shows only on the loft.
+        CarStyle.FlatPlaneV8 => new(Color.FromHtml("#E4002B")),
+        // Giallo Ginestra (Fiat 258, "broom yellow"), a colour only the three-door Bravo was sold in from the 1998
+        // facelift the game's HGT follows (the first-generation Bravo and Brava paint lists, fiatforum.com, 2008; before
+        // it, Giallo Superga 515). No colour of Fiat's HGT press cars was found. Shade estimated.
+        CarStyle.HgtFive => new(Color.FromHtml("#F0C000")),
+        // Verde Reflex metallic (Fiat 391), another of the colours only the Bravo was sold in, 1995-2001 (the same
+        // lists). No press car of the 1.6 16V was found either. Shade estimated.
+        CarStyle.HatchSixteen => new(Color.FromHtml("#2E6B4F"), Metallic: 0.6f, Roughness: 0.3f),
+        // Desire Red metallic: SEAT's press text for the Leon Cupra 300 (February 2017) names it, with an electric blue,
+        // as the range's two new metallics, and the Cupra 300's launch photographs (December 2016) show it on the ST
+        // estate (the five-door beside it is grey). Shade read off those photographs (sRGB 150-210, 20, 40-57 in light).
+        CarStyle.CupraTsi => new(Color.FromHtml("#A61427"), Metallic: 0.6f, Roughness: 0.3f),
+        // WR Blue Pearl, Subaru's "signature exterior color" (Subaru of America, 28 May 2014), offered on the BRZ from
+        // 2013 (code 02C, K7X from 2015); #1A4FD6 is PaintScratch's approximation of 02C. The loft draws a pearl as its
+        // metallic base.
+        CarStyle.Boxer => new(Color.FromHtml("#1A4FD6"), Metallic: 0.3f, Roughness: 0.32f, Pearl: 1f),
+        _ => new(DefaultPaint),
+    };
 
     /// <summary>
     /// A car's paint: its colour and its finish. A solid colour is a coated dielectric (0.11): hardly any metallic,
@@ -77,7 +111,8 @@ internal sealed partial class CarView : Node3D
     /// <summary>
     /// The paints the player chooses from (the menu's PAINT line): the car's own colour as its model has it (null:
     /// the Testarossa's red, the McLaren's orange, the 205's navy, the Delta's Martini white, the Golf's blue, the
-    /// VAZ's beige, the Renault's blue, the Mercedes' silver; the lofted bodies' red), then the classic colours.
+    /// VAZ's beige, the Renault's blue, the Mercedes' silver, the 458's Rosso Corsa; a lofted body's
+    /// <see cref="LoftPaint"/>), then the classic colours.
     /// </summary>
     public static readonly (string Name, CarPaint? Paint)[] Paints =
     [
@@ -128,6 +163,7 @@ internal sealed partial class CarView : Node3D
     private BodyStyle _style = BodyStyle.FlatTwelve;
     private Color _paint = DefaultPaint;    // the car's colour as drawn (a model's own when none was chosen)
     private CarPaint _finish = new(DefaultPaint);   // the lofted body's paint: its finish (a model's: _paintChoice)
+    private CarPaint _loftPaint = new(DefaultPaint);  // the lofted body's own paint (LoftPaint), its ORIGINAL
     private CarPaint? _paintChoice;         // the paint chosen for it; null keeps a model's own (CarView.Model.cs)
     private float _cgHeight;
     private float _trafficShift;   // reference point to the body's middle, forward (m): SetTrafficPose
@@ -143,14 +179,16 @@ internal sealed partial class CarView : Node3D
     /// model's when it says (CarView.Model.cs), the cluster's own place otherwise.</summary>
     public float GearTop => _modelGearTop ?? InstrumentCluster.DefaultGearTop;
 
-    /// <summary>A car in a paint, or (null) in its model's own; a lofted body without one is red.</summary>
+    /// <summary>A car in a paint, or (null) in its model's own; a lofted body without one in its style's (<see cref="LoftPaint"/>).</summary>
     public static CarView Create(VehicleSpec spec, CarPaint? paint = null)
     {
+        var own = LoftPaint(spec.Style);
         var view = new CarView
         {
             Name = "Car",
-            _paint = paint?.Colour ?? DefaultPaint,
-            _finish = paint ?? new CarPaint(DefaultPaint),
+            _paint = paint?.Colour ?? own.Colour,
+            _finish = paint ?? own,
+            _loftPaint = own,
             _paintChoice = paint,
             _wheelRadius = spec.WheelRadius,
             _style = (spec.Style switch

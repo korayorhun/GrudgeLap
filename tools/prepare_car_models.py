@@ -809,12 +809,14 @@ def prepare(car, entry, inspect=False, config=None):
     # The paint atlases (paint_atlas): materials whose texture holds the paint with the rest of the car's details.
     atlas = {k.lower(): v for k, v in entry.get("paint_atlas", {}).items()}
     atlas_materials = {}
-    # The entry's corrections to a material's finish (materials: {name: {roughness, metallic}}), where the model is
-    # wrong about the real car: the 570S's dashboard, scuttle and door tops are leather or Alcantara, matt, and its
+    # The entry's corrections to a material's finish (materials: {name: {roughness, metallic, colour}}), where the model
+    # is wrong about the real car: the 570S's dashboard, scuttle and door tops are leather or Alcantara, matt, and its
     # model has them in gloss black (roughness 0.18-0.22), which mirrored the sky from the seat as a grey wash over the
     # right half of the frame (v8seat). Its entry takes them to 0.88, the game's own dark trim (0.85) and rubber (0.86):
-    # at 0.55-0.6 the sun ahead still spread over them as a flat grey sheen. Only the named materials change; a model
-    # without them prepares as before.
+    # at 0.55-0.6 the sun ahead still spread over them as a flat grey sheen. colour (sRGB "#RRGGBB") sets a material's
+    # base colour, kept linear as glTF has it: the 458's paint is a pure #F70000 in its model, and the car's ORIGINAL is
+    # its launch colour, Rosso Corsa (cars13 stage 2; the source is cited in CarView.LoftPaint). Only the named
+    # materials change; a model without them prepares as before.
     finishes = {k.lower(): v for k, v in entry.get("materials", {}).items()}
     finished = set()
     for index, material in enumerate(model.get("materials", [])):
@@ -827,7 +829,12 @@ def prepare(car, entry, inspect=False, config=None):
         if lower in finishes:
             finished.add(lower)
             for key, value in finishes[lower].items():
-                pbr[f"{key}Factor"] = float(value)
+                if key == "colour":
+                    srgb = [int(value.lstrip("#")[k:k + 2], 16) / 255.0 for k in (0, 2, 4)]
+                    linear = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in srgb]
+                    pbr["baseColorFactor"] = [round(c, 6) for c in linear] + [pbr.get("baseColorFactor", [1, 1, 1, 1.0])[3]]
+                else:
+                    pbr[f"{key}Factor"] = float(value)
         alpha = pbr.get("baseColorFactor", [1, 1, 1, 1])
         # Nothing real is black as 0: black plastic, rubber and leather reflect 3-5 % of the light. An untextured
         # pure black (the Delta's whole cabin) drew as a void with no shape; it is lifted to 0.035.

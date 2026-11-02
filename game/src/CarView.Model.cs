@@ -35,8 +35,8 @@ internal sealed partial class CarView
         return key is null ? null : $"res://assets/models/{key}.glb";
     }
 
-    /// <summary>The car's own colour whatever it is painted: its model's paint that covers the most of it, or the lofted body's red.</summary>
-    public Color OwnColour => _paints.Count > 0 ? _paints[0].Factory : DefaultPaint;
+    /// <summary>The car's own colour whatever it is painted: its model's paint that covers the most of it, or the lofted body's (<see cref="LoftPaint"/>).</summary>
+    public Color OwnColour => _paints.Count > 0 ? _paints[0].Factory : _loftPaint.Colour;
 
     /// <summary>
     /// The body's box in this node's frame (origin at the centre of gravity): the model's, or the lofted body's from its

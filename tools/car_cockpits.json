@@ -1,5 +1,23 @@
 {
   "_comment": "Written by tools/prepare_car_models.py for every car it prepares (do not edit): where the eyes, the dials and the mirror's glass went, in the car frame (x right, y up from the centre of gravity, z back; metres). eye_over_road: from the road at rest; under_lining: from the eyes to whatever is over them (the eyes stay 13 cm under it; lowered when they had to be); seats_passed_over: seat-shaped meshes over the eyes' footprint that are not taken for a roof; eye_from_wheel: from the steering wheel's centre; dials gear_top: the gear readout's box, pixels down the 1024 x 400 panel.",
+  "458": {
+    "eye": [-0.358, 0.356, -0.019],
+    "eye_over_road": 1.001,
+    "under_lining": 0.155,
+    "lowered": false,
+    "seats_passed_over": [],
+    "wheel_centre": [-0.358, 0.026, -0.569],
+    "eye_from_wheel": [0.0, 0.33, 0.55],
+    "dials": {
+      "centre": [-0.379, 0.111, -0.792],
+      "width": 0.31,
+      "gear_top": 44
+    },
+    "mirror": {
+      "glass": [0.0, 0.436, -0.511],
+      "on": "hung by the game"
+    }
+  },
   "estate": {
     "eye": [-0.37, 0.45, 0.3],
     "eye_over_road": 1.083,

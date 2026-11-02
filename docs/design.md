@@ -947,6 +947,16 @@ they drive like the real cars before their models and sounds land:
     300 N m from 2200 rpm, 6.4 s to 100 km/h, 247 km/h), and the nearest later one the Cupra Leon VZ 245 (2020 on).
     The 300 PS Mk3 of SEAT's 2017 sheet stays until the user chooses among the three.
 
+    Stage 2 (cars/stage2: phys13, models13 and sound13 merged onto 0.25.0, the McLaren's cockpit fix and the
+    showroom's paint in it). The table's last two rows are history now: the 458 is drawn by its model (models13, with
+    the 570S's cabin; its cockpit and paint below, under Real car models) and the other four by their lofts until a
+    model of each is found; every engine names its own bank (`SoundFolder`: the 458 `v8flat`, the HGT `inline5`, the
+    Bravo 1.6 `four16v`, the Cupra `tsi4`, the BRZ `boxer4`; `GlpAudio.cpp`'s table alike; under Sound, cars13 stage 2).
+    The BRZ is voiced as the coupe with a boot it is, the saloons' 1.9 m cabin, as this item left for its own bank,
+    and the diesel's knock test holds it to the same margins as every petrol four. Each car's ORIGINAL paint is its
+    real car's launch or press colour (under Each car's paint). No physics value changed: the eight cars' and the
+    five's figures are this item's.
+
 Kept, as earlier decisions: the fixed 240 Hz step with semi-implicit Euler for the body, the raycast wheels, the
 grass's grip and rolling resistance (0.9), the weather's grip figures (0.12), the speed-sensitive steering lock,
 the clutch's lock/slip machine, and the low-speed fades of the slip angle (no jitter at rest).
@@ -1227,6 +1237,15 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
     its metallic base. A mixed colour is held inside what a paint reflects, 0.03 to 0.92 a channel (sRGB, about the
     black's 0.035 and the white's 0.90), so the picker's pure white does not glow in the sun and its pure black is not
     a hole in the picture.
+  - A lofted body's ORIGINAL (cars13 stage 2, `CarView.LoftPaint`): the default red, but for the five cars of cars13,
+    which wear their real cars' launch or press colours: the 458 Rosso Corsa (#E4002B, Pantone 185 C, its model's
+    paint set to it as well), the Bravo HGT Giallo Ginestra (Fiat 258, a Bravo-only colour of the 1998 facelift, solid,
+    #F0C000), the Bravo 1.6 Verde Reflex (Fiat 391, Bravo-only, metallic, #2E6B4F), the Leon Cupra Desire Red (the
+    metallic SEAT launched the Cupra 300 with, #A61427), the BRZ WR Blue Pearl (#1A4FD6, PaintScratch's reading of
+    02C, a pearl). The sources are in the code; no press-car colour of either Bravo was found, so both are colours only
+    the Bravo was sold in, their shades estimated. The showroom's swatches read these values; the lofted bodies draw
+    them paler on the turntable than the models draw theirs (their clearcoat mirrors the studio's light sky, a solid
+    as much as a metallic), as any lofted body does there.
 - A fault in the sound update is logged once and the frame carries on (`Bootstrap._Process`). In 0.8.0 the
   world sound kept the players of the last credit's drones, freed with their views, and threw on every frame of
   the next credit: the view stopped following the car, which stood at the line while the engine revved and the
@@ -1411,10 +1430,31 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
   Thingiverse clips), so the Bravos and the Cupra keep theirs too. `CarModelSourceTests` pins the 458's entry and ties
   the four places a model is named: every file `fetch_models.py` fetches has its LICENSE.txt (with its Sketchfab uid) and is drawn by the game
   or the Unreal level, and THIRD_PARTY.md credits exactly the models the game draws (this branch first credited two
-  models no entry drew and fetched their 52 MB on every fresh build). Left: the 570S cabin's gloss-black dashboard
-  mirrors the sky in the 458 as it did in the V8 (cars/v8seat's `materials` corrects the V8's; the 458's entry wants
-  the same once both are in), and with the Testarossa the game draws two Ferrari bodies, whose names and designs are
-  Ferrari's (THIRD_PARTY.md), a maker that has had its models taken down from Sketchfab.
+  models no entry drew and fetched their 52 MB on every fresh build). The 570S cabin's gloss-black dashboard
+  mirrored the sky in the 458 as it did in the V8 until stage 2 gave the 458's entry the V8's `materials` (next
+  item). Left: with the Testarossa the game draws two Ferrari bodies, whose names and designs are Ferrari's
+  (THIRD_PARTY.md), a maker that has had its models taken down from Sketchfab.
+- cars13 stage 2, the 458's cockpit and paint (cars/stage2, the McLaren's cockpit fix and models13 met). The 458
+  borrows the 570S's whole cabin, so its entry takes what 0.25.0 gave the V8's: the dashboard, scuttle and door tops
+  matt (`materials`: plastic.black and McLaren.black at roughness 0.88), the dials 0.31 m wide, 1 cm right and 4 mm
+  down on the binnacle with the gear readout from 44 px down the panel, and the eyes 5 cm up and 3 cm back on the
+  default (`eye`), 0.33 m over and 0.55 m behind the wheel's centre as in the 570S. The eyes were not asked for and
+  were added for the dials: the dials projected from the default eyes (`dialmask`, the cabin and the wheel between
+  the eyes and the panel, at rest and for the head's sway: 4.5 cm either side, 3 cm back, 3 cm forward and right, 6 cm
+  forward at speed), 5 cm lower and 3 cm nearer the wheel than the McLaren's, put the rim higher across the panel:
+  the rev counter read only 4,000-7,000 rpm at every head position, the speedometer 70-230 km/h, the gear readout 43-80
+  % in view (the V8: 3,000-7,750, 40-260 km/h, 100 %). Raising the panel to the window between the binnacle's hood and
+  the rim needed 12 mm or more, and from there it stood out of the binnacle over the hood in the seat view (shots at
+  12, 20 and 24 mm); a smaller panel gains nothing. On the McLaren's eyes over the same wheel the projection is the
+  V8's to the figure, and the seat view frames the road as the V8's does: eyes 1.001 m over the road, 0.155 m under
+  the lining (the default found nothing over them, which a sparse roof mesh lets through), the hung mirror 8 cm over
+  the eyes (no glass over its new place: the windscreen's top lies ahead of it). Its paint, the material named
+  "Material", is a pure #F70000 in the model; the entry sets it to Rosso Corsa, #E4002B (`materials`' new `colour`,
+  sRGB, kept linear as glTF has it), the 458's launch colour (`CarView.LoftPaint` cites the sources), so the ORIGINAL
+  swatch, the paint covering the most of the car, reads #E4002B in the showroom. The other eight models prepare to
+  the same bytes as main's (SHA-256 against a preparation of main's tree), `tools/car_cockpits.json` takes the 458,
+  and `A_seat_pair_in_one_mesh_does_not_lower_the_eyes` holds its eyes, dials and dashboard to the 570S's against the
+  same wheel.
 - Real car models (0.16, `tools/prepare_car_models.py`, `CarView.Model.cs`). The lofted bodies and the boxes of
   their cabins read as toys, from the seat most of all, so the catalogue's cars are drawn as CC BY models of real
   cars with cabins of their own (THIRD_PARTY.md): the flat-twelve a Lotus Esprit Turbo 1983 (right-hand drive,

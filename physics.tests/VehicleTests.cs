@@ -447,6 +447,37 @@ public sealed class VehicleTests
         // over it as a grey sheen (v8seat review), at 0.88 it does not.
         foreach (var material in new[] { "plastic.black", "McLaren.black" })
             Assert.True(entry.GetProperty("materials").GetProperty(material).GetProperty("roughness").GetSingle() >= 0.8f, material);
+
+        // The 458 (cars13 stage 2) borrows the 570S's whole cabin (cabin_from: its tub, dashboard, binnacle, wheel and the
+        // seat pair, named as seats so that nothing of it is taken for the roof), and with it the 570S's driving position,
+        // dials and matt dashboard. On the preparation's default eyes, 5 cm lower and 3 cm nearer the wheel than the
+        // McLaren's, the rim crossed the panel higher: projected from them the rev counter read only 4,000-7,000 rpm and
+        // the speedometer 70-230 km/h over the head's sway, the gear readout 43-80 % in view, and a panel raised 12 mm or
+        // more to the window between the hood and the rim stood out of the binnacle over the hood. Its record must put
+        // the eyes, the dials and the readout where the 570S's are against the same wheel.
+        var ferrari = record.RootElement.GetProperty("458");
+        var ferrariEntry = config.RootElement.GetProperty("458");
+        Assert.Equal("v8", ferrariEntry.GetProperty("cabin_from").GetProperty("car").GetString());
+        Assert.False(ferrari.GetProperty("lowered").GetBoolean());
+        var ferrariOver = ferrari.GetProperty("eye_over_road").GetSingle();
+        _out.WriteLine($"458 eyes {ferrariOver:F3} m over the road, {ferrari.GetProperty("under_lining").GetSingle():F3} m under the lining");
+        Assert.InRange(ferrariOver, 0.97f, 1.03f);
+        Assert.True(ferrari.GetProperty("under_lining").GetSingle() >= 0.129f);
+        var ferrariFromWheel = Point(ferrari.GetProperty("eye_from_wheel"));
+        Assert.Equal(fromWheel[1], ferrariFromWheel[1], 0.0011f);
+        Assert.Equal(fromWheel[2], ferrariFromWheel[2], 0.0011f);
+        var ferrariDials = ferrari.GetProperty("dials");
+        var ferrariDialsEntry = ferrariEntry.GetProperty("dials");
+        Assert.Equal(dialsEntry.GetProperty("width").GetSingle(), ferrariDialsEntry.GetProperty("width").GetSingle());
+        Assert.Equal(dialsEntry.GetProperty("gear_top").GetInt32(), ferrariDials.GetProperty("gear_top").GetInt32());
+        Assert.Equal(dials.GetProperty("width").GetSingle(), ferrariDials.GetProperty("width").GetSingle(), 0.0011f);
+        // The panel against the wheel's centre as in the 570S, within 2 mm (it sits 6 mm proud of the binnacle towards
+        // the eyes, so it moves as little as the eyes' direction does).
+        var panel = Point(dials.GetProperty("centre")).Zip(Point(v8.GetProperty("wheel_centre")), (a, b) => a - b).ToArray();
+        var ferrariPanel = Point(ferrariDials.GetProperty("centre")).Zip(Point(ferrari.GetProperty("wheel_centre")), (a, b) => a - b).ToArray();
+        for (var axis = 0; axis < 3; axis++) Assert.Equal(panel[axis], ferrariPanel[axis], 0.002f);
+        foreach (var material in new[] { "plastic.black", "McLaren.black" })
+            Assert.True(ferrariEntry.GetProperty("materials").GetProperty(material).GetProperty("roughness").GetSingle() >= 0.8f, $"458 {material}");
     }
 
     [Fact]
