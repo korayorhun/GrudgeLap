@@ -94,6 +94,47 @@ public sealed class VehicleTests
         }
     }
 
+    /// <summary>
+    /// Seconds to 60 mph from a standing start made as the road tests that publish the figures make it: first gear in,
+    /// brake and throttle held a moment so the revs wait at the launch speed with the clutch open, the brake released,
+    /// the throttle fed in against wheelspin (<see cref="ScriptedDriver.FeatherThrottle"/>), and each gear held until
+    /// <see cref="RoadTestShiftDue"/>.
+    /// </summary>
+    private static float RoadTestZeroToSixty(VehicleSpec spec, float limit = 20f)
+    {
+        var car = new VehicleSim(spec, DragStrip());
+        car.Drivetrain.Mode = TransmissionMode.ManualAutoClutch;
+        car.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Ignition = true, Clutch = 1f }, Dt);
+        car.Step(new DriverInputs { Gear = 1, Clutch = 1f, Brake = 1f }, Dt);
+        for (var t = 0f; t < 1.5f; t += Dt) car.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Brake = 1f, Throttle = 1f }, Dt);
+        var lastGear = car.Drivetrain.Gear;
+        for (var t = 0f; t < limit; t += Dt)
+        {
+            var shift = RoadTestShiftDue(car) && car.Drivetrain.ClutchLocked && car.Drivetrain.Gear == lastGear;
+            car.Step(new DriverInputs { Throttle = ScriptedDriver.FeatherThrottle(car, 1f), Steer = FollowRoad(car), Gear = DriverInputs.NoGearChange, ShiftUp = shift }, Dt);
+            if (shift) lastGear = car.Drivetrain.Gear;
+            if (car.SpeedMph >= 60f) return t + Dt;
+        }
+        return float.PositiveInfinity;
+    }
+
+    /// <summary>
+    /// Whether a road tester changes up now: at the limiter (within 1.5 % of it, the rise of a 60 Hz step in first), or
+    /// earlier where the next gear already pulls harder (the full-throttle curve times the ratio at the revs the change
+    /// lands on). A fixed fraction of the limiter suits a curve that falls away before it; the BRZ's power holds to its
+    /// limiter, and its second gear reaches 60 mph only there.
+    /// </summary>
+    private static bool RoadTestShiftDue(VehicleSim car)
+    {
+        var spec = car.Spec;
+        var gear = car.Drivetrain.Gear;
+        if (gear < 1 || gear >= spec.ForwardGearCount) return false;
+        var rpm = car.Drivetrain.Engine.Rpm;
+        if (rpm > spec.Engine.RedlineRpm * 0.985f) return true;
+        var landing = rpm * spec.RatioForGear(gear + 1) / spec.RatioForGear(gear);
+        return spec.Engine.CurveTorque(landing) * spec.RatioForGear(gear + 1) >= spec.Engine.CurveTorque(rpm) * spec.RatioForGear(gear);
+    }
+
     private static VehicleSim StartedCar(TrackGeometry track, TransmissionMode mode = TransmissionMode.ManualAutoClutch, VehicleSpec? spec = null)
     {
         var car = new VehicleSim(spec ?? new VehicleSpec(), track);
@@ -205,31 +246,35 @@ public sealed class VehicleTests
     }
 
     /// <summary>
-    /// The five cars of cars13 against the figures of the cars they follow, driven as the hatchbacks are: 0-60 mph from
-    /// idle (the published 0-100 km/h less a twentieth, a tenth below it to a fifth above) and top speed a tenth of the
-    /// published figure either side; the Leon Cupra's 250 km/h (155 mph) is its limiter's, which holds the car within a
-    /// few per cent of it rather than the drag, so its window is the limiter's. The BRZ has none: its 226 km/h is the
-    /// drag's, and it runs about 8 % past it here (VehicleSpec.Boxer).
+    /// The five cars of cars13 against the figures of the cars they follow: 0-60 mph launched as the road tests that
+    /// publish the figures launch (<see cref="RoadTestZeroToSixty"/>), within a tenth either side of the published
+    /// 0-100 km/h less a twentieth, and top speed a tenth of the published figure either side; the Leon Cupra's 250 km/h
+    /// (155 mph) is its limiter's, which holds the car within a few per cent of it rather than the drag, so its window
+    /// is the limiter's. The BRZ has none: its 226 km/h is the drag's, and it runs about 8 % past it here
+    /// (VehicleSpec.Boxer).
+    /// <para>
+    /// Until the cars13 review this test drove them as <see cref="Hatchbacks_match_their_published_figures"/> drives the
+    /// hatchbacks, floored from idle with the shifts at 0.93 of the limiter, a tenth under the figure to a fifth over:
+    /// the shift into first and the revs rising from idle cost the cars about half a second before they move (a fifth
+    /// on the 458 with its launch control), and the fifth over, meant for a turbo waiting for its boost, carried the
+    /// naturally aspirated cars too. Driven that way the BRZ took 8.28 s, its second gear given up at 87 km/h for a third
+    /// gear landing in the FA20's trough, where its second runs on to the limiter just short of 60 mph; launched as Edmunds launched one (7.3 s to 60 mph, the quarter mile in
+    /// 15.3 s at 92.1 mph) it takes 7.2 s and runs the quarter in 15.4 s at 94 mph, so the car was right and the method
+    /// was not. All five are now held to a tenth either side, the turbo Cupra too.
+    /// </para>
     /// </summary>
     [Theory]
-    [InlineData(8, false, 2.9f, 3.9f, 182f, 222f)]    // 458 Italia: under 3.4 s to 100 km/h, over 325 km/h (202 mph); rear-wheel drive
-    [InlineData(9, true, 7.3f, 9.7f, 119f, 146f)]     // Bravo HGT 2.0 20V: 8.5 s, 213 km/h (132 mph)
-    [InlineData(10, true, 9.4f, 12.5f, 103f, 126f)]   // Bravo 1.6 16V: 11.0 s, 184 km/h (114 mph)
-    [InlineData(11, true, 4.9f, 6.5f, 150f, 158f)]    // Leon Cupra 300: 5.7 s, 250 km/h limited (155 mph)
-    [InlineData(12, false, 6.5f, 8.7f, 126f, 154f)]   // BRZ: 7.6 s, 226 km/h (140 mph)
+    [InlineData(8, false, 2.9f, 3.55f, 182f, 222f)]   // 458 Italia: under 3.4 s to 100 km/h, over 325 km/h (202 mph); rear-wheel drive
+    [InlineData(9, true, 7.3f, 8.9f, 119f, 146f)]     // Bravo HGT 2.0 20V: 8.5 s, 213 km/h (132 mph)
+    [InlineData(10, true, 9.4f, 11.5f, 103f, 126f)]   // Bravo 1.6 16V: 11.0 s, 184 km/h (114 mph)
+    [InlineData(11, true, 5.0f, 6.05f, 150f, 158f)]   // Leon Cupra 300 five-door: 5.8 s (the three-door's 5.7), 250 km/h limited (155 mph)
+    [InlineData(12, false, 6.5f, 7.9f, 126f, 154f)]   // BRZ: 7.6 s, 226 km/h (140 mph)
     public void The_cars_of_cars13_match_their_published_figures(int car, bool frontWheelDrive, float zeroToSixtyMin, float zeroToSixtyMax, float topMin, float topMax)
     {
         var spec = VehicleSpec.Catalogue[car];
         Assert.Equal(frontWheelDrive, spec.FrontWheelDrive);
         Assert.Null(spec.FourWheelDrive);
-        var sprint = StartedCar(DragStrip(), spec: spec);
-        var t = 0f;
-        var reached = -1f;
-        DriveFlatOut(sprint, 20f, c =>
-        {
-            t += Dt;
-            if (reached < 0f && c.SpeedMph >= 60f) reached = t;
-        });
+        var reached = RoadTestZeroToSixty(spec);
         var top = StartedCar(DragStrip(9000f), spec: spec);
         // The quick car is at its top speed within a minute and would run off the strip's end in two; the slow ones need the two.
         DriveFlatOut(top, topMax > 170f ? 60f : 120f);

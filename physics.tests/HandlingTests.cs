@@ -62,9 +62,9 @@ public sealed class HandlingTests(ITestOutputHelper output)
     [InlineData(9, 7.6f, 9.4f, 34f, 44f)]
     // 1.6 hatch: 11.0 s for the Bravo 1.6 16V (cars-data); ABS, drums behind, no published stop (the class: 38-47 m).
     [InlineData(10, 9.9f, 12.1f, 38f, 47f)]
-    // Hot hatch of 2018: SEAT quotes 5.7 s for the Leon Cupra 300 three-door (5.8 for the five-door); ESC with ABS, no
-    // published stop (a hot hatch of 2018 on 235/35 R19 performance tyres with 340 mm discs: 31-38 m).
-    [InlineData(11, 5.1f, 6.3f, 31f, 38f)]
+    // Hot hatch of 2018: SEAT quotes 5.8 s for the Leon Cupra 300 five-door the spec follows (5.7 for the three-door);
+    // ESC with ABS, no published stop (a hot hatch of 2018 on 235/35 R19 performance tyres with 340 mm discs: 31-38 m).
+    [InlineData(11, 5.2f, 6.4f, 31f, 38f)]
     // Boxer coupe: Subaru quotes 7.6 s for the BRZ; ABS; Car and Driver stopped a 2013 BRZ from 70 mph in 165 ft, about
     // 39.6 m from 100 km/h on its touring tyres.
     [InlineData(12, 6.8f, 8.4f, 35f, 44f)]
@@ -152,6 +152,46 @@ public sealed class HandlingTests(ITestOutputHelper output)
         Assert.InRange(meanSlip, spec.LaunchControl ? 0.8f : 0.5f, 1.0f);
         Assert.True(mostSlip < 1.15f, $"a driven tyre spun past its peak ({mostSlip:P0})");
         Assert.True(mostLeadSlip < 1.4f, $"the fronts ran too far ahead to close the coupling ({mostLeadSlip:P0})");
+    }
+
+    /// <summary>
+    /// A launch out of a tight turn with launch control (cars13 review): brake and throttle held, then released with 60 %
+    /// of the steering lock on and the throttle held down, each 240 Hz step watched for two seconds. The driven wheels'
+    /// speed difference does not change sign from one step to the next (both sides over 0.5 rad/s) for more than 8
+    /// steps running, dry or wet: the launch control's clutch and the differential's lock feeding each other at the step
+    /// rate is a hunt no real axle makes. The 458 on the default 1.3 kg m^2 of wheel inertia, a 16 in wheel's,
+    /// alternated for 31 steps (13 in the rain); on its 20 in corners' 1.8 it alternates for 1 (none in the rain), the
+    /// 570S for 5 (none).
+    /// </summary>
+    [Theory]
+    [InlineData(1, Weather.Dry)]
+    [InlineData(1, Weather.Rain)]
+    [InlineData(8, Weather.Dry)]
+    [InlineData(8, Weather.Rain)]
+    public void A_launch_out_of_a_tight_turn_does_not_set_the_driven_wheels_hunting(int car, Weather weather)
+    {
+        var spec = VehicleSpec.Catalogue[car];
+        Assert.True(spec.LaunchControl);
+        var sim = new VehicleSim(spec, HandlingRig.Proving()) { Weather = weather };
+        var dt = VehicleSim.FixedStep;
+        sim.Drivetrain.Mode = TransmissionMode.ManualAutoClutch;
+        sim.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Ignition = true, Clutch = 1f }, dt);
+        sim.Step(new DriverInputs { Gear = 1, Clutch = 1f, Brake = 1f }, dt);
+        for (var t = 0f; t < 1.5f; t += dt) sim.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Brake = 1f, Throttle = 1f }, dt);
+        var (left, right) = spec.FrontWheelDrive ? (0, 1) : (2, 3);
+        float before = 0f;
+        int run = 0, longest = 0;
+        for (var i = 0; i < 480; i++)
+        {
+            sim.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Throttle = 1f, Steer = 0.6f }, dt);
+            var apart = sim.Wheels[left].AngularVelocity - sim.Wheels[right].AngularVelocity;
+            run = MathF.Abs(apart) > 0.5f && MathF.Abs(before) > 0.5f && MathF.Sign(apart) != MathF.Sign(before) ? run + 1 : 0;
+            longest = Math.Max(longest, run);
+            before = apart;
+        }
+        output.WriteLine($"{spec.Name} {weather}: the driven wheels alternated for {longest} steps at most; {sim.Speed * MathUtil.KmhPerMps:F1} km/h after 2 s");
+        Assert.Equal(1, sim.Drivetrain.Gear);
+        Assert.True(longest <= 8, $"the driven wheels hunted against each other for {longest} steps");
     }
 
     /// <summary>

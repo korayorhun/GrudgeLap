@@ -22,7 +22,7 @@ internal sealed class NativeSession(RaceSession session, int car)
 /// </summary>
 internal static class NativeApi
 {
-    public const int AbiVersion = 7;
+    public const int AbiVersion = 8;
     public const int TrafficFlag = 1;
     public const int SpeedRouteFlag = 2;
     /// <summary>Bits 4-5 of the flags: the credit's weather (0 dry, 1 overcast, 2 wet, 3 rain); <see cref="RandomWeatherFlag"/> draws one instead.</summary>

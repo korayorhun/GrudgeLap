@@ -780,8 +780,20 @@ public sealed record VehicleSpec
         ClutchMaxTorque = 1200f,
         // A flat-plane crank and a light flywheel behind a dual-clutch box.
         EngineInertia = 0.18f,
-        // 295/35 R20 behind (0.357 m), 235/35 R20 in front (0.336): one radius here, between the two.
+        // 295/35 R20 behind (0.357 m), 235/35 R20 in front (0.336): one radius here, between the two, so a model drawn
+        // with both sits on the road (tools/car_models.py sets the hubs at their mean). It is also about the driven tyre's
+        // rolling radius under load (a tyre rolls on about 97 % of its free radius: 0.346), which sets the speed of each
+        // gear: 330 km/h at 9000 rpm in seventh, so the real car's "over 325" is within a few per cent of its cut too.
+        // Here it tops out at 323 km/h on the cut, the model's road load not growing with speed (design audit item 22);
+        // on the free 0.357 it ran to 335 km/h, still on the cut (cars13 review).
         WheelRadius = 0.345f,
+        // A rear corner's rotating parts: a 295/35 ZR20 tyre of about 12.5 kg turning at a radius of gyration of about
+        // 0.32 m (1.3 kg m^2), a forged 20 x 10.5 in wheel of about 11 kg (0.45), the 360 mm carbon-ceramic disc, the hub
+        // and the half shaft (0.1): about 1.8 kg m^2, a game estimate (Ferrari publishes no inertias; the front corners,
+        // on 235/35 tyres, are nearer 1.5, but the model has one figure and the driven wheels' sets the drive). At the
+        // default 1.3 the rear wheels' speeds alternated against each other at the step rate for 31 steps launching out
+        // of a tight turn (launch control, 60 % steer; the 570S's 5: cars13 review); at 1.8, for 1.
+        WheelInertia = 1.8f,
     };
 
     /// <summary>
@@ -1017,20 +1029,26 @@ public sealed record VehicleSpec
     /// The coupe of 2013, after the Subaru BRZ (ZC6, 2012-16, before the facelift of 2017): the two-litre FA20 boxer four,
     /// 200 PS at 7000 and 205 N m at 6400-6600, the six-speed manual (3.626 / 2.188 / 1.541 / 1.213 / 1.000 / 0.767,
     /// reverse 3.437, final drive 4.10 until 2016 and 4.30 from 2017: Subaru's 2013 and 2017 specification sheets) to a
-    /// Torsen limited-slip rear differential, 215/45 R17 tyres, 294 mm (11.6 in) ventilated discs all round with ABS,
-    /// VSC with traction control, 53/47; 2762 lb (1253 kg) at the kerb for the US manual car, 1240 kg as listed in Europe.
-    /// Its figures: 0-100 km/h in 7.6 s and 226 km/h (Subaru Europe); its 215/45 R17 Michelin Primacy HP touring tyres
-    /// held about 0.9 g in the road tests of 2012-13 (Car and Driver's and Motor Trend's BRZ and FR-S).
+    /// Torsen limited-slip rear differential, 215/45 R17 tyres, ventilated discs of 294 mm (11.6 in) in front and 290 mm
+    /// (11.4 in) behind with ABS, VSC with traction control, 53/47; 2762 lb (1253 kg) at the kerb for the US manual car,
+    /// 1240 kg as listed in Europe. Its figures: 0-100 km/h in 7.6 s and 226 km/h (Subaru Europe); Edmunds' Inside Line
+    /// ran a manual BRZ of 2012 to 60 mph in 7.3 s and over the quarter mile in 15.3 s at 92.1 mph (autoblog.com's report
+    /// of the test), which takes third gear: second runs out at the limiter's 7,400 rpm at 97 km/h on the free tyre
+    /// radius, about 95 on the loaded one, just short of 60 mph. Its 215/45 R17 Michelin Primacy HP touring tyres held
+    /// about 0.9 g in the road tests of 2012-13 (Car and Driver's and Motor Trend's BRZ and FR-S).
     /// </summary>
     /// <remarks>
     /// Its size is the BRZ's: 4240 x 1775 x 1285 mm, 2570 mm between the axles, tracks of 1520 mm in front and 1540
     /// behind (Subaru's sheet: 59.8 / 60.6 in), one track of 1.53 m here; the overhangs about 920 / 750 mm. Cd 0.29
     /// (Subaru Canada's sheet, without the rear spoiler; 0.28 with it). The Torsen's bias ratio is not published: a
     /// Type-2 unit's 2.5:1 is taken, a locking share of (2.5 - 1) / (2 x 3.5) = 0.21 as the Delta's rear is reckoned
-    /// (FourWheelDrive.RearLocking), with no preload. The V8's loft, fitted to these axles, stands in for it until its
-    /// model lands (CarStyle.Boxer): the nearest in height and proportion, though its glass engine deck belongs to a
-    /// mid-engined car. The inertias follow the sports cars' (the dynamic index about 0.9); the springs and bars a
-    /// sports coupe's of 1315 kg (game figures, none published).
+    /// (FourWheelDrive.RearLocking), with no preload. The law passes that share of the drive torque from the faster
+    /// wheel whatever the slower one can take, so with a wheel in the air it still sends a fifth of the axle's torque to
+    /// the grounded one, where a real Torsen, biasing torque against the other wheel's, sends almost none: the Delta's
+    /// rear works the same way, and a law with the bias's own limit is left to a pass on both. The V8's loft, fitted to
+    /// these axles, stands in for it until its model lands (CarStyle.Boxer): the nearest in height and proportion,
+    /// though its glass engine deck belongs to a mid-engined car. The inertias follow the sports cars' (the dynamic index
+    /// about 0.9); the springs and bars a sports coupe's of 1315 kg (game figures, none published).
     /// </remarks>
     public static VehicleSpec Boxer => new()
     {
@@ -1082,7 +1100,8 @@ public sealed record VehicleSpec
         // A 13.1:1 rack: quick.
         MaxSteerLowSpeedDeg = 32f,
         MaxSteerHighSpeedDeg = 7f,
-        // 294 mm ventilated discs all round, two-piston callipers in front, proportioned for a 53/47 car.
+        // Ventilated discs of 294 mm (11.6 in) in front and 290 mm (11.4 in) behind, two-piston callipers in front,
+        // proportioned for a 53/47 car.
         FrontBrakeTorque = 2600f,
         RearBrakeTorque = 1100f,
         GearRatios = [-3.437f, 0f, 3.626f, 2.188f, 1.541f, 1.213f, 1.000f, 0.767f],

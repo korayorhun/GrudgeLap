@@ -134,6 +134,23 @@ public class DieselCharacterTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// The petrol fours that play a six's banks until their own land, each by its style and the folder it borrows, so
+    /// the exception lapses when the car's own banks take the folder's place, with the idling margin it is held to in
+    /// place of 6 dB. The BRZ (stage 2 of cars13 gives it the "boxer4" banks; VehicleSpec.Boxer) plays the V6 hatch's:
+    /// the VR6's recording, which no four of the catalogue played before, carries -13.7 dB of its sound between 1 and
+    /// 3 kHz idling at the BRZ's 700 rpm against the diesel's -9.3, a six's brighter exhaust rather than a knock, though
+    /// a player hears its idle nearly as bright as the diesel's (the other petrol fours: -17.5 to -29.3 dB). 3.5 dB, a
+    /// decibel under the 4.4 measured, keeps it from growing brighter still until its banks land; at 1,500 rpm it is held
+    /// to the others' 3.5 (measured 9.4 dB under the diesel). On their marks the VR6's recordings swing as a six's
+    /// firing does (its run-up 0.32 against the diesel's 0.24), which says nothing of a four's knock: they are not
+    /// compared there.
+    /// </summary>
+    private static readonly Dictionary<(CarStyle Style, string Folder), double> BorrowedSixBanks = new()
+    {
+        [(CarStyle.Boxer, "v6")] = 3.5,
+    };
+
+    /// <summary>
     /// The diesel's knock (diesel6): idling at its governor's throttle and at 1,500 rpm on a light throttle (0.3), where a
     /// diesel's rattle is plainest, the fleet saloon's 1-3 kHz carries a larger share of its sound than any petrol four's
     /// at the same throttle (the hot hatch, the rally hatch, the saloon and the estate, each at its own idle), by 6 dB idling
@@ -153,22 +170,19 @@ public class DieselCharacterTests(ITestOutputHelper output)
     /// 0.03, the petrol fours' idles 0.19 to 0.41 and run-ups 0.04 to 0.09.
     /// </para>
     /// <para>
-    /// The petrol fours are the four-cylinder cars whose banks were recorded from a four (cars13): a car that plays another
-    /// car's banks until its own land is a four's voice only if the banks' owner, the first car of the folder, is one. The
-    /// Bravo 1.6 and the Leon Cupra, on the hot hatch's and the rally hatch's banks, are compared; the BRZ, on the V6
-    /// hatch's, is not: the VR6's recording, which no four of the catalogue played before, carries -13.7 dB of its sound
-    /// between 1 and 3 kHz idling at the BRZ's 700 rpm, a six's exhaust and not a knock.
+    /// Every petrol four is compared, the cars of cars13 that play another car's banks until their own land too (the
+    /// Bravo 1.6 on the hot hatch's, the Leon Cupra on the rally hatch's). One is an exception, by name and only while
+    /// it plays the banks it borrows (<see cref="BorrowedSixBanks"/>): the BRZ on the V6 hatch's, held to a looser
+    /// idling margin, its banks, a six's recordings, left out of the comparison on their marks.
     /// </para>
     /// </summary>
     [Fact]
     public void The_diesel_knocks_where_the_petrol_fours_do_not()
     {
         var diesel = VehicleSpec.Catalogue.Single(c => c.Engine.Governor);
-        var petrols = VehicleSpec.Catalogue
-            .Where(c => c.Engine.Cylinders == 4 && !c.Engine.Governor
-                && VehicleSpec.Catalogue.First(owner => owner.Engine.SoundFolder == c.Engine.SoundFolder).Engine.Cylinders == 4)
-            .ToArray();
+        var petrols = VehicleSpec.Catalogue.Where(c => c.Engine.Cylinders == 4 && !c.Engine.Governor).ToArray();
         Assert.NotEmpty(petrols);
+        foreach (var key in BorrowedSixBanks.Keys) Assert.Contains(petrols, c => c.Style == key.Style);
         foreach (var (light, margin) in new[] { (false, 6.0), (true, 3.5) })
         {
             (double Share, double Firing) Heard(VehicleSpec car)
@@ -189,8 +203,9 @@ public class DieselCharacterTests(ITestOutputHelper output)
             foreach (var petrol in petrols)
             {
                 var other = Heard(petrol);
-                output.WriteLine($"  {petrol.Engine.SoundFolder}: {other.Share:0.0} dB, swinging {other.Firing:0.00}");
-                Assert.True(knock.Share >= other.Share + margin, $"{what} the diesel's 1-3 kHz is {knock.Share - other.Share:0.0} dB over the {petrol.Engine.SoundFolder}'s");
+                var needed = !light && BorrowedSixBanks.TryGetValue((petrol.Style, petrol.Engine.SoundFolder), out var borrowed) ? borrowed : margin;
+                output.WriteLine($"  {petrol.Name} ({petrol.Engine.SoundFolder}): {other.Share:0.0} dB, swinging {other.Firing:0.00}; the diesel {knock.Share - other.Share:0.0} dB over it, {needed:0.0} needed");
+                Assert.True(knock.Share >= other.Share + needed, $"{what} the diesel's 1-3 kHz is {knock.Share - other.Share:0.0} dB over the {petrol.Name}'s ({petrol.Engine.SoundFolder}), {needed:0.0} needed");
             }
         }
 
@@ -203,6 +218,11 @@ public class DieselCharacterTests(ITestOutputHelper output)
             Assert.True(swing >= hiss + 0.15, $"the diesel's {name} knocks on its marks hardly more than hiss ({swing:0.00} against {hiss:0.00})");
             foreach (var petrol in petrols)
             {
+                if (BorrowedSixBanks.ContainsKey((petrol.Style, petrol.Engine.SoundFolder)))
+                {
+                    output.WriteLine($"  {petrol.Engine.SoundFolder}/{name} ({petrol.Name}'s for now): a six's recording, not compared");
+                    continue;
+                }
                 if (Bank(petrol.Engine.SoundFolder, name) is not { } other) continue;
                 var theirs = KnockOnMarks(other);
                 output.WriteLine($"  {petrol.Engine.SoundFolder}/{name}: {theirs:0.00}");

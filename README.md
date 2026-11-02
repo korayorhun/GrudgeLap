@@ -27,10 +27,14 @@ reading working dials through a steering wheel that turns as you steer, with the
 mirror, and the tyres squeal at their limit, howl and scrub past it and scrabble on gravel from real recordings. Keyboard-playable on Windows,
 windowed or full screen. Free, open source, no assets copied from anywhere.
 
-**TR** · 1989'un arcade sürüş simülatörlerine saygı duruşu. Beş araba (1984 flat-12, 4 vites; 2012 V8, 7
+**TR** · 1989'un arcade sürüş simülatörlerine saygı duruşu. On üç araba (1984 flat-12, 4 vites; 2012 V8, 7
 vites, spor egzoz; 1988-2003'ten üç hatchback: önden çekişli 1.9 8V, dört çeker 2.0 turbo ve dört çeker 3.2 V6; Türkiye
 yollarının üç gündelik arabası: 1990'ların 1.6 arkadan itişli sedanı, aynı yılların 1.4 station'ı ve 2010'ların 2.1
-arkadan itişli dizel filo sedanı, yayımlanmış ağırlık, vites ve güç değerleriyle; hepsinde gerçek motor kayıtları), uzun *speed* ve kısa *stunt* (açık köprü, dikey loop, eğimli
+arkadan itişli dizel filo sedanı; cars13'ün beş arabası: 7 vites çift kavramalı şanzımanlı ve elektronik kontrollü
+diferansiyelli 2010 4.5 düz krank (flat-plane) V8, 2001'den beş silindirli 2.0 ve 1.6 16V iki hatchback, lamelli ön
+diferansiyelli ve 250 km/sa sınırlayıcılı 2018 300 PS turbo hot hatch ve Torsen diferansiyelli 2013 2.0 boxer coupe;
+bu beşi kendi modelleri ve sesleri gelene dek yedek gövdelerle çizilir ve en yakın mevcut kayıtlarla seslendirilir;
+hepsi yayımlanmış ağırlık, vites ve güç değerleriyle, hepsinde gerçek motor kayıtları), uzun *speed* ve kısa *stunt* (açık köprü, dikey loop, eğimli
 180°) rotaları, çukurlar, iki yönlü trafik, süreye karşı kontrol noktaları, her kazadan sonra arabanın çarptığı
 yerden ezildiği ve parçalarının uçuştuğu anlık tekrar,
 gizli skid pad, "1989 modu" ve *grudge match*: en iyi turunuzun hayaleti sonraki her turda sizinle yarışır.

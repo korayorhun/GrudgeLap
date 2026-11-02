@@ -557,7 +557,8 @@ public sealed record EngineSpec
         // The FA20 idles at 650 +/- 100 rpm with the manual gearbox (Subaru's BRZ service manual of 2013; 550-750 in
         // the 2015 service data): 700, within both and what road tests' tachometers show warm.
         IdleRpm = 700f,
-        // Subaru's redline: 7400 rpm, the limiter a little past it.
+        // Subaru's redline, 7400 rpm, where the model's limiter cuts (the FA20's own cut is said to sit a little past it;
+        // its figure is not published).
         RedlineRpm = 7400f,
         StallRpm = 380f,
         BrakingTorque = 13f,

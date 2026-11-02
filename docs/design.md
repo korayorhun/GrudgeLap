@@ -111,9 +111,10 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   cars13 (audit item 22), five more: the flat-plane V8 of 2010 after the Ferrari 458 Italia (1560 kg, 570 CV at 9000,
   seven-speed dual clutch, the E-Diff, launch control), the Fiat Bravo HGT 2.0 20V five and the Bravo 1.6 16V of 2001
   (1240 and 1135 kg, front-wheel drive, five speeds, ABS), the SEAT Leon Cupra 300 of 2018 (1395 kg, a 300 PS turbo
-  four, six speeds, the VAQ front differential, a 250 km/h limiter) and the Subaru BRZ of 2013 (1315 kg, a 200 PS
-  boxer four, six speeds, a Torsen); `VehicleTests.The_cars_of_cars13_match_their_published_figures`
-  holds their 0-60 and top speed. Each
+  four, six speeds, the VAQ front differential, a 250 km/h limiter; which Cupra waits on the user, audit item 22) and
+  the Subaru BRZ of 2013 (1315 kg, a 200 PS boxer four, six speeds, a Torsen);
+  `VehicleTests.The_cars_of_cars13_match_their_published_figures` holds their 0-60, launched as a road test, and top
+  speed. Each
   carries an `EngineSpec` (idle, redline, full-throttle curve, engine braking, cylinders, the recordings'
   folder, boost), a body style and the recordings to play.
 - **Drivetrain** — torque-curve engine with idle governor, rev limiter and stall; clutch as a lock/slip
@@ -719,15 +720,15 @@ they drive like the real cars before their models and sounds land:
     | tyres | 235/35 R20, 295/35 R20 | 205/50 R15 | 185/65 R14 | 235/35 R19 | 215/45 R17 |
     | length x width x height; wheelbase; tracks, mm | 4527 x 1937 x 1213; 2650; 1672 / 1606 | 4025 x 1755 x 1410; 2540; 1471 / 1430 | 4025 x 1755 x 1414; 2540; 1439 / 1441 | 4281 x 1816 x 1443; 2631; 1536 / 1510 | 4240 x 1775 x 1285; 2570; 1520 / 1540 |
     | Cd; lift | 0.33; 140 kg of downforce at 200 km/h, 41/59 (370 kg at 325) | 0.32 (a game figure) | 0.32 (a game figure) | 0.32 (a game figure) | 0.29 (Subaru Canada, no spoiler) |
-    | 0-100 km/h, published | under 3.4 s | 8.5 s (cars-data's table: 8.0) | 11.0 s | 5.7 s (5.8 five-door) | 7.6 s |
-    | 0-100 km/h, here (revved on the brake; floored from idle) | 3.40 s (3.56) | 8.77 (8.94) | 10.97 (11.17) | 6.07 (6.22) | 8.07 (8.45) |
-    | 0-60 mph from idle with the shifts at the redline, here | 3.43 s | 8.72 | 10.78 | 6.25 | 8.28 |
-    | 100-0 km/h dry (rain), here; published | 30.7 m (44.2); Ferrari's 32.5 | 36.4 (51.9); none | 39.8 (56.3); none | 33.8 (47.7); none | 36.5 (52.6); Car and Driver's 165 ft from 70 mph, about 39.6 |
+    | 0-100 km/h, published | under 3.4 s | 8.5 s (cars-data's table: 8.0) | 11.0 s | 5.8 s, the five-door's (5.7 the three-door's) | 7.6 s (Edmunds: 0-60 mph in 7.3 s, the quarter mile in 15.3 s at 92.1 mph) |
+    | 0-100 km/h, here (revved on the brake; floored from idle) | 3.42 s (3.58) | 8.77 (8.94) | 10.97 (11.17) | 6.07 (6.22) | 8.07 (8.45) |
+    | 0-60 mph launched as a road test (revved on the brake, each gear to the limiter or until the next pulls harder), here; from idle with the shifts at 0.93 of the limiter, as until the review | 3.23 s (3.45) | 8.02 (8.72) | 10.13 (10.78) | 5.77 (6.25) | 7.20, the quarter mile in 15.4 s at 94 mph (8.28) |
+    | 100-0 km/h dry (rain), here; published | 30.8 m (44.0); Ferrari's 32.5 | 36.4 (51.9); none | 39.8 (56.3); none | 33.8 (47.7); none | 36.5 (52.6); Car and Driver's 165 ft from 70 mph, about 39.6 |
     | top speed, published | over 325 km/h | 213 km/h | 184 km/h | 250 km/h, limited | 226 km/h (230 in cars-data's listing) |
-    | top speed, here | 323 km/h (201 mph) in 7th at 8,980 rpm, on the rev limiter | 219 km/h (136 mph) in 5th at 6,800 rpm | 191 km/h (119 mph) in 5th at 5,650 rpm | 247 km/h (154 mph) in 6th at 5,790 rpm, on the speed limiter | 246 km/h (153 mph) in 6th at 6,670 rpm |
+    | top speed, here | 323 km/h (201 mph) in 7th at 9,000 rpm, on the rev limiter | 219 km/h (136 mph) in 5th at 6,800 rpm | 191 km/h (119 mph) in 5th at 5,650 rpm | 247 km/h (154 mph) in 6th at 5,790 rpm, on the speed limiter | 246 km/h (153 mph) in 6th at 6,670 rpm |
     | understeer, roll (40 m circle) | 1.10, 1.50 deg/g | 1.78, 2.99 | 2.16, 3.26 | 1.73, 2.31 | 1.25, 2.12 |
     | loop run-up (needs 1.35 m/s^2) | 9.74 | 3.13 | 2.32 | 5.93 | 3.71 |
-    | scripted laps, stunt / speed route, dry, no traffic | 85.7 / 100.9 s | 96.6 / 107.4 | 100.5 / 111.4 | 91.0 / 103.9 | 96.5 / 107.1 |
+    | scripted laps, stunt / speed route, dry, no traffic | 85.8 / 100.9 s | 96.6 / 107.4 | 100.5 / 111.4 | 91.0 / 103.9 | 96.5 / 107.1 |
     | drawn as, until its model lands | the V8's loft at its axles | the loft keyed on the 1995 Bravo | the same | the loft keyed on the 2007 Leon | the V8's loft (a stand-in: its glass deck is a mid-engined car's) |
     | sounds from, until its banks land | "v8" (whose run-up and overrun were cut from a 458) | "hothatch", laid at a five's firing | "hothatch" | "turbohatch" (the Pulsar's turbo four, with the synthesised whistle and vent) | "v6", laid at a four's firing (see below) |
 
@@ -765,23 +766,24 @@ they drive like the real cars before their models and sounds land:
     6,530 rpm in fifth, on the power peak. The 458's gearing (3.08-0.69 on 5.14) is what the V8 of 2012 already carried,
     which was the 458's table by another name; the 570S's own gearbox was never the game's.
 
-    Where they land against the published figures (ranges a tenth either side in `HandlingTests` and `VehicleTests`,
-    as items 19-20 set them): the 458 at 3.40 s to 100 km/h against Ferrari's "under 3.4" (traction-limited in first at
-    0.88 of its tyres' peak by its launch control, like the 570S), the HGT 8.77 against 8.5, the Bravo 1.6 10.97 against
-    11.0, the Cupra 6.07 against 5.7 (a front-wheel-drive car of 300 PS is traction-limited; the launch assist holds its
-    front tyres at 65 % of their peak slip as a driver's foot does, where SEAT's figure has the VAQ and a launch
-    procedure), the BRZ 8.07 against 7.6 (a rear-drive 53/47 car on touring tyres, launched at 5,400 rpm where 95 % of
-    its peaky curve's torque is). Stops: the 458's 30.7 m against Ferrari's 32.5 on its carbon-ceramic brakes at a grip
-    of 1.17 (Automobile Magazine's 458 held 1.04-1.08 g); the others have no published stop and take the class's range
-    (34-44 m for the HGT, the Delta's and R32's class; 38-47 for the 1.6 on its drums; 31-38 for the Cupra; the BRZ's
-    35-44 a tenth either side of Car and Driver's). Top speeds: the HGT's 219 km/h against 213 and the 1.6's 191
-    against 184 are 3-4 % over, the drag letting them past the power peak in fifth (the estimated Cd of 0.32), and the
-    BRZ's 246 against 226 8 % over (above); the Cupra sits on its limiter. The skid-pad ranges are the class's
-    narrowed round each car's own figure (0.6 deg/g either side), as the fleet saloon's were: no understeer gradient
-    or roll rate is published for any of the five, so they guard against a change, not against a measurement. All five
-    hold their launch revs with the driven tyres short of their peak, launch without a bog floored from idle, lap both
-    routes dry without a crash and make the loop (2.32-9.74 m/s^2 at 50 mph); the 458 tucks its tail on a lift at the
-    limit as the other mid-engined cars do, and its weight and the Cupra's move forward under braking as statics says.
+    Where they land against the published figures (ranges a tenth either side in `HandlingTests` and `VehicleTests`, as
+    items 19-20 set them): the 458 at 3.42 s to 100 km/h against Ferrari's "under 3.4" (traction-limited in first at
+    0.87 of its tyres' peak by its launch control, like the 570S; 0.88 before the review gave it heavier wheels), the
+    HGT 8.77 against 8.5, the Bravo 1.6 10.97 against 11.0, the Cupra 6.07 against the five-door's 5.8 (a
+    front-wheel-drive car of 300 PS is traction-limited; the launch assist holds its front tyres at 65 % of their peak
+    slip as a driver's foot does, where SEAT's figure has the VAQ and a launch procedure), the BRZ 8.07 against 7.6 (a
+    rear-drive 53/47 car on touring tyres, launched at 5,400 rpm where 95 % of its peaky curve's torque is). Stops: the
+    458's 30.8 m against Ferrari's 32.5 on its carbon-ceramic brakes at a grip of 1.17 (Automobile Magazine's 458 held
+    1.04-1.08 g); the others have no published stop and take the class's range (34-44 m for the HGT, the Delta's and
+    R32's class; 38-47 for the 1.6 on its drums; 31-38 for the Cupra; the BRZ's 35-44 a tenth either side of Car and
+    Driver's). Top speeds: the HGT's 219 km/h against 213 and the 1.6's 191 against 184 are 3-4 % over, the drag letting
+    them past the power peak in fifth (the estimated Cd of 0.32), and the BRZ's 246 against 226 8 % over (above); the
+    Cupra sits on its limiter. The skid-pad ranges are the class's narrowed round each car's own figure (0.6 deg/g
+    either side), as the fleet saloon's were: no understeer gradient or roll rate is published for any of the five, so
+    they guard against a change, not against a measurement. All five hold their launch revs with the driven tyres short
+    of their peak, launch without a bog floored from idle, lap both routes dry without a crash and make the loop
+    (2.32-9.74 m/s^2 at 50 mph); the 458 tucks its tail on a lift at the limit as the other mid-engined cars do, and its
+    weight and the Cupra's move forward under braking as statics says.
 
     Every place that enumerates the catalogue was extended: the `CarStyle` enum and `Catalogue`; `Bootstrap.CarIndex`'s
     ids and aliases (`--car=458|flatv8`, `bravohgt`, `bravo16`, `leoncupra|cupra`, `brz`, or 8-12); `CarView.Model.cs`'s
@@ -790,7 +792,8 @@ they drive like the real cars before their models and sounds land:
     the car's axles, so the arches sit over the wheels); the voicing of the mid-engined cars (`SampledEngine.VoicingOf`,
     `NativeApi.VoicingOf`) and the V8's overrun pops, which the 458 shares; the two model preparations' SPECS
     (`tools/car_models.py`, `unreal/Scripts/prepare_car_model.py`; `The_model_preparations_have_the_simulations_geometry`
-    reads them for every car); `unreal/Scripts/build_scene.py`'s car list (GLP.Car8-12, empty until their exports) and
+    reads them for every car); `unreal/Scripts/build.cmd`'s export loop (since the review) and `build_scene.py`'s car
+    list (GLP.Car8-12, each filled from its export with the lofted stand-in, empty while the export is missing) and
     `GlpAudio.cpp`'s bank table and its pops, the 458's too (neither built nor run here: the Unreal tree is kept
     consistent). The `SoundFolder` of
     each new engine points at the nearest existing bank for now, as the table says, with the cylinders of the real
@@ -802,12 +805,16 @@ they drive like the real cars before their models and sounds land:
     at 75 %, passes with 17 dB). On the estate's idle (810 rpm) the level still sagged 2.6 LU over the revs, on the
     saloon's (810) it stepped 2.2 LU at 800 rpm; the VR6's, recorded at 590-735 rpm of a six (30-37 Hz against the
     boxer's 23 Hz), passes every voice test, and its run-up, held to the period past its top, carries the boxer to
-    7,400 rpm as it carries the VR6 to 6,600. The diesel's knock test compared the diesel with every four-cylinder
-    car's voice; it now compares it with the four-cylinder cars whose banks were recorded from a four (the banks'
-    owner, the first car of the folder): the VR6's recording, which no four played before, carries -13.7 dB of its
-    sound between 1 and 3 kHz idling at the BRZ's 700 rpm against the diesel's -9.3, a six's brighter exhaust, where
-    the test asks the diesel to be 6 dB over the fours' (`DieselCharacterTests`; the Bravo 1.6 and the Cupra are now
-    compared too). The audio library was left as it is (the gaps under a recording stay quiet by design,
+    7,400 rpm as it carries the VR6 to 6,600. The diesel's knock test compares the diesel with every petrol four's
+    voice, the Bravo 1.6 and the Cupra on their borrowed banks too, and the BRZ as a named exception while it plays the
+    V6 hatch's (`DieselCharacterTests.BorrowedSixBanks`, keyed by its style and the folder, so it lapses when "boxer4"
+    takes the folder's place): the VR6's recording, which no four played before, carries -13.7 dB of its sound between
+    1 and 3 kHz idling at the BRZ's 700 rpm against the diesel's -9.3, a six's brighter exhaust, where the test asks
+    the diesel to be 6 dB over the fours'; the BRZ is held 3.5 dB under it idling (measured 4.4) and to the others'
+    3.5 dB at 1,500 rpm (measured 9.4), and its banks, a six's recordings (the run-up swings 0.32 on its marks against
+    the diesel's 0.24), are left out of the comparison on their marks. Until the review the test dropped it silently,
+    filtering out every four on another engine's banks; a player hears its idle nearly as bright as the diesel's
+    until its banks land. The audio library was left as it is (the gaps under a recording stay quiet by design,
     `GrainRing.Take`); the boxer's own bank, recorded at its idle, ends it and puts the BRZ back among the fours. The native
     library grew one function for the shared folders: `glp_engine_create` finds a car by its folder's name, which names
     one car only while every car has its own banks, so the banks the new cars borrow would have voiced and trimmed them
@@ -815,7 +822,9 @@ they drive like the real cars before their models and sounds land:
     the voice for the catalogue's car (its cylinders, voicing and redline) from whatever folder, `GlpAudio.cpp` calls it
     with the style (the catalogue's index), and `glp_engine_create` keeps its meaning (`NativeApiTests`: the trims of
     every car's voice equal the game's, the folder path's equal the first car's of the folder, the published library
-    renders the Bravo HGT on the hot hatch's banks as the managed side does). The rest of the ABI is unchanged.
+    renders the Bravo HGT on the hot hatch's banks as the managed side does). The rest of the ABI is unchanged; the new
+    function and the catalogue's five more cars (`glp_car_count`, `glp_car_spec`'s styles 8-12) make it ABI 8 (since
+    the review: the Unreal loader refused a library without the symbol already, and now the version says so too).
 
     The eight cars of 0.24.0 are unchanged bit for bit: a hash of their whole state over both routes dry and wet, the
     40 m pad, a sprint, a stop and a bend exit (as the reviews of dyn5, fleet and dims6 made it) matches 0.24.0's line
@@ -829,6 +838,55 @@ they drive like the real cars before their models and sounds land:
     laws (lock with the steering angle and the yaw rate, open on turn-in), which the clutch-type law does not have; the
     BRZ's voicing as a coupe with a boot (1.9 m, the saloons') once it has its own bank (the audio tests voice a folder
     as the first car that plays it, the R32 for "v6").
+
+    The review of cars13 (merged clean into 0.24.0, the eight cars bit for bit) and what came of it. The 0-60 test
+    (`VehicleTests.The_cars_of_cars13_match_their_published_figures`) had driven the five as the hatchbacks are driven,
+    floored from idle with the shifts at 0.93 of the limiter, a tenth under the published figure to a fifth over, the
+    fifth over meant for a turbo waiting for its boost: the BRZ took 8.28 s against 7.22 (Subaru's 7.6 s to 100 km/h
+    less a twentieth) and passed on that allowance. The car was right and the method was not: from idle the shift into
+    first and the revs rising cost the cars about half a second before they move (a fifth on the 458 with its launch
+    control), and at 0.93 of its limiter the BRZ gave up second at 87 km/h for a third gear landing in the FA20's
+    trough, where its second runs on to the limiter just short of 60 mph (7,400 rpm is 97 km/h on the free tyre radius,
+    less the tyres' slip). Launched as Edmunds launched one, revved on the brake with each gear held to the limiter or
+    until the next pulls harder (`RoadTestZeroToSixty`), it takes 7.20 s against their 7.3 and runs the quarter mile in
+    15.4 s at 94 mph against their 15.3 s at 92.1: the trap speed, which the launch does not reach, says its power, mass
+    and drag are right, so the curve was left as it is (a fuller curve or less drag, which the review suggested, would
+    have made it quicker than the road test). All five are now held to a tenth either side of the published figure less
+    a twentieth, the turbo Cupra too: 3.23 / 8.02 / 10.13 / 5.77 / 7.20 s against 3.23 / 8.08 / 10.45 / 5.51 / 7.22. The
+    hatchbacks of cars3 keep their own test and its fifth. The BRZ's top speed stays 8 % over (above); its window is
+    unchanged.
+
+    The 458's rear wheels hunted at the step rate launching out of a tight turn (launch control, 60 % steer: the two
+    rear wheels' speed difference changed sign every 240 Hz step for 31 steps, 13 in the rain; the 570S 5, the 458
+    without its launch control none): its wheels carried the default 1.3 kg m^2, which is a 16 in wheel's. A rear
+    corner of the 458 turns about 1.8 (a 295/35 ZR20 tyre of about 12.5 kg at a radius of gyration of about 0.32 m,
+    a forged 20 x 10.5 in wheel of about 11 kg, the 360 mm carbon-ceramic disc, the hub and the half shaft: a game
+    estimate, as Ferrari publishes no inertias), and at 1.8 the run is 1 step, none in the rain
+    (`HandlingTests.A_launch_out_of_a_tight_turn_does_not_set_the_driven_wheels_hunting` holds both cars with launch
+    control to 8 at most). At the start of a scripted lap the longest run falls from 39 steps to 3 (19 to 1 in the
+    rain), the sign changes on the road from 0.47 a second to 0.035. At 80 % steer it falls from 41 steps to 13 and
+    at full lock it is 21 (16 before), the 570S's 13 and 19 there: the launch governor's own alternation at full lock
+    is shared with the 570S and left to a pass on the governor, which would change the eight cars. Its 0-100 km/h is
+    3.42 s (3.40), its stop 30.8 m (30.7), its stunt lap 85.8 s (85.7), its skid-pad figures as before. Its one wheel
+    radius stays 0.345 m, the mean of the front and rear tyres' free radii, so a model drawn with both sits on the road
+    (the preparation sets the hubs at their mean), and about the driven tyre's rolling radius under load (97 % of
+    0.357): it gives 330 km/h at 9,000 rpm in seventh, so the real car's "over 325" lies within a few per cent of its
+    cut too. Here it tops out at 323 km/h on the cut, as the 570S does, the model's road load not growing with speed;
+    on the rear tyre's free radius it ran to 335 km/h, still on the cut, and the drawn tyres would stand a centimetre
+    off the road.
+
+    The rest of the review: the Unreal build loops over the five's exports (`build.cmd`, see above); ABI 8 (above);
+    the diesel's knock test names its exception (above); the BRZ's rear discs are 290 mm (11.4 in), its fronts 294;
+    the Cupra is the five-door throughout, its sprint held round SEAT's 5.8 s for it (5.2-6.4 s), not the
+    three-door's 5.7. The Torsen's law here, the share of the drive torque passed from the faster wheel whatever the
+    slower one can take, still sends a fifth of the axle's torque to the grounded wheel with the other in the air,
+    where a real Torsen, biasing torque against the other wheel's, sends almost none; the Delta's rear works the same
+    way, and a law with the bias's own limit is left to a pass on both. The E-Diff and the VAQ stay first
+    approximations as said above (no lock with the steering or the yaw, none on the overrun, the VAQ's light-throttle
+    opening not modelled). Open for the user: the Cupra. The user asked for a "Seat Leon Cupra 2018 240HP 2.0TSI";
+    no 2018 Leon Cupra had 240 HP. The 240 PS Cupra is the Mk2 (2006-12, sold as the "2.0 TSI Cupra" from 2009:
+    300 N m from 2200 rpm, 6.4 s to 100 km/h, 247 km/h), and the nearest later one the Cupra Leon VZ 245 (2020 on).
+    The 300 PS Mk3 of SEAT's 2017 sheet stays until the user chooses among the three.
 
 Kept, as earlier decisions: the fixed 240 Hz step with semi-implicit Euler for the body, the raycast wheels, the
 grass's grip and rolling resistance (0.9), the weather's grip figures (0.12), the speed-sensitive steering lock,
