@@ -52,7 +52,8 @@ internal sealed partial class SampledEngine : Node
     /// The recordings are read here, through Godot's loader on the main thread; the banks are evened and the voice is
     /// trimmed on a worker. Made here, that took 40-130 ms (100-290 in a debug build), longer than the generator's
     /// 50 ms of audio, so a change of car in a new session ran it dry (0.20 review); until the new voice is ready the
-    /// previous one plays on.
+    /// previous one plays on. Since the voice measures its idle against its run-up across their crossfade (banks review)
+    /// it takes 65-135 ms in a release build, the banks evened and the voice made (50-120 before).
     /// </remarks>
     public void Load(VehicleSpec spec)
     {

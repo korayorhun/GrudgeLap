@@ -12,20 +12,20 @@ overlap-adds them; nothing loops and nothing is pitch-shifted.
 | Bank | Source | Segments (start@end s @ firing Hz at start @ search band Hz) |
 |---|---|---|
 | `v8/engine_idle` | Freesound #585215 "Car Engine: Maserati GranTurismo Switch to Sport Mode and Launch" by myeclecticself, https://freesound.org/s/585215/ (CC0 1.0) | 0.5@4.8@56@40@80 |
-| `v8/engine_drive` | `3 Ferrari 458.mp3` from the Internet Archive item "Car Engine Sounds" (below) | 0.15@3.95@150@120@700, 4.85@6.95@400@330@560, 7.3@9.5@370@300@500 |
+| `v8/engine_drive` | `3 Ferrari 458.mp3` from the Internet Archive item "Car Engine Sounds" (below) | 0.3@3.95@164@120@700, 4.85@5.6@400@330@560, 5.95@6.95@460@330@560, 7.3@9.5@370@300@500 |
 | `flat12/engine_idle` | Freesound #112075 "Lambo idle and rev.mp3" by cheesepuff, https://freesound.org/s/112075/ (CC0 1.0) | 4.0@16.3@121@98@128 |
 | `flat12/engine_drive` | `15 Lamborghini Countach.mp3` from the Internet Archive item "Car Engine Sounds" (below) | 0.08@2.75@262@220@800, 3.3@5.6@556@450@820 |
 | `v8/engine_overrun` | `3 Ferrari 458.mp3` (the stretches with the throttle shut and the revs falling) | 15.0@16.3@436@380@480, 19.0@20.0@377@300@420 |
 | `flat12/engine_overrun` | `15 Lamborghini Countach.mp3` (the throttle shut at the end of the run) | 8.65@9.65@290@200@320 |
-| `hothatch/engine_idle` | `honda civic type r.mp3` from the Internet Archive item "Car Engine Sounds" (below) | 2.7@3.4@42@30@46, 10.3@11.9@35@27@42 |
+| `hothatch/engine_idle` | `honda civic type r.mp3` from the Internet Archive item "Car Engine Sounds" (below) | 3.05@3.45@38@30@46, 10.3@11.9@35@27@42 |
 | `hothatch/engine_drive` | `honda civic type r.mp3` | 14.2@16.3@60@45@235, 17.4@19.6@150@125@240 |
-| `hothatch/engine_overrun` | `honda civic type r.mp3` (the throttle shut, revs falling) | 0.6@2.2@112@45@130, 4.5@6.2@110@40@125, 8.5@10.0@91@35@100 |
-| `turbohatch/engine_idle` | `25 Nissan Pulsar.mp3` from the Internet Archive item "Car Engine Sounds" (below) | 0.4@2.4@33@22@48 |
+| `hothatch/engine_overrun` | `honda civic type r.mp3` (the throttle shut, revs falling) | 0.85@2.2@109@45@130, 4.5@6.2@110@40@125, 8.5@9.75@91@35@100 |
+| `turbohatch/engine_idle` | `25 Nissan Pulsar.mp3` from the Internet Archive item "Car Engine Sounds" (below) | 0.55@2.4@33@22@48 |
 | `turbohatch/engine_drive` | `25 Nissan Pulsar.mp3` | 6.0@8.7@94@80@175, 21.3@22.2@109@90@210, 23.1@24.5@129@90@210, 25.0@27.9@127@110@200 |
-| `turbohatch/engine_overrun` | `25 Nissan Pulsar.mp3` (the throttle shut, revs falling) | 13.0@15.3@130@60@140, 16.5@19.2@94@28@100 |
+| `turbohatch/engine_overrun` | `25 Nissan Pulsar.mp3` (the throttle shut, revs falling) | 13.0@15.3@130@60@140, 16.65@19.2@92@28@100 |
 | `v6/engine_idle` | `Jaguar f-type s.mp3` from the Internet Archive item "Car Engine Sounds" (below) | 13.0@14.4@32@25@40, 30.5@31.05@32@25@40 |
 | `v6/engine_drive` | `Jaguar f-type s.mp3` (the blips of the throttle, rising, each up to where its recording overloads) | 14.80@15.1@60@45@110, 4.46@4.8@60@45@110, 1.12@1.85@44@36@130, 18.15@18.70@82@65@200, 20.53@20.875@86@60@200, 22.73@23.005@106@90@200, 25.40@25.97@72@55@170, 26.57@26.815@124@60@200 |
-| `v6/engine_overrun` | `Jaguar f-type s.mp3` (the revs falling from the limiter after each blip, the throttle shut) | 21.42@22.66@186@95@210, 23.48@25.32@192@65@210, 27.25@29.9@191@44@210 |
+| `v6/engine_overrun` | `Jaguar f-type s.mp3` (the revs falling from the limiter after each blip, the throttle shut) | 21.55@22.66@180@95@210, 23.62@25.32@181@65@210, 27.40@29.9@180@44@210 |
 
 The overrun banks play in place of the run-up as the throttle closes (`GranularEngine`): off the throttle a real
 engine stops firing and what is left is the exhaust's rasp, which no filter on the run-up gave.
@@ -33,7 +33,8 @@ engine stops firing and what is left is the exhaust's rasp, which no filter on t
 The files are used as cut. Since 0.20 the voice evens a bank when it loads it (`GrainBank`: each segment tilted and
 levelled onto the bank's trend across the revs, so the joins between recordings do not step) and trims each car to
 one loudness (`GranularEngine`, BS.1770); since soundfix it also levels every grain of the run-up and the overrun onto
-the run-up's trend, against the drift of level within a recording (`GrainBank.LevelGains`). Nothing is written back.
+the run-up's trend, against the drift of level within a recording (`GrainBank.LevelGains`), and since banks the idle's
+too when the engine pulls, so that from the idle's revs to the run-up's the voice follows one trend. Nothing is written back.
 
 The Internet Archive item **"Car Engine Sounds"** (identifier `car-engines`, uploaded 2015-09-01, dated
 2011-02-22) was published by its uploader under **CC0 1.0 Universal** (`licenseurl` in the item's metadata:
@@ -73,22 +74,68 @@ a standstill, about 4,000 rpm, and its recording overloads on the way, from abou
 for 40 ms (steps of nearly full scale between samples, which the voice replayed as clicks wherever it picked those
 pulses), and the stretch at the limiter is the ignition cut every 150 ms with the throttle partly shut, 10 dB duller
 than the run-up. The run-up is cut from each blip's start to just before its crackle (up to about 3,600 rpm), the
-overrun from where the revs leave the limiter (from about 3,800 rpm; 1 November 2026). Past 3,600 rpm the voice lays
+overrun from where the revs leave the limiter (from about 3,800 rpm; 1 November 2026), and since the banks pass
+from 0.1 to 0.15 s later (from about 3,650 rpm, 2 November 2026): the first tenth of a second after each limiter holds the
+ignition's last bangs, ticks 7 to 9 dB over the rest of a grain's top end, which the voice laid past the overrun's top as
+the driver lifted from the redline (28 sharp transients in five seconds, 43 once the tool filled its missing marks). Past 3,600 rpm the voice lays
 the run-up's 16 highest pulses closer, up to 1.8 times at the R32's 6,600 rpm, each held to the period it is laid at
 so it plays at its recorded strength (`GranularEngine`); a recording of those revs would serve better.
+None was found on 2 November 2026 either. Freesound (searched for VR6, R32, Golf R32, Corrado, six cylinder, inline and
+straight six, V6, and the six-cylinder BMWs, Nissans, Porsches and Toyotas, CC0 and CC BY only, high-quality previews):
+a Toyota Supra on a chassis dyno (#496171, CC0) pulls through its gears but its recording distorts from about 4,700 rpm
+(steps four to six times sharper than below, as its uploader warns); a Chevrolet Traverse's 3.6 V6 accelerating (#351962, CC BY 4.0) is recorded
+in its cabin through an automatic's shifts, the firing buried under the body's boom; a BMW M3 (#343369, CC BY 3.0) is 20
+seconds of driving that does not run up past about 4,500 rpm; a Suzuki Vitara's V6 (#249720), a DeLorean's PRV V6
+(#623436) and a Porsche 911 (#772802) are revved standing, like the Jaguar. Wikimedia Commons (1,400 engine and exhaust
+recordings, most of them YouTube audio under CC BY 3.0) has at least eight Volkswagens ("Volkswagen ... - engine and
+exhaust sound (YouTube ...)"), which the search of 2 November missed; the nearest, a Touareg's 3.6 VR6 (the R32's engine
+family, CC BY 3.0), is revved standing and clipped (99 s with 270,894 samples at full scale, its peaks decoding 3.5 dB
+past it; banks review). Of Commons' other sixes a Lexus IS300 (the 2JZ-GE straight six) is the one pulling through its
+gears, from 1,100 to 5,200 rpm, but clipped from 1,800 rpm on (its peaks decode past full scale, 79,000 samples in ten
+seconds); the others are a cold start (BMW Z4 M Coupé) and exhaust videos with talking (Nissan 350Z, 300ZX), and its
+"Audi A3" and "BMW 330i" are a 2.0 TDI and a four. The CC0 archive item's other sixes, passed over for the Jaguar in
+cars3, show in their pitch tracks no run-up of one engine through the revs the Jaguar lacks: the GT-R's V6, the Cayman
+S's flat six and the Ghibli's V6, the "2 Toyota Supra 950" (9 s, its revs jumping between 3,000 and 8,300 rpm), and the
+"18 Porsche 911 GT3" and "19 Porsche 997 GT3 RS" (4 and 5 s of blips, fetched for the banks review). The "alfa romeo
+giulia" track does not say which Giulia it is, a six or a four. The Jaguar stays.
 
 The rally hatch's run-up leaves out 22.2-23.1 s of the Pulsar track: a compressor's flutter, a band at 1.3 kHz beating
 ten times a second with bursts of hiss, whose pulses were up to 30 dB brighter than their neighbours at 3,300-3,500
 rpm (the "brighter at 3350 rpm" of the 0.19 audit, finding 9, which the evening could not take out); the voice
 synthesises the turbo's own sounds (`audio/TurboNoise.cs`).
 
-The banks cut before the V6's re-cut (all but `v6/` and `turbohatch/engine_drive`) were cut with the tool seeking the
-MP3 decoder before its input: each of their segments begins with a few pulses of the decoder's silence (the V8's
-run-up and overrun 19 and 20, the flat-twelve's 34, the hot hatch's 7, the rally hatch's overrun 4), which the voice
-plays as a drop-out of a firing period when it picks one. The tool now seeks after the input, exact to the sample, and
-warns of crackles in a segment. Taking those pulses out moves the cars' balance (tried on 1 November 2026 by leaving
-them out at load: the V8's overrun came up to only 4.4 dB under its throttle at 5600 rpm, and its limiter's cut took
-20 ms to fall), so re-cutting them is left for a pass of its own.
+Every bank was re-cut on 2 November 2026 (banks) from the same recordings with the tool seeking exactly. Those cut
+before the V6's re-cut began their segments with the MP3 decoder's silence: 50 grains 12 dB or more under their
+neighbours, most 40 to 160 dB under (the V8's run-up 15 and its overrun 7, the flat-twelve's run-up 8 and its overrun
+7, the rally hatch's overrun 5, the hot hatch's run-up 4 and its overrun 3, the estate's overrun 1), each a drop-out of a
+firing period wherever the voice picked it. Cut exactly, some start points fell on what the decoder's silence had hidden
+or the tool had not warned of, and moved:
+
+- the V8's run-up from 0.15 to 0.3 s: its first 30 pulses are the recording fading in from silence, up to 20 dB under the
+  rest (the voice stepped 2.7 LU at 2,300 rpm); its second segment is split around 5.6-5.95 s, where the recording dips
+  9 dB (it stepped 1.9 LU at 6,700 rpm);
+- the hot hatch's overrun from 0.6 to 0.85 s and to 9.75 s from 10.0: the blip before 0.8 s overloads the recording
+  (samples past full scale) and its end crackles; its idle from 2.7 to 3.05 s, past a waver up to 1,370 rpm that set
+  the top of the idle 200 rpm too high;
+- the rally hatch's idle from 0.4 to 0.55 s and its overrun's second segment from 16.5 to 16.65 s: the Pulsar track
+  starts with the engine catching, 13 dB quieter and twice as sharp, and the overrun's segment with the end of a blip;
+- the V6's overrun from 0.13 to 0.15 s later (above);
+- the saloon's idle to 19.75-21.2 s of its second stretch (19.6-25.0 s): around it three bursts of a tick 10 times as
+  sharp as the recording (the Niva's idle is otherwise smooth), and after them 22.55-25.0 s is 12.5 dB duller than the
+  rest, more than the evening's tilt of 6 dB could take back;
+- the fleet saloon's Bravo run-up and overrun without the instants of its ticks (10.74, 10.85, 12.21 and 12.75 s; 57.97,
+  58.58, 60.63, 60.88 and 61.2 s), the Punto's run-up without a tick at 74.98 s.
+
+The tool now also fills the pulses it lost: where two expected pulses moved onto the same peak, one was dropped and the
+grains on either side spanned two periods (12 % of the fleet saloon's run-up, 17 % of the flat-twelve's spanned over 1.3
+periods), which laid at the revs played quieter than the rest. It fills only a gap of 1.75 periods or more, with pulses
+three quarters of a period or more from either side, and of two peaks closer than 0.6 of a period it keeps the stronger
+(banks review): filling from 1.5 periods with half a period either side, and keeping peaks half a period apart, left
+grains reaching half a period on a side, and laid under their recorded revs two such sides left gaps (the hot hatch's
+idle, 6 ms of silence at 900 rpm). Every bank was re-cut with it from the segments above (the recordings and the
+segments' samples are unchanged, only the marks moved). No bank now has a grain more than 9.8 dB under its neighbours,
+a crackle by the tool's measure or a grain reaching under 0.6 of its period on a side
+(`EngineVoiceTests.Every_bank_is_cut_without_drop_outs_or_crackles`, `Every_grain_reaches_most_of_a_period_either_side`).
 
 The five-cylinder hatch of 0.9-0.19 (a Volvo five at idle, credit cmusounddesign, CC BY 4.0, and the S2000 track
 laid at a five's firing frequency, `GranularEngine.FivePattern`) left the game with the car it voiced; its banks are
@@ -98,15 +145,15 @@ no longer shipped.
 
 | Bank | Source | Segments (start@end s @ firing Hz at start @ search band Hz) |
 |---|---|---|
-| `saloon/engine_idle` | Freesound #187029 "car Niva.wav" by dobrymolodec (the Lada Niva's 1.6, of the Fiat-124 family the 1.6 saloon's pushrod four belongs to), https://freesound.org/s/187029/ (CC0 1.0) | 0.3@6.4@27@20@36, 19.6@25.0@27@20@36 |
+| `saloon/engine_idle` | Freesound #187029 "car Niva.wav" by dobrymolodec (the Lada Niva's 1.6, of the Fiat-124 family the 1.6 saloon's pushrod four belongs to), https://freesound.org/s/187029/ (CC0 1.0) | 0.3@6.4@27@20@36, 19.75@21.2@27@20@36 |
 | `saloon/engine_drive` | Freesound #255122 "A car pulling away on asphalt, Lada 1500 Combi 1981" by YleArkisto, https://freesound.org/s/255122/ (CC BY 4.0) | 11.2@14.8@66@55@140, 17.4@19.2@118@100@150 |
 | `saloon/engine_overrun` | Freesound #255126 "A car approaching, stopping, shutting down, Lada 1500 Combi" by YleArkisto, https://freesound.org/s/255126/ (CC BY 4.0) | 10.8@18.0@130@65@150 |
 | `estate/engine_idle` | Freesound #141240 "Renault 19 underhood acceleration" and #141245 "Reault 19 driving 2" by lovretta (the carburetted Cleon 1.4 of the same family as the estate's), https://freesound.org/s/141240/ (CC0 1.0) | 141240: 0.6@2.9@27@20@36; 141245: 3.0@7.2@36@28@44 |
 | `estate/engine_drive` | Freesound #141245, as above | 10.8@16.2@50@40@105, 25.5@33.3@92@80@160, 121.2@126.8@91@80@170 |
 | `estate/engine_overrun` | Freesound #141245, as above | 133.2@139.4@194@95@215 |
 | `fleet/engine_idle` | Wikimedia Commons "Fiat Grande Punto 1.4 T-Jet - engine and exhaust sound (YouTube -1zYK0ORqWg)" by Adri Drives (the 1.4 Fire family), CC BY 3.0 | 19.2@27.0@27@20@36 |
-| `fleet/engine_drive` | the same, and "Fiat Bravo 1.4 T-Jet - engine and exhaust sound (YouTube TYdDRfp-LdY)" by michael maurice, CC BY 3.0 | Punto 64.0@70.2@64@55@115, 72.4@77.4@91@80@130; Bravo 10.0@14.4@156@140@220 |
-| `fleet/engine_overrun` | the Bravo recording | 57.6@61.6@167@130@190 |
+| `fleet/engine_drive` | the same, and "Fiat Bravo 1.4 T-Jet - engine and exhaust sound (YouTube TYdDRfp-LdY)" by michael maurice, CC BY 3.0 | Punto 64.0@70.2@64@55@115, 72.4@74.95@91@80@130, 75.02@77.4@105@80@130; Bravo 10.0@10.72@153@140@220, 10.88@12.19@166@140@220, 12.24@12.73@187@140@220, 12.78@14.4@191@140@220 |
+| `fleet/engine_overrun` | the Bravo recording | 57.6@57.95@168@130@190, 58.0@58.56@165@130@190, 58.62@60.45@163@130@190 |
 
 No CC0 or CC BY recording of the cars themselves was found (a phone clip of a Renault 12 was too short); the banks
 are their engines' closest siblings: the Lada's Fiat-124 four for the saloon's Fiat 131 pushrod four, the Renault 19's

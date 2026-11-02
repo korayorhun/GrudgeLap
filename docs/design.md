@@ -1112,6 +1112,101 @@ fixed in 0.19, each pinned by a test (`TyreMixTests`, `BodyNoiseTests`, `Granula
     redline it plays its overrun (recorded up to 3,800 rpm) past its top as well, averaged, with 28 sharp transients in
     five seconds outside and in the cabin (0.20 9 and 16; its overrun bank itself has two in its 5.7 s); a VR6 recorded
     through its revs would replace both.
+18. **Every voice clean across its revs** (banks, after 0.22). Measured bank by bank and rendered from idle to redline:
+    (a) the banks cut before the V6's re-cut began their segments with the MP3 decoder's silence, 50 grains 12 dB or more
+    under their neighbours, most 40 to 160 dB under (the V8's run-up 15 and its overrun 7, the flat-twelve's run-up 8
+    and its overrun 7, the Delta's overrun 5, the 205's run-up 4 and its overrun 3, the estate's overrun 1), each a
+    drop-out of a firing period wherever it was picked; rendered flat out from idle to the redline the flat-twelve fell
+    32 dB for 10 ms and the Delta 23. Every bank is re-cut with the exact seek from the same recordings; where that
+    exposed what the silence had hidden the start points moved (SOURCES.md): the V8's run-up past its recording's
+    fade-in, the Delta's idle past the engine catching and its overrun past the end of a blip (both crackled at their
+    documented starts), the 205's overrun past an overloaded blip, the saloon's idle and the fleet saloon's Bravo
+    segments around their ticks, the V6's overrun past the limiter's last bangs. The tool now also fills the pulses it
+    lost where two expected pulses moved onto one peak (12 to 17 % of some run-ups' grains spanned over 1.3 periods,
+    and played quieter laid at the revs: the fleet saloon stepped 1 LU past the top of its run-up), since the review
+    only gaps of 1.75 periods or more (f). No bank has a grain more than 9.8 dB under its neighbours or a crackle by the
+    tool's measure (`Every_bank_is_cut_without_drop_outs_or_crackles`).
+    (b) Between the idle's recording and the run-up's the voice sagged at full throttle, 3 to 8 LU under both ends:
+    the Delta at 30 % of its redline (2,000 rpm, below its run-up's bottom at 2,430) 4 LU under its run-up 400 rpm up,
+    the V8 at 1,900 rpm 7 LU under its idle and its run-up. The idle's pulses, laid closer than recorded, averaged one
+    another down; two recordings mixed by their shares in amplitude lost up to 3 dB halfway (they do not add in phase);
+    and the idle kept its idling level whatever the throttle. Now (`GranularEngine`) the idle's grains past the top of
+    its recording are held to their period like the run-up's, each stream (the idle, the run-up with the overrun) is
+    normalised apart and keeps the square root of its share, and pulling, the idle's grains are levelled onto the
+    run-up's trend and brought to the loudness of the run-up's pulses (`LoadedIdleGain`, since the review across the
+    crossfade, (f); by RMS alone an idle recorded with its energy under 100 Hz stayed 5 to 9 LU under in loudness).
+    Levelling the grains by their K-weighted loudness instead of RMS was tried and dropped: the run-ups' joins then
+    stepped up to 2.3 LU. Held
+    flat out every 100 rpm from idle to the redline (each the mean of five two-second holds within 50 rpm), no car now
+    steps more than 1.1 LU from one to the next, outside or in the cabin (before 1.4 to 2.8; the V8 also 2.7 LU at
+    2,300 rpm from its run-up's fade-in and 1.9 at 6,700 from a 9 dB dip in its recording, both cut out):
+    `The_level_follows_the_revs_evenly_from_the_idle_to_the_redline`. Idle, flat out to the redline in eight seconds and
+    off the throttle, on five seeds since the review, no step between samples is over 2.2 times the RMS of the 5 ms
+    around it nor any 10 ms more than 16.9 dB under the 210 ms around it
+    (`Sweeps_from_idle_to_the_redline_and_off_without_clicks_or_drop_outs`). (c)
+    The R32: no better recording was found (SOURCES.md lists the CC0 and CC BY sixes looked at on Freesound, Wikimedia
+    Commons and in the archive item: a Supra on a dyno and a Lexus IS300 pulling through their gears both overload,
+    the rest are standing, in-cabin or talked over), so its run-up still stops at 3,600 rpm and its overrun now at
+    3,650; lifting off from the redline its sharp transients fell from 28 in five seconds (43 once the tool filled its
+    marks) to 1 to 3, the overrun's first tenth of a second after each limiter, which held the ignition's last bangs,
+    cut away. (d) The limiter test compared the crisp cut's fall with the blurred one's; on the estate's re-cut banks
+    the blurred cut swings 0.7 dB, a third of a decibel between its quarter and three quarters, and its fall timed at 6
+    or 24 ms as the grains fell: the test now also takes a blurred swing of a quarter of the crisp one or less as not
+    crisp (`The_limiter_cuts_crisply`; the estate's crisp cut 6.5 dB in 6 ms). In the game (hidden, silent 40 s attract
+    runs, dry, no traffic, cabin and chase, against 0.22): every car within 0.3 LU of before (the fleet saloon 0.3 louder,
+    the flat-twelve 0.2-0.3), loudness range within 0.6 LU, sharp transients from 4 to 2 behind the R32, 1 to 0 in the
+    flat-twelve's cabin, 16 to 8 behind the fleet saloon and 4 to 3 in its cabin, 0 elsewhere before and after, no 10
+    ms drop-out in any run, peaks at -0.6 dBFS per channel or under. Left: the R32's run-up past 3,600 rpm is still its
+    16 highest pulses laid closer; the drive and overrun recordings, mixed by the load at part throttle, still sum by
+    amplitude (up to 3 dB down halfway, around a quarter of the throttle), which the idle's mix no longer does; the
+    fleet saloon's and the 205's run-ups have sharp onsets at low revs that the in-game transient count still finds
+    (their recordings', 11-15 dB over a grain's top end).
+    (f) The review of the banks (independent, before the merge) found the mark-filler cutting holes, the idle's throttle
+    flattened and the tests too narrow. The tool rounded a gap of 1.5 periods to two and filled it with a pulse half a
+    period from either side, and kept two peaks half a period apart: the 205's idle, whose tracker read 38 Hz over an
+    uneven stretch of 34 pulses a second, gained pulses with sides of 585 to 656 samples against a period of 1,160, and
+    idling at 900 rpm two such sides left a gap no grain covered (five frames 20 dB or more under the idle around them
+    in two minutes over six seeds, 6 ms at -120 dB). It now fills only gaps of 1.75 periods or more, three quarters of a
+    period from either side, and keeps the stronger of two peaks closer than 0.6 of a period; every bank is re-cut with
+    it from the same segments (only the marks move), and none reaches under 0.6 of its period on a side
+    (`Every_grain_reaches_most_of_a_period_either_side`; the 205 idling now at most 17.4 dB under,
+    `Idles_without_drop_outs`, five seeds at the governor's throttle and at full throttle). The idle slid by its gain
+    from its own level onto the run-up's trend between 0.2 and 0.6 of the throttle, against the level law wherever the
+    trend lay under its own level (at the idle's revs, on most cars): the V8 at 900 rpm rose 1.7 LU from the governor's
+    throttle to full and fell 1.9 from 0.3 to 0.6. The idle's level now goes from its own at a fifth of the throttle to
+    the pulling one at full in even decibels with the level law (`IdleLevel`), and the pulling one is matched stream
+    against stream, the idle alone against the run-up alone at the same revs a quarter, half and three quarters across
+    the crossfade, outside and in the cabin (matched at the idle's top revs alone, against the run-up laid there far
+    under its recording, the pulling idle came out 1 to 4.5 dB under its own level on five cars; matched against the
+    run-up at its own bottom revs, as tried, the idle was the louder across the crossfade, its pulses held to the period
+    growing louder with the revs, and the voice sagged where the run-up took over: the 205 1.8 LU at 2,000 rpm, the
+    fleet saloon's cabin 2.2 at 1,700). Opening the throttle at the idle's revs now rises 0.4 LU or more a step and 3.0
+    (estate) to 12.2 LU (saloon) in all, the V8 3.8 (`Opening_the_throttle_at_the_idle_revs_raises_the_level`; 0.22 rose
+    6.4 to 7.7 LU on most cars but sagged 3 to 8 LU into the run-up). Held up to its own level instead, as the review
+    proposed, the idle at full throttle lay over the run-up's first revs on the estate, the Delta and the V6 hatch, and
+    the voice fell 1.7 to 3.0 LU into the run-up and rose again (and stepped 1.7 to 2.0 LU on the estate); that was
+    measured and dropped. Matched this way the saloon's idle (a Niva's, quiet and under 100 Hz) was lifted 18 dB at full
+    throttle and stepped by 1.0 between samples: each pulse is now held, like the idle's own level, to a step of 0.45
+    (`LoadedIdleLevels`); it still rounds off its peaks at full throttle at the idle's revs, as in 0.22 (1,300 samples
+    in ten seconds against 900, its light-throttle idle already at the ceiling). The tests now run the sweep and the
+    idle on five seeds (seed 4 of the Delta dropped 20.3 dB idling), hold the idle, add a sag limit to the level across
+    the revs (no point 2.1 LU under the lower of the loudest within 600 rpm either side: 1.5 or less but the fleet
+    saloon's cabin 2.0 at 1,700 rpm, its run-up alone sagging 1.4 there laid under its recording, and the estate 1.7 at
+    1,200 rpm, where its quieter idle recording plays; the 205's, 1.5 before, is 1.3), and count the ticks lifting off
+    from the redline (`Lifts_off_from_the_redline_without_a_run_of_ticks`: at most 20 in five seconds; the V6 hatch 14
+    in its cabin, 4 outside, against 28 to 44 with the limiter's last bangs in its overrun, which the crackle test
+    passed at 3.3 times; the 205's overloaded blip 35 to 76). SOURCES.md no longer says Commons has no Volkswagen (it
+    has at least eight; the Touareg's VR6 is revved standing and clipped) and names the archive item's Supra 950 and two
+    GT3s (blips, no run-up). Making a voice takes 65-135 ms (50-120 before), on a worker. In the game (hidden, silent 40
+    s attract runs, dry, no traffic, cabin and chase, against 0.22): every car within 0.4 LU (the fleet saloon 0.3-0.4
+    louder), loudness range within 0.5 LU, no step over 3 times the RMS around it and no 10 ms drop-out in any run;
+    peaks -0.7 to -3.3 dBFS, the flat-twelve's chase back to -1.9 and the V8's cabin to -3.0 (-0.5 and -1.0 before this
+    review) and the saloon's chase -2.2, but three runs touched -1 dBFS for an instant (the Delta's chase -0.7 at one
+    moment, 3 samples; the estate's cabin -0.9 and chase -1.0), where the engine alone stays under -1 dBFS
+    (`Full_throttle_peaks_under_minus_one_dbfs`). Left: the estate's two idle recordings differ by about 1.5 LU pulling,
+    and the fleet saloon's run-up laid under its recording sags in the cabin, both within the 2.1 LU limit and over 1.5;
+    full throttle at the idle's revs is held to what the crossfade allows, 3.0 to 3.8 LU over the governor's throttle on
+    the estate, the Delta and the V8.
 
 ### Sound, 0.20: the audit's open findings and the balance between cars
 

@@ -86,11 +86,40 @@ def marks(x, f):
         if lo >= 0 and hi < len(x):
             out.append(lo + int(np.argmax(smooth[lo:hi])))
     out = sorted(set(out))
+    # Two peaks closer than 0.6 of a period are one pulse found from both sides of its window (a pulse lying between two
+    # expected positions): the stronger is kept. Kept from half a period on, the earlier of the two, they left grains
+    # with a side of half a period (64 in the V8's run-up, 34 in the flat-twelve's), and two such sides laid below the
+    # revs they were recorded at no longer meet (banks review). The period is the longer of the two marks', so neither
+    # mark is left with a side under 0.6 of its own.
     kept = [out[0]]
     for m in out[1:]:
-        if m - kept[-1] > 0.5 * SR / f[m]:   # a peak found twice
+        if m - kept[-1] > 0.6 * SR / min(f[m], f[kept[-1]]):
             kept.append(m)
-    return np.array(kept)
+        elif smooth[m] > smooth[kept[-1]]:
+            kept[-1] = m
+    # Where two expected pulses moved onto the same peak, one was dropped and its neighbours' grains spanned two periods
+    # on that side: laid at the revs, such a grain overlapped its neighbours by a period more than the rest, and averaged
+    # with them it played quieter (12 % of the fleet saloon's run-up and 17 % of the flat-twelve's spanned over 1.3
+    # periods; the voice past the top of the fleet saloon's recording, every grain held to the period, was 1 LU louder
+    # than just under it). Each gap of n periods is filled with the n - 1 pulses expected in it, each moved onto the
+    # nearest peak within a quarter of a period, but only a gap of at least 1.75 periods, and only by a pulse leaving
+    # three quarters of a period or more on either side: filled from 1.5 periods (rounded to two) and kept with half a
+    # period either side, the hot hatch's idle, whose tracker read 38 Hz over an uneven stretch of 34 pulses a second, gained pulses
+    # leaving sides of 585 to 656 samples against a period of 1,160, and laid at 900 rpm two such sides left a gap no
+    # grain covered (6 ms of silence; banks review).
+    filled = [kept[0]]
+    for m in kept[1:]:
+        last = filled[-1]
+        period = SR / f[(last + m) // 2]
+        missing = int(np.floor((m - last) / period + 0.25)) - 1
+        for k in range(1, missing + 1):
+            guess = last + (m - last) * k / (missing + 1)
+            lo, hi = int(guess - period / 4), int(guess + period / 4)
+            at = lo + int(np.argmax(smooth[lo:hi]))
+            if filled[-1] + 0.75 * period <= at <= m - 0.75 * period:
+                filled.append(at)
+        filled.append(m)
+    return np.array(filled)
 
 
 def crackles(x, m, factor=4.0):
