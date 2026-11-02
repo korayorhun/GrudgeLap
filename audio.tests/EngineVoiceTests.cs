@@ -183,7 +183,8 @@ public class EngineVoiceTests(ITestOutputHelper output)
     /// The limiter stutters (audit finding 12): with the cut set for 60 ms in every 100, as the simulation's limiter does
     /// at the redline, the voice's level, averaged over a hundred cycles in step with them, drops at least 6 dB and falls
     /// within a few milliseconds of each cut (a firing period or two and the 2 ms blocks it is measured in); the same cut
-    /// followed through the load, as in 0.19, swung by less and took tens of milliseconds to fall. Over twenty cycles the
+    /// followed through the load, as in 0.19, swung by less and took tens of milliseconds to fall, or barely dipped at all
+    /// (a quarter of the crisp swing or less, whose fall cannot be timed: the estate's, 0.7 dB). Over twenty cycles the
     /// grains a run happened to pick moved the swing by a decibel or two and the fall by up to 20 ms either way (eight
     /// seeds of the rally hatch: its crisp cut fell in 6 to 26 ms; the V8 of 0.20 swung 6.6 dB over twenty and 5.3 over
     /// a hundred), and any change to the picks passed or failed one of the three cars.
@@ -201,7 +202,10 @@ public class EngineVoiceTests(ITestOutputHelper output)
         output.WriteLine($"{car}: the cut swings {depth:0.0} dB and falls in {edge:0} ms; through the load {blurredDepth:0.0} dB in {blurredEdge:0} ms");
         Assert.True(depth > 6, $"the cut swings only {depth:0.0} dB");
         Assert.True(edge <= 10, $"the cut takes {edge:0} ms to fall");
-        Assert.True(blurredEdge > 2 * edge, "the crisp cut falls no faster than the blurred one");
+        // A swing of under a decibel has no fall to time: the band between its quarter and three quarters is a third of a
+        // decibel, within the cycle's own ripple (the estate's re-cut banks, banks: through the load 0.7 dB, timed at 6 or
+        // 24 ms as the grains fell). Such a cut is not crisper either; it hardly dips.
+        Assert.True(blurredEdge > 2 * edge || blurredDepth < depth / 4, "the crisp cut falls no faster than the blurred one");
     }
 
     /// <summary>
@@ -524,6 +528,160 @@ public class EngineVoiceTests(ITestOutputHelper output)
             Assert.True(m.Over > -4, $"{m.Car}'s engine is {-m.Over:0.0} LU under the roar and the wind");
             Assert.True(m.Band > 4, $"{m.Car}'s engine stands out by only {m.Band:0.0} dB in its loudest band");
         });
+    }
+
+    /// <summary>
+    /// Every bank is cut clean (banks): no grain is a drop-out, more than 12 dB under the median of the dozen pulses either
+    /// side of it in its segment, and none holds a crackle, a step between samples more than four times as sharp against
+    /// its level as its segment's grains have (the warning of tools/make-engine-bank.py). Cut with the tool seeking before
+    /// its input, the banks began their segments with the MP3 decoder's silence: 50 grains 12 dB or more under their
+    /// neighbours (the V8's run-up 15 and its overrun 7, the flat-twelve's run-up 8 and its overrun 7, the rally hatch's
+    /// overrun 5, the hot hatch's run-up 4 and its overrun 3, the estate's overrun 1), most of them 40 to 160 dB under,
+    /// which the voice played as a drop-out of a firing period; and the rally hatch's idle and overrun, the hot hatch's
+    /// overrun, the saloon's idle and the fleet saloon's Bravo segments held crackles. Measured on the re-cut banks: the
+    /// deepest grain 9.6 dB under its neighbours (the V6 hatch's run-up, a blip's last pulse).
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Cars))]
+    public void Every_bank_is_cut_without_drop_outs_or_crackles(string car, int index)
+    {
+        _ = index;
+        foreach (var name in new[] { "engine_idle", "engine_drive", "engine_overrun" })
+        {
+            var bank = Bank(car, name, even: false);
+            if (bank is null) continue;
+            var (deepest, deepestAt) = (0.0, 0);
+            var (sharpest, sharpestAt) = (0.0, 0);
+            foreach (var segment in bank.Segment.Distinct())
+            {
+                var pulses = Enumerable.Range(0, bank.Marks.Length).Where(i => bank.Usable[i] && bank.Segment[i] == segment).ToArray();
+                if (pulses.Length == 0) continue;
+                var level = pulses.Select(i => (double)bank.Level(i)).ToArray();
+                var sharpness = pulses.Select(i => Sharpness(bank, i)).ToArray();
+                var typical = Median(sharpness);
+                for (var k = 0; k < pulses.Length; k++)
+                {
+                    var from = Math.Max(k - 12, 0);
+                    var dip = Median(level.Skip(from).Take(Math.Min(k + 13, level.Length) - from)) - level[k];
+                    if (dip > deepest) (deepest, deepestAt) = (dip, pulses[k]);
+                    if (sharpness[k] / typical > sharpest) (sharpest, sharpestAt) = (sharpness[k] / typical, pulses[k]);
+                }
+            }
+            output.WriteLine($"{car} {name}: deepest grain {deepest:0.0} dB under its neighbours (pulse {deepestAt}), sharpest {sharpest:0.0} times its segment's median (pulse {sharpestAt})");
+            Assert.True(deepest <= 12, $"{car} {name}: pulse {deepestAt} is {deepest:0.0} dB under its neighbours");
+            Assert.True(sharpest <= 4, $"{car} {name}: pulse {sharpestAt} is {sharpest:0.0} times as sharp as its segment's grains (a crackle)");
+        }
+    }
+
+    /// <summary>The sharpest step between samples of a pulse's grain against the grain's RMS (as the cutting tool measures a crackle).</summary>
+    private static double Sharpness(GrainBank bank, int pulse)
+    {
+        double step = 0, energy = 0;
+        for (var j = bank.Marks[pulse - 1]; j < bank.Marks[pulse + 1]; j++)
+        {
+            energy += bank.Samples[j] * bank.Samples[j];
+            if (j > bank.Marks[pulse - 1]) step = Math.Max(step, Math.Abs(bank.Samples[j] - bank.Samples[j - 1]));
+        }
+        return step / Math.Sqrt(energy / (bank.Marks[pulse + 1] - bank.Marks[pulse - 1]) + 1e-20);
+    }
+
+    private static double Median(IEnumerable<double> values)
+    {
+        var sorted = values.OrderBy(v => v).ToArray();
+        return sorted.Length % 2 == 1 ? sorted[sorted.Length / 2] : 0.5 * (sorted[sorted.Length / 2 - 1] + sorted[sorted.Length / 2]);
+    }
+
+    /// <summary>
+    /// Driven as the game drives it through every rev it has, each car's voice is free of clicks and drop-outs (banks):
+    /// idling at the governor's throttle for a second, then flat out from its idle to its redline over eight seconds and
+    /// off the throttle down 40 % of its redline in two, at the game's volume of 0.9, outside and in the cabin. No step
+    /// between samples is over 0.45, nor three times the RMS of the 5 ms around it (a click; measured: at most 2.1 times,
+    /// the estate from behind at 1,500 rpm), and no 10 ms of it falls 20 dB under the 210 ms around it (a drop-out, as the
+    /// near-silent grains of the banks cut before played; measured: at most 14.8 dB, the hot hatch lifting off at 6,500 rpm).
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Cars))]
+    public void Sweeps_from_idle_to_the_redline_and_off_without_clicks_or_drop_outs(string car, int index)
+    {
+        var spec = VehicleSpec.Catalogue[index].Engine;
+        foreach (var interior in new[] { false, true })
+        {
+            var voice = Voice(car, index, interior);
+            voice.Volume = 0.9f;
+            var x = new float[11 * Rate];
+            const int block = 441;
+            for (var at = 0; at < x.Length; at += block)
+            {
+                var t = at / (double)Rate;
+                var (rpm, load) = t < 1 ? (spec.IdleRpm, 0.12f)
+                    : t < 9 ? (spec.IdleRpm + (spec.RedlineRpm - spec.IdleRpm) * (float)(t - 1) / 8f, 1f)
+                    : (spec.RedlineRpm * (1f - 0.2f * (float)(t - 9)), 0.05f);
+                voice.Render(x.AsSpan(at, Math.Min(block, x.Length - at)), rpm, load, true);
+            }
+            Assert.All(x, v => Assert.True(float.IsFinite(v)));
+            // Steps against the RMS of the 5 ms around them, from a running sum of squares.
+            const int half = Rate / 400;
+            var squares = new double[x.Length + 1];
+            for (var i = 0; i < x.Length; i++) squares[i + 1] = squares[i] + x[i] * x[i];
+            var (step, ratio, ratioAt) = (0.0, 0.0, 0);
+            for (var i = 1; i < x.Length; i++)
+            {
+                var d = Math.Abs(x[i] - x[i - 1]);
+                var from = Math.Max(i - half, 0);
+                var to = Math.Min(i + half, x.Length);
+                var rms = Math.Sqrt((squares[to] - squares[from]) / (to - from));
+                step = Math.Max(step, d);
+                if (d / (rms + 1e-4) > ratio) (ratio, ratioAt) = (d / (rms + 1e-4), i);
+            }
+            // Drop-outs: 10 ms frames against the 210 ms around them.
+            const int frame = Rate / 100;
+            var frames = Enumerable.Range(0, x.Length / frame).Select(k => (squares[(k + 1) * frame] - squares[k * frame]) / frame + 1e-12).ToArray();
+            var (drop, dropAt) = (0.0, 0);
+            for (var k = 10; k < frames.Length - 10; k++)
+            {
+                var under = 10 * Math.Log10(frames.Skip(k - 10).Take(21).Average() / frames[k]);
+                if (under > drop) (drop, dropAt) = (under, k);
+            }
+            output.WriteLine($"{car} {(interior ? "cabin" : "outside")}: largest step {step:0.000}, {ratio:0.0} times the RMS around it at {ratioAt / (double)Rate:0.00} s; deepest 10 ms {drop:0.0} dB under the 210 ms around it at {dropAt / 100.0:0.00} s");
+            Assert.True(step <= 0.45, $"{car}: a step of {step:0.00} between samples");
+            Assert.True(ratio <= 3, $"{car}: a step {ratio:0.0} times the RMS around it at {ratioAt / (double)Rate:0.00} s (a click)");
+            Assert.True(drop <= 20, $"{car}: 10 ms {drop:0.0} dB under the 210 ms around it at {dropAt / 100.0:0.00} s (a drop-out)");
+        }
+    }
+
+    /// <summary>
+    /// Pulling at full throttle the voice's level follows the revs evenly from the idle to the redline (banks), outside and
+    /// in the cabin: held every 100 rpm (its loudness the mean over five holds of two seconds, 25 and 50 rpm either side,
+    /// as one rev to the next strings other grains together and moves by a few tenths), no step from one to the next is
+    /// over 1.2 LU. Between the idle's recording and the run-up's the voice sagged by 3 to 8 LU before (the rally hatch at
+    /// 30 % of its redline 4 LU under its run-up 400 rpm up; the V8 at 1,900 rpm 7 LU under both ends), the V8's run-up
+    /// began with 25 pulses of its recording fading in (14 dB under the rest after levelling) and stepped 2.7 LU at 2,300
+    /// rpm, and a gap of 9 dB in its run-up at 6,700 rpm stepped it 1.9 LU. Measured: at most 1.0 LU (the estate's idle
+    /// at 900 rpm, where its two idle recordings meet).
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Cars))]
+    public void The_level_follows_the_revs_evenly_from_the_idle_to_the_redline(string car, int index)
+    {
+        var spec = VehicleSpec.Catalogue[index].Engine;
+        foreach (var interior in new[] { false, true })
+        {
+            var voice = Voice(car, index, interior);
+            var levels = new List<(float Rpm, double Lufs)>();
+            for (var rpm = MathF.Ceiling(spec.IdleRpm / 100f) * 100f; rpm <= spec.RedlineRpm + 1f; rpm += 100f)
+            {
+                var energy = 0.0;
+                foreach (var offset in new[] { -50f, -25f, 0f, 25f, 50f })
+                {
+                    energy += Math.Pow(10.0, Loudness.Lufs(Hold(voice, rpm + offset, 1f, 2.5f).AsSpan(Rate / 2), Rate) / 10.0);
+                }
+                levels.Add((rpm, 10.0 * Math.Log10(energy / 5.0)));
+            }
+            var steps = levels.Zip(levels.Skip(1), (a, b) => (b.Rpm, Step: b.Lufs - a.Lufs)).ToArray();
+            var worst = steps.MaxBy(s => Math.Abs(s.Step));
+            output.WriteLine($"{car} {(interior ? "cabin" : "outside")}: {levels[0].Lufs:0.0} LUFS at {levels[0].Rpm:0} rpm to {levels[^1].Lufs:0.0} at {levels[^1].Rpm:0}, the largest step {worst.Step:+0.0;-0.0} LU at {worst.Rpm:0} rpm");
+            Assert.True(Math.Abs(worst.Step) <= 1.2, $"{car}: the level steps {worst.Step:+0.0;-0.0} LU at {worst.Rpm:0} rpm");
+        }
     }
 
     private static float[] LoopSamples(string file)

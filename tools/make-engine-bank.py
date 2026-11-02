@@ -90,7 +90,25 @@ def marks(x, f):
     for m in out[1:]:
         if m - kept[-1] > 0.5 * SR / f[m]:   # a peak found twice
             kept.append(m)
-    return np.array(kept)
+    # Where two expected pulses moved onto the same peak, one was dropped and its neighbours' grains spanned two periods
+    # on that side: laid at the revs, such a grain overlapped its neighbours by a period more than the rest, and averaged
+    # with them it played quieter (12 % of the fleet saloon's run-up and 17 % of the flat-twelve's spanned over 1.3
+    # periods; the voice past the top of the fleet saloon's recording, every grain held to the period, was 1 LU louder
+    # than just under it). Each gap of n periods is filled with the n - 1 pulses expected in it, each moved onto the
+    # nearest peak within a quarter of a period.
+    filled = [kept[0]]
+    for m in kept[1:]:
+        last = filled[-1]
+        period = SR / f[(last + m) // 2]
+        missing = int(round((m - last) / period)) - 1
+        for k in range(1, missing + 1):
+            guess = last + (m - last) * k / (missing + 1)
+            lo, hi = int(guess - period / 4), int(guess + period / 4)
+            at = lo + int(np.argmax(smooth[lo:hi]))
+            if filled[-1] + 0.5 * period < at < m - 0.5 * period:
+                filled.append(at)
+        filled.append(m)
+    return np.array(filled)
 
 
 def crackles(x, m, factor=4.0):

@@ -19,6 +19,20 @@ namespace GrudgeLap.Audio;
 /// pass it (0.20). The voice renders at its banks' rate, allocates nothing per call and is used from one thread.
 /// </para>
 /// <para>
+/// Between the idle and the run-up (banks): across the revs between the top of the idle's recording and the bottom of
+/// the run-up's the two recordings take over from each other, and held at full throttle the voice sagged there, 3 to 8
+/// LU under both ends (the rally hatch at 30 % of its redline, 2,000 rpm, 4 LU under its run-up at 2,400; the V8 at
+/// 1,900 rpm 7 LU under its idle and its run-up). Three things did it. The idle's pulses, laid closer than recorded,
+/// overlapped several at a time and averaged one another down; now, like the run-up past its top, each is held to the
+/// period it is laid at and plays at its recorded strength. Two recordings mixed by their shares in amplitude do not add
+/// in phase and lost up to 3 dB halfway; now each is normalised apart and keeps the square root of its share, their
+/// powers summing to one. And the idle's level is the engine's idling (<see cref="IdleGain"/>) whatever the throttle; now
+/// pulling, its pulses are levelled onto the run-up's trend like the run-up's own and brought to the loudness of the
+/// run-up's pulses laid at the idle's top revs (<see cref="LoadedIdleGain"/>), so the voice at full throttle rises
+/// with the revs from the idle's to the run-up's without a dip: held every 100 rpm from the idle to the redline it never
+/// moves by more than about 1 LU from one step to the next. At a light throttle the idle keeps its own level.
+/// </para>
+/// <para>
 /// The rev limiter's cut (<see cref="Cut"/>, 0.20): an ignition or fuel cut stops the combustion from the next firing
 /// on, so the pulses laid while it lasts are the overrun's (the cylinders only pump air) at the closed throttle's level,
 /// and they fire again from the first pulse after it. The switch is made pulse by pulse, not through the load, whose
@@ -98,20 +112,26 @@ public sealed class GranularEngine
     private readonly GrainBank? _overrun;
     private readonly int _cylinders;
     private readonly Random _random;
-    private readonly float[] _sum = new float[RingSize];
-    private readonly float[] _weight = new float[RingSize];
+    /// <summary>The run-up's and the overrun's grains overlap-added (see <see cref="Add"/>), and the idle's apart from them.</summary>
+    private readonly GrainRing _running = new(), _idling = new();
     /// <summary>
     /// The gains that level the run-up's and the overrun's pulses onto the run-up's trend of level, grain by grain
     /// (<see cref="GrainBank.LevelGains"/>, see the remarks).
     /// </summary>
     private readonly float[] _driveLevel;
     private readonly float[]? _overrunLevel;
+    private readonly float[]? _idleLevel;
     private readonly int _latency;
     private readonly float _idleTopRpm;
     private readonly float _driveBottomRpm;
     private readonly float _outsideTrim = 1f, _cabinTrim = 1f;
     /// <summary>Brings the idle recording to <see cref="IdleLufs"/> (see the remarks).</summary>
     private readonly float _idleGain = 1f;
+    /// <summary>
+    /// Brings the idle's pulses, levelled onto the run-up's trend (<see cref="_idleLevel"/>), to the run-up's own loudness
+    /// at the idle's revs pulling (see the remarks); copied into the twins the trims are measured on.
+    /// </summary>
+    private float _loadedIdleGain = 1f;
     /// <summary>Peaks are rounded off (<see cref="Round"/>); not in the twins the trims are measured on, which must see them whole.</summary>
     private readonly bool _rounded;
     private long _time;
@@ -179,6 +199,7 @@ public sealed class GranularEngine
         var trend = drive.LevelTrend();
         _driveLevel = drive.LevelGains(trend);
         _overrunLevel = overrun?.LevelGains(trend);
+        _idleLevel = idle?.LevelGains(trend);
         // The cabin's low-pass and boom and the tailpipe's shelf are the body's and never change: set once, where the
         // throttle's filter and the intake's roar follow the load (UpdateFilters).
         _cabinHigh.SetLowPass(voicing.CabinCutoff, 0.7f, drive.SampleRate);
@@ -199,6 +220,7 @@ public sealed class GranularEngine
                 revs = RunUpRevs(5);
                 peakRevs = RunUpRevs(11);
             }
+            if (idle is not null) _loadedIdleGain = LoadedIdleGain(idle);
             _outsideTrim = Trim(interior: false, revs, peakRevs);
             _cabinTrim = Trim(interior: true, revs, peakRevs);
             if (idle is not null) _idleGain = IdleGain(idle);
@@ -254,10 +276,14 @@ public sealed class GranularEngine
             }
 
             var slot = (int)(_time & Mask);
-            // Where the pulses are spread apart (revs below the bank) the gaps stay quiet instead of being blown up.
-            var value = _sum[slot] / MathF.Max(_weight[slot], 0.35f);
-            _sum[slot] = 0f;
-            _weight[slot] = 0f;
+            // The idle's pulses and the run-up's (or the overrun's) are other recordings and do not add in phase: mixed by
+            // their shares in amplitude, their sum lost up to 3 dB halfway between the recordings (half of each, a quarter
+            // of the power, twice). Each stream is normalised on its own and keeps the square root of its share: their
+            // powers sum to one.
+            var pulled = _running.Take(slot, out var pulledShare);
+            var idled = _idling.Take(slot, out var idledShare);
+            var shares = pulledShare + idledShare;
+            var value = shares > 0f ? MathF.Sqrt(pulledShare / shares) * pulled + MathF.Sqrt(idledShare / shares) * idled : 0f;
 
             if ((i & 31) == 0) UpdateFilters(rate);
             value = _throttle.Process(value);
@@ -293,10 +319,18 @@ public sealed class GranularEngine
             if (_overrun is not null) overrun = drive;
             gain = CutLevel / (CutLevel + (1f - CutLevel) * _smoothLoad);
         }
+        var idleShare = 1f - drive;
         drive -= overrun;
-        if (drive > 0.002f) Add(_drive, _driveLevel, Pick(_drive, ref _drivePulse, firing), centre, drive * beat, gain, firing);
-        if (overrun > 0.002f) Add(_overrun!, _overrunLevel, Pick(_overrun!, ref _overrunPulse, firing), centre, overrun * beat, gain);
-        if (drive + overrun < 0.998f && _idle is not null) Add(_idle, null, Pick(_idle, ref _idlePulse, firing), centre, 1f - drive - overrun, gain * _idleGain);
+        if (drive > 0.002f) Add(_running, _drive, _driveLevel, Pick(_drive, ref _drivePulse, firing), centre, drive * beat, gain, firing);
+        if (overrun > 0.002f) Add(_running, _overrun!, _overrunLevel, Pick(_overrun!, ref _overrunPulse, firing), centre, overrun * beat, gain);
+        if (idleShare > 0.002f && _idle is not null)
+        {
+            // The idle's level: its own at a light throttle (IdleGain); pulling, its pulses levelled onto the run-up's trend.
+            var pulse = Pick(_idle, ref _idlePulse, firing);
+            var loaded = 1f - IdleShareOfLoad(_smoothLoad);
+            var level = _idleGain + (_idleLevel![pulse] * _loadedIdleGain - _idleGain) * loaded;
+            Add(_idling, _idle, null, pulse, centre, idleShare, gain * level, firing);
+        }
     }
 
     /// <summary>
@@ -316,18 +350,18 @@ public sealed class GranularEngine
     /// <paramref name="levels"/> (<see cref="_driveLevel"/>, <see cref="_overrunLevel"/>; none for the idle).
     /// </summary>
     /// <param name="runUpFiring">
-    /// For a grain of the run-up, the firing frequency it is laid at (0 for the idle's and the overrun's): past the top
-    /// of the run-up's recording its window is held to that period. Laid closer together than they were recorded, whole
+    /// For a grain of the run-up or of the idle, the firing frequency it is laid at (0 for the overrun's): past the top of
+    /// its recording its window is held to that period. Laid closer together than they were recorded, whole
     /// grains overlapped by more than their windows sum to one, and the normalisation averaged several pulses at every
     /// sample, which took each other down (by 4 to 5 dB at the V6 hatch's redline: its recording reaches 3,600 rpm, its
     /// redline 6,600) where a real engine fires as hard at the higher revs, only more often. Held to the period, the
     /// windows sum to one again: each pulse plays at its recorded strength, its own peak whole and its tail, which the
     /// next pulse covers, cut short. (Dividing the overlap out instead kept the whole grains, several at once, and from
-    /// pulses picked at random their sum was a noise between the harmonics as loud as the firing tone itself.) The idle
-    /// and the overrun keep their whole windows: the overrun is to stay the quieter past its top, and the idle's level
-    /// is its own (<see cref="IdleGain"/>).
+    /// pulses picked at random their sum was a noise between the harmonics as loud as the firing tone itself.) The idle's
+    /// grains are held the same way past the top of its recording (banks: see the remarks). The overrun keeps its whole
+    /// windows: it is to stay the quieter past its top.
     /// </param>
-    private void Add(GrainBank bank, float[]? levels, int pulse, long centre, float weight, float gain, float runUpFiring = 0f)
+    private void Add(GrainRing stream, GrainBank bank, float[]? levels, int pulse, long centre, float weight, float gain, float runUpFiring = 0f)
     {
         var marks = bank.Marks;
         var samples = bank.Samples;
@@ -346,8 +380,9 @@ public sealed class GranularEngine
         {
             var w = j < 0 ? 0.5f - 0.5f * MathF.Cos(MathF.PI * (j + left) / left) : 0.5f + 0.5f * MathF.Cos(MathF.PI * j / right);
             var slot = (int)((centre + j) & Mask);
-            _sum[slot] += weight * w * gain * samples[mark + j];
-            _weight[slot] += weight * w;
+            stream.Sum[slot] += weight * w * gain * samples[mark + j];
+            stream.Weight[slot] += weight * w;
+            stream.Cover[slot] += w;
         }
     }
 
@@ -379,7 +414,7 @@ public sealed class GranularEngine
     /// </summary>
     private float Trim(bool interior, float[] revs, float[] peakRevs)
     {
-        var twin = new GranularEngine(_idle, _drive, _cylinders, 1, _overrun, Voicing, trim: false, 0f) { Interior = interior };
+        var twin = new GranularEngine(_idle, _drive, _cylinders, 1, _overrun, Voicing, trim: false, 0f) { Interior = interior, _loadedIdleGain = _loadedIdleGain };
         var rate = SampleRate;
         var settle = rate / 10;
         var each = rate / 3;
@@ -400,6 +435,27 @@ public sealed class GranularEngine
         var lufs = Loudness.Lufs(heard, rate);
         var gain = MathF.Min((float)Math.Pow(10.0, (ReferenceLufs - lufs) / 20.0), PeakCeiling / peaks.Peak);
         return Math.Clamp(gain, 0.25f, 4f);
+    }
+
+    /// <summary>
+    /// The gain that brings the idle's levelled pulses, pulling at full throttle at the top of the idle's revs (where the
+    /// run-up starts to take over), to the loudness of the run-up's pulses laid there (a twin without the idle). Levelled
+    /// onto the run-up's trend by their RMS level, the pulses of an idle recorded with its energy under 100 Hz (the
+    /// saloon's Niva, the estate's Renault) are still quieter in loudness, where the K-weighting takes their lows off (the
+    /// level within a recording is left to RMS: levelled by its K-weighted loudness instead, the run-ups' joins stepped
+    /// by up to 2 LU). Held between a quarter and four times.
+    /// </summary>
+    private float LoadedIdleGain(GrainBank idle)
+    {
+        var rpm = _idleTopRpm;
+        double Heard(GrainBank? idleBank)
+        {
+            var twin = new GranularEngine(idleBank, _drive, _cylinders, 1, _overrun, Voicing, trim: false, 0f);
+            var heard = new float[SampleRate];
+            for (var at = 0; at < heard.Length; at += 512) twin.Render(heard.AsSpan(at, Math.Min(512, heard.Length - at)), rpm, 1f, true);
+            return Loudness.Lufs(heard.AsSpan(SampleRate / 2), SampleRate);
+        }
+        return Math.Clamp((float)Math.Pow(10.0, (Heard(null) - Heard(idle)) / 20.0), 0.25f, 4f);
     }
 
     /// <summary>
@@ -438,9 +494,37 @@ public sealed class GranularEngine
         return MathF.CopySign(PeakKnee + room * MathF.Tanh((magnitude - PeakKnee) / room), x);
     }
 
+    /// <summary>
+    /// How much the idle plays at its own level against the run-up's (see the remarks): fully up to a fifth of the
+    /// throttle (the idle governor's tenth to sixth, and a light throttle), not at all from 0.6 on.
+    /// </summary>
+    private static float IdleShareOfLoad(float load) => SmoothStep((0.6f - load) / 0.4f);
+
     private static float SmoothStep(float x)
     {
         x = Math.Clamp(x, 0f, 1f);
         return x * x * (3f - 2f * x);
+    }
+
+    /// <summary>A ring of overlap-added grains: their samples by window and share, the shares by window, and the windows.</summary>
+    private sealed class GrainRing
+    {
+        public readonly float[] Sum = new float[RingSize];
+        public readonly float[] Weight = new float[RingSize];
+        public readonly float[] Cover = new float[RingSize];
+
+        /// <summary>
+        /// The grains at <paramref name="slot"/> normalised by their windows, and their share of the mix there (the shares
+        /// of the pulses covering it, by window), clearing the slot. Where the pulses are spread apart (revs below a
+        /// recording) the gaps between them stay quiet instead of being blown up: the windows count for at least 0.35.
+        /// </summary>
+        public float Take(int slot, out float share)
+        {
+            var cover = Cover[slot];
+            share = cover > 1e-6f ? Weight[slot] / cover : 0f;
+            var value = share > 0f ? Sum[slot] / (share * MathF.Max(cover, 0.35f)) : 0f;
+            Sum[slot] = Weight[slot] = Cover[slot] = 0f;
+            return value;
+        }
     }
 }
