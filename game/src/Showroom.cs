@@ -50,18 +50,25 @@ internal sealed partial class Showroom : Node
     private CarView? _leaving;
     private float _yaw;
     private float _spin;            // the drag's angular velocity, rad/s, decaying once the button is up
+    private float _dragTurn;        // the turn dragged since the last frame, rad: the spin is the frame's whole drag
     private float _slide = 1f;      // the car change's progress: 0 as it starts, 1 done
     private int _slideDirection;
     private float _zoom = 1f;
-    private float _reach = 2.4f;    // half the car's length, m, smoothed: frames the camera
+    private float _reach = 2.4f;    // the radius the car sweeps on the table, m, smoothed: frames the camera
     private float _distance;        // the camera's distance from its aim, m, smoothed
     private float _since;           // seconds open, for the automation's notes
     private readonly Dictionary<string, PackedScene> _preloaded = new();
     private readonly HashSet<string> _loading = new();
+    /// <summary>
+    /// Threaded loads still running when a showroom closed, collected (and let go) as they finish by
+    /// <see cref="CollectAbandoned"/>: the loader holds a model it loaded until it is collected.
+    /// </summary>
+    private static readonly HashSet<string> _abandoned = new();
     private PaintBook _book = null!;
     private readonly Dictionary<int, PaintChoice> _edits = new();     // the paints chosen here, by car, until taken
     private readonly Dictionary<int, PaintChoice> _mixed = new();     // the colour each car was last mixed in here
     private PaintChoice? _mixedBefore;                                // the car's mixed colour when the picker opened
+    private readonly Dictionary<int, float> _mixedHue = new();        // the picker's hue when it last closed, by car: a grey has none of its own
 
     /// <summary>The car on the turntable, as an index into <see cref="VehicleSpec.Catalogue"/>.</summary>
     public int Index { get; private set; }
@@ -258,16 +265,20 @@ internal sealed partial class Showroom : Node
             Mesh = new PlaneMesh { Size = new Vector2(3000f, 3000f), Material = new StandardMaterial3D { AlbedoColor = new Color(0.17f, 0.17f, 0.18f), Roughness = 0.22f, Metallic = 0.0f } },
         };
         parent.AddChild(floor);
-        // The key light: from the front quarter, high, soft-edged, with the shadows that set the car on the floor. Its own
-        // highlight is held down (LightSpecular): a sun-sized source drew a hard white spot with a halo of glow on the
-        // bonnet and the roof, where a studio's key is a softbox whose reflection is a broad soft patch.
+        // The key light: from the front quarter, high, soft-edged, with the shadows that set the car on the floor. No
+        // highlight of its own (LightSpecular 0), as the fill and the rim: a studio's key is a softbox whose reflection is
+        // a broad soft patch, which the sky's lamps give. At full strength a sun-sized source drew a hard white spot with a
+        // halo of glow on the bonnet and the roof; held down to 0.35 it still burnt the side glass and the panel under it
+        // to white whenever their normal halved the angle between it and the lens, twice a turn (at 100 degrees 15,800
+        // clipped pixels on the 205 and 14,900 on the E-Class, none without it; the sky without its lamps clipped the same,
+        // so the softbox behind the camera the showroom's review suspected was not the cause).
         var key = new DirectionalLight3D
         {
             Name = "Key",
             LightEnergy = 1.35f,
             LightColor = new Color(1f, 0.975f, 0.94f),
             LightAngularDistance = 4f,
-            LightSpecular = 0.35f,
+            LightSpecular = 0f,
             ShadowEnabled = true,
             DirectionalShadowMode = DirectionalLight3D.ShadowMode.Orthogonal,
             DirectionalShadowMaxDistance = 40f,
@@ -324,10 +335,15 @@ internal sealed partial class Showroom : Node
         return car;
     }
 
+    /// <summary>
+    /// The radius the camera frames: the circle the car's corners sweep as the table turns (half its length and width
+    /// together), or for a tall car its height. Framed by the half-length until the showroom's review, the short cars'
+    /// front wheel dipped under the panel as a corner turned towards the lens.
+    /// </summary>
     private static float ReachOf(CarView car)
     {
         var bounds = car.Bounds;
-        return MathF.Max(bounds.Size.Z * 0.5f, bounds.Size.Y * 1.25f);
+        return MathF.Max(new Vector2(bounds.Size.Z, bounds.Size.X).Length() * 0.5f, bounds.Size.Y * 1.25f);
     }
 
     /// <summary>Steps to the next (1) or the previous (-1) car: the car on the stage slides out and the next slides in from the other side.</summary>
@@ -380,7 +396,7 @@ internal sealed partial class Showroom : Node
         var before = Choice;
         _mixedBefore = _mixed.TryGetValue(Index, out var mixed) ? mixed : null;
         if (!before.IsCustom) SetChoice(MixedFor(Index));
-        Picker = new ColourPicker(Choice, before);
+        Picker = new ColourPicker(Choice, before, _mixedHue.TryGetValue(Index, out var hue) ? hue : null);
     }
 
     /// <summary>
@@ -391,6 +407,7 @@ internal sealed partial class Showroom : Node
     {
         if (Picker is not { } picker) return;
         Picker = null;
+        _mixedHue[Index] = picker.Hue;
         if (keep) return;
         SetChoice(picker.Before);
         if (_mixedBefore is { } mixed) _mixed[Index] = mixed;
@@ -404,11 +421,11 @@ internal sealed partial class Showroom : Node
     }
 
     /// <summary>The mouse dragged across the stage by <paramref name="pixels"/> (right positive): the turntable follows, and keeps a little of the motion when it is let go.</summary>
-    public void Drag(float pixels, float dt)
+    public void Drag(float pixels)
     {
         var turn = pixels * DragRadiansPerPixel;
         _yaw += turn;
-        _spin = turn / MathF.Max(dt, 1f / 240f);
+        _dragTurn += turn;
     }
 
     /// <summary>The wheel: closer (positive steps) or further, within the stage.</summary>
@@ -442,12 +459,21 @@ internal sealed partial class Showroom : Node
     {
         var dt = (float)delta;
         _since += dt;
-        if (!Dragging)
+        if (Dragging)
+        {
+            // The spin the table keeps when it is let go: the frame's whole drag over the frame's time, eased over about
+            // 50 ms. Taken from a single motion event until the showroom's review, it depended on how often the mouse
+            // reports (a 1000 Hz mouse sends several a frame, the last a fraction of the frame's motion), and a drag held
+            // still kept the last motion's speed and spun away when let go.
+            _spin += (_dragTurn / MathF.Max(dt, 1e-4f) - _spin) * Mathf.Clamp(dt * 20f, 0f, 1f);
+        }
+        else
         {
             // The turntable turns on its own, the drag's spin on top, dying away in about a second.
             _spin *= MathF.Exp(-dt * 3f);
             _yaw += ((Held ? 0f : TurnRate) + _spin) * dt;
         }
+        _dragTurn = 0f;
         _yaw %= MathF.Tau;
         _turntable.Rotation = new Vector3(0f, _yaw, 0f);
         if (_slide < 1f)
@@ -467,7 +493,46 @@ internal sealed partial class Showroom : Node
         CollectPreloaded();
     }
 
-    private float CameraDistance => _reach * 2.9f * _zoom;
+    /// <summary>
+    /// The camera's distance from its aim, m: 2.9 times the radius the car sweeps, or as far as its nearest corner needs
+    /// to stay over the panel (<see cref="FloorFitDistance"/>); the wheel brings it closer or further from there.
+    /// With the picker open the car stands in the stage left of it, a narrower frame (<see cref="PickerShift"/>): the
+    /// camera steps back as far as the car's sweep needs to fit that frame's half-width with a tenth to spare. Until the
+    /// showroom's review it only moved sideways, and a long car's nose went under the left chevron (at 4:3 its tail under
+    /// the picker too).
+    /// </summary>
+    private float CameraDistance
+    {
+        get
+        {
+            var framed = MathF.Max(_reach * 2.9f, FloorFitDistance) * _zoom;
+            if (Picker is null) return framed;
+            var free = (ColourPicker.Panel(ScreenSize).Position.X - LeftArrow(ScreenSize).End.X) / ScreenSize.X;
+            var halfWidth = MathF.Tan(Mathf.DegToRad(CameraFov * 0.5f)) * ScreenSize.X / ScreenSize.Y;
+            return MathF.Max(framed, _reach / (0.9f * free * halfWidth));
+        }
+    }
+
+    /// <summary>
+    /// The distance, m, at which the nearest point the car sweeps on the floor (a corner turned towards the lens, at the
+    /// disc's height) is drawn 16 px over the panel, for the lens's angle, its pitch and its aim (<see cref="AimDrop"/>).
+    /// The short, tall cars need it: framed by their sweep alone, the 205's and the Delta's near wheel went under the
+    /// panel as a rear corner came round, the Delta's aerial raising its middle as well. The camera at
+    /// D (sin p, cos p) from an aim k D under the car's middle sees a floor point a under the middle and r towards it at
+    /// y / z = (a cos p + k D cos p - r sin p) / (D (1 - k sin p) - a sin p - r cos p); set to the panel's edge on the
+    /// screen (y over z the tangent of half the lens's angle times its place from -1 to 1), that is linear in D.
+    /// </summary>
+    private float FloorFitDistance
+    {
+        get
+        {
+            var (s, c) = MathF.SinCos(Mathf.DegToRad(CameraPitchDegrees));
+            var edge = (1f - 2f * (Panel(ScreenSize).Position.Y - 16f) / ScreenSize.Y) * MathF.Tan(Mathf.DegToRad(CameraFov * 0.5f));
+            var a = DiscHeight - Middle;
+            var below = AimDrop * c - edge * (1f - AimDrop * s);
+            return below <= 0.01f ? 0f : (_reach * s - a * c - edge * (a * s + _reach * c)) / below;
+        }
+    }
 
     /// <summary>
     /// The camera's sideways move while the picker is open, m: the car centred in the stage left of the picker's panel
@@ -486,14 +551,24 @@ internal sealed partial class Showroom : Node
     }
 
     /// <summary>
-    /// The camera: a long lens from the front, a little above the car, aimed under the car's middle so the car stands in
-    /// the upper two thirds of the picture, over the HUD's panel.
+    /// How far under the car's middle the camera aims, as a share of its distance: 0.098 stands the car over the middle
+    /// of the stage between the bar and the panel. At 0.072, with the closer framing by half the car's length, the short
+    /// cars' front wheel went under the panel at the first view and the tall ones' roofs into the name, drawn then on
+    /// the stage (the showroom's review).
+    /// </summary>
+    private const float AimDrop = 0.098f;
+
+    /// <summary>The height of the car's middle (its box's), m, the camera's aim is set from.</summary>
+    private float Middle => _car is null ? 0.7f : _car.Position.Y + _car.Bounds.GetCenter().Y;
+
+    /// <summary>
+    /// The camera: a long lens from the front, a little above the car, aimed under the car's middle (<see cref="AimDrop"/>)
+    /// so the car stands in the upper part of the picture, over the HUD's panel.
     /// </summary>
     private void PlaceCamera()
     {
         var pitch = Mathf.DegToRad(CameraPitchDegrees);
-        var middle = _car is null ? 0.7f : _car.Position.Y + _car.Bounds.GetCenter().Y;
-        var aim = new Vector3(0f, middle - 0.072f * _distance, 0f);
+        var aim = new Vector3(0f, Middle - AimDrop * _distance, 0f);
         var eye = aim + new Vector3(0f, MathF.Sin(pitch), MathF.Cos(pitch)) * _distance;
         _camera.GlobalTransform = new Transform3D(Basis.LookingAt(aim - eye, Vector3.Up), eye);
     }
@@ -510,7 +585,9 @@ internal sealed partial class Showroom : Node
     /// <summary>
     /// The neighbours' models loaded on a thread while the player looks at this car, so a step does not wait on the disk
     /// (a prepared model is 20-70 MB; read on the main thread it held the picture for most of a second). Only the two
-    /// neighbours are kept: eight cars of textures at once would be hundreds of megabytes of video memory.
+    /// neighbours are kept: eight cars of textures at once would be hundreds of megabytes of video memory. A model let
+    /// go is disposed at once rather than when the .NET collector next runs: its wrapper holds the scene, textures and
+    /// all, until then.
     /// </summary>
     private void Preload()
     {
@@ -519,11 +596,17 @@ internal sealed partial class Showroom : Node
         {
             if (CarView.ModelPath(VehicleSpec.Catalogue[(Index + offset + Count) % Count]) is { } path) wanted.Add(path);
         }
-        foreach (var path in _preloaded.Keys.Where(p => !wanted.Contains(p)).ToList()) _preloaded.Remove(path);
+        foreach (var path in _preloaded.Keys.Where(p => !wanted.Contains(p)).ToList())
+        {
+            _preloaded[path].Dispose();
+            _preloaded.Remove(path);
+        }
         foreach (var path in wanted)
         {
             if (_preloaded.ContainsKey(path) || _loading.Contains(path)) continue;
-            if (ResourceLoader.LoadThreadedRequest(path) == Error.Ok) _loading.Add(path);
+            // A load that a closed showroom left running is this one now: a second request would be a second claim on
+            // the loader, and collecting the first would dispose the scene this showroom keeps.
+            if (_abandoned.Remove(path) || ResourceLoader.LoadThreadedRequest(path) == Error.Ok) _loading.Add(path);
         }
     }
 
@@ -537,6 +620,36 @@ internal sealed partial class Showroom : Node
             if (status == ResourceLoader.ThreadLoadStatus.InProgress) continue;
             _loading.Remove(path);
             if (status == ResourceLoader.ThreadLoadStatus.Loaded && ResourceLoader.LoadThreadedGet(path) is PackedScene scene) _preloaded[path] = scene;
+        }
+    }
+
+    /// <summary>
+    /// The showroom closed: the neighbours' scenes let go now, and the loads still running handed to
+    /// <see cref="CollectAbandoned"/>. Left to themselves, a model still loading stayed in the loader for the rest of the
+    /// session (the showroom's review: a step and a close 0.15 s later kept the Delta's 27 textures, 140 MB of video
+    /// memory), and the kept ones stayed until the .NET collector ran.
+    /// </summary>
+    public override void _ExitTree()
+    {
+        _abandoned.UnionWith(_loading);
+        _loading.Clear();
+        foreach (var scene in _preloaded.Values) scene.Dispose();
+        _preloaded.Clear();
+    }
+
+    /// <summary>
+    /// Called every frame (<see cref="Bootstrap"/>): the loads a closed showroom left running, collected as they finish
+    /// and let go at once.
+    /// </summary>
+    public static void CollectAbandoned()
+    {
+        if (_abandoned.Count == 0) return;
+        foreach (var path in _abandoned.ToList())
+        {
+            var status = ResourceLoader.LoadThreadedGetStatus(path);
+            if (status == ResourceLoader.ThreadLoadStatus.InProgress) continue;
+            _abandoned.Remove(path);
+            if (status == ResourceLoader.ThreadLoadStatus.Loaded) ResourceLoader.LoadThreadedGet(path)?.Dispose();
         }
     }
 

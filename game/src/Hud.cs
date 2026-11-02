@@ -213,11 +213,11 @@ internal sealed partial class Hud : Control
     public static Rect2 TitleCarRect(Vector2 size) => new(size.X * 0.5f - 320f, size.Y * 0.22f + 100f, 640f, 44f);
 
     /// <summary>
-    /// The showroom (<see cref="Game.Showroom"/>): its stage full-screen, the car's name over it, the chevrons at the
-    /// sides, and on a panel at the foot the facts its spec gives, the paints as swatches (the chosen one framed, the
-    /// ORIGINAL one in the car's own colour, the last one the car's mixed colour over a strip of hues), the paint's name
-    /// and the keys; the colour picker over the stage while it is open. The rects are the showroom's and the picker's,
-    /// so the mouse hits what is drawn.
+    /// The showroom (<see cref="Game.Showroom"/>): its stage full-screen, the car's name in the bar over it, the chevrons
+    /// at the sides, and on a panel at the foot the facts its spec gives, the paints as swatches (the chosen one framed,
+    /// the ORIGINAL one in the car's own colour, the last one the car's mixed colour over a strip of hues), the paint's
+    /// name and the keys; the colour picker over the stage while it is open. The rects are the showroom's and the
+    /// picker's, so the mouse hits what is drawn.
     /// </summary>
     private void DrawShowroom(Font font, Vector2 size, Showroom room)
     {
@@ -228,8 +228,9 @@ internal sealed partial class Hud : Control
         DrawRect(new Rect2(0f, 0f, size.X, 64f), new Color(0.05f, 0.05f, 0.06f, 0.5f));
         DrawString(font, new Vector2(20f, 44f), "SHOWROOM", HorizontalAlignment.Left, -1f, 30, white);
         DrawString(font, new Vector2(size.X - 320f, 44f), $"CAR {room.Index + 1} OF {Showroom.Count}", HorizontalAlignment.Right, 300f, 22, grey);
-        // The name fades out and in with the cars sliding under it.
-        Centred(font, room.Spec.Name, 128f, 46, white with { A = room.TextAlpha });
+        // The name fades out and in with the cars sliding under it. In the bar: drawn over the stage (46 px, under the
+        // bar) it lay on the roofs of the tall cars and of a car brought closer (the showroom's review).
+        Centred(font, room.Spec.Name, 45f, 34, white with { A = room.TextAlpha });
         var left = Showroom.LeftArrow(size);
         var right = Showroom.RightArrow(size);
         DrawString(font, new Vector2(left.Position.X, left.Position.Y + 112f), "<", HorizontalAlignment.Center, left.Size.X, 96, gold);
@@ -247,6 +248,8 @@ internal sealed partial class Hud : Control
             var swatch = Showroom.Swatch(size, i);
             var colour = i == Showroom.CustomSlot ? room.MixedChoice.Colour : CarView.Paints[i].Paint?.Colour ?? room.CarColour;
             DrawRect(swatch, new Color(colour.R, colour.G, colour.B));
+            // A faint edge on every swatch: the black one was lost on the dark panel.
+            DrawRect(swatch, new Color(1f, 1f, 1f, 0.3f), false, 1f);
             // The mixed colour's swatch stands on a strip of every hue: the one that opens the picker.
             if (i == Showroom.CustomSlot) DrawTextureRect(ColourPicker.HueStrip, new Rect2(swatch.Position.X, swatch.End.Y - 6f, swatch.Size.X, 6f), false);
             if (i == room.PaintSlot) DrawRect(swatch.Grow(4f), gold, false, 3f);
@@ -255,12 +258,20 @@ internal sealed partial class Hud : Control
         Centred(font, choice.IsCustom ? $"{choice.Name}   {choice.Hex}" : choice.Name, y + 160f, 18, gold);
         var take = Showroom.TakeButton(size);
         var back = Showroom.BackButton(size);
-        DrawRect(take, new Color(1f, 0.85f, 0.3f, 0.16f));
-        DrawString(font, new Vector2(take.Position.X, take.Position.Y + 29f), "TAKE IT   (ENTER)", HorizontalAlignment.Center, take.Size.X, 20, gold);
-        DrawRect(back, new Color(1f, 1f, 1f, 0.06f));
-        DrawString(font, new Vector2(back.Position.X, back.Position.Y + 29f), "BACK   (ESC)", HorizontalAlignment.Center, back.Size.X, 20, grey);
-        Centred(font, "left / right or A / D: car     up / down or W / S: paint     C or Y: mix a colour     drag the car to turn it, the wheel brings it closer     ENTER or A: take it     ESC or B: back", y + 190f, 15, grey);
-        Centred(font, room.FromMenu ? "another car starts a new game; the car and every car's paint are kept for next time" : "the car and every car's paint are kept for next time", y + 216f, 14, new Color(0.55f, 0.58f, 0.62f));
+        // While the picker is open the buttons wait for its DONE or CANCEL (Bootstrap ignores a click on them), so they are dimmed.
+        var waiting = room.Picker is not null ? 0.35f : 1f;
+        DrawRect(take, new Color(1f, 0.85f, 0.3f, 0.16f * waiting));
+        DrawString(font, new Vector2(take.Position.X, take.Position.Y + 29f), "TAKE IT   (ENTER)", HorizontalAlignment.Center, take.Size.X, 20, gold with { A = waiting });
+        DrawRect(back, new Color(1f, 1f, 1f, 0.06f * waiting));
+        DrawString(font, new Vector2(back.Position.X, back.Position.Y + 29f), "BACK   (ESC)", HorizontalAlignment.Center, back.Size.X, 20, grey with { A = waiting });
+        // Space as on the screen under the showroom: it starts the game on the title screen and goes back on the menu.
+        var takeAndBack = room.FromMenu ? "ENTER or A: take it     ESC, SPACE or B: back" : "ENTER, SPACE or A: take it     ESC or B: back";
+        Centred(font, $"left / right or A / D: car     up / down or W / S: paint     C or Y: mix a colour     drag the car to turn it, the wheel brings it closer     {takeAndBack}", y + 190f, 15, grey);
+        // The figures are the simulation's, read from the spec (Showroom.FiguresLine), and say so: a mass there carries a
+        // driver and fuel (VehicleSpec.MassKg), and the power and torque are its curve's peaks, which can sit off the
+        // brochure's (the showroom's review read them against the real cars' published figures).
+        var kept = room.FromMenu ? "another car starts a new game; the car and every car's paint are kept for next time" : "the car and every car's paint are kept for next time";
+        Centred(font, $"{kept}     ·     the figures are the simulation's, the mass with a driver and fuel", y + 216f, 14, new Color(0.55f, 0.58f, 0.62f));
         if (room.Picker is { } picker) DrawPicker(font, size, picker);
     }
 

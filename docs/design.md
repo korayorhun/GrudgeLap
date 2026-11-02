@@ -832,7 +832,10 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
   camera, graphics, weather, 1989 mode, units, full screen, replay music and quit, with the keys, the d-pad or the
   mouse. While it is open the session does not step, no input reaches the car and the master bus is muted. Until
   0.8.1 the game could only be left by closing its window, which a full-screen window does not offer. Twelve lines
-  since the CAR line, at a 44 px pitch, so the panel still clears a 720-line window (the 48 px pitch would not).
+  since the CAR line, at a 44 px pitch so the panel keeps about the height eleven lines at 48 gave it (660 px against
+  690). Not for want of room: the canvas is 1600 x 900 stretched with `expand`, never under 900 lines high whatever
+  the window, so a taller panel would have fitted too (until the showroom's review this said the 48 px pitch would
+  not clear a 720-line window, which the canvas never is).
 - The showroom (0.25, `Showroom`): the player asked for a menu where the cars turn round so a car is chosen by
   seeing it; until then a car was a name on the title screen's line. It opens from the menu's CAR line (Enter, or
   left / right, which step straight on to the next car) and from the title screen (down, the key or the d-pad, not
@@ -841,11 +844,18 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
   seen from the front three-quarter on the driver's side; left / right (A / D, the chevrons) step through
   `VehicleSpec.Catalogue` with a 0.32 s slide (the car leaves sideways, the next comes in from the other side, its
   name fading out and in, the title screen's chime), up / down (W / S) through the paints, C or the pad's Y opens
-  the colour picker; a drag turns the table (letting go keeps a little of the spin, dying away in about a second),
-  the wheel brings the camera closer or further (0.55 to 1.8 of its framing), and the chevrons, the swatches and the
-  buttons take clicks. Enter, Space or A take the car and the paints chosen: another car starts a new game, as the
-  title screen's left / right always did, the same car is repainted where it stands; Esc, B or Back go back with
-  nothing changed. Either way the player is where the showroom was opened, the title screen or the menu.
+  the colour picker; a drag turns the table (letting go keeps a little of the spin, dying away in about a second:
+  the spin is the frame's whole drag over the frame's time, eased over about 50 ms, so a mouse reporting 1000 times
+  a second and one reporting 125 let go the same, and a drag held still lets go still; until the showroom's review
+  it was the last motion event's alone), the wheel brings the camera closer or further (0.55 to 1.8 of its
+  framing), and the chevrons, the swatches and the buttons take clicks. Enter or A take the car and the paints
+  chosen: another car starts a new game, as the title screen's left / right always did, the same car is repainted
+  where it stands; Esc, B or Back go back with nothing changed. Space does what it does on the screen the showroom
+  was opened over: over the title screen it takes the car, as it starts the game there, and over the menu it goes
+  back, as the menu's footer says (until the showroom's review it took the car there too, and a Space pressed as the
+  menu had taught ended the race in progress with a new game). Either way the player is where the showroom was
+  opened, the title screen or the menu. The car's name is in the bar over the stage, fading out and in with the
+  slide.
   - The stage is a world of its own (a `SubViewport` with `OwnWorld3D`), so the game's sun, weather and fog do not
     reach it, and the main viewport draws no 3D while it is open (`Disable3D`): a paused frame of the track costs
     what a driven one does, and would be drawn under the stage unseen. The light is a photographer's: a grey dome
@@ -855,12 +865,24 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
     side, a rim from behind and above, a dark glossy floor that fades into the dome by a thin fog so the stage has no
     edge, screen-space reflections on the floor, AgX as on the road so a paint reads the same colour in both. The lamps
     are in the sky because a car's clearcoat mirrors the sky alone: as meshes in the room, caught by a reflection probe,
-    they reached the paint only through the base coat's rough reflection, and every flank read as satin. Only the key
-    has a highlight of its own, and a weak one (0.35): at full strength the key and the rim, small sources, drew hard
-    white spots with a halo of glow on the bonnet and the roof (seen from the front, the bonnet mirrors the space above
-    and behind the car, where the rim stands), where a studio's lamps are softboxes whose reflections are broad soft
-    patches. A 32 degree lens (vertical) from 11 degrees above, at 2.9 times the car's half-length (or 1.25 times its
-    height, the larger) and aimed under its middle, so the car stands over the panel.
+    they reached the paint only through the base coat's rough reflection, and every flank read as satin. None of the
+    three lights has a highlight of its own; the highlights are the sky's lamps'. At full strength the key and the
+    rim, small sources, drew hard white spots with a halo of glow on the bonnet and the roof (seen from the front, the
+    bonnet mirrors the space above and behind the car, where the rim stands), where a studio's lamps are softboxes
+    whose reflections are broad soft patches; the key held down to 0.35 still burnt the side glass and the panel under
+    it to white with a halo twice a turn, wherever their normal halved the angle between the key and the lens (at 100
+    degrees 15,800 clipped pixels on the 205 and 14,900 on the E-Class, none without it). The showroom's review put it
+    on the softbox behind the camera, but the sky drawn without its lamps clipped the same.
+  - The camera: a 32 degree lens (vertical) from 11 degrees above, at 2.9 times the radius the car sweeps on the
+    table (half its length and width together, or 1.25 times its height, the larger), further where its nearest
+    corner, turned towards the lens, would come within 16 px of the panel (`FloorFitDistance`, solved from the lens:
+    the short, tall cars, the 205 and the Delta, whose aerial also raises its middle), and aimed 0.098 of its distance
+    under the car's middle, so the car stands between the bar and the panel through the whole turn. Framed by half the
+    length and aimed at 0.072 until the showroom's review, the 205's front wheel went under the panel at the first view
+    (145 degrees), the short cars' rear wheel as a rear corner came round, and the tall cars' roofs into the name,
+    which was drawn on the stage then. With the picker open the camera slides the car into the stage left of the
+    picker's panel and steps back until its sweep fits that frame's half-width with a tenth to spare; it only slid
+    before, and a long car's nose went under the left chevron (at 4:3 its tail under the picker too).
   - The ORIGINAL swatch is the car's own colour, the model's paint that covers the most of it, now by area: counted by
     its surfaces' indices (since 0.21, for the crash's debris), the McLaren's finely cut maroon parts outnumbered its
     orange panels and the orange car's swatch was maroon; the debris takes the orange too. The area is worked out once
@@ -872,13 +894,34 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
     diesel's, a boost share a turbo's); the driven wheels; the gears and the gearbox (a change under 0.125 s is a
     dual-clutch box handing over); the front / rear split; peak power (metric horsepower, torque times revs over
     7023, as the title screen prints it) and peak torque, each with its revs, from the full-throttle torque curve;
-    the mass, the power to weight and the tyres.
+    the mass, the power to weight and the tyres. The panel's foot says they are the simulation's, the mass with a
+    driver and fuel: the showroom's review read them against the drawn cars' published figures, which they are not
+    (the V8's curve peaks at 585 hp at 8,600 rpm, where its spec's own comment says 570 at 8,000 and the 570S drawn
+    has 570 PS at 7,400-7,500 rpm and 600 N m, from 2015 where the name says '12; the flat-twelve has the arcade car's
+    four gears where the Testarossa had five, and 395 hp where it had 390 PS; the 205's 985 kg carries a driver and a
+    tank against its 875 kg DIN). The figures are the car the player drives, so they stay the spec's.
   - The neighbours' models load on a thread while the player looks at a car (`ResourceLoader.LoadThreadedRequest`),
     so a step does not wait on the disk: a prepared model is 20 to 70 MB, and read on the main thread it held the
     picture for most of a second. Only the two neighbours are kept: every car's textures at once would be hundreds of
     megabytes of video memory. The graphics preset reaches the stage (Low: three quarters of the pixels, FXAA, no
     SSAO or reflections; 1989 mode a third of the pixels and no glow).
-  - Frame time, measured with `--perf-log` on the development laptop (RTX 5060 Laptop), hidden runs at the game's
+  - The showroom lets go of its cars when it closes. The scenes it kept are disposed (a model it no longer wants is
+    disposed as it steps on), a neighbour still loading is collected when its load ends and let go
+    (`Showroom.CollectAbandoned`), and the frame after the close collects .NET's wrappers until a round frees nothing
+    (three or four collections, 17 to 22 ms). Until the showroom's review none of this happened: a model still loading
+    stayed in the loader for the session (a step and a close 0.15 s later kept the Delta's 27 textures, 140 MB of video
+    memory), and the cars' meshes, materials and textures waited on the collector, since a wrapper holds its Godot
+    object while Godot refers to it too and, on a heap of about 20 MB, the collector ran a minute and a half later (310
+    resources and 200 MB of video memory over the baseline until then); one collection still left 69 MB, a material
+    let go by one leaving its textures' wrappers to the next. The model materials already corrected
+    (`CorrectModelMaterial`) are marked on themselves, no longer in a static set that held every model the game had
+    drawn for the session (68 MB after a visit to every car). Measured with a scripted run in a scratch copy with its
+    own user folder, over the V8's credit: a visit to all eight cars, and a step with a close 0.15 s or 3 s after it,
+    each back within a second of the close at the driving baseline, 1,721 MB of video memory and 1,383 resources, where
+    two forced collections later leave them.
+  - Frame time, measured with `--perf-log` and the showroom opened by `--showroom=v8` (the title's and the menu's ways
+    in open the same stage; the review measured those through a scripted run, 3.2 to 10.6 ms of GPU against 6.6 to 13.4 driving, on
+    a shared machine), on the development laptop (RTX 5060 Laptop), hidden runs at the game's
     frame cap (32 frames a second on the hidden window's 32 Hz screen), five-second averages once the first car is
     in (the first ones carry its loading): the showroom on the V8 held the cap with 4.3 to 5.9 ms of GPU and 8 to 11
     ms of CPU a frame, 4.6 to 5.1 and 9 to 14 with the colour picker open (its square rebuilt only when the hue moves),
@@ -904,10 +947,15 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
     saturation, lightness and finish as rows: up / down choose a row, left / right change it (a tap a degree or a
     per cent, held faster and faster from a quarter of a second, 30 to 150 steps a second), the mouse clicks or
     drags the square and the bar. The turning car is repainted as the colour moves, the texture-painted cars too (the
-    205's and the VAZ's atlases, the Delta's white: the mask path of 0.21), and the camera slides the car left,
-    clear of the picker's panel. Enter, Space, A, C or Y keep the colour; Esc, B or Back put back the paint the car
-    had, and its mixed swatch. A car's last mixed colour stays its swatch while the game runs, and after a restart
-    when the car is still in it. A colour starts from the car's last mixed one, or from its own colour as a solid.
+    205's and the VAZ's atlases, the Delta's white: the mask path of 0.21), and the camera slides the car left and
+    steps back, clear of the picker's panel and the left chevron. Enter, Space, A, C or Y keep the colour; Esc, B or
+    Back put back the paint the car had, and its mixed swatch. TAKE IT and BACK wait for the picker, as Enter and Esc
+    do, and are drawn dimmed while it is open: until the showroom's review a click on them was kept and fired when the
+    picker closed, so DONE left the showroom without the colour and Esc took the car. A car's last mixed colour stays
+    its swatch while the game runs, and after a restart when the car is still in it. A colour starts from the car's
+    last mixed one, or from its own colour as a solid; a grey, which has no hue of its own, opens at the hue the bar
+    had when the picker last closed on that car (at 0, red, before the review). Every swatch has a faint edge, so the
+    black one shows on the dark panel.
   - The finishes: solid as the classic paints (metallic 0.05, roughness 0.38 under the clearcoat), metallic as the
     silver (0.6, 0.3), and pearl (0.3, 0.32 and a flop). A pearl's mica is coated thinly enough to colour the light it
     returns by interference, so its colour shifts with the angle it is seen at; the models' paint shaders blend

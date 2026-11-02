@@ -82,7 +82,8 @@ name) opens the **showroom**, and **1 / 2 / 3** the gearbox (automatic at first;
 remembered). A crash shows a replay and puts you back at the last return point; Enter turns the key again.
 
 **Showroom.** Every car on a turntable, turning slowly through a full circle in its real model, with its year,
-layout, power, torque, weight and tyres under it. Open it from the title screen or from the menu's CAR line (Esc).
+layout, power, torque, weight (with a driver and fuel) and tyres under it, as the simulation has them. Open it from
+the title screen or from the menu's CAR line (Esc).
 
 | Key / mouse | Action |
 |---|---|
@@ -90,8 +91,8 @@ layout, power, torque, weight and tyres under it. Open it from the title screen 
 | Up / down, W / S, a click on a swatch | the paint: the car's own colour, red, white, silver, black, dark blue, green, yellow, or your own |
 | C (pad: Y), or a click on the last swatch | mix your own colour: hue, saturation, lightness and a finish (solid, metallic, pearl); up / down choose, left / right change, or click and drag; Enter keeps it, Esc puts the paint back |
 | Drag the car / mouse wheel | turn the turntable / come closer or step back |
-| Enter, Space (pad: A) | take this car and the paints you chose (each car keeps its own colour) |
-| Esc (pad: B or Back) | back, nothing changed |
+| Enter (pad: A); Space when opened from the title screen | take this car and the paints you chose (each car keeps its own colour) |
+| Esc (pad: B or Back); Space when opened from the menu, as in the menu | back, nothing changed |
 
 | Key | Action |
 |---|---|

@@ -78,6 +78,7 @@ public sealed partial class Bootstrap : Node3D
     private Showroom? _showroom;        // the car choice on its turntable (0.25), open over the title screen or the menu
     private bool _showroomTake;         // the showroom's TAKE IT button was clicked
     private bool _showroomBack;         // and its BACK button
+    private bool _collectAfterShowroom; // the showroom was closed last frame: its cars' resources are let go now (CloseShowroom)
     private bool _titleCarClicked;      // the car's name on the title screen was clicked: the showroom
     private string? _showroomArg;       // automation: the showroom open from the start, on this car (--showroom[=car])
     private bool _showroomFromMenu;     // automation: reached through the Esc menu's CAR line (--showroom-entry=menu)
@@ -90,6 +91,7 @@ public sealed partial class Bootstrap : Node3D
     private GraphicsQuality _quality = GraphicsQuality.High;
     private float _overlayUntil = -1f;   // a short notice (graphics preset) on the HUD until then
     private bool _invisible;
+    private bool _automated;    // --invisible, --screenshot or --quit-after: never writes the player's paints, never phones home
     private bool _leaving;      // a second launch on its way out: nothing was built
     private bool _noGhost;
     private bool _noTraffic;
@@ -127,8 +129,8 @@ public sealed partial class Bootstrap : Node3D
         ParseArgs();   // may override the saved car with --car= and the paint with --paint=
         // The paints (0.21, per car since 0.25): every car in its own colour by default; the showroom and the menu
         // choose another, and keep it. An automated run reads them but never writes the player's file.
-        var automated = _invisible || _screenshotPath is not null || _quitAfter >= 0f;
-        _paints = PaintBook.Load(SettingsFile, keep: !automated);
+        _automated = _invisible || _screenshotPath is not null || _quitAfter >= 0f;
+        _paints = PaintBook.Load(SettingsFile, keep: !_automated);
         if (_paintArg is not null)
         {
             if (PaintChoice.TryParse(_paintArg, out var paint)) _paints.Set(_carIndex, paint, keep: false);
@@ -258,8 +260,10 @@ public sealed partial class Bootstrap : Node3D
                 if (_showroomPicker) room.OpenPicker();
             }
         }
-        // Automated runs never phone home; a player can also switch the check off in settings.cfg.
-        if (!_attract && _screenshotPath is null && System.Environment.GetEnvironmentVariable("GRUDGELAP_NO_UPDATE") is null) _updater.CheckIfDue(manual: false);
+        // Automated runs never phone home; a player can also switch the check off in settings.cfg. Every automated run, not
+        // only the scripted driver's and the screenshots': a hidden --showroom or --picker run without them (the
+        // showroom's review) checked for updates and wrote its time into the settings.
+        if (!_automated && !_attract && System.Environment.GetEnvironmentVariable("GRUDGELAP_NO_UPDATE") is null) _updater.CheckIfDue(manual: false);
     }
 
     /// <summary>
@@ -626,6 +630,31 @@ public sealed partial class Bootstrap : Node3D
         _elapsed += dt;
         if (SingleInstance.ActivationRequested()) BringToFront();
         HandleGlobalKeys();
+        Showroom.CollectAbandoned();
+        if (_collectAfterShowroom)
+        {
+            // The showroom and its cars were freed at the end of the last frame, but their meshes, materials and textures
+            // are held by .NET's wrappers until the collector runs, and on a heap of about 20 MB it ran a minute and a half
+            // later (the showroom's review: 310 resources and 200 MB of video memory over the baseline until then). They
+            // are collected now, on a frame that is already a change of screen. A wrapper holds its object strongly while
+            // Godot also refers to it, so a material let go by one collection leaves its textures' wrappers to the next:
+            // collected until a round frees nothing (one collection left a visit to every car 69 MB of video memory over;
+            // three or four took 17-22 ms and left none).
+            _collectAfterShowroom = false;
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            var collections = 0;
+            var objects = Performance.GetMonitor(Performance.Monitor.ObjectCount);
+            while (collections < 6)
+            {
+                System.GC.Collect();
+                System.GC.WaitForPendingFinalizers();
+                collections++;
+                var left = Performance.GetMonitor(Performance.Monitor.ObjectCount);
+                if (left >= objects) break;
+                objects = left;
+            }
+            if (_perfLog) GD.Print($"showroom closed: its cars let go in {watch.Elapsed.TotalMilliseconds:0.0} ms, {collections} collections");
+        }
         if (_showroom is not null)
         {
             // The showroom over the title screen or the paused credit: its own keys and mouse, the session not stepping.
@@ -1131,11 +1160,14 @@ public sealed partial class Bootstrap : Node3D
                         else room.ChooseSlot(index);
                         _audio.Chime();
                         break;
+                    // With the picker open the two buttons wait for it, as Enter and Esc do (its DONE or CANCEL first; they
+                    // are drawn dimmed): a click kept until then took the car or left the showroom once the picker closed,
+                    // long after it was made, and lost the colour being mixed (the showroom's review).
                     case Showroom.Hit.Take:
-                        _showroomTake = true;
+                        if (room.Picker is null) _showroomTake = true;
                         break;
                     case Showroom.Hit.Back:
-                        _showroomBack = true;
+                        if (room.Picker is null) _showroomBack = true;
                         break;
                     default:
                         room.Dragging = true;
@@ -1149,7 +1181,7 @@ public sealed partial class Bootstrap : Node3D
                 room.Zoom(-1);
                 break;
             case InputEventMouseMotion motion when room.Dragging:
-                room.Drag(motion.Relative.X, (float)GetProcessDeltaTime());
+                room.Drag(motion.Relative.X);
                 break;
         }
     }
@@ -1331,6 +1363,7 @@ public sealed partial class Bootstrap : Node3D
         GetViewport().Disable3D = false;
         room.Dragging = false;
         room.QueueFree();
+        _collectAfterShowroom = true;
         _keyboard.Reset();
         _clicked = false;
         _menuClick = false;
@@ -1361,8 +1394,9 @@ public sealed partial class Bootstrap : Node3D
 
     /// <summary>
     /// The showroom's keys: left and right (A, D, the stick, the d-pad) step the car, up and down (W, S) the paint, C or
-    /// Y open the colour picker, Enter, Space or A take the car and the paint, Esc, Back or B leave it as it was. A step
-    /// chimes, as the title screen's did. While the picker is open the keys are its own (<see cref="HandlePicker"/>).
+    /// Y open the colour picker, Enter or A take the car and the paint, Esc, Back or B leave it as it was; Space takes
+    /// it over the title screen and goes back over the menu, as it does on each. A step chimes, as the title screen's
+    /// did. While the picker is open the keys are its own (<see cref="HandlePicker"/>).
     /// </summary>
     private void HandleShowroom()
     {
@@ -1370,10 +1404,16 @@ public sealed partial class Bootstrap : Node3D
         room.Resize(GetWindow().Size);
         room.ScreenSize = GetViewport().GetVisibleRect().Size;
         var abort = Input.IsActionJustPressed(InputSetup.Abort);
-        // Space and the pad's B share an action: Space takes, as it starts the game on the title screen; B goes back.
+        // Space and the pad's B share an action. B goes back. Space takes over the title screen, where it starts the
+        // game, and goes back over the menu, whose footer says so: taking there ends the race in progress, and it did on
+        // a press the menu had taught to mean back (the showroom's review).
         var padB = abort && Input.IsJoyButtonPressed(InputSetup.Pad, JoyButton.B);
+        var spaceBack = abort && !padB && room.FromMenu;
         if (room.Picker is { } picker)
         {
+            // A click on TAKE IT or BACK is not kept for after the picker (HandleShowroomMouse ignores them; this is the
+            // belt to its braces).
+            _showroomTake = _showroomBack = false;
             HandlePicker(room, picker, abort, padB);
             return;
         }
@@ -1383,7 +1423,7 @@ public sealed partial class Bootstrap : Node3D
             _audio.Chime();
             return;
         }
-        if (Input.IsActionJustPressed(InputSetup.Menu) || padB || _showroomBack)
+        if (Input.IsActionJustPressed(InputSetup.Menu) || padB || spaceBack || _showroomBack)
         {
             CloseShowroom(take: false);
             return;

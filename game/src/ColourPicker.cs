@@ -22,9 +22,16 @@ internal sealed class ColourPicker
     private float _squareHue = -1f;
     private float _held;                      // seconds left or right has been held on a value row
 
-    public ColourPicker(PaintChoice start, PaintChoice before)
+    /// <param name="start">The colour it opens on.</param>
+    /// <param name="before">The car's paint before it opened, put back by CANCEL.</param>
+    /// <param name="hue">The hue the picker had when it last closed on this car, if it did.</param>
+    public ColourPicker(PaintChoice start, PaintChoice before, float? hue = null)
     {
         (Hue, Saturation, Lightness) = Hsl.From(start.Colour);
+        // A grey (and a colour so pale or dark that its hex rounds the hue away) has no hue of its own, and opened at 0,
+        // red, wherever the player had left the bar (the showroom's review). The last hue is taken back when it gives
+        // the same colour, so nothing about the colour changes.
+        if (hue is { } kept && PaintChoice.Mixed(Hsl.ToColour(kept, Saturation, Lightness), start.Finish).Hex == start.Hex) Hue = kept;
         Finish = start.Finish;
         Before = before;
     }
@@ -172,9 +179,9 @@ internal sealed class ColourPicker
     // ---- layout, shared with the HUD's drawing and the mouse's hit test --------------------------------
 
     /// <summary>
-    /// The picker's panel: on the right of the stage, clear of the right chevron, the car's name over it and the
-    /// showroom's panel under it (900 lines high: 140 to 650 of the stage's 64 to 664), so the car, moved left while
-    /// it is open (<see cref="Showroom"/>), stays in view.
+    /// The picker's panel: on the right of the stage, clear of the right chevron, between the bar with the car's name
+    /// and the showroom's panel (900 lines high: 140 to 650 of the stage's 64 to 664), so the car, moved left and
+    /// framed further off while it is open (<see cref="Showroom"/>), stays in view.
     /// </summary>
     public static Rect2 Panel(Vector2 size) => new(size.X - 480f, 140f, 330f, 510f);
     public static Rect2 Square(Vector2 size) => Inside(size, 20f, 52f, 240f, 240f);

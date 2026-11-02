@@ -374,8 +374,13 @@ internal sealed partial class CarView
         return area;
     }
 
-    /// <summary>The model materials already corrected: the imported scene is cached, so its materials are shared by every car drawn with it.</summary>
-    private static readonly HashSet<BaseMaterial3D> _corrected = [];
+    /// <summary>
+    /// The mark of a model material already corrected: the imported scene is cached, so its materials are shared by every
+    /// car drawn with it. Kept on the material itself; a static set of them (until the showroom's review) held every
+    /// model the game had drawn, textures and all, for the session, the showroom's eight among them (68 MB of video
+    /// memory after a visit to each car).
+    /// </summary>
+    private static readonly StringName CorrectedMark = "glp_corrected";
 
     /// <summary>
     /// Physically plausible values for a model's own materials where the exporter left none (0.19). Many of the CC BY
@@ -386,7 +391,8 @@ internal sealed partial class CarView
     /// </summary>
     private static void CorrectModelMaterial(BaseMaterial3D material)
     {
-        if (!_corrected.Add(material)) return;
+        if (material.HasMeta(CorrectedMark)) return;
+        material.SetMeta(CorrectedMark, true);
         var name = material.ResourceName.ToLowerInvariant();
         static bool Says(string name, params string[] words) => words.Any(name.Contains);
         var drivenByTexture = material.RoughnessTexture is not null || material.MetallicTexture is not null;
