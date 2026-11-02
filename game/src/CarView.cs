@@ -1697,6 +1697,17 @@ internal sealed partial class CarView : Node3D
 
     public void SetPose(SN.Vector3 position, SN.Quaternion orientation) => Transform = Convert.ToGodot(position, orientation);
 
+    /// <summary>
+    /// Poses a drone where the traffic carries it. The traffic carries every drone at one height over the road
+    /// (<see cref="GrudgeLap.Physics.Race.Traffic.RideHeight"/>, 0.61 m), while the car drawn stands at its own: its
+    /// reference point is the simulation's, at the car's static ride height (0.62-0.66 m for the five cars of the
+    /// traffic), and its body and wheels hang below it from there. So the drawn car is lifted by the difference along its
+    /// own up; posed at the traffic's height they sat 1-5 cm into the road, the Mercedes 5 cm. Only the drawing moves: the
+    /// traffic's positions, gaps and knocks stay its own.
+    /// </summary>
+    public void SetTrafficPose(SN.Vector3 position, SN.Quaternion orientation) =>
+        SetPose(position + SN.Vector3.Transform(SN.Vector3.UnitY, orientation) * (_cgHeight - GrudgeLap.Physics.Race.Traffic.RideHeight), orientation);
+
     public void SetWheels(WheelState[] wheels, float steerAngle, VehicleSpec spec)
     {
         for (var i = 0; i < 4; i++)

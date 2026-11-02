@@ -724,7 +724,12 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
   review's 0.3-1.1 ms over main is within that, against a main that also differs in its audio, the sound review's
   fixes), and the first figures written here (8.91 / 8.63 ms) were two runs' noise, not a saving. 5.6 ms of GPU
   with the camera at a 205 drone; loading the two more models adds about 6 ms to the first five seconds' average
-  CPU. Switch: `--look=drone:<n>[:distance[:bearing]]` (pictures of the traffic's cars).
+  CPU. Switch: `--look=drone:<n>[:distance[:bearing[:height]]]` (pictures of the traffic's cars; the height, over the
+  road and 1.8 m by default, low for where the tyres meet it). Each drawn drone stands at its own car's static ride
+  height (dyn5, `CarView.SetTrafficPose`): the traffic carries every drone 0.61 m over the road (`Traffic.RideHeight`,
+  about the sports car's), and drawn there the five cars sat into it by the difference, the 205 0.9 cm, the saloon
+  2.0, the estate 2.3, the Golf 3.4 and the Mercedes 5.1; they are lifted by it along their own up, the traffic's
+  positions, gaps and knocks unchanged (shots at `--look=drone:<n>:3.5:90:0.25`, before and after).
 - Real car models (0.16, `tools/prepare_car_models.py`, `CarView.Model.cs`). The lofted bodies and the boxes of
   their cabins read as toys, from the seat most of all, so the catalogue's cars are drawn as CC BY models of real
   cars with cabins of their own (THIRD_PARTY.md): the flat-twelve a Lotus Esprit Turbo 1983 (right-hand drive,
@@ -784,7 +789,7 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
   on the start straight: the crash replay on film),
   `--no-traffic`, `--weather=dry|overcast|wet|rain` (the credit's weather; otherwise every credit draws one),
   `--lofted` (the lofted bodies instead of the real models), `--paint=<original|red|white|silver|black|dark-blue|green|yellow>`
-  (the player's paint for the run), `--look=drone:<n>` (the camera on the n-th drone), `--seat-look=<yaw>,<pitch>` (the cockpit view turned,
+  (the player's paint for the run), `--look=drone:<n>[:distance[:bearing[:height]]]` (the camera on the n-th drone), `--seat-look=<yaw>,<pitch>` (the cockpit view turned,
   degrees, left and up positive: pictures of a cabin), `--dent-test` (a deep dent in the nose two seconds in),
   `--perf-log` (the measured GPU and CPU time a frame, every five seconds, under the frame cap),
   `--drop=<file>` (a file dropped on the window two seconds in: the replay music's path),

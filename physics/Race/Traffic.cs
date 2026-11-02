@@ -14,7 +14,12 @@ public sealed class Traffic
 {
     /// <summary>Lane centre offset from the road centre line; the road is two lanes wide.</summary>
     public const float LaneOffset = 2.75f;
-    private const float RideHeight = 0.61f;
+    /// <summary>
+    /// How far above the road the drones are carried (m), whatever car the view draws for them: the height of a car's
+    /// reference point at rest, about the sports car's. Each car the view draws stands at its own (CarView.SetTrafficPose
+    /// lifts it by the difference).
+    /// </summary>
+    public const float RideHeight = 0.61f;
     /// <summary>Half a drone's length and width (m), for the gap ahead and the knocks.</summary>
     public const float HalfLength = 2.15f;
     public const float HalfWidth = 0.95f;

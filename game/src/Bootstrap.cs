@@ -713,9 +713,10 @@ public sealed partial class Bootstrap : Node3D
     }
 
     /// <summary>
-    /// The --look=drone:n[:distance[:bearing]] shot (0.21): the n-th drone of the traffic followed from <c>distance</c>
-    /// metres (default 7) off its front corner (<c>bearing</c> degrees round from straight ahead, default 35), for
-    /// pictures of the traffic's cars.
+    /// The --look=drone:n[:distance[:bearing[:height]]] shot (0.21): the n-th drone of the traffic followed from
+    /// <c>distance</c> metres (default 7) off its front corner (<c>bearing</c> degrees round from straight ahead, default
+    /// 35) and <c>height</c> metres over the road (default 1.8), for pictures of the traffic's cars; a height of a few
+    /// tenths looks along the road at where the tyres meet it.
     /// </summary>
     private void LookAtDrone(string[] parts)
     {
@@ -724,10 +725,14 @@ public sealed partial class Bootstrap : Node3D
         var drone = _droneViews[System.Math.Clamp(n, 0, _droneViews.Count - 1)];
         var distance = parts.Length > 2 && float.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : 7f;
         var bearing = parts.Length > 3 && float.TryParse(parts[3], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var b) ? b : 35f;
-        // A car's nose is its -Z.
+        var height = parts.Length > 4 && float.TryParse(parts[4], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var e) ? e : 1.8f;
+        // A car's nose is its -Z. The road under it is the traffic's, a fixed ride height below where it carries the
+        // drone, whatever car is drawn: the eye is set from it, so a car drawn higher or lower shows against the same road.
         var front = (-drone.GlobalTransform.Basis.Z).Normalized().Rotated(Vector3.Up, Mathf.DegToRad(bearing));
-        var eye = drone.GlobalPosition + front * distance + Vector3.Up * 1.2f;
-        _cameraRig.Look(eye, drone.GlobalPosition, 50f);
+        var traffic = _session.Traffic!.Cars[System.Math.Clamp(n, 0, _droneViews.Count - 1)];
+        var road = Convert.ToGodot(traffic.Position - traffic.Frame.Normal * Traffic.RideHeight);
+        var eye = road + front * distance + Vector3.Up * height;
+        _cameraRig.Look(eye, road + Vector3.Up * MathF.Min(height, 0.6f), 50f);
     }
 
     /// <summary>
@@ -833,7 +838,7 @@ public sealed partial class Bootstrap : Node3D
         var cars = _session.Traffic.Cars;
         for (var i = 0; i < cars.Count && i < _droneViews.Count; i++)
         {
-            _droneViews[i].SetPose(cars[i].Position, cars[i].Orientation);
+            _droneViews[i].SetTrafficPose(cars[i].Position, cars[i].Orientation);
             if (_session.Phase is SessionPhase.Driving or SessionPhase.StartEngine) _droneViews[i].AdvanceWheels(cars[i].Speed * dt, 0f);
         }
     }
