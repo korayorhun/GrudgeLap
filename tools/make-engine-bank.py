@@ -1,7 +1,7 @@
 """Cuts an engine grain bank out of recordings, for the granular engine voice (audio/GranularEngine.cs).
 
 Usage: python make-engine-bank.py <out prefix> <cylinders> <segment> [<segment> ...]
-       segment = <recording>@<start s>@<end s>@<firing Hz at start>@<lowest Hz>@<highest Hz>
+       segment = <recording>@<start s>@<end s>@<firing Hz at start>@<lowest Hz>@<highest Hz>[@<harmonic>]
 
 Writes <out prefix>.wav (mono 16-bit PCM at 44.1 kHz: the segments one after another) and <out prefix>.json
 (the grain marks: a sample position and the firing frequency there, for every firing pulse).
@@ -12,6 +12,13 @@ never jumping more than 12 % between frames, so a harmonic cannot take over. Mar
 apart by integrating it, and each is moved onto the nearest peak of the firing component (the recording low-
 passed just above the firing frequency): every grain then starts its pulse at the same point, so neighbouring
 grains overlap in phase however they are picked later. Each segment is normalised to the same loudness.
+
+The tracker's frames are 4,096 samples (10.8 Hz a bin), so under about 45 Hz its band of 12 % either side is narrower
+than a bin, may hold none, and the estimate sticks where it was. A slow idle can name a harmonic of the firing to
+follow instead (the optional last field, 2 for the second): its band is that many times wider in hertz, and the
+estimate is divided back to the firing frequency. Without it a diesel four's idle at about 980 rpm was labelled 28.63 Hz
+on 150 of its 352 pulses, 7 to 12 % under the 32.6 Hz the rest of the segment and its spectrum's lines show (diesel6
+review), and those grains were laid that much too slow.
 """
 import json
 import site
@@ -152,7 +159,9 @@ def main():
     prefix, cylinders = sys.argv[1], int(sys.argv[2])
     pieces, all_marks, all_firing, offset = [], [], [], 0
     for spec in sys.argv[3:]:
-        path, start, end, f0, lo, hi = spec.split("@")
+        fields = spec.split("@")
+        path, start, end, f0, lo, hi = fields[:6]
+        harmonic = int(fields[6]) if len(fields) > 6 else 1
         # The tracker's frames are 4096 samples long and centred on their positions: tracked over the segment alone, its
         # first and last 46 ms held the frequency of the frames at either end, and on a fast run-up (the V6's blips of
         # the throttle, which gain 1000 rpm in a tenth of a second) the last pulses were laid at revs long passed.
@@ -163,7 +172,11 @@ def main():
         x = around[first:first + int(round((float(end) - float(start)) * SR))].copy()
         x -= x.mean()
         x *= 0.25 / max(np.sqrt(np.mean(x * x)), 1e-9)
-        f = track(around - around.mean(), float(f0), float(lo), float(hi))[first:first + len(x)]
+        if harmonic == 1:
+            f = track(around - around.mean(), float(f0), float(lo), float(hi))[first:first + len(x)]
+        else:
+            f = track(around - around.mean(), float(f0) * harmonic, float(lo) * harmonic,
+                      float(hi) * harmonic)[first:first + len(x)] / harmonic
         m = marks(x, f)
         # Grains need a whole period on each side; the first and last marks of a segment only bound others.
         all_marks.extend((m + offset).tolist())

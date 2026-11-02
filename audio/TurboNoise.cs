@@ -79,7 +79,9 @@ public enum TurboLift
 /// The diesel (diesel6). A diesel has no throttle plate: its load is the fuel injected, so lifting shuts nothing on the
 /// boost. The fuel is cut, the air goes on through the cylinders and the turbine, the charge falls with the exhaust's
 /// energy, and the turbo, fitted without a blow-off valve as diesels' are, spools down: its whine follows the shaft down
-/// over the second it runs on, with no rush and no flutter (<see cref="TurboLift.SpoolDown"/>).
+/// over the second it runs on, with no rush and no flutter (<see cref="TurboLift.SpoolDown"/>). The air drawn through
+/// the compressor, which carries its tones out of the inlet and makes its rush, follows the falling boost rather than
+/// the pedal, so the whine fades with the shaft instead of dropping when the foot comes off.
 /// </para>
 /// </remarks>
 public sealed class TurboNoise
@@ -143,11 +145,13 @@ public sealed class TurboNoise
     /// from the pressure ratio each makes (diesel6). The ratio is set by the blades' tip speed: the work done on the air
     /// grows as the tip speed squared (Euler's turbine equation, as in the remarks), so the tip speed goes as the square
     /// root of the work. A fan's or a compressor's sound power grows about as the fifth power of its tip speed (the fan
-    /// laws: 50 log10 of the speed; ASHRAE Handbook, HVAC Applications, Sound and Vibration Control), its pressure as the
-    /// tip speed to the 2.5, so as the work to the 1.25. The fleet saloon's diesel makes 2.5 bar absolute on full boost
-    /// against the rally hatch's 1.9 (their torque without boost against with it): its tones are 4.1 dB louder, as its
-    /// clatter, broadband around the whine's 2.5 kHz, would otherwise mask them (1.7 dB under its run-up there outside,
-    /// 3.8 in the cabin).
+    /// laws' sound-power term, 50 log10 of the speed ratio at a fixed size, as AMCA Publication 301 applies it), its
+    /// pressure as the tip speed to the 2.5, so as the work to the 1.25. The pressure ratios are the game's own, from each
+    /// engine's torque without boost against with it (<see cref="TurboState.BoostShare"/>): 2.5 bar absolute for the fleet
+    /// saloon's diesel against 1.9 for the rally hatch's, so its tones are 4.1 dB louder, as its clatter, broadband around
+    /// the whine's 2.5 kHz, would otherwise mask them (1.7 dB under its run-up there outside, 3.8 in the cabin). The OM 651's
+    /// 150 kW tune is described as running just under 3 bar (EngineSpec.DieselFour), which the same law would make 6.3 dB;
+    /// the game's 2.5 is kept so that the sound's boost is the one its torque model makes (diesel6 review).
     /// </summary>
     public static float TonalGain(float boostShare) => MathF.Pow(Work(boostShare) / Work(ReferenceBoostShare), 1.25f);
 
@@ -192,13 +196,21 @@ public sealed class TurboNoise
         var whistleFrom = _whistleLevel;
         var shaftFrom = _shaftLevel;
         var rushFrom = _rushLevel;
-        // Both tones leave mostly through the compressor's inlet with the air it draws: fainter with the throttle shut.
-        var drawn = 0.3f + 0.7f * Math.Clamp(state.Throttle, 0f, 1f);
+        // The air through the compressor: a petrol engine's throttle sets it, so it collapses the moment the throttle shuts.
+        // A diesel's lift shuts nothing (TurboLift.SpoolDown): the charge keeps flowing as it falls, so the flow follows
+        // the boost down instead of the pedal. Held, the boost settles at most at the throttle (its target is the throttle
+        // times the revs' share), so this matters on the lift and as the throttle eases: the whine had dropped 10.5 dB in
+        // the first 50 ms while its pitch had barely moved, a step down where the spool-down should be heard (diesel6
+        // review). The petrol turbos are unchanged.
+        var throttle = Math.Clamp(state.Throttle, 0f, 1f);
+        var flow = state.Lift == TurboLift.SpoolDown ? MathF.Max(throttle, Math.Clamp(state.Boost, 0f, 1f)) : throttle;
+        // Both tones leave mostly through the compressor's inlet with the air it draws: fainter as that flow falls.
+        var drawn = 0.3f + 0.7f * flow;
         // Louder for a turbo working at a higher pressure ratio than the reference (exactly 1 for the reference's).
         var tonal = TonalGain(state.BoostShare);
         _whistleLevel = WhistleGain * tonal * _shaft * drawn;
         _shaftLevel = ShaftGain * tonal * _shaft * _shaft * drawn;
-        _rushLevel = RushGain * Math.Clamp(state.Boost, 0f, 1f) * Math.Clamp(state.Throttle, 0f, 1f);
+        _rushLevel = RushGain * Math.Clamp(state.Boost, 0f, 1f) * flow;
         var nyquist = 0.5f * _rate;
         var n = output.Length;
         for (var i = 0; i < n; i++)

@@ -136,8 +136,13 @@ public class TurboNoiseTests(ITestOutputHelper output)
     /// turbo is never venting nor surging, nothing rises over the steady turbo in the vent's band (above 3 kHz, first
     /// 100 ms) or the surge's (under 2 kHz, first 250 ms), its level does not beat, the shaft never speeds up again once
     /// the driver has lifted, and the whine (the shaft's own tone) is lower half a second after the lift than before it
-    /// and a tenth lower again a second after. Measured: nothing over the steady turbo (above 3 kHz 25 dB under it, under 2
-    /// kHz 30 dB under), a beat of 0.8 dB (the vent's 3.1, the surge's 14.5), the whine from 2,500 Hz to 2,384 and 2,074.
+    /// and a tenth lower again a second after. Its level fades with the shaft rather than stepping down as the foot comes
+    /// off: no throttle cuts the air through the compressor, so the whine's band is within 3 dB in the first 100 ms after
+    /// the lift of the 100 ms before it (the diesel6 review measured 10.5 dB gone in 50 ms with the pedal setting the
+    /// flow), and is lower a second after. Measured: nothing over the steady turbo (above 3 kHz 0.4 dB under it, the air's
+    /// rush going on as the boost falls, 25 dB under while the pedal set the flow; under 2 kHz 1.5 dB under), a beat of
+    /// 0.5 dB (the vent's 3.1, the surge's 14.5), the whine's band 0.3 dB down in the first 100 ms and 10.5 dB a second
+    /// after, its pitch from 2,499 Hz to 2,384 and 2,086.
     /// </summary>
     [Fact]
     public void A_diesels_turbo_spools_down_on_lift_off_without_a_vent_or_a_surge()
@@ -178,12 +183,17 @@ public class TurboNoiseTests(ITestOutputHelper output)
         var (beatRate, beatDepth) = Beat(sound.AsSpan(lifted, (int)(0.6f * Rate)));
         double Whine(double from) => Spectrum.PeakHz(sound.AsSpan((int)(from * Rate), Rate / 4), Rate, 300, 4500, 4096);
         var (before, half, second) = (Whine(1.2), Whine(2.0), Whine(2.5));
+        double WhineDb(int from) => Spectrum.BandDb(sound.AsSpan(from, Rate / 10), Rate, 2000, 2800, 1024);
+        var (levelBefore, levelLifted, levelSecond) = (WhineDb(lifted - Rate / 10), WhineDb(lifted), WhineDb(lifted + Rate));
+        output.WriteLine($"the whine's band {levelLifted - levelBefore:+0.0;-0.0} dB in the first 100 ms after the lift, {levelSecond - levelBefore:+0.0;-0.0} dB a second after");
         output.WriteLine($"lifted: above 3 kHz {high:+0.0;-0.0} dB, under 2 kHz {low:+0.0;-0.0} dB over the steady turbo; beats {beatDepth:0.0} dB at {beatRate:0.0} Hz; " +
             $"the whine at {before:0} Hz before, {half:0} Hz half a second after, {second:0} Hz a second after; the shaft from {shafts[89]:0.00} to {shafts[^1]:0.00}");
         Assert.True(high < 0, $"something vents: {high:+0.0} dB above 3 kHz");
         Assert.True(low < 0, $"something surges: {low:+0.0} dB under 2 kHz");
         Assert.True(beatDepth < 6, $"the level beats by {beatDepth:0.0} dB");
         Assert.True(half < before && second < 0.9 * half, "the whine does not fall as the turbo spools down");
+        Assert.True(levelLifted - levelBefore > -3, $"the whine steps down {levelBefore - levelLifted:0.0} dB as the foot comes off");
+        Assert.True(levelSecond < levelBefore - 3, $"the whine does not fade as the turbo spools down ({levelSecond - levelBefore:+0.0} dB a second after)");
     }
 
     /// <summary>
@@ -205,8 +215,8 @@ public class TurboNoiseTests(ITestOutputHelper output)
     /// <summary>
     /// The compressor's tones grow with the pressure ratio it works at (diesel6, <see cref="TurboNoise.TonalGain"/>): the
     /// rally hatch's turbo, on which the gains were set, keeps them exactly (a gain of 1, so its sound is unchanged sample
-    /// for sample); the diesel's, at 2.5 bar absolute against 1.9, is 4.1 dB louder; a turbo working at a lower ratio is
-    /// quieter.
+    /// for sample); the diesel's, at 2.5 bar absolute against 1.9 (the game's ratios, from each engine's boost share; the
+    /// OM 651's own just under 3 bar would give 6.3 dB), is 4.1 dB louder; a turbo working at a lower ratio is quieter.
     /// </summary>
     [Fact]
     public void The_tones_follow_the_pressure_ratio_and_the_rally_hatch_keeps_its_own()

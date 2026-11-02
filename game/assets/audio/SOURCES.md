@@ -164,7 +164,7 @@ those banks are no longer shipped.
 
 | Bank | Source | Segments (start@end s @ firing Hz at start @ search band Hz) |
 |---|---|---|
-| `diesel4/engine_idle` | Freesound #243773 "Diesel-drive2.wav" and #243783 "Diesel-drive.wav" by fastson, https://freesound.org/s/243773/ and https://freesound.org/s/243783/ (CC0 1.0) | #243773 0.5@8.8@26@20@32; #243783 28.0@40.0@33.5@28@38 |
+| `diesel4/engine_idle` | Freesound #243773 "Diesel-drive2.wav" and #243783 "Diesel-drive.wav" by fastson, https://freesound.org/s/243773/ and https://freesound.org/s/243783/ (CC0 1.0), notched at 159-166 Hz | #243773 0.5@8.8@26@20@32@2; #243783 28.0@40.0@33.5@28@38@2 (the firing followed on its second harmonic) |
 | `diesel4/engine_drive` | the same | #243773 94.4@98.2@45@38@75, 98.45@100.2@61@50@85; #243783 90.3@93.6@54@45@100; #243773 27.4@29.0@58@50@100, 29.0@29.88@91@85@130 |
 | `diesel4/engine_overrun` | #243773 (the revs falling slowly after a change up, the level down: the fuel cut) | 32.3@42.0@62@38@70 |
 
@@ -191,7 +191,9 @@ Rebuild:
 
     python tools/clean-recording.py 243773.mp3 diesel-drive2.wav
     python tools/clean-recording.py 243783.mp3 diesel-drive.wav
-    python tools/make-engine-bank.py game/assets/audio/diesel4/engine_idle 4 "diesel-drive2.wav@0.5@8.8@26@20@32" "diesel-drive.wav@28.0@40.0@33.5@28@38"
+    python tools/clean-recording.py 243773.mp3 diesel-drive2-idle.wav 700 6000 159-166
+    python tools/clean-recording.py 243783.mp3 diesel-drive-idle.wav 700 6000 159-166
+    python tools/make-engine-bank.py game/assets/audio/diesel4/engine_idle 4 "diesel-drive2-idle.wav@0.5@8.8@26@20@32@2" "diesel-drive-idle.wav@28.0@40.0@33.5@28@38@2"
     python tools/make-engine-bank.py game/assets/audio/diesel4/engine_drive 4 "diesel-drive2.wav@94.4@98.2@45@38@75" "diesel-drive2.wav@98.45@100.2@61@50@85" "diesel-drive.wav@90.3@93.6@54@45@100" "diesel-drive2.wav@27.4@29.0@58@50@100" "diesel-drive2.wav@29.0@29.88@91@85@130"
     python tools/make-engine-bank.py game/assets/audio/diesel4/engine_overrun 4 "diesel-drive2.wav@32.3@42.0@62@38@70"
 
@@ -200,14 +202,28 @@ the run-up under load from 1,300 to 3,425 rpm in five stretches (#243773's run-u
 firing tracker jumped to a partial for a few pulses, and at 29.0 s, past which it follows the firing only within a
 higher band), and the overrun from 2,000 down to 1,150 rpm. The fleet saloon's governor is at 4,800 rpm: past 3,425 the
 voice lays the run-up's highest pulses closer, as for the V6 hatch, and lifting from high revs plays the overrun's
-highest pulses closer still. A recording of the same kind of engine revving higher under load would serve better. Both
-recordings also carry a steady tone at 163-165 Hz that does not follow the revs (an auxiliary of the car's); it stays in
-the grains.
+highest pulses closer still. A recording of the same kind of engine revving higher under load would serve better.
+
+Both recordings carry a steady tone that does not follow the revs (an auxiliary of the car's): 162.7 Hz idling at 780
+rpm in #243773, 161.3 at about 980 in #243783, the strongest line of either idle, level with the second firing
+harmonic. Cut into grains and laid at the firing rate it was chopped into a buzz: the voice idled with 160-167 Hz 7.1 dB
+over its firing line outside and 8.9 in the cabin, where the petrol cars' sit well under theirs (diesel6 review). The
+idle is cut from copies notched at 159-166 Hz (the last argument above: a zero-phase second-order band-stop), and the
+voice now idles with that band 10.4 dB under its firing line outside and 8.6 in the cabin
+(`The_diesel_idles_without_a_steady_hum`). #243783's fifth firing harmonic (about 163 Hz) goes with it; #243773's
+sixth (156 Hz) is kept. The run-up and the overrun are cut from the un-notched files: through them every firing harmonic
+passes the band in turn, and a notch would cut each as it went by; the tone is no louder than the harmonics around it
+there.
 
 The bank tool's tracker cannot follow a firing frequency under about 45 Hz (1,350 rpm for a four): its search band of
 12 % either side is then narrower than a bin of its 4,096-sample frames, often holds none, and the estimate stays where it
-was. The idles are steady, so it does not matter there; the run-up starts at 1,300 rpm for that reason, and the voice
-crossfades the idle into it.
+was. The run-up starts at 1,300 rpm for that reason, and the voice crossfades the idle into it. The idles are followed
+on their second harmonic (the segment's last field, 2: a band twice as wide in hertz), since the steady idle did not
+save them from it (diesel6 review): followed on the firing, #243773's idle was labelled 26.00 Hz on every pulse and
+#243783's 28.63 Hz on 150 of its 352 (its pulses' spacing gives 30.9 there and 32.6 where the tracker followed, its
+spectrum 32.5 to 33), 7 to 12 % slow, with 104 of the bank's grains spanning over 1.4 periods on a side where a pulse was
+missed. On the second harmonic the labels' medians are 26.07 and 32.84 Hz, as the spectra and the spacing give (26.0 and
+32.5-33; 25.6 and 32.8), and 45 grains span over 1.4 periods.
 
 What was searched (2 November 2026), CC0 and CC BY only:
 

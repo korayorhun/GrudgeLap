@@ -1382,54 +1382,84 @@ its turbo still vented like a petrol car's blow-off valve when the driver lifted
   of the two drives; the overrun from 2,000 down to 1,150 rpm (the revs falling slowly after a change up, the fuel
   cut). The tool's tracker cannot follow a firing frequency under about 45 Hz (its 12 % search band is then narrower than
   a bin and may hold none, so the estimate sticks), so the run-up starts at 1,300 rpm and the voice crossfades the idle
-  into it; one stretch is split where the tracker jumped to a partial for a few pulses. Past 3,425 rpm the voice lays
+  into it; one stretch is split where the tracker jumped to a partial for a few pulses. The idles are followed on their
+  second harmonic (`make-engine-bank.py`'s optional harmonic field; review): followed on the firing, 150 of #243783's
+  352 idle pulses were labelled 28.63 Hz, 7 to 12 % under the 32.6 its spectrum and the rest of its pulses give, and 104
+  of the bank's grains spanned over 1.4 periods on a side where a pulse was missed; now its labels' median is 32.84 Hz
+  and 45 grains do. Past 3,425 rpm the voice lays
   the run-up's highest pulses closer up to the governor's 4,800 (1.4 times), and lifting from there plays the overrun's
   highest pulses closer still, as on the V6 hatch. Every bank test passes (no grain over 3.3 dB under its neighbours,
   the sharpest 2.9 times its segment's median, every side 0.60 of its period or more; sweeps and idles on five seeds
-  with steps at most 1.5 times the RMS around them; no ticks lifting off; steps across the revs 0.9 LU, sags 0.9; peaks
-  -1.4 dBFS outside and -1.1 in the cabin, 127 samples in 952,560 rounded there; pulling as a tone; the throttle at
-  idle revs 4.6 LU from the governor's throttle to full). The voicing is the saloons' (`SampledEngine.VoicingOf`: front
+  with steps at most 1.4 times the RMS around them; no ticks lifting off; steps across the revs 0.9 LU, sags 1.1; peaks
+  -1.4 dBFS outside and -1.1 in the cabin, 128 samples in 952,560 rounded there; pulling as a tone; the throttle at
+  idle revs 5.5 LU from the governor's throttle to full). The voicing is the saloons' (`SampledEngine.VoicingOf`: front
   engine, a 1.9 m cabin booming at 90 Hz).
+- **The hum** (`The_diesel_idles_without_a_steady_hum`; review). Both drives carry a steady tone that does not follow
+  the revs, 162.7 Hz idling at 780 rpm and 161.3 at about 980 (an auxiliary of the car's), the strongest line of either
+  idle; cut into grains and laid at the firing rate it was chopped into a buzz, and the voice idled with 160-167 Hz 7.1
+  dB over its firing line outside and 8.9 in the cabin, where the petrol cars' sit well under theirs. The idle is cut
+  from copies notched at 159-166 Hz (`clean-recording.py`'s optional notch, a zero-phase second-order band-stop): 10.4
+  dB under the firing line outside, 8.6 in the cabin. The run-up and the overrun keep the tone (un-notched files):
+  every firing harmonic passes the band through them, and a notch would cut each as it went by; there the tone is no
+  louder than the harmonics around it.
 - **The knock** (`The_diesel_knocks_where_the_petrol_fours_do_not`). A diesel's combustion starts with a steep rise of
   pressure as the fuel injected into hot air ignites at once, which rings the block and the head (the clatter, strongest
   at idle and light load, where the ignition delay is longest against the little fuel burnt; Heywood, *Internal
   Combustion Engine Fundamentals*, ch. 10). In the voice: idling,
-  its 1-3 kHz is -10.5 dB of the sound against the petrol fours' -17.5 (the saloon) to -29.3 (the hot hatch), and at
+  its 1-3 kHz is -9.3 dB of the sound against the petrol fours' -17.5 (the saloon) to -29.3 (the hot hatch), and at
   1,500 rpm on a light throttle -10.8 against -15.1 to -27.6; the Punto/Bravo bank gave -29.6 and -26.5. That band
-  follows its firing (its envelope folded on the firing period swings 0.65 and 0.58 of its mean, as every engine's 1-3
-  kHz does): it is the knock of each firing, not hiss. The diesel's top is its governor's 4,800 rpm and its recording's
-  3,425 laid closer, without a petrol engine's rasp at 6,000 and over.
+  follows its firing (its envelope folded on the firing period swings 0.97 and 0.60 of its mean). The review found
+  neither figure tells a knock from hiss: white noise cut on the diesel's marks and played the same way scores -5.6 and
+  -6.3 dB and swings 0.40 and 0.46, the grains' windows laying the firing's rhythm on anything. The test now also wants
+  the voice 0.1 over that control and measures the knock where no grain window can make it, on the banks' own
+  recordings folded on their marks: the diesel's idle swings 0.67 and its run-up 0.24, white noise on the same marks
+  0.04 and 0.03, the petrol fours' idles 0.19 to 0.41 and run-ups 0.04 to 0.09 (the review: the source's idle has a 26
+  Hz line 35 dB over the median of its 1-3 kHz envelope; above 6 kHz it is mostly hiss). The diesel's top is its governor's 4,800 rpm
+  and its recording's 3,425 laid closer, without a petrol engine's rasp at 6,000 and over.
 - **The turbo on lift-off** (`EngineSpec.LiftOff`, `TurboLiftOff`; `TurboState.Lift`, `TurboLift`). A diesel has no
   throttle plate: its load is the fuel injected, so lifting shuts nothing on the boost, the air goes on through the
   engine and the turbine, the charge falls with the exhaust's energy, and diesel turbochargers are fitted without a
   blow-off or diverter valve. The bool `BlowOffValve` (true vents, false surges) is now a three-way choice: `Vents` (the
   default, every petrol turbo, the Delta among them), `Surges`, and `SpoolsDown` (the diesel): no vent and no surge, the
-  shaft runs down over its second of run-on and the whine with it (driven through `EngineModel`: never venting nor
-  surging, nothing over the steady turbo above 3 kHz or under 2 kHz, a beat of 0.8 dB against the vent's 3.1 and the
-  surge's 14.5, the whine from 2,500 Hz to 2,384 half a second after the lift and 2,074 a second after;
+  shaft runs down over its second of run-on and the whine with it. The air through the compressor, which carries its
+  tones out of the inlet and makes its rush, follows the falling boost on a diesel rather than the pedal (review: with
+  the pedal setting it, the whine fell 10.5 dB in the first 50 ms after the lift while its pitch had barely moved, a step
+  down where the spool-down should be heard; held, the boost never exceeds the throttle, so nothing else changes and the
+  petrol turbos are untouched). Driven through `EngineModel`: never venting nor surging, nothing over the steady turbo
+  above 3 kHz (0.4 dB under it: the rush goes on as the boost falls) or under 2 kHz (1.5 under), a beat of 0.5 dB
+  against the vent's 3.1 and the surge's 14.5, the whine's band 0.3 dB down in the first 100 ms (at most 3 allowed)
+  and 10.5 a second after, its pitch from 2,499 Hz to 2,384 half a second after the lift and 2,086 a second after;
   `A_diesels_turbo_spools_down_on_lift_off_without_a_vent_or_a_surge`, `Every_turbo_engine_lifts_off_as_its_kind_does`).
 - **The turbo's tones** (`TurboNoise.TonalGain`). Against the diesel's knock, loud around 2.5 kHz, its turbo's whine was
   1.7 dB under the engine in its band outside and 3.8 in the cabin, under the masked threshold there
   (`The_turbo_is_heard_on_boost`). The tones now follow the pressure ratio the turbo works at: the work done on the air
   goes as the tip speed squared (Euler), a fan's or a compressor's sound power as the fifth power of its tip speed (the
-  fan laws, 50 log10 of the speed; ASHRAE Handbook, HVAC Applications), so the tones' pressure as the work to the 1.25,
-  against the rally hatch's turbo, on which the gains were set (`ReferenceBoostShare` 0.48: a gain of exactly 1, its
-  sound unchanged sample for sample). The diesel's 2.5 bar absolute against the Delta's 1.9 gives 4.1 dB: its whine is
-  2.3 dB over the engine in its band outside, 0.2 in the cabin. (A faster shaft for the diesel's smaller high-pressure
+  fan laws' sound-power term, 50 log10 of the speed ratio at a fixed size, as AMCA Publication 301 applies it), so the
+  tones' pressure as the work to the 1.25, against the rally hatch's turbo, on which the gains were set
+  (`ReferenceBoostShare` 0.48: a gain of exactly 1, its sound unchanged sample for sample). The pressure ratios are the
+  game's own, from each engine's torque without boost against with it: the diesel's 2.5 bar absolute against the
+  Delta's 1.9 gives 4.1 dB, and its whine is 2.3 dB over the engine in its band outside, 0.2 in the cabin. (The OM
+  651's 150 kW tune is described as running just under 3 bar, which the same law would make 6.3 dB; the 2.5 is kept so
+  the sound's boost is the one the torque model makes.) (A faster shaft for the diesel's smaller high-pressure
   stage, its whine at 3.7 kHz, was tried first: the knock is as loud there, and the whine fell 1.4 and 4.5 dB under.)
 - **In the game** (hidden, silent 40 s `--write-movie` attract runs at 30 fps, dry, cabin and chase, ffmpeg's `ebur128`
-  over the whole mix, transients counted as the lift-off test counts its ticks): the fleet saloon -13.4 LUFS in its cabin
-  and -13.3 from behind (-13.3 and -13.3 on its petrol banks), the other cars -11.7 (the estate) to -16.0 (the V8), the
-  voice alone trimmed to the reference as every car's (-14.1 LUFS pulling outside, -13.8 in the cabin, among the
-  others' -13.5 to -14.3; `Every_engine_is_about_as_loud_pulling_hard`). Its loudness range is wider, 6.8 and 7.4 LU
-  against 5.6 and 5.7 (the voice held flat out runs from -19.6 LUFS at 800 rpm to -12.7 at 4,800); peaks -0.5 dBFS in
-  the cabin and -0.7 from behind as before (the whole mix's); sharp transients 0 and 0 (0 and 1 before). At top speed its cabin is
-  0.3 LU over the roar and the wind, 2.2 under on the petrol banks.
+  over the whole mix, transients counted as the lift-off test counts its ticks): the fleet saloon -13.3 LUFS in its cabin
+  and -13.4 from behind after the review (-13.4 and -13.3 before it, -13.3 and -13.3 on its petrol banks), the other
+  cars -11.7 (the estate) to -16.0 (the V8), the voice alone trimmed to the reference as every car's (-14.1 LUFS pulling
+  outside, -13.8 in the cabin, among the others' -13.5 to -14.3; `Every_engine_is_about_as_loud_pulling_hard`). Its
+  loudness range is wider, 6.9 and 7.5 LU against 5.6 and 5.7 (the voice held flat out runs from -18.4 LUFS at 800 rpm,
+  -19.6 before the review's re-cut idle, to -12.7 at 4,800; the review measured it 5.7 LU under its top held flat out
+  at 1,440 rpm, where the petrol fleet banks were 3.2 under and the estate, the hot hatch and the flat-twelve 6.3 to 7.1, within the
+  tests' limits but worth a listen: a diesel is usually strong near its 1,600-1,800 rpm torque peak); peaks -0.5 dBFS
+  in the cabin and from behind (the whole mix's; -0.5 and -0.7 before the review); sharp transients none over 12 times
+  the level around them, 20 ms drop-outs none. At top speed its cabin is 0.3 LU over the roar and the wind, 2.2 under
+  on the petrol banks. The rally hatch, the only other turbo car, renders sample for sample as before in its cabin.
 - **The Unreal version** reads the "diesel4" folder in its bank table (`GlpAudio.cpp`); it has no turbo voice yet.
 - Left: the recording's car is not named and is not an OM 651; its run-up ends at 3,425 rpm and its overrun at 2,000,
-  so the top of the diesel's revs is its highest pulses laid closer; the drives carry a steady 163-165 Hz tone that does
-  not follow the revs (an auxiliary of the car's), which stays in the grains; the tool's tracker cannot follow a firing
-  under about 45 Hz. A recording of an OM 651 pulling to its governed speed under load would serve better (roadmap).
+  so the top of the diesel's revs is its highest pulses laid closer; the drives' steady 161-163 Hz tone (an auxiliary
+  of the car's) is notched out of the idle only and stays in the run-up and the overrun; the tool's tracker cannot follow
+  a firing under about 45 Hz on the firing itself (the idles are followed on their second harmonic). A recording of an
+  OM 651 pulling to its governed speed under load would serve better (roadmap).
 
 ## Unreal Engine version (`unreal/`)
 
