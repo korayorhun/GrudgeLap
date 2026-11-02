@@ -26,6 +26,7 @@ internal sealed partial class CarView
 
     private Node3D? _model;
     private Vector3? _modelEye;
+    private float? _modelGearTop;
     private Node3D? _modelMirror;
     private bool _modelMirrorHung;    // the game's own housing hangs there (the model's is out of view or missing)
     private Aabb _modelBounds;
@@ -216,10 +217,14 @@ internal sealed partial class CarView
         foreach (var child in node.GetChildren()) Disown(child);
     }
 
-    /// <summary>The live instrument panel on the model's dials, as wide as the prepared node's x scale says.</summary>
+    /// <summary>The live instrument panel on the model's dials, as wide as the prepared node's x scale says; a child
+    /// Gear (prepare_car_models.py, the entry's dials gear_top) says where on it the gear readout goes, in the panel's
+    /// widths up from its centre.</summary>
     private void MountModelDials(Node3D dials)
     {
         var width = dials.Basis.Scale.X;
+        if (dials.GetNodeOrNull<Node3D>("Gear") is { } gear)
+            _modelGearTop = InstrumentCluster.PanelSize.Y * 0.5f - gear.Position.Y * InstrumentCluster.PanelSize.X;
         dials.Basis = dials.Basis.Orthonormalized();
         var size = new Vector2(width, width * InstrumentCluster.PanelSize.Y / InstrumentCluster.PanelSize.X);
         _gaugeFace = new MeshInstance3D

@@ -317,6 +317,7 @@ public sealed partial class Bootstrap : Node3D
     private void FitOutPlayerCar()
     {
         _carView.MountInstruments(_instrumentPanel);
+        _instruments.GearTop = _carView.GearTop;
         _mirror = RearMirror.Create(new StandardMaterial3D { AlbedoColor = new Color(0.05f, 0.05f, 0.055f), Roughness = 0.5f });
         _carView.MountMirror(_mirror);
         _cameraRig.Eye = _carView.Eye;

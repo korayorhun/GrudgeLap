@@ -19,11 +19,15 @@ wheelbase, hubs at the rest height, origin at the centre of gravity), its scene:
     Eye             the driver's eyes (CarView.Eye)
     Dials           the instrument panel's face: +Z towards the eyes, its x scale the face's width in metres
                     (CarView puts the live InstrumentCluster there)
+      Gear          (optional) where the gear readout's box starts on the panel (dials gear_top in the entry)
     Mirror          the rear-view mirror's glass: +Z towards the driver (CarView hangs RearMirror's glass there)
 
 A model without a cabin of its own ("interior": false) gets neither Steering, Eye, Dials nor Mirror: the game
 builds its own cabin inside the model's shell. --inspect prints the meshes around the driver's seat with their
 boxes in the car frame, for writing a model's entry.
+
+Where the preparation put each car's eyes, dials and mirror goes to tools/car_cockpits.json (kept in the
+repository, rewritten for every car prepared), for the tests: the models themselves are not in the repository.
 """
 import io
 import json
@@ -45,6 +49,7 @@ ROOT = os.environ.get("GLP_ROOT") or os.path.normpath(os.path.join(os.path.dirna
 SOURCE = os.path.join(ROOT, "unreal", "Import", "Models")
 TARGET = os.path.join(ROOT, "game", "assets", "models")
 CONFIG = os.path.join(ROOT, "tools", "car_models.json")
+COCKPITS = os.path.join(ROOT, "tools", "car_cockpits.json")
 
 # Paint is found by whole words of a material's name: "lack" (German for paint) inside "Black" had every black part
 # of a model painted in the body colour, and "Painted Black" is trim. A name that is only "body" with "m", "mat" or
@@ -568,6 +573,7 @@ def prepare(car, entry, inspect=False, config=None):
         return True
 
     out_nodes = []
+    cockpit = None
 
     def add(name, m=None, mesh=None, children=None):
         node = {"name": name}
@@ -643,6 +649,9 @@ def prepare(car, entry, inspect=False, config=None):
         # The eyes: half a metre behind the wheel's centre and 28 cm over it, then the entry's offset.
         eye = centre + np.array([0.0, 0.28, 0.52]) + np.array(entry.get("eye", [0.0, 0.0, 0.0]))
         over = []
+        # The seat-shaped meshes passed over, for the cockpit record (their tops over the road at rest).
+        passed = []
+        road = spec["hub"] - (spec["rest"] - spec["mass"] * cm.GRAVITY / 4.0 / spec["stiffness"]) - spec["radius"]
         for i in body:
             if contains(name_of(i), GLASS_WORDS) or contains(name_of(i), ("seat", "sheat", "asiento", "sitz", "siege")):
                 continue
@@ -651,12 +660,14 @@ def prepare(car, entry, inspect=False, config=None):
             # than a pair of seats, no deeper than one, and rising from the floor, well below the eyes. Its backrest
             # stands at head height just behind the eyes; at the 205's real size (dims6) its top came 4 cm over them
             # and had the eyes lowered 10 cm, as if under a roof. The 570S's two buckets are one mesh 1.34 m across
-            # (v8seat): their tops, 1.04 m over the road, had its eyes set 13 cm under them, at 0.85 m, where the
-            # wheel and the dashboard hid the road. A roof lining, a header or a visor hangs over the eyes and never
-            # reaches 0.4 m under them, so the width alone tells a seat pair from nothing that is over the head.
-            if hi_i[0] - lo_i[0] < 1.4 and hi_i[2] - lo_i[2] < 0.9 and lo_i[1] < eye[1] - 0.4:
-                continue
+            # (v8seat), 1.04 m over the road at their top: their backs, 0.975 m up where they rise behind the eyes, had
+            # its eyes set 13 cm under them, at 0.845 m, where the wheel and the dashboard hid the road. A roof
+            # lining, a header or a visor hangs over the eyes and never reaches 0.4 m under them, so the width alone
+            # tells a seat pair from nothing that is over the head.
             if lo_i[0] - 0.15 < eye[0] < hi_i[0] + 0.15 and lo_i[2] - 0.15 < eye[2] < hi_i[2] + 0.15 and hi_i[1] > eye[1]:
+                if hi_i[0] - lo_i[0] < 1.4 and hi_i[2] - lo_i[2] < 0.9 and lo_i[1] < eye[1] - 0.4:
+                    passed.append({"mesh": name_of(i), "width": round(float(hi_i[0] - lo_i[0]), 3), "top_over_road": round(float(hi_i[1] - road), 3)})
+                    continue
                 pts = cm.mesh_points(model, blob, nodes[i]["mesh"], world[i])
                 near = pts[(np.abs(pts[:, 0] - eye[0]) < 0.10) & (np.abs(pts[:, 2] - eye[2]) < 0.10) & (pts[:, 1] > eye[1] + 0.03)]
                 if len(near):
@@ -666,6 +677,15 @@ def prepare(car, entry, inspect=False, config=None):
         if over and headroom < 0.13:
             eye[1] = min(over) - 0.13
         children.append(add("Eye", matrix(translation=eye)))
+        cockpit = {
+            "eye": mm(eye),
+            "eye_over_road": mm(eye[1] - road),
+            "under_lining": mm(min(over) - eye[1]) if over else None,
+            "lowered": bool(over and headroom < 0.13),
+            "seats_passed_over": passed,
+            "wheel_centre": mm(centre),
+            "eye_from_wheel": mm(eye - centre),
+        }
         print(f"  eyes at ({eye[0]:+.3f} {eye[1]:+.3f} {eye[2]:+.3f}), headroom {headroom:.3f} m{' (lowered)' if over and headroom < 0.13 else ''}")
 
         # The dials: on the face of the named instrument meshes (their side towards the eyes, 6 mm proud of it so the
@@ -703,8 +723,15 @@ def prepare(car, entry, inspect=False, config=None):
             print(f"  dials found {'on the surface the eyes meet ' + format(min(hits) - reach, '.2f') + ' m past the hub' if hits else 'nothing past the hub: placed 17 cm past it'}")
         face = face + np.array(dials_entry.get("offset", [0.0, 0.0, 0.0]))
         width = dials_entry.get("width", width)
-        children.append(add("Dials", matrix(basis_facing(eye - face), face, (width, width, 1.0))))
-        print(f"  dials at ({face[0]:+.3f} {face[1]:+.3f} {face[2]:+.3f}), {width:.2f} m wide")
+        # Where the rim crosses the panel just under the gear readout (the 570S's, the eyes over a reclined seat), the
+        # entry moves the readout up the panel (gear_top, pixels down the 1024 x 400 InstrumentCluster): a child Gear,
+        # at the box's top edge in the panel's units (its width), which CarView hands to the cluster.
+        gear = []
+        if "gear_top" in dials_entry:
+            gear = [add("Gear", matrix(translation=(0.0, (200.0 - float(dials_entry["gear_top"])) / 1024.0, 0.0)))]
+        children.append(add("Dials", matrix(basis_facing(eye - face), face, (width, width, 1.0)), children=gear))
+        cockpit["dials"] = {"centre": mm(face), "width": mm(width), "gear_top": int(dials_entry.get("gear_top", 120))}
+        print(f"  dials at ({face[0]:+.3f} {face[1]:+.3f} {face[2]:+.3f}), {width:.2f} m wide" + (f", the gear readout from {dials_entry['gear_top']} px down" if gear else ""))
 
         # The rear-view mirror: the named housing's centre, its glass on the side towards the eyes.
         mirror_words = [s.lower() for s in entry.get("mirror", [])]
@@ -726,6 +753,7 @@ def prepare(car, entry, inspect=False, config=None):
                 size = tuple(box["size"])
             glass = face + (eye - face) / np.linalg.norm(eye - face) * 0.006 + np.array(entry.get("mirror_offset", [0.0, 0.0, 0.0]))
             children.append(add("Mirror", matrix(basis_facing(eye - glass), glass, (size[0], size[1], 1.0))))
+            cockpit["mirror"] = {"glass": mm(glass), "size": mm(size)}
             # The model's own glass goes: the live glass replaces it, and where the two crossed it hid half the picture.
             dropped_panes = {name_of(i)[:60] for i in panes}
             body_node = next(n for n in out_nodes if n.get("name") == "Body")
@@ -738,6 +766,7 @@ def prepare(car, entry, inspect=False, config=None):
             towards = (eye - centre_m) / np.linalg.norm(eye - centre_m)
             glass = centre_m + towards * (0.5 * (hi_m[2] - lo_m[2]) + 0.004) + np.array(entry.get("mirror_offset", [0.0, 0.0, 0.0]))
             children.append(add("Mirror", matrix(basis_facing(eye - glass), glass)))
+            cockpit["mirror"] = {"glass": mm(glass), "on": "housing"}
             print(f"  mirror glass at ({glass[0]:+.3f} {glass[1]:+.3f} {glass[2]:+.3f}) from {[name_of(i) for i in housing][:3]}")
         else:
             # No housing of the model's to use (none, or out of the driver's view, as in a low wedge whose screen
@@ -758,6 +787,7 @@ def prepare(car, entry, inspect=False, config=None):
             y_m = (top - 0.06) if top is not None else eye[1] + 0.08
             glass = np.array([0.0, y_m, z_m]) + np.array(entry.get("mirror_offset", [0.0, 0.0, 0.0]))
             children.append(add("MirrorHung", matrix(basis_facing(eye - glass), glass)))
+            cockpit["mirror"] = {"glass": mm(glass), "on": "hung by the game"}
             print(f"  mirror hung at ({glass[0]:+.3f} {glass[1]:+.3f} {glass[2]:+.3f}), the glass over it at {None if top is None else round(float(top), 3)}")
 
     root = add("CarModel", children=children)
@@ -770,7 +800,9 @@ def prepare(car, entry, inspect=False, config=None):
     # The entry's corrections to a material's finish (materials: {name: {roughness, metallic}}), where the model is
     # wrong about the real car: the 570S's dashboard, scuttle and door tops are leather or Alcantara, matt, and its
     # model has them in gloss black (roughness 0.18-0.22), which mirrored the sky from the seat as a grey wash over the
-    # right half of the frame (v8seat). Only the named materials change; a model without them prepares as before.
+    # right half of the frame (v8seat). Its entry takes them to 0.88, the game's own dark trim (0.85) and rubber (0.86):
+    # at 0.55-0.6 the sun ahead still spread over them as a flat grey sheen. Only the named materials change; a model
+    # without them prepares as before.
     finishes = {k.lower(): v for k, v in entry.get("materials", {}).items()}
     finished = set()
     for index, material in enumerate(model.get("materials", [])):
@@ -865,7 +897,43 @@ def prepare(car, entry, inspect=False, config=None):
     target = os.path.join(TARGET, f"{car}.glb")
     cm.save(target, model, blob)
     print(f"  -> {target}")
+    record_cockpit(car, cockpit)
     return True
+
+
+def mm(v):
+    """A length or a point, rounded to the millimetre, for the cockpit record (stable from run to run)."""
+    if np.ndim(v) == 0:
+        return round(float(v), 3)
+    return [round(float(x), 3) for x in v]
+
+
+def record_cockpit(car, cockpit):
+    """Writes where the preparation put this car's eyes, dials and mirror into tools/car_cockpits.json (the car frame:
+    x right, y up from the centre of gravity, z back; metres), or drops the car's entry when the game builds its
+    cabin. The tests read it: the models it describes are build output, not in the repository, and a rule of the
+    preparation that broke would otherwise show only on screen (v8seat review: the eyes 0.845 m over the road)."""
+    record = {}
+    if os.path.exists(COCKPITS):
+        with open(COCKPITS, encoding="utf-8") as f:
+            record = json.load(f)
+    record["_comment"] = ("Written by tools/prepare_car_models.py for every car it prepares (do not edit): where the eyes, the "
+                          "dials and the mirror's glass went, in the car frame (x right, y up from the centre of gravity, z back; "
+                          "metres). eye_over_road: from the road at rest; under_lining: from the eyes to whatever is over them "
+                          "(the eyes stay 13 cm under it; lowered when they had to be); seats_passed_over: seat-shaped meshes "
+                          "over the eyes' footprint that are not taken for a roof; eye_from_wheel: "
+                          "from the steering wheel's centre; dials gear_top: the gear readout's box, pixels down the 1024 x 400 panel.")
+    if cockpit is None:
+        record.pop(car, None)
+    else:
+        record[car] = cockpit
+    ordered = {"_comment": record.pop("_comment")}
+    ordered.update(sorted(record.items()))
+    # Points and sizes on one line each, so that a change to one reads as one line of a diff.
+    text = re.sub(r"\[\s+([-0-9., \n]+?)\s+\]", lambda m: "[" + ", ".join(v.strip() for v in m.group(1).split(",")) + "]",
+                  json.dumps(ordered, indent=2))
+    with open(COCKPITS, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text + "\n")
 
 
 def main():

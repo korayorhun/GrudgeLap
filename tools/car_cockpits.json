@@ -1,0 +1,159 @@
+{
+  "_comment": "Written by tools/prepare_car_models.py for every car it prepares (do not edit): where the eyes, the dials and the mirror's glass went, in the car frame (x right, y up from the centre of gravity, z back; metres). eye_over_road: from the road at rest; under_lining: from the eyes to whatever is over them (the eyes stay 13 cm under it; lowered when they had to be); seats_passed_over: seat-shaped meshes over the eyes' footprint that are not taken for a roof; eye_from_wheel: from the steering wheel's centre; dials gear_top: the gear readout's box, pixels down the 1024 x 400 panel.",
+  "estate": {
+    "eye": [-0.37, 0.45, 0.3],
+    "eye_over_road": 1.083,
+    "under_lining": 0.245,
+    "lowered": false,
+    "seats_passed_over": [],
+    "wheel_centre": [-0.37, 0.17, -0.22],
+    "eye_from_wheel": [0.0, 0.28, 0.52],
+    "dials": {
+      "centre": [-0.285, 0.191, -0.312],
+      "width": 0.269,
+      "gear_top": 120
+    },
+    "mirror": {
+      "glass": [0.0, 0.517, -0.209],
+      "on": "hung by the game"
+    }
+  },
+  "five": {
+    "eye": [-0.351, 0.5, 0.292],
+    "eye_over_road": 1.116,
+    "under_lining": 0.158,
+    "lowered": false,
+    "seats_passed_over": [],
+    "wheel_centre": [-0.351, 0.22, -0.228],
+    "eye_from_wheel": [0.0, 0.28, 0.52],
+    "dials": {
+      "centre": [-0.351, 0.255, -0.33],
+      "width": 0.26,
+      "gear_top": 120
+    },
+    "mirror": {
+      "glass": [0.0, 0.488, -0.191],
+      "on": "hung by the game"
+    }
+  },
+  "flat12": {
+    "eye": [-0.38, 0.434, -0.004],
+    "eye_over_road": 1.042,
+    "under_lining": 0.13,
+    "lowered": true,
+    "seats_passed_over": [],
+    "wheel_centre": [-0.38, 0.167, -0.524],
+    "eye_from_wheel": [0.0, 0.266, 0.52],
+    "dials": {
+      "centre": [-0.374, 0.198, -0.63],
+      "width": 0.387,
+      "gear_top": 120
+    },
+    "mirror": {
+      "glass": [0.0, 0.376, -0.526],
+      "on": "hung by the game"
+    }
+  },
+  "fleet": {
+    "eye": [-0.36, 0.47, 0.47],
+    "eye_over_road": 1.14,
+    "under_lining": 0.243,
+    "lowered": false,
+    "seats_passed_over": [],
+    "wheel_centre": [-0.36, 0.19, -0.05],
+    "eye_from_wheel": [0.0, 0.28, 0.52],
+    "dials": {
+      "centre": [-0.373, 0.254, -0.285],
+      "width": 0.269,
+      "gear_top": 120
+    },
+    "mirror": {
+      "glass": [-0.026, 0.564, 0.135],
+      "size": [0.24, 0.071]
+    }
+  },
+  "hothatch": {
+    "eye": [-0.344, 0.47, 0.376],
+    "eye_over_road": 1.089,
+    "under_lining": 0.247,
+    "lowered": false,
+    "seats_passed_over": [
+      {
+        "mesh": "defaultMaterial",
+        "width": 0.477,
+        "top_over_road": 1.228
+      }
+    ],
+    "wheel_centre": [-0.344, 0.19, -0.144],
+    "eye_from_wheel": [0.0, 0.28, 0.52],
+    "dials": {
+      "centre": [-0.344, 0.212, -0.279],
+      "width": 0.26,
+      "gear_top": 120
+    },
+    "mirror": {
+      "glass": [0.0, 0.546, -0.098],
+      "on": "hung by the game"
+    }
+  },
+  "saloon": {
+    "eye": [-0.366, 0.597, 0.253],
+    "eye_over_road": 1.227,
+    "under_lining": null,
+    "lowered": false,
+    "seats_passed_over": [],
+    "wheel_centre": [-0.366, 0.317, -0.267],
+    "eye_from_wheel": [0.0, 0.28, 0.52],
+    "dials": {
+      "centre": [-0.366, 0.285, -0.539],
+      "width": 0.26,
+      "gear_top": 120
+    },
+    "mirror": {
+      "glass": [0.0, 0.677, -0.251],
+      "on": "hung by the game"
+    }
+  },
+  "turbohatch": {
+    "eye": [-0.344, 0.517, 0.246],
+    "eye_over_road": 1.16,
+    "under_lining": 0.187,
+    "lowered": false,
+    "seats_passed_over": [],
+    "wheel_centre": [-0.344, 0.237, -0.274],
+    "eye_from_wheel": [0.0, 0.28, 0.52],
+    "dials": {
+      "centre": [-0.344, 0.248, -0.437],
+      "width": 0.26,
+      "gear_top": 120
+    },
+    "mirror": {
+      "glass": [0.0, 0.499, -0.227],
+      "on": "hung by the game"
+    }
+  },
+  "v8": {
+    "eye": [-0.358, 0.355, -0.014],
+    "eye_over_road": 0.986,
+    "under_lining": 0.155,
+    "lowered": false,
+    "seats_passed_over": [
+      {
+        "mesh": "Object_16",
+        "width": 1.337,
+        "top_over_road": 1.045
+      }
+    ],
+    "wheel_centre": [-0.358, 0.025, -0.564],
+    "eye_from_wheel": [0.0, 0.33, 0.55],
+    "dials": {
+      "centre": [-0.379, 0.11, -0.787],
+      "width": 0.31,
+      "gear_top": 44
+    },
+    "mirror": {
+      "glass": [0.0, 0.411, -0.506],
+      "on": "hung by the game"
+    }
+  }
+}

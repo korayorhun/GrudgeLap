@@ -690,33 +690,59 @@ Item 21 came with dims6, when the cars respecified to the real cars the game dra
     between the wheel and the header, the dashboard and the wheel filled the lower half of the frame and the right
     half was a grey wash. The preparation sets the eyes 13 cm under whatever lies over them and passes over a seat
     by its shape (item 21: no wider than 0.7 m), since a backrest stands at head height just behind the eyes; the
-    570S model's two bucket seats are one mesh 1.34 m across, which the rule let through, and their tops, 1.04 m
-    over the road, had the eyes set at 0.845 m (the preparation's default put them at 0.936; the real car's roof is
-    1.202 m high and its driver's eyes near a metre up). The rule now passes over a mesh up to 1.4 m wide, a seat
-    pair, that is no deeper than a seat and rises from 0.4 m under the eyes, which nothing over the head does. On
-    top of that the entry corrects the 570S's eyes 5 cm up and 3 cm back on the default (28 cm over and 52 cm behind
-    the wheel's centre), to 0.33 m over and 0.55 m behind it, as a reclined supercar seat has them: the eyes at
-    (-0.358, +0.355, -0.014), 0.986 m over the road, 0.67 m over the model's cushion (0.30-0.32 m up, measured along
-    the driver's line) and 0.154 m under its roof skin, the head's top 3 cm under it. The regulations' stand-in for a
-    driver's eyes, the V points of UN Regulation 125 (Directive 77/649/EEC before it), sit 589-665 mm over the seat's
-    R point and 68 mm behind it at a 25 degree seat-back; no H-point of the 570S is published, so the model's cushion
-    stands for it. The model's seat back is no guide to the eyes: at their height its face is 5 cm behind them
-    (z +0.035 across the bucket), where a head, a man's some 20 cm long with its back about 18 cm behind the eyes,
-    would stand 13 cm into it; read off that seat the eyes would be 0.42 m behind the wheel's centre at most, closer
-    than a driver sits. The model's buckets sit forward of where its wheel puts the driver, and the eyes follow the wheel,
-    which the driver sees; the seat behind them shows only to a look across the cabin (the passenger's head restraint
-    level with the eyes, at the edge of a look 60 degrees right). The mirror hangs at (0, +0.411, -0.506), 5.6 cm over
-    the eyes and 36 degrees right; the dials on the binnacle at (-0.389, +0.114, -0.787) read over the rim's top and
-    through the wheel's upper opening. Ray-cast from the eyes, the rim covers the panel from 40 to 62 % of its height
-    over the gear, 64-98 % under the speedometer's centre and 46-69 % across the tachometer's, and the binnacle's
-    hood lip its top 6 % over the one and 26 % over the other: the speed from 40 to 280 km/h, the gear and both
-    needles read, the tachometer's hub is hidden. At the frame's centre column the dash top is now at 58 % of
-    the height with 83 rows of road over it (was 1), where the other cars' seats have it (flat-twelve 63, Delta 60,
-    estate 58, E-Class 56 %). The grey wash was neither the cabin probe nor the glass: the model's dashboard, scuttle
-    and door tops are gloss black (roughness 0.18-0.22) and mirrored the sky at the low eye's grazing angle, where the
-    real car's are leather or Alcantara; the entry now corrects their finish (`materials` in `tools/car_models.json`,
-    applied by the preparation: plastic.black 0.6, McLaren.black 0.55), and the dash top's band at the right of the
-    frame fell from a mean of 88 to 56 of 255 with its specular streak gone. The other seven models prepare to the
+    570S model's two bucket seats are one mesh 1.34 m across, which the rule let through. Their box reaches 1.04 m
+    over the road, and their backs, 0.975 m up where they rise behind the eyes, had the eyes set 13 cm under them,
+    at 0.845 m (the preparation's default put them at 0.936; the real car's roof is 1.202 m high and its driver's
+    eyes near a metre up). The rule now passes over a mesh up to 1.4 m wide, a seat pair, that is no deeper than a
+    seat and rises from 0.4 m under the eyes, which nothing over the head does. On top of that the entry corrects
+    the 570S's eyes 5 cm up and 3 cm back on the default (28 cm over and 52 cm behind the wheel's centre), to 0.33 m
+    over and 0.55 m behind it, as a reclined supercar seat has them: the eyes at (-0.358, +0.355, -0.014), 0.986 m
+    over the road, 0.67 m over the model's cushion (0.30-0.32 m up, measured along the driver's line) and 0.155 m
+    under its roof skin, the head's top 3 cm under it. The regulations' stand-in for a driver's eyes, the V points
+    of UN Regulation 125 (Directive 77/649/EEC before it), sit 589-665 mm over the seat's R point and 68 mm behind it
+    at a 25 degree seat-back; the R point is the design hip pivot, which sits over the cushion, so the 0.67 m over
+    the cushion is not the same measure and says only that the eyes are no higher over the hip than that. No R point
+    of the 570S is published. The model's seat back is no guide to the eyes: at their height its face is 5 cm
+    behind them (z +0.035 across the bucket), where a head, a man's some 20 cm long with its back about 18 cm behind
+    the eyes, would stand 13 cm into it; read off that seat the eyes would be 0.42 m behind the wheel's centre at
+    most, closer than a driver sits. The model's buckets sit forward of where its wheel puts the driver, and the
+    eyes follow the wheel, which the driver sees; the seat behind them shows only to a look across the cabin (the
+    passenger's head restraint level with the eyes, in the right part of a look 60 degrees right). The mirror hangs
+    at (0, +0.411, -0.506), 5.6 cm over the eyes and 36 degrees right. At the frame's centre column the dash top is
+    now at 58 % of the height in the parked seat shot with 83 rows of road over it (was 1), where the other cars'
+    seats have it (flat-twelve 63, Delta 60, estate 58, E-Class 56 %); over the 40 s attract lap its median is 54 %
+    (main 49 %) and 9 of 80 frames show almost no road (main 16).
+
+    The grey wash was neither the cabin probe nor the glass: the model's dashboard, scuttle and door tops are gloss
+    black (roughness 0.18-0.22) and mirrored the sky at the low eye's grazing angle, where the real car's are leather
+    and, on the dash top, Alcantara, which has almost no sheen. The entry corrects their finish (`materials` in
+    `tools/car_models.json`, applied by the preparation): plastic.black and McLaren.black at roughness 0.88, as the
+    game's own dark cabin trim (0.85) and rubber (0.86). At 0.6 and 0.55, as first set, the sun ahead still spread
+    over the right half as a flat grey sheen. Measured over the same deterministic 40 s cockpit lap (`--write-movie`,
+    30 fps, 80 frames at 2 fps), the right half's dash band (rows 560-760, x 1000-1550 of 1600 x 900) went over 65
+    of 255 in 12 frames at 0.6/0.55 (peak 84.6, when the sun is ahead), in none with the model's gloss (peak 58.4)
+    and in none at 0.88 (peak 52.8); the dash top's band averages 88.5 with the gloss, 66.0 at 0.6/0.55 and 58.1 at
+    0.88. Against 0.6/0.55 the orbit views change only on the black trim and the cabin seen through the glass
+    (0.7-1.1 % of the pixels), the chase view by 0.4 % over a 20 s movie, as much as main differs from it there.
+
+    The dials: with the eyes 14 cm higher the line of sight comes down steeper over the rim, and the panel as first
+    placed (on the binnacle's face, 0.39 m wide) lost the tachometer from 3.75 to 6.75 thousand rpm under the
+    binnacle's hood lip, half the gear readout under the rim and the speedometer at 200 km/h. Projected from the eyes
+    onto the panel, the cabin and the wheel between them leave a window under the hood and over the rim; the entry
+    sets the panel 0.31 m wide, 1 cm right and 4 mm down on the binnacle's face (dials width and offset) and moves
+    the gear readout up the panel to where that window is (dials gear_top: its box from 44 px down the 1024 x 400
+    cluster instead of 120; the preparation hangs a child Gear under Dials, CarView hands it to InstrumentCluster;
+    every other car keeps the readout where it was). From the eyes at rest the speed reads from 30 to 270 km/h and
+    the rpm from 3,000 to 8,250, with the gear readout wholly in view; leaning forward at speed (the cockpit camera's
+    6 cm) to 8,500, and the readout stays in view for the head's sway of 4.5 cm either side and 3 cm back. The
+    automatic box changes up at 7,965 rpm (0.885 of the 9,000 redline), inside that; the needle's last 500 rpm
+    before the red sector and the tachometer's hub pass behind the rim, which crosses the panel's lower half.
+
+    Where the preparation put each car's eyes, dials and mirror now goes to `tools/car_cockpits.json`, rewritten with
+    every car it prepares (the models are build output and not in the repository), so that the tests read what it
+    did rather than its source text: the 570S's eyes 0.986 m over the road and 0.155 m under the lining with Object_16,
+    1.337 m wide, passed over; every car's eyes between 0.95 and 1.30 m over the road (the 570S 0.986, the flat-twelve
+    1.042, the saloon 1.227) and none closer than 13 cm under what is over them. The other seven models prepare to the
     same bytes. Test `A_seat_pair_in_one_mesh_does_not_lower_the_eyes`.
 
 Kept, as earlier decisions: the fixed 240 Hz step with semi-implicit Euler for the body, the raycast wheels, the
@@ -1031,10 +1057,12 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
   the tyre's vertices, as a wheel stored turned has a swollen box), finds the steering wheel's column axis
   (its thinnest direction), and places the eyes (half a metre behind the wheel's centre and 28 cm over it, plus the
   entry's `eye` correction, 13 cm under the headlining; a seat or a seat pair under them is passed over, item 22), the
-  dials (on the named instrument meshes, or where the line of sight over the hub meets
-  the dashboard) and the mirror (the model's own glass, sized to it, or hung by the game under the windscreen 36
-  degrees right of straight ahead when the model's is out of view, as in the Esprit). Paint is found by whole
-  words of a material's name ("lack" inside "Black" had painted every black part) and drawn in the car's colour
+  dials (on the named instrument meshes, or where the line of sight over the hub meets the dashboard; the entry may
+  size and move them and move the gear readout up the panel, `gear_top`, item 22) and the mirror (the model's own
+  glass, sized to it, or hung by the game under the windscreen 36 degrees right of straight ahead when the model's is
+  out of view, as in the Esprit), and writes where they went to `tools/car_cockpits.json` for the tests. An entry
+  may also correct a material's finish where the model is wrong about the real car (`materials`). Paint is found by
+  whole words of a material's name ("lack" inside "Black" had painted every black part) and drawn in the car's colour
   with a dark lining on the back of a panel; painted faces inside the glasshouse that face the cabin take a dark
   trim (`GLP_Lining`), and painted parts that face into the car (a mirrored door) are turned out. The game hangs
   the wheels on its own pivots, turns the steering wheel, mounts the live instrument panel and the mirror, and

@@ -23,6 +23,13 @@ internal sealed partial class InstrumentCluster : Control
 
     public bool UseKmh { get; set; } = true;   // metric by default since 0.14
 
+    public const float DefaultGearTop = 120f;
+
+    /// <summary>The gear readout's box top edge, pixels down the panel (<see cref="DefaultGearTop"/> for most binnacles).
+    /// A model whose wheel rim crosses the panel just under the box (the 570S's, from the eyes over its reclined seat)
+    /// has it higher, where the eyes see it between the binnacle's hood and the rim (<see cref="CarView.GearTop"/>).</summary>
+    public float GearTop { get; set; } = DefaultGearTop;
+
     /// <summary>Builds the viewport the panel is drawn into; add it to the tree and use its texture.</summary>
     public static (SubViewport Viewport, InstrumentCluster Cluster) Create()
     {
@@ -77,7 +84,7 @@ internal sealed partial class InstrumentCluster : Control
 
         // Gear readout and warning lights in the column between the dials.
         var gear = car.Drivetrain.Gear switch { -1 => "R", 0 => "N", var g => g.ToString() };
-        var box = new Rect2(474f, 120f, 76f, 76f);
+        var box = new Rect2(474f, GearTop, 76f, 76f);
         DrawRect(box, new Color(0.01f, 0.03f, 0.02f));
         DrawRect(box, new Color(0.3f, 0.3f, 0.32f), false, 2f);
         DrawString(font, new Vector2(box.Position.X, box.End.Y - 14f), gear, HorizontalAlignment.Center, box.Size.X, 54, new Color(1f, 0.75f, 0.2f));
@@ -87,7 +94,7 @@ internal sealed partial class InstrumentCluster : Control
             TransmissionMode.ManualAutoClutch => "STICK",
             _ => "CLUTCH",
         };
-        DrawString(font, new Vector2(442f, 222f), mode, HorizontalAlignment.Center, 140f, 16, new Color(0.65f, 0.65f, 0.65f));
+        DrawString(font, new Vector2(442f, box.End.Y + 26f), mode, HorizontalAlignment.Center, 140f, 16, new Color(0.65f, 0.65f, 0.65f));
         // Oil pressure and charge lamps light up with the ignition on and the engine stopped, as in any car.
         Lamp(font, new Vector2(490f, 268f), "OIL", !running);
         Lamp(font, new Vector2(534f, 268f), "BAT", !running);

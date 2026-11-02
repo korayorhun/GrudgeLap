@@ -302,24 +302,64 @@ public sealed class VehicleTests
     /// <summary>
     /// The preparation sets the eyes 13 cm under whatever lies over them and passes over a seat by its shape, since a
     /// backrest stands at head height just behind the eyes. The 570S model's two bucket seats are one mesh 1.34 m across,
-    /// wider than the single seat the rule knew (0.7 m): their tops had its eyes set at 0.845 m over the road, where the
+    /// wider than the single seat the rule knew (0.7 m): their backs had its eyes set at 0.845 m over the road, where the
     /// wheel and the dashboard hid the road (v8seat). The rule takes a seat pair now, and the McLaren's entry raises the
     /// eyes over the preparation's default to where a reclined supercar seat has them, 0.33 m over the wheel's centre
-    /// and 0.55 m behind it, and corrects its dashboard's finish from the model's gloss black to the car's matt leather.
+    /// and 0.55 m behind it, and corrects its dashboard's finish from the model's gloss black to the car's matt leather
+    /// and Alcantara. The models are build output, not in the repository: the preparation writes where it put each car's
+    /// eyes, dials and mirror to tools/car_cockpits.json, and this reads what it did there (v8seat review: a check of the
+    /// rule's source text passed whether or not the rule worked).
     /// </summary>
     [Fact]
     public void A_seat_pair_in_one_mesh_does_not_lower_the_eyes()
     {
         var root = TrackTests.FindRepoRoot();
-        var prepare = File.ReadAllText(Path.Combine(root, "tools/prepare_car_models.py"));
-        Assert.Contains("hi_i[0] - lo_i[0] < 1.4 and hi_i[2] - lo_i[2] < 0.9", prepare);
         using var config = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "tools/car_models.json")));
-        var v8 = config.RootElement.GetProperty("v8");
-        var eye = v8.GetProperty("eye").EnumerateArray().Select(v => v.GetSingle()).ToArray();
-        _out.WriteLine($"570S eyes {0.28f + eye[1]:F2} m over the wheel's centre, {0.52f + eye[2]:F2} m behind it");
-        Assert.InRange(0.28f + eye[1], 0.32f, 0.36f);
-        Assert.InRange(0.52f + eye[2], 0.54f, 0.60f);
-        Assert.True(v8.GetProperty("materials").GetProperty("plastic.black").GetProperty("roughness").GetSingle() >= 0.5f);
+        using var record = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "tools/car_cockpits.json")));
+        static float[] Point(System.Text.Json.JsonElement e) => e.EnumerateArray().Select(v => v.GetSingle()).ToArray();
+
+        // Every car's eyes about where a driver's are: a metre over the road in the low cars, a little more in the tall
+        // ones, and never closer than 13 cm under what is over them (the top of the head is some 12 cm over the eyes).
+        foreach (var car in record.RootElement.EnumerateObject().Where(c => !c.Name.StartsWith('_')))
+        {
+            var cockpit = car.Value;
+            var over = cockpit.GetProperty("eye_over_road").GetSingle();
+            var lining = cockpit.GetProperty("under_lining");
+            _out.WriteLine($"{car.Name}: eyes {over:F3} m over the road, " +
+                (lining.ValueKind == System.Text.Json.JsonValueKind.Null ? "nothing over them" : $"{lining.GetSingle():F3} m under the lining"));
+            Assert.InRange(over, 0.95f, 1.30f);
+            if (lining.ValueKind != System.Text.Json.JsonValueKind.Null) Assert.True(lining.GetSingle() >= 0.129f, $"{car.Name}'s eyes are in the roof");
+        }
+
+        // The 570S: the seat pair passed over, not taken for the roof, and the eyes where the entry puts them (the record
+        // in step with tools/car_models.json: a change to the entry's eyes or dials without preparing again fails here).
+        var v8 = record.RootElement.GetProperty("v8");
+        var entry = config.RootElement.GetProperty("v8");
+        Assert.False(v8.GetProperty("lowered").GetBoolean());
+        var seats = v8.GetProperty("seats_passed_over").EnumerateArray().ToArray();
+        Assert.Contains(seats, s => s.GetProperty("width").GetSingle() is > 0.7f and < 1.4f
+                                    && s.GetProperty("top_over_road").GetSingle() > v8.GetProperty("eye_over_road").GetSingle());
+        Assert.InRange(v8.GetProperty("eye_over_road").GetSingle(), 0.96f, 1.01f);
+        var fromWheel = Point(v8.GetProperty("eye_from_wheel"));
+        var correction = Point(entry.GetProperty("eye"));
+        _out.WriteLine($"570S eyes {fromWheel[1]:F3} m over the wheel's centre, {fromWheel[2]:F3} m behind it");
+        Assert.InRange(fromWheel[1], 0.32f, 0.36f);
+        Assert.InRange(fromWheel[2], 0.54f, 0.60f);
+        Assert.Equal(0.28f + correction[1], fromWheel[1], 0.0011f);
+        Assert.Equal(0.52f + correction[2], fromWheel[2], 0.0011f);
+
+        // Its dials and their gear readout where the entry says (item 22: the rim crosses the panel just under the
+        // readout's usual place, so the readout sits higher on it).
+        var dials = v8.GetProperty("dials");
+        var dialsEntry = entry.GetProperty("dials");
+        Assert.Equal(dialsEntry.GetProperty("width").GetSingle(), dials.GetProperty("width").GetSingle(), 0.0011f);
+        Assert.Equal(dialsEntry.GetProperty("gear_top").GetInt32(), dials.GetProperty("gear_top").GetInt32());
+        Assert.InRange(dials.GetProperty("gear_top").GetInt32(), 0, 119);
+
+        // Its dashboard matt, as the leather and Alcantara of the real car are: at 0.55-0.6 the sun ahead still spread
+        // over it as a grey sheen (v8seat review), at 0.88 it does not.
+        foreach (var material in new[] { "plastic.black", "McLaren.black" })
+            Assert.True(entry.GetProperty("materials").GetProperty(material).GetProperty("roughness").GetSingle() >= 0.8f, material);
     }
 
     [Fact]

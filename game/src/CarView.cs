@@ -106,6 +106,10 @@ internal sealed partial class CarView : Node3D
     /// model's driver's seat when the car is a real model with a cabin (CarView.Model.cs), the lofted cabin's otherwise.</summary>
     public Vector3 Eye => _modelEye ?? new(DriverX, _style.EyeH - _cgHeight, _style.EyeZ);
 
+    /// <summary>Where this car's binnacle wants the gear readout's box on the instrument panel (pixels down it): the
+    /// model's when it says (CarView.Model.cs), the cluster's own place otherwise.</summary>
+    public float GearTop => _modelGearTop ?? InstrumentCluster.DefaultGearTop;
+
     /// <summary>A car in a paint, or (null) in its model's own; a lofted body without one is red.</summary>
     public static CarView Create(VehicleSpec spec, CarPaint? paint = null)
     {
