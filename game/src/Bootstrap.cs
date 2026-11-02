@@ -16,7 +16,9 @@ namespace GrudgeLap.Game;
 /// one-copy-per-computer lock of <see cref="SingleInstance"/>), <c>--park</c> (the car waits at the start with its
 /// engine off while the traffic and the train go by: checks of the placed sounds), <c>--time=&lt;seconds&gt;</c> (a credit
 /// of that length), <c>--try-table</c> (the attract driver's credit is offered to the high-score table: checks of the
-/// entry screen), <c>--quality=low|medium|high</c> (the graphics preset for this run) and <c>--quit-after=&lt;seconds&gt;</c>.
+/// entry screen), <c>--quality=low|medium|high</c> (the graphics preset for this run), <c>--showroom[=&lt;car&gt;]</c>
+/// (the showroom open from the start, on that car, through the title screen or with <c>--showroom-entry=menu</c> through
+/// the Esc menu's CAR line; <c>--turn=&lt;degrees&gt;</c> the turntable held at that angle) and <c>--quit-after=&lt;seconds&gt;</c>.
 /// </summary>
 public sealed partial class Bootstrap : Node3D
 {
@@ -70,6 +72,13 @@ public sealed partial class Bootstrap : Node3D
     private readonly HashSet<string> _soundFaults = new();
     private readonly PauseMenu _menu = new();
     private bool _menuClick;
+    private Showroom? _showroom;        // the car choice on its turntable (0.25), open over the title screen or the menu
+    private bool _showroomTake;         // the showroom's TAKE IT button was clicked
+    private bool _showroomBack;         // and its BACK button
+    private bool _titleCarClicked;      // the car's name on the title screen was clicked: the showroom
+    private string? _showroomArg;       // automation: the showroom open from the start, on this car (--showroom[=car])
+    private bool _showroomFromMenu;     // automation: reached through the Esc menu's CAR line (--showroom-entry=menu)
+    private float _turn = float.NaN;    // automation: the turntable held at this angle, degrees (--turn=)
     private bool _startChase;
     private bool _retro;
     private GraphicsQuality _quality = GraphicsQuality.High;
@@ -202,6 +211,16 @@ public sealed partial class Bootstrap : Node3D
         if (_retro) SetRetro(true);
         else ApplyGraphics();
         ApplyFrameCap();
+        if (_showroomArg is not null)
+        {
+            // The automation's showroom, reached as a player reaches it: through the menu's CAR line, or from the title.
+            if (_showroomFromMenu)
+            {
+                ShowMenu(true);
+                _menu.Select((int)PauseMenu.Item.Car);
+            }
+            OpenShowroom(_showroomArg == "" ? _carIndex : CarIndex(_showroomArg, _carIndex));
+        }
         // Automated runs never phone home; a player can also switch the check off in settings.cfg.
         if (!_attract && _screenshotPath is null && System.Environment.GetEnvironmentVariable("GRUDGELAP_NO_UPDATE") is null) _updater.CheckIfDue(manual: false);
     }
@@ -277,6 +296,9 @@ public sealed partial class Bootstrap : Node3D
             else if (arg.StartsWith("--paint=", System.StringComparison.Ordinal)) _paintChoice = PaintIndex(arg["--paint=".Length..], _paintChoice);   // this run only
             else if (arg.StartsWith("--look=", System.StringComparison.Ordinal)) _look = arg["--look=".Length..];
             else if (arg.StartsWith("--seat-look=", System.StringComparison.Ordinal)) _seatLook = ParseVector2(arg["--seat-look=".Length..]);
+            else if (arg == "--showroom" || arg.StartsWith("--showroom=", System.StringComparison.Ordinal)) _showroomArg = arg.StartsWith("--showroom=", System.StringComparison.Ordinal) ? arg["--showroom=".Length..] : "";   // automated runs: the showroom open from the start, on this car
+            else if (arg.StartsWith("--showroom-entry=", System.StringComparison.Ordinal)) _showroomFromMenu = arg["--showroom-entry=".Length..] == "menu";
+            else if (arg.StartsWith("--turn=", System.StringComparison.Ordinal)) float.TryParse(arg["--turn=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _turn);
             else if (arg == "--lofted") CarView.UseModels = false;
             else if (arg == "--perf-log") _perfLog = true;
             else if (arg == "--dent-test") _dentTest = true;
@@ -472,6 +494,16 @@ public sealed partial class Bootstrap : Node3D
         _elapsed += dt;
         if (SingleInstance.ActivationRequested()) BringToFront();
         HandleGlobalKeys();
+        if (_showroom is not null)
+        {
+            // The showroom over the title screen or the paused credit: its own keys and mouse, the session not stepping.
+            // The title's ambience (the cows, the train) plays on under it; under the menu the bus is muted as before.
+            HandleShowroom();
+            if (!_menu.Open) UpdateSound(dt);
+            if (_perfLog) LogPerformance();
+            AutomationAfterFrame();
+            return;
+        }
         if (Input.IsActionJustPressed(InputSetup.Menu)) ShowMenu(!_menu.Open);
         if (_menu.Open)
         {
@@ -557,9 +589,22 @@ public sealed partial class Bootstrap : Node3D
             }
             _scores.Update(dt);
         }
-        // The sound may fail without the race noticing: a fault there is logged once and the rest of the frame (the
-        // picture, the clock, quitting) carries on. In 0.8.0 the world sound threw on every frame of a second credit
-        // and the view stopped following the car: it stood at the line while the engine revved and the clock ran.
+        UpdateSound(dt);
+        _hud.Notice = _updater.Status;
+        SyncView();
+
+        AutomationAfterFrame();
+        // A downloaded update restarts the game only between credits: on the title screen or once the time is up.
+        _updater.ApplyWhenIdle(_session.Phase is SessionPhase.SelectTransmission or SessionPhase.Finished);
+    }
+
+    /// <summary>
+    /// The sound may fail without the race noticing: a fault there is logged once and the rest of the frame (the
+    /// picture, the clock, quitting) carries on. In 0.8.0 the world sound threw on every frame of a second credit
+    /// and the view stopped following the car: it stood at the line while the engine revved and the clock ran.
+    /// </summary>
+    private void UpdateSound(float dt)
+    {
         try
         {
             _audio.Update(_session, dt);
@@ -569,12 +614,6 @@ public sealed partial class Bootstrap : Node3D
         {
             if (_soundFaults.Add($"{e.GetType().Name}: {e.Message}")) GD.PushError($"sound update failed (logged once): {e}");
         }
-        _hud.Notice = _updater.Status;
-        SyncView();
-
-        AutomationAfterFrame();
-        // A downloaded update restarts the game only between credits: on the title screen or once the time is up.
-        _updater.ApplyWhenIdle(_session.Phase is SessionPhase.SelectTransmission or SessionPhase.Finished);
     }
 
     /// <summary>
@@ -866,6 +905,15 @@ public sealed partial class Bootstrap : Node3D
         var click = _clicked;
         _clicked = false;
         if (_session.Phase != SessionPhase.SelectTransmission) return false;
+        // Down (the key or the d-pad, not the brake trigger: a foot resting on it would open it), or a click on the car's
+        // name: the showroom (0.25), where the cars are seen before one is taken.
+        var titleCar = _titleCarClicked;
+        _titleCarClicked = false;
+        if (titleCar || (Input.IsActionJustPressed(InputSetup.Brake) && Input.GetJoyAxis(InputSetup.Pad, JoyAxis.TriggerLeft) < 0.4f))
+        {
+            OpenShowroom(_carIndex);
+            return false;
+        }
         // Left/right steps through the cars, either way round; the session is rebuilt around the new spec.
         var step = Input.IsActionJustPressed(InputSetup.SteerLeft) ? -1 : Input.IsActionJustPressed(InputSetup.SteerRight) ? 1 : 0;
         if (step != 0)
@@ -898,6 +946,11 @@ public sealed partial class Bootstrap : Node3D
 
     public override void _UnhandledInput(InputEvent @event)
     {
+        if (_showroom is { } room)
+        {
+            HandleShowroomMouse(room, @event);
+            return;
+        }
         if (_menu.Open && @event is InputEventMouse mouse)
         {
             var line = PauseMenu.HitTest(GetViewport().GetVisibleRect().Size, mouse.Position);
@@ -905,7 +958,61 @@ public sealed partial class Bootstrap : Node3D
             if (line >= 0 && mouse is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left }) _menuClick = true;
             return;
         }
-        if (@event is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left }) _clicked = true;
+        if (@event is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } click)
+        {
+            // On the title screen a click on the car's name opens the showroom; anywhere else it starts the game.
+            if (_session is not null && _session.Phase == SessionPhase.SelectTransmission && Hud.TitleCarRect(GetViewport().GetVisibleRect().Size).HasPoint(click.Position)) _titleCarClicked = true;
+            else _clicked = true;
+        }
+    }
+
+    /// <summary>The showroom's mouse: a drag turns the car, the wheel brings it closer, a click takes a chevron, a swatch or a button.</summary>
+    private void HandleShowroomMouse(Showroom room, InputEvent @event)
+    {
+        var size = GetViewport().GetVisibleRect().Size;
+        switch (@event)
+        {
+            case InputEventMouseButton { ButtonIndex: MouseButton.Left } button when !button.Pressed:
+                room.Dragging = false;
+                break;
+            case InputEventMouseButton { ButtonIndex: MouseButton.Left } button:
+                var (hit, index) = Showroom.HitTest(size, button.Position);
+                switch (hit)
+                {
+                    case Showroom.Hit.Left:
+                        room.Step(-1);
+                        _audio.Chime();
+                        break;
+                    case Showroom.Hit.Right:
+                        room.Step(1);
+                        _audio.Chime();
+                        break;
+                    case Showroom.Hit.Swatch:
+                        if (index == room.PaintIndex) break;
+                        room.CyclePaint(index - room.PaintIndex);
+                        _audio.Chime();
+                        break;
+                    case Showroom.Hit.Take:
+                        _showroomTake = true;
+                        break;
+                    case Showroom.Hit.Back:
+                        _showroomBack = true;
+                        break;
+                    default:
+                        room.Dragging = true;
+                        break;
+                }
+                break;
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelUp }:
+                room.Zoom(1);
+                break;
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelDown }:
+                room.Zoom(-1);
+                break;
+            case InputEventMouseMotion motion when room.Dragging:
+                room.Drag(motion.Relative.X, (float)GetProcessDeltaTime());
+                break;
+        }
     }
 
     /// <summary>Opens or closes the menu; the race and its sound stand still while it is open.</summary>
@@ -961,9 +1068,16 @@ public sealed partial class Bootstrap : Node3D
         if (_perfFrames == 0 && _perfSince == 0.0) RenderingServer.ViewportSetMeasureRenderTime(viewport, true);
         _perfGpu += RenderingServer.ViewportGetMeasuredRenderTimeGpu(viewport);
         _perfCpu += RenderingServer.ViewportGetMeasuredRenderTimeCpu(viewport) + Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000.0;
+        if (_showroom is { } room)
+        {
+            // The stage renders in its own viewport while the main one draws no 3D: its time is the showroom's frame.
+            RenderingServer.ViewportSetMeasureRenderTime(room.ViewportRid, true);
+            _perfGpu += RenderingServer.ViewportGetMeasuredRenderTimeGpu(room.ViewportRid);
+            _perfCpu += RenderingServer.ViewportGetMeasuredRenderTimeCpu(room.ViewportRid);
+        }
         _perfFrames++;
         if (_elapsed - _perfSince < 5.0) return;
-        GD.Print($"perf: {_perfFrames / (_elapsed - _perfSince):0.0} fps, gpu {_perfGpu / _perfFrames:0.00} ms, cpu {_perfCpu / _perfFrames:0.00} ms a frame");
+        GD.Print($"perf: {_perfFrames / (_elapsed - _perfSince):0.0} fps, gpu {_perfGpu / _perfFrames:0.00} ms, cpu {_perfCpu / _perfFrames:0.00} ms a frame{(_showroom is { } open ? $" (showroom: {open.Spec.Name}, turntable at {open.YawDegrees:0} deg)" : "")}");
         _perfGpu = _perfCpu = 0.0;
         _perfFrames = 0;
         _perfSince = _elapsed;
@@ -999,6 +1113,98 @@ public sealed partial class Bootstrap : Node3D
         _keyboard.Reset();
     }
 
+    /// <summary>
+    /// Opens the showroom (<see cref="Showroom"/>) on a car, over the title screen or over the paused credit (the menu's
+    /// CAR line). The main viewport's 3D is switched off while it is open: the game's world would otherwise be drawn
+    /// under the stage at a driven frame's cost and never seen.
+    /// </summary>
+    private void OpenShowroom(int carIndex)
+    {
+        if (_showroom is not null) return;
+        _showroom = Showroom.Create(carIndex, _paintChoice, float.IsNaN(_turn) ? Showroom.StartYawDegrees : _turn, fromMenu: _menu.Open, held: !float.IsNaN(_turn));
+        AddChild(_showroom);
+        _showroom.Resize(GetWindow().Size);
+        _showroom.ApplyGraphics(_quality, _retro);
+        GetViewport().Disable3D = true;
+        _hud.Showroom = _showroom;
+        _keyboard.Reset();
+        _clicked = false;
+        _showroomTake = _showroomBack = false;
+    }
+
+    /// <summary>
+    /// Closes the showroom. Taken (Enter), the car and the paint are kept ("car" and "paint" in the settings) and
+    /// applied: another car by a new session, as the title screen's left/right always did, a paint on the car where it
+    /// stands. Left (Esc), nothing changes. Either way the player is back where the showroom was opened, the title or
+    /// the menu.
+    /// </summary>
+    private void CloseShowroom(bool take)
+    {
+        if (_showroom is not { } room) return;
+        _showroom = null;
+        _hud.Showroom = null;
+        GetViewport().Disable3D = false;
+        room.Dragging = false;
+        room.QueueFree();
+        _keyboard.Reset();
+        _clicked = false;
+        _menuClick = false;
+        if (!take) return;
+        var anotherCar = room.Index != _carIndex;
+        _carIndex = room.Index;
+        _paintChoice = room.PaintIndex;
+        SaveChoice("car", _carIndex);
+        SaveChoice("paint", _paintChoice);
+        if (anotherCar)
+        {
+            ShowMenu(false);
+            NewSession();
+            _audio.Chime();
+        }
+        else if (!_carView.Repaint(PlayerPaint))
+        {
+            // A lofted body (a checkout without the models) is built again in the paint; during a crash's replay the
+            // car is the scene's and is built again with the next credit (as CyclePaint).
+            if (_crash is null) BuildPlayerCar();
+            else _repaintLofted = true;
+        }
+    }
+
+    /// <summary>
+    /// The showroom's keys: left and right (A, D, the stick, the d-pad) step the car, up and down (W, S) the paint, Enter,
+    /// Space or A take the car and the paint, Esc, Back or B leave it as it was. A step chimes, as the title screen's did.
+    /// </summary>
+    private void HandleShowroom()
+    {
+        var room = _showroom!;
+        room.Resize(GetWindow().Size);
+        var abort = Input.IsActionJustPressed(InputSetup.Abort);
+        // Space and the pad's B share an action: Space takes, as it starts the game on the title screen; B goes back.
+        var padB = abort && Input.IsJoyButtonPressed(InputSetup.Pad, JoyButton.B);
+        if (Input.IsActionJustPressed(InputSetup.Menu) || padB || _showroomBack)
+        {
+            CloseShowroom(take: false);
+            return;
+        }
+        if (Input.IsActionJustPressed(InputSetup.Ignition) || (abort && !padB) || _showroomTake)
+        {
+            CloseShowroom(take: true);
+            return;
+        }
+        var step = Input.IsActionJustPressed(InputSetup.SteerLeft) ? -1 : Input.IsActionJustPressed(InputSetup.SteerRight) ? 1 : 0;
+        if (step != 0)
+        {
+            room.Step(step);
+            _audio.Chime();
+        }
+        var paint = Input.IsActionJustPressed(InputSetup.Throttle) ? -1 : Input.IsActionJustPressed(InputSetup.Brake) ? 1 : 0;
+        if (paint != 0)
+        {
+            room.CyclePaint(paint);
+            _audio.Chime();
+        }
+    }
+
     /// <summary>The menu's keys: up and down move, Enter or A takes the line, left and right turn a setting, Space or B goes back.</summary>
     private void HandleMenu()
     {
@@ -1022,6 +1228,11 @@ public sealed partial class Bootstrap : Node3D
             case PauseMenu.Item.NewGame when take:
                 ShowMenu(false);
                 NewSession();
+                break;
+            case PauseMenu.Item.Car:
+                // The showroom (0.25) over the paused credit; left and right go straight on to the next car there.
+                OpenShowroom(_carIndex);
+                if (!take && _showroom is not null) _showroom.Step(left ? -1 : 1);
                 break;
             case PauseMenu.Item.Camera:
                 ToggleCamera();
@@ -1060,6 +1271,7 @@ public sealed partial class Bootstrap : Node3D
         var labels = _menu.Labels;
         labels[(int)PauseMenu.Item.Continue] = "CONTINUE";
         labels[(int)PauseMenu.Item.NewGame] = "NEW GAME";
+        labels[(int)PauseMenu.Item.Car] = $"CAR:  {VehicleSpec.Catalogue[_carIndex].Name}";
         labels[(int)PauseMenu.Item.Camera] = $"CAMERA:  {(_cameraRig.Mode == CameraMode.Cockpit ? "DRIVER'S SEAT" : "BEHIND THE CAR")}";
         labels[(int)PauseMenu.Item.Graphics] = $"GRAPHICS:  {_quality.ToString().ToUpperInvariant()}";
         labels[(int)PauseMenu.Item.Weather] = $"WEATHER:  {WeatherLabel()}";
@@ -1104,6 +1316,7 @@ public sealed partial class Bootstrap : Node3D
         }
         if (Input.IsActionJustPressed(InputSetup.NewGame))
         {
+            CloseShowroom(take: false);
             ShowMenu(false);
             NewSession();
         }
@@ -1161,6 +1374,7 @@ public sealed partial class Bootstrap : Node3D
         viewport.ScreenSpaceAA = low ? Viewport.ScreenSpaceAAEnum.Fxaa : Viewport.ScreenSpaceAAEnum.Disabled;
         viewport.UseTaa = !low;
         WorldBuilder.SetQuality(_quality);
+        _showroom?.ApplyGraphics(_quality, _retro);
     }
 
     /// <summary>"1989 mode": a third of the resolution, 20 frames a second, flat colours and no atmosphere.</summary>
@@ -1183,6 +1397,7 @@ public sealed partial class Bootstrap : Node3D
         _world.Retro = retro;
         _hud.Retro = retro;
         ApplyRain();
+        _showroom?.ApplyGraphics(_quality, retro);
     }
 
     private void TakeScreenshot(string path)

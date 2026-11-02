@@ -24,6 +24,28 @@ internal sealed partial class CarView
     /// <summary>The lofted bodies instead of the models (<c>--lofted</c>), for comparisons.</summary>
     public static bool UseModels { get; set; } = true;
 
+    /// <summary>
+    /// The prepared model a car is drawn with, as a resource path, or null when the build has none (the lofted body is
+    /// drawn then). The showroom loads its neighbours' models on a thread ahead of a step (Showroom.Preload).
+    /// </summary>
+    public static string? ModelPath(VehicleSpec spec)
+    {
+        if (!UseModels) return null;
+        var key = ModelKeys(spec.Style).FirstOrDefault(k => ResourceLoader.Exists($"res://assets/models/{k}.glb"));
+        return key is null ? null : $"res://assets/models/{key}.glb";
+    }
+
+    /// <summary>The car's own colour whatever it is painted: its model's paint that covers the most of it, or the lofted body's red.</summary>
+    public Color OwnColour => _paints.Count > 0 ? _paints[0].Factory : DefaultPaint;
+
+    /// <summary>
+    /// The body's box in this node's frame (origin at the centre of gravity): the model's, or the lofted body's from its
+    /// style's widest half width, nose and tail stations and roof height. The showroom frames its camera by it.
+    /// </summary>
+    public Aabb Bounds => _model is not null
+        ? _modelBounds
+        : new Aabb(new Vector3(-_style.HalfWidth.Max(), -_cgHeight, _style.Keys[0]), new Vector3(2f * _style.HalfWidth.Max(), _style.CentreH.Max(), _style.Keys[^1] - _style.Keys[0]));
+
     private Node3D? _model;
     private Vector3? _modelEye;
     private Node3D? _modelMirror;
@@ -107,10 +129,8 @@ internal sealed partial class CarView
     /// </summary>
     private bool TryBuildModel(VehicleSpec spec)
     {
-        if (!UseModels) return false;
-        var key = ModelKeys(spec.Style).FirstOrDefault(k => ResourceLoader.Exists($"res://assets/models/{k}.glb"));
-        if (key is null) return false;
-        var path = $"res://assets/models/{key}.glb";
+        if (ModelPath(spec) is not { } path) return false;
+        var key = System.IO.Path.GetFileNameWithoutExtension(path);
         if (ResourceLoader.Load<PackedScene>(path)?.Instantiate() is not Node3D scene) return false;
         if (scene.FindChild("CarModel", true, false) is not Node3D model || model.GetNodeOrNull<Node3D>("Wheel0") is null)
         {

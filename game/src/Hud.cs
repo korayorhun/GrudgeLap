@@ -34,6 +34,8 @@ internal sealed partial class Hud : Control
     public bool Retro { get; set; }
     /// <summary>The menu Esc opens (<see cref="PauseMenu"/>), drawn over everything while it is open.</summary>
     public PauseMenu? Menu { get; set; }
+    /// <summary>The showroom (<see cref="Game.Showroom"/>) while it is open: its stage fills the screen and nothing of the race is drawn.</summary>
+    public Showroom? Showroom { get; set; }
     /// <summary>The frame rate, top left (F6).</summary>
     public bool ShowFps { get; set; }
 
@@ -73,6 +75,11 @@ internal sealed partial class Hud : Control
         var size = GetViewportRect().Size;
         var car = _session.Car;
         var s = _session;
+        if (Showroom is { } room)
+        {
+            DrawShowroom(font, size, room);
+            return;
+        }
 
         // ---- instrument panel at the foot of the screen, except from the driver's seat ---------------------
         var bandTop = size.Y;
@@ -148,7 +155,7 @@ internal sealed partial class Hud : Control
             var y = panel.Position.Y + 70f;
             Centred(font, "GRUDGELAP", y, 58, white);
             Centred(font, $"<   {car.Spec.Name}   >", y + 62f, 28, white);
-            Centred(font, $"{CarFigures(car.Spec)}      left / right or the stick: car {CarNumber(car.Spec)} of {VehicleSpec.Catalogue.Length}", y + 90f, 15, grey);
+            Centred(font, $"{CarFigures(car.Spec)}      left / right or the stick: car {CarNumber(car.Spec)} of {VehicleSpec.Catalogue.Length}      down or a click on the name: showroom", y + 90f, 15, grey);
             var options = new (string Key, string Label, TransmissionMode Mode)[]
             {
                 ("1", "AUTOMATIC", TransmissionMode.Automatic),
@@ -194,11 +201,61 @@ internal sealed partial class Hud : Control
             var current = i == menu.Cursor;
             if (current) DrawRect(line, new Color(1f, 0.85f, 0.3f, 0.16f));
             var label = menu.Labels[i] ?? PauseMenu.Items[i].ToString();
-            DrawString(font, new Vector2(line.Position.X, line.Position.Y + 30f), label, HorizontalAlignment.Center, line.Size.X, 24, current ? gold : grey);
+            DrawString(font, new Vector2(line.Position.X, line.Position.Y + 29f), label, HorizontalAlignment.Center, line.Size.X, 24, current ? gold : grey);
         }
         DrawString(font, new Vector2(panel.Position.X, panel.End.Y - 22f),
             "up / down: choose     ENTER or A: take it     left / right: change     ESC, SPACE or B: back",
             HorizontalAlignment.Center, panel.Size.X, 14, grey);
+    }
+
+    /// <summary>The car's name on the title screen, for the click that opens the showroom (<see cref="Bootstrap"/>).</summary>
+    public static Rect2 TitleCarRect(Vector2 size) => new(size.X * 0.5f - 320f, size.Y * 0.22f + 100f, 640f, 44f);
+
+    /// <summary>
+    /// The showroom (<see cref="Game.Showroom"/>): its stage full-screen, the car's name over it, the chevrons at the
+    /// sides, and on a panel at the foot the facts its spec gives, the paints as swatches (the chosen one framed, the
+    /// ORIGINAL one in the car's own colour) and the keys. The rects are the showroom's, so the mouse hits what is drawn.
+    /// </summary>
+    private void DrawShowroom(Font font, Vector2 size, Showroom room)
+    {
+        var white = new Color(1f, 1f, 1f);
+        var grey = new Color(0.72f, 0.75f, 0.8f);
+        var gold = new Color(1f, 0.85f, 0.3f);
+        DrawTextureRect(room.Texture, new Rect2(Vector2.Zero, size), false);
+        DrawRect(new Rect2(0f, 0f, size.X, 64f), new Color(0.05f, 0.05f, 0.06f, 0.5f));
+        DrawString(font, new Vector2(20f, 44f), "SHOWROOM", HorizontalAlignment.Left, -1f, 30, white);
+        DrawString(font, new Vector2(size.X - 320f, 44f), $"CAR {room.Index + 1} OF {Showroom.Count}", HorizontalAlignment.Right, 300f, 22, grey);
+        // The name fades out and in with the cars sliding under it.
+        Centred(font, room.Spec.Name, 128f, 46, white with { A = room.TextAlpha });
+        var left = Showroom.LeftArrow(size);
+        var right = Showroom.RightArrow(size);
+        DrawString(font, new Vector2(left.Position.X, left.Position.Y + 112f), "<", HorizontalAlignment.Center, left.Size.X, 96, gold);
+        DrawString(font, new Vector2(right.Position.X, right.Position.Y + 112f), ">", HorizontalAlignment.Center, right.Size.X, 96, gold);
+
+        var panel = Showroom.Panel(size);
+        DrawRect(panel, new Color(0.03f, 0.03f, 0.04f, 0.80f));
+        var y = panel.Position.Y;
+        Centred(font, Showroom.LayoutLine(room.Spec), y + 38f, 19, grey);
+        Centred(font, Showroom.FiguresLine(room.Spec), y + 70f, 20, white);
+        var first = Showroom.Swatch(size, 0);
+        var last = Showroom.Swatch(size, CarView.Paints.Length - 1);
+        DrawString(font, new Vector2(first.Position.X - 112f, first.Position.Y + 25f), "PAINT", HorizontalAlignment.Right, 96f, 20, grey);
+        for (var i = 0; i < CarView.Paints.Length; i++)
+        {
+            var swatch = Showroom.Swatch(size, i);
+            var colour = CarView.Paints[i].Paint?.Colour ?? room.CarColour;
+            DrawRect(swatch, new Color(colour.R, colour.G, colour.B));
+            if (i == room.PaintIndex) DrawRect(swatch.Grow(4f), gold, false, 3f);
+        }
+        DrawString(font, new Vector2(last.End.X + 16f, first.Position.Y + 25f), CarView.Paints[room.PaintIndex].Name, HorizontalAlignment.Left, 240f, 20, gold);
+        var take = Showroom.TakeButton(size);
+        var back = Showroom.BackButton(size);
+        DrawRect(take, new Color(1f, 0.85f, 0.3f, 0.16f));
+        DrawString(font, new Vector2(take.Position.X, take.Position.Y + 29f), "TAKE IT   (ENTER)", HorizontalAlignment.Center, take.Size.X, 20, gold);
+        DrawRect(back, new Color(1f, 1f, 1f, 0.06f));
+        DrawString(font, new Vector2(back.Position.X, back.Position.Y + 29f), "BACK   (ESC)", HorizontalAlignment.Center, back.Size.X, 20, grey);
+        Centred(font, "left / right or A / D: car     up / down or W / S: paint     drag the car to turn it, the wheel brings it closer     ENTER, SPACE or A: take it     ESC or B: back", y + 176f, 15, grey);
+        Centred(font, room.FromMenu ? "another car starts a new game; the car and the paint are kept for next time" : "the car and the paint are kept for next time", y + 204f, 14, new Color(0.55f, 0.58f, 0.62f));
     }
 
     /// <summary>The end of the credit: the score, the entry of the initials when it made the table, and the table.</summary>
