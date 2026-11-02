@@ -212,16 +212,24 @@ void UGlpAudio::SetCar(int32 Style)
 	TSharedPtr<FClips, ESPMode::ThreadSafe> Loaded = MakeShared<FClips, ESPMode::ThreadSafe>();
 	// SampledEngine.Load: the grain banks of the car's engine, by its body style (CarStyle: the twelve, the V8, the
 	// hot hatch's four, the rally hatch's turbo four on the "turbohatch" recordings, the V6 hatch's six, the saloon's and
-	// the estate's fours, the fleet saloon's diesel four on the "diesel4" recordings), with the cylinders that turn revs
-	// into firing pulses: EngineSpec.SoundFolder and Cylinders of physics/Vehicle/EngineModel.cs.
+	// the estate's fours, the fleet saloon's diesel four on the "diesel4" recordings; then the five of cars13 on the
+	// nearest existing banks until their own land: the 458's flat-plane V8 on "v8" (cut from a 458), the Bravo HGT's
+	// five and the Bravo 1.6's four on "hothatch", the Leon Cupra's turbo four on "turbohatch", the BRZ's boxer four on
+	// "v6", whose idle was recorded low enough for its 700 rpm), with
+	// the cylinders that turn revs into firing pulses: EngineSpec.SoundFolder and Cylinders of
+	// physics/Vehicle/EngineModel.cs. Keep this table in step with the catalogue; it is not built or run here.
 	struct FEngineBank { const TCHAR* Folder; int32 Cylinders; };
 	static const FEngineBank EngineBanks[] = { { TEXT("flat12"), 12 }, { TEXT("v8"), 8 }, { TEXT("hothatch"), 4 }, { TEXT("turbohatch"), 4 }, { TEXT("v6"), 6 },
-		{ TEXT("saloon"), 4 }, { TEXT("estate"), 4 }, { TEXT("diesel4"), 4 } };
-	const FEngineBank& Bank = EngineBanks[FMath::Clamp(Style, 0, (int32)UE_ARRAY_COUNT(EngineBanks) - 1)];
+		{ TEXT("saloon"), 4 }, { TEXT("estate"), 4 }, { TEXT("diesel4"), 4 },
+		{ TEXT("v8"), 8 }, { TEXT("hothatch"), 5 }, { TEXT("hothatch"), 4 }, { TEXT("turbohatch"), 4 }, { TEXT("v6"), 4 } };
+	const int32 Car = FMath::Clamp(Style, 0, (int32)UE_ARRAY_COUNT(EngineBanks) - 1);
+	const FEngineBank& Bank = EngineBanks[Car];
 	if (const FGlpLibrary* Library = FGlpLibrary::Get())
 	{
 		const FString Banks = FPaths::Combine(Directory, Bank.Folder);
-		Loaded->Engine = Library->EngineCreate(TCHAR_TO_UTF8(*Banks), Bank.Cylinders);
+		// By the car, not the folder alone (glp_engine_create_for_car, cars13): a car playing another's banks is still
+		// voiced and trimmed as itself. CarStyle's values are the catalogue's indices (glp_car_spec.style, GlpGame).
+		Loaded->Engine = Library->EngineCreateForCar(TCHAR_TO_UTF8(*Banks), Car);
 		if (Loaded->Engine == 0)
 		{
 			UE_LOG(LogGlpAudio, Warning, TEXT("engine sound unavailable: %s"), *Library->LastError());
@@ -237,7 +245,8 @@ void UGlpAudio::SetCar(int32 Style)
 	{
 		LoadClip(FPaths::Combine(Directory, File), Loaded->Tyres.AddDefaulted_GetRef());
 	}
-	if (Style == 1)
+	// The sports exhausts that crackle on a lift (EngineAudio: the V8 and, since cars13, the 458's flat-plane V8).
+	if (Style == 1 || Style == 8)
 	{
 		for (const TCHAR* File : PopFiles)
 		{

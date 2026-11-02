@@ -238,6 +238,33 @@ public sealed unsafe class NativeApiTests
             {
                 destroy(engine);
             }
+
+            // glp_engine_create_for_car (cars13): the Bravo HGT (car 9) on the hot hatch's banks renders as the managed
+            // voice made for it, which is not the hot hatch's (five cylinders against four, a redline of 7000 against 6700).
+            var createForCar = (delegate* unmanaged[Cdecl]<byte*, int, nint>)NativeLibrary.GetExport(library, "glp_engine_create_for_car");
+            var hatchFolder = FindInRepository(Path.Combine("game", "assets", "audio", "hothatch"));
+            Assert.NotNull(hatchFolder);
+            var hgt = Array.FindIndex(VehicleSpec.Catalogue, c => c.Style == CarStyle.HgtFive);
+            var hgtExpected = new float[2048];
+            NativeApi.CreateEngineForCar(hatchFolder, hgt).Render(hgtExpected, 5000f, 1f, true);
+            var hatchExpected = new float[2048];
+            NativeApi.CreateEngine(hatchFolder, 4).Render(hatchExpected, 5000f, 1f, true);
+            Assert.NotEqual(hatchExpected, hgtExpected);
+            var hatchName = Encoding.UTF8.GetBytes(hatchFolder + "\0");
+            nint hgtEngine;
+            fixed (byte* text = hatchName) hgtEngine = createForCar(text, hgt);
+            Assert.NotEqual(0, hgtEngine);
+            try
+            {
+                var output = new float[hgtExpected.Length];
+                fixed (float* samples = output) Assert.Equal(0, render(hgtEngine, samples, output.Length, 5000f, 1f, 1, 0, 1f));
+                Assert.Equal(hgtExpected, output);
+            }
+            finally
+            {
+                destroy(hgtEngine);
+            }
+            fixed (byte* text = hatchName) Assert.Equal(0, createForCar(text, VehicleSpec.Catalogue.Length));
         }
         finally
         {
@@ -246,26 +273,35 @@ public sealed unsafe class NativeApiTests
     }
 
     /// <summary>
-    /// The voice glp_engine_create makes is the Godot version's for the same car (0.20 review, problem 6): found by its
-    /// sound folder, voiced for its body (the flat-twelve and the V8 mid-engined, their cabins at 4 kHz booming at 132 Hz;
-    /// the estate's at 61 Hz) and trimmed over its redline, so it is as loud as the game's and peaks no higher (the trims
-    /// equal a voice made with the car's voicing and redline). A folder no car uses keeps the front-engined default.
+    /// The voice glp_engine_create_for_car makes is the Godot version's for the same car (0.20 review, problem 6; by the
+    /// car since cars13): voiced for its body (the flat-twelve, the V8 and the 458 mid-engined, their cabins at 4 kHz
+    /// booming at 132 Hz; the estate's at 61 Hz) and trimmed over its redline, so it is as loud as the game's and peaks
+    /// no higher (the trims equal a voice made with the car's voicing and redline). glp_engine_create, which knows only
+    /// the folder, makes the first car's voice of a folder that several cars share (the hot hatch's for "hothatch", which
+    /// the Bravo HGT and the Bravo 1.6 play until their own banks land; the V6 hatch's for "v6", which the BRZ plays),
+    /// and the front-engined default for a folder no car uses.
     /// </summary>
     [Fact]
     public void EngineVoiceIsVoicedAndTrimmedForItsCar()
     {
-        foreach (var car in VehicleSpec.Catalogue)
+        for (var index = 0; index < VehicleSpec.Catalogue.Length; index++)
         {
+            var car = VehicleSpec.Catalogue[index];
             var folder = FindInRepository(Path.Combine("game", "assets", "audio", car.Engine.SoundFolder));
             Assert.NotNull(folder);
-            var voice = NativeApi.CreateEngine(folder + Path.DirectorySeparatorChar, car.Engine.Cylinders);
+            var voice = NativeApi.CreateEngineForCar(folder + Path.DirectorySeparatorChar, index);
             var voicing = NativeApi.VoicingOf(car);
             Assert.Equal(voicing, voice.Voicing);
             GrainBank? Bank(string name) =>
                 File.Exists(Path.Combine(folder, name + ".wav")) ? GrainBank.FromFiles(Path.Combine(folder, name + ".wav"), Path.Combine(folder, name + ".json")) : null;
             var game = new GranularEngine(Bank("engine_idle"), Bank("engine_drive")!, car.Engine.Cylinders, voicing, car.Engine.RedlineRpm, overrun: Bank("engine_overrun"));
-            _out.WriteLine($"{car.Engine.SoundFolder}: {voicing.Placement}, cabin {voicing.CabinCutoff:0} Hz, boom {voicing.BoomHz:0} Hz; trims {voice.Trims}");
+            _out.WriteLine($"{car.Name} ({car.Engine.SoundFolder}): {voicing.Placement}, cabin {voicing.CabinCutoff:0} Hz, boom {voicing.BoomHz:0} Hz; trims {voice.Trims}");
             Assert.Equal(game.Trims, voice.Trims);
+            // By the folder alone, the first car that plays it.
+            var first = VehicleSpec.Catalogue.First(c => c.Engine.SoundFolder == car.Engine.SoundFolder);
+            var byFolder = NativeApi.CreateEngine(folder + Path.DirectorySeparatorChar, first.Engine.Cylinders);
+            Assert.Equal(NativeApi.VoicingOf(first), byFolder.Voicing);
+            Assert.Equal(new GranularEngine(Bank("engine_idle"), Bank("engine_drive")!, first.Engine.Cylinders, NativeApi.VoicingOf(first), first.Engine.RedlineRpm, overrun: Bank("engine_overrun")).Trims, byFolder.Trims);
         }
         var flat12 = NativeApi.VoicingOf(VehicleSpec.Catalogue[0]);
         Assert.Equal(EnginePlacement.Mid, flat12.Placement);

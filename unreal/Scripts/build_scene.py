@@ -1618,9 +1618,10 @@ def main():
     dress_car(car, materials)
     rig_car(car, "GLP.Car")
     # The other catalogue cars, in the catalogue's order (VehicleSpec.Catalogue): GLP.Car1 the V8, GLP.Car2 the hot
-    # hatch, GLP.Car3 the five, GLP.Car4 the turbo hatch, GLP.Car5-7 the everyday cars (0.13); a missing export leaves
-    # its slot empty and the title screen skips it.
-    for index, name in enumerate(["v8", "hothatch", "five", "turbohatch", "saloon", "estate", "fleet"], start=1):
+    # hatch, GLP.Car3 the five, GLP.Car4 the turbo hatch, GLP.Car5-7 the everyday cars (0.13), GLP.Car8-12 the five of
+    # cars13 (the 458, the two Bravos, the Leon Cupra and the BRZ, which await their exports and models); a missing
+    # export leaves its slot empty and the title screen skips it.
+    for index, name in enumerate(["v8", "hothatch", "five", "turbohatch", "saloon", "estate", "fleet", "458", "bravohgt", "bravo16", "leoncupra", "brz"], start=1):
         other = import_car(name)
         if other is not None:
             dress_car(other, materials)

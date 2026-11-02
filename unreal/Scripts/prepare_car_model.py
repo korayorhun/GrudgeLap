@@ -43,6 +43,12 @@ SPECS = {
     "saloon": dict(front=1.17, rear=1.32, track=0.678, hub=-0.20, rest=0.25, mass=1050.0, stiffness=24000.0, radius=0.2875),
     "estate": dict(front=1.00, rear=1.441, track=0.656, hub=-0.20, rest=0.26, mass=1045.0, stiffness=22000.0, radius=0.289),
     "fleet": dict(front=1.121, rear=1.753, track=0.80, hub=-0.20, rest=0.24, mass=1770.0, stiffness=45385.0, radius=0.326),
+    # cars13 (VehicleSpec.FlatPlaneV8, HgtFive, HatchSixteen, CupraTsi, Boxer): keyed by the model files the model track delivers.
+    "458": dict(front=1.325, rear=1.325, track=0.82, hub=-0.12, rest=0.26, mass=1560.0, stiffness=48000.0, radius=0.345),
+    "bravohgt": dict(front=0.975, rear=1.565, track=0.725, hub=-0.20, rest=0.22, mass=1240.0, stiffness=32630.0, radius=0.293),
+    "bravo16": dict(front=0.975, rear=1.565, track=0.72, hub=-0.20, rest=0.22, mass=1135.0, stiffness=29870.0, radius=0.298),
+    "leoncupra": dict(front=1.052, rear=1.579, track=0.7615, hub=-0.20, rest=0.22, mass=1395.0, stiffness=35830.0, radius=0.324),
+    "brz": dict(front=1.21, rear=1.36, track=0.765, hub=-0.16, rest=0.24, mass=1315.0, stiffness=36000.0, radius=0.313),
 }
 
 

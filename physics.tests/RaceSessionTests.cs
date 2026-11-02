@@ -149,6 +149,16 @@ public sealed class RaceSessionTests
     [InlineData(3, false)]
     [InlineData(4, true)]
     [InlineData(4, false)]
+    [InlineData(8, true)]
+    [InlineData(8, false)]
+    [InlineData(9, true)]
+    [InlineData(9, false)]
+    [InlineData(10, true)]
+    [InlineData(10, false)]
+    [InlineData(11, true)]
+    [InlineData(11, false)]
+    [InlineData(12, true)]
+    [InlineData(12, false)]
     public void Every_car_laps_both_routes(int car, bool stunt)
     {
         var spec = VehicleSpec.Catalogue[car];

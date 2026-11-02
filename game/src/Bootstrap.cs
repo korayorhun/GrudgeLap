@@ -354,10 +354,12 @@ public sealed partial class Bootstrap : Node3D
     /// <summary>The car a --car= switch names: its index in the catalogue or one of the short names; otherwise the current one.</summary>
     private static int CarIndex(string name, int current)
     {
-        string[] names = ["flat12", "v8", "hothatch", "five", "turbohatch", "saloon", "estate", "fleet"];
+        // In the catalogue's order (VehicleSpec.Catalogue); the five of cars13 by their model file keys.
+        string[] names = ["flat12", "v8", "hothatch", "five", "turbohatch", "saloon", "estate", "fleet", "458", "bravohgt", "bravo16", "leoncupra", "brz"];
         // The everyday cars and the hatchbacks answer to the names of the cars they follow too (the hatchbacks' keys
-        // are those of the cars they once were, which the models' files still carry).
-        string[] aliases = ["", "", "peugeot205", "delta", "r32", "sahin", "toros", "w212"];
+        // are those of the cars they once were, which the models' files still carry); the 458 and the Cupra to a short
+        // name each.
+        string[] aliases = ["", "", "peugeot205", "delta", "r32", "sahin", "toros", "w212", "flatv8", "", "", "cupra", ""];
         var index = System.Array.IndexOf(names, name.ToLowerInvariant());
         if (index < 0) index = System.Array.IndexOf(aliases, name.ToLowerInvariant());
         if (index < 0 && int.TryParse(name, out var number)) index = number;

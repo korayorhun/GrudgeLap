@@ -24,7 +24,10 @@ internal sealed partial class SampledEngine : Node
     private readonly Vector2[] _frames = new Vector2[Chunk];
     private AudioStreamGeneratorPlayback? _playback;
     private GranularEngine? _engine;
-    private (string Folder, EngineVoicing Voicing, float Redline)? _loaded;
+    // What the voice was made from. The cylinders are part of it since cars13: the cars that borrow another's banks
+    // (the Bravo HGT's five on the hot hatch's four) can differ from the banks' owner in them alone, and the voice,
+    // laid at the other car's firing, would stay.
+    private (string Folder, int Cylinders, EngineVoicing Voicing, float Redline)? _loaded;
     /// <summary>The voice being made for the car last loaded; the one it replaces plays until it is ready.</summary>
     private Task<GranularEngine?>? _making;
 
@@ -59,8 +62,8 @@ internal sealed partial class SampledEngine : Node
     {
         var engine = spec.Engine;
         var voicing = VoicingOf(spec);
-        if (_loaded == (engine.SoundFolder, voicing, engine.RedlineRpm)) return;
-        _loaded = (engine.SoundFolder, voicing, engine.RedlineRpm);
+        if (_loaded == (engine.SoundFolder, engine.Cylinders, voicing, engine.RedlineRpm)) return;
+        _loaded = (engine.SoundFolder, engine.Cylinders, voicing, engine.RedlineRpm);
         var folder = engine.SoundFolder;
         var drive = Recording(folder, "engine_drive", required: true);
         if (drive is null)
@@ -82,11 +85,13 @@ internal sealed partial class SampledEngine : Node
     /// mid-engined, the engine behind the seats of a two-seat cell about 1.3 m long, with big twin tailpipes; every other
     /// car has its engine in front. The cabin is measured from the dash to where its air ends: a hatchback's and an
     /// estate's load space is one space with the cabin (about 2.3 m and 2.8 m), a saloon's boot is shut off behind the
-    /// rear seats (about 1.9 m). A car of a style not named here is taken for a front-engined hatchback.
+    /// rear seats (about 1.9 m). A car of a style not named here is taken for a front-engined hatchback: the two Bravos
+    /// and the Leon Cupra are; the BRZ, a coupe with a boot, is left at it too while it plays the V6 hatch's banks, until
+    /// its own land (its cabin then the saloons' 1.9 m, here and in NativeApi.VoicingOf alike).
     /// </summary>
     internal static EngineVoicing VoicingOf(VehicleSpec spec) => spec.Style switch
     {
-        CarStyle.FlatTwelve or CarStyle.V8 => new EngineVoicing(EnginePlacement.Mid, 1.3f, TailpipeRadius: 0.035f),
+        CarStyle.FlatTwelve or CarStyle.V8 or CarStyle.FlatPlaneV8 => new EngineVoicing(EnginePlacement.Mid, 1.3f, TailpipeRadius: 0.035f),
         CarStyle.Saloon or CarStyle.Fleet => new EngineVoicing(EnginePlacement.Front, 1.9f),
         CarStyle.Estate => new EngineVoicing(EnginePlacement.Front, 2.8f),
         _ => new EngineVoicing(EnginePlacement.Front, 2.3f),

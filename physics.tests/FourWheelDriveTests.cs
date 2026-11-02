@@ -139,6 +139,11 @@ public sealed class FourWheelDriveTests(ITestOutputHelper output)
     [InlineData(2)]
     [InlineData(5)]
     [InlineData(7)]
+    [InlineData(8)]
+    [InlineData(9)]
+    [InlineData(10)]
+    [InlineData(11)]
+    [InlineData(12)]
     public void Two_wheel_drive_cars_drive_one_axle(int car)
     {
         var spec = VehicleSpec.Catalogue[car];

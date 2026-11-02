@@ -1,12 +1,16 @@
 # GrudgeLap
 
-**EN** · A homage to the 1989 arcade driving simulators. Eight cars — a four-speed flat-twelve of 1984, a
+**EN** · A homage to the 1989 arcade driving simulators. Thirteen cars — a four-speed flat-twelve of 1984, a
 seven-speed V8 of 2012 with a sports exhaust, three hatchbacks of 1988-2003 (a front-wheel-drive eight-valve
 1.9, a four-wheel-drive two-litre turbo with a viscous-coupled centre differential and a four-wheel-drive 3.2 V6 with
-an on-demand coupling) and three everyday cars of Turkey's roads (a 1.6
+an on-demand coupling), three everyday cars of Turkey's roads (a 1.6
 rear-wheel-drive saloon of the 1990s, a 1.4 estate of the same years and a 2.1 rear-wheel-drive diesel fleet saloon of
-the 2010s, with their
-published weights, gearing and power), all with real engine recordings — a fork between a long
+the 2010s) and five more of cars13 (a 4.5 flat-plane V8 of 2010 with a seven-speed dual-clutch gearbox and an
+electronically controlled differential, a five-cylinder and a 1.6 sixteen-valve hatchback of 2001, a 300 PS turbo
+hot hatch of 2018 with a clutch-pack front differential and a 250 km/h limiter, and a 2.0 boxer coupe of 2013 with a
+Torsen; drawn with stand-in bodies and voiced from the nearest existing recordings until their own models and
+sounds land), all with their
+published weights, gearing and power and real engine recordings — a fork between a long
 *speed* route and a short *stunt* route with an open drawbridge, a vertical loop and a banked 180, dips,
 traffic in both directions that keeps its distance, checkpoints against the clock, knocks that dent the car and bounce
 it off (only a hard hit, or one too many, is a crash), an instant replay with its own music after every crash in which
@@ -23,10 +27,14 @@ reading working dials through a steering wheel that turns as you steer, with the
 mirror, and the tyres squeal at their limit, howl and scrub past it and scrabble on gravel from real recordings. Keyboard-playable on Windows,
 windowed or full screen. Free, open source, no assets copied from anywhere.
 
-**TR** · 1989'un arcade sürüş simülatörlerine saygı duruşu. Beş araba (1984 flat-12, 4 vites; 2012 V8, 7
+**TR** · 1989'un arcade sürüş simülatörlerine saygı duruşu. On üç araba (1984 flat-12, 4 vites; 2012 V8, 7
 vites, spor egzoz; 1988-2003'ten üç hatchback: önden çekişli 1.9 8V, dört çeker 2.0 turbo ve dört çeker 3.2 V6; Türkiye
 yollarının üç gündelik arabası: 1990'ların 1.6 arkadan itişli sedanı, aynı yılların 1.4 station'ı ve 2010'ların 2.1
-arkadan itişli dizel filo sedanı, yayımlanmış ağırlık, vites ve güç değerleriyle; hepsinde gerçek motor kayıtları), uzun *speed* ve kısa *stunt* (açık köprü, dikey loop, eğimli
+arkadan itişli dizel filo sedanı; cars13'ün beş arabası: 7 vites çift kavramalı şanzımanlı ve elektronik kontrollü
+diferansiyelli 2010 4.5 düz krank (flat-plane) V8, 2001'den beş silindirli 2.0 ve 1.6 16V iki hatchback, lamelli ön
+diferansiyelli ve 250 km/sa sınırlayıcılı 2018 300 PS turbo hot hatch ve Torsen diferansiyelli 2013 2.0 boxer coupe;
+bu beşi kendi modelleri ve sesleri gelene dek yedek gövdelerle çizilir ve en yakın mevcut kayıtlarla seslendirilir;
+hepsi yayımlanmış ağırlık, vites ve güç değerleriyle, hepsinde gerçek motor kayıtları), uzun *speed* ve kısa *stunt* (açık köprü, dikey loop, eğimli
 180°) rotaları, çukurlar, iki yönlü trafik, süreye karşı kontrol noktaları, her kazadan sonra arabanın çarptığı
 yerden ezildiği ve parçalarının uçuştuğu anlık tekrar,
 gizli skid pad, "1989 modu" ve *grudge match*: en iyi turunuzun hayaleti sonraki her turda sizinle yarışır.
@@ -168,9 +176,12 @@ best lap's ghost out of the picture.
 ## How it is made
 
 - `physics/` — the simulation: raycast-wheel rigid body at 240 Hz, Pacejka-style tyres, torque-curve
-  engines (flat-twelve, V8, the fours, a two-litre turbo four with its boost lag and a VR6),
+  engines (flat-twelve, two V8s, the fours, a five, two turbo fours with their boost lag, a VR6, a boxer four and a
+  turbodiesel with its governor),
   front-, rear- or four-wheel drive (a centre differential with a viscous coupling, or an on-demand coupling to the
-  rear axle, and a differential per axle), clutch lock/slip with a launch assist, gearboxes, the track as a graph
+  rear axle, and a differential per axle: open, clutch-type or Torsen, with the electronically controlled units of
+  the 2010s as clutch-type shares), speed limiters where the real cars have them, clutch lock/slip with a launch
+  assist, gearboxes, the track as a graph
   of road frames built by a turtle API (loop, drawbridge, banked curve, overpass, dips), the wear of the road
   (a slow undulation and potholes in the wheel tracks that the wheels feel and the view draws), a ground
   field that gives the terrain its embankments and cuttings, traffic drones, the rules of a credit, the

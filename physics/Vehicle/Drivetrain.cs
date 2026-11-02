@@ -100,6 +100,14 @@ public sealed class Drivetrain
         Engagement = 1f - pedal;
 
         var throttle = input.Throttle * MathUtil.Clamp01(TorqueCut);
+        if (float.IsFinite(_spec.SpeedLimiterKmh))
+        {
+            // The speed limiter (cars13): the engine management takes the throttle back over the last 3 km/h under the
+            // limit and holds the car there, the smooth hold of the real limiters rather than the rev limiter's cut (the
+            // sound reads the throttle and hears a lift, not a stutter). A car without one never enters here.
+            var kmh = MathF.Abs(groundSpeed) * MathUtil.KmhPerMps;
+            throttle = MathF.Min(throttle, MathUtil.Clamp01((_spec.SpeedLimiterKmh - kmh) / 3f));
+        }
         if (Mode != TransmissionMode.ManualClutch && _shiftTimer > 0f) throttle = 0f; // lift fully during assisted shifts
         if (Launching || PreRevving) throttle = MathF.Min(throttle, LaunchGovernor(input.Throttle));
         else if (Synchronising)

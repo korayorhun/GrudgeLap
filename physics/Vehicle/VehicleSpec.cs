@@ -7,9 +7,13 @@ namespace GrudgeLap.Physics.Vehicle;
 /// the four-wheel-drive Delta HF Integrale Evoluzione of 1992 (<see cref="FiveHatch"/>) and Golf R32 of 2003
 /// (<see cref="TurboHatch"/>); and three everyday cars of Turkey's roads (0.9.1): the 1.6 rear-wheel-drive saloon of the
 /// 1990s (<see cref="Saloon"/>), the 1.4 estate of the same years (<see cref="Estate"/>) and the 2.1 diesel fleet
-/// saloon of the 2010s (<see cref="Fleet"/>, the E-Class the game draws). The numbers are game numbers, tuned for feel
-/// from the published figures of the cars they follow (power, torque, mass, wheelbase, track, tyres, gearing), not a
-/// manufacturer datasheet.
+/// saloon of the 2010s (<see cref="Fleet"/>, the E-Class the game draws); and five cars of cars13, appended after them
+/// so saved choices keep their index: the flat-plane V8 of 2010 (<see cref="FlatPlaneV8"/>, after the Ferrari 458
+/// Italia), the five-cylinder and the 1.6 hatchbacks of 2001 (<see cref="HgtFive"/> and <see cref="HatchSixteen"/>,
+/// after the Fiat Bravo HGT 2.0 20V and 1.6 16V), the hot hatch of 2018 (<see cref="CupraTsi"/>, after the SEAT Leon
+/// Cupra 300) and the coupe of 2013 (<see cref="Boxer"/>, after the Subaru BRZ). The numbers are game numbers, tuned
+/// for feel from the published figures of the cars they follow (power, torque, mass, wheelbase, track, tyres, gearing),
+/// not a manufacturer datasheet.
 /// </summary>
 public sealed record VehicleSpec
 {
@@ -149,6 +153,16 @@ public sealed record VehicleSpec
     public float RearBrakeTorque { get; init; } = 1700f;
     /// <summary>Anti-lock brakes: each wheel's pressure is eased when it slips past the tyre's peak, so the car stops short and still steers.</summary>
     public bool AntiLockBrakes { get; init; }
+
+    /// <summary>
+    /// The speed limiter (cars13): the road speed (km/h) past which the engine management takes the throttle away and
+    /// holds the car, as the German makers' agreement holds most of their cars of the 2000s and 2010s to 250 km/h and
+    /// Volkswagen's group cars with them; infinite on a car without one (every car but the Leon Cupra, whose published
+    /// 250 km/h is the limiter's, not the car's). The ease is smooth, over the last 3 km/h under the limit
+    /// (Drivetrain.Step), the way the real limiters fade the fuel in: no rev limiter's cut, nothing for the sound to
+    /// stutter on. Managed only: the native ABI does not carry it.
+    /// </summary>
+    public float SpeedLimiterKmh { get; init; } = float.PositiveInfinity;
 
     // Drivetrain
     public float[] GearRatios { get; init; } = [-3.0f, 0f, 3.14f, 2.11f, 1.46f, 1.0f]; // index = gear + 1 (R, N, 1..4)
@@ -686,8 +700,422 @@ public sealed record VehicleSpec
         WheelInertia = 1.1f,
     };
 
-    /// <summary>The cars the player can choose from, in menu order.</summary>
-    public static VehicleSpec[] Catalogue => [FlatTwelve, V8Evo, HotHatch, FiveHatch, TurboHatch, Saloon, Estate, Fleet];
+    /// <summary>
+    /// The mid-engined V8 of 2010, after the Ferrari 458 Italia (2009-15): the 4.5-litre flat-plane V8, 570 CV at 9000
+    /// and 540 N m at 6000, the seven-speed Getrag dual-clutch gearbox (3.08 / 2.19 / 1.63 / 1.29 / 1.03 / 0.84 / 0.69 on
+    /// a 5.14 final drive: carspecs.us's 2010 listing and Wikipedia's 458 page, which has 2.18 for second), the E-Diff
+    /// with F1-Trac, 235/35 ZR20 front and 295/35 ZR20 rear tyres, carbon-ceramic brakes (398 mm in front, 360 behind)
+    /// with ABS, 1380 kg dry, 1485 kg at the kerb, 42/58 (Ferrari's press release of 2009, as conceptcarz.com carries it;
+    /// autozine.org's archive page on the 458). Ferrari's figures: 0-100 km/h in under 3.4 s, over 325 km/h, 100-0 km/h
+    /// in 32.5 m, Cd 0.33 with 140 kg of downforce at 200 km/h (360 kg at top speed, split 41/59 front to rear).
+    /// </summary>
+    /// <remarks>
+    /// Its size is the 458's: 4527 x 1937 x 1213 mm, 2650 mm between the axles, tracks of 1672 mm in front and 1606
+    /// behind (Ferrari's technical sheet), one track of 1.64 m here (the mean, as on every car). The overhangs are split
+    /// as the real car's are (about 1030 mm in front, 847 behind); the V8's loft, fitted to these axles, draws the car
+    /// until its model lands (CarStyle.FlatPlaneV8). The E-Diff: a multi-plate clutch across the rear differential pressed
+    /// by a hydraulic actuator the ECU commands from open to locked, with the traction control (F1-Trac) in the same ECU
+    /// deciding both from the car's state (Ferrari's description of the 458's E-Diff 3; the semi-active differential
+    /// Ferrari, Magna Steyr and the Politecnico di Milano developed for the F430, IFAC World Congress 2005). The game's
+    /// differential is the clutch-type unit the flat-twelve has: the E-Diff's power-on strategy is taken as a locking
+    /// share of 35 % of the drive torque (a game figure, since Ferrari publishes no lock figure; a little under the
+    /// flat-twelve's 40 % plate unit, because the real strategy opens the clutch on turn-in, which the model does not)
+    /// and no preload, as the clutch is open without pressure. F1-Trac is the traction control, and the launch control
+    /// the 458 had (the dual-clutch gearbox's launch mode) is <see cref="LaunchControl"/>.
+    /// </remarks>
+    public static VehicleSpec FlatPlaneV8 => new()
+    {
+        Name = "V8 4.5 '10",
+        Style = CarStyle.FlatPlaneV8,
+        // Getrag's seven-speed dual-clutch box: a shift costs what the 570S's does (the same make of gearbox).
+        ShiftSeconds = 0.03f,
+        LaunchControl = true,
+        // 140 kg at 200 km/h, 41 % of it over the front axle: lift areas of -0.30 and -0.44 m^2 together make 1373 N at
+        // 55.6 m/s (0.5 x 1.2 x 55.6^2 x 0.74), and 370 kg at 325 km/h, Ferrari's 360.
+        FrontLiftArea = -0.30f,
+        RearLiftArea = -0.44f,
+        FrontTire = new(235f, 35f, 20f),
+        RearTire = new(295f, 35f, 20f),
+        // A little stiffer than the 570S's bars, for 75 kg more and a car Ferrari set up for the track.
+        FrontAntiRoll = 34000f,
+        RearAntiRoll = 17000f,
+        // 42/58: the centre of mass 0.212 m behind the middle of the 2.65 m wheelbase, 0.19 m under the reference point
+        // as the V8's (a mid-engined car of 1.21 m).
+        CentreOfMassOffset = new(0f, -0.19f, -0.212f),
+        AntiLockBrakes = true,
+        // The E-Diff (see the remarks).
+        LimitedSlipLocking = 0.35f,
+        LimitedSlipPreload = 0f,
+        Engine = EngineSpec.FlatPlaneV8,
+        SpeedoMaxMph = 220f,
+        // 1485 kg at the kerb with a driver.
+        MassKg = 1560f,
+        // The V8's inertias at 1560 kg, the same wheelbase.
+        InertiaRoll = 505f,
+        InertiaYaw = 2260f,
+        InertiaPitch = 2050f,
+        HalfTrack = 0.82f,
+        FrontAxle = 1.325f,
+        RearAxle = 1.325f,
+        BodyFront = 2.355f,
+        BodyRear = 2.172f,
+        BodyHalfWidth = 0.9685f,
+        HubHeight = -0.12f,
+        DragCoefficient = 0.33f,
+        // 1.94 m wide and 1.21 m tall.
+        FrontalArea = 2.05f,
+        // Automobile Magazine's 458 held 1.04-1.08 g on its cornering test (2010); the 570S's 1.05 g is 1.15 here.
+        TireGrip = 1.17f,
+        TractionControl = true,
+        SuspensionStiffness = 48000f,
+        SuspensionDamping = 4300f,
+        MaxSteerLowSpeedDeg = 30f,
+        // Carbon-ceramic discs of 398 mm in front and 360 behind, six- and four-piston callipers: Ferrari's 32.5 m from
+        // 100 km/h.
+        FrontBrakeTorque = 3400f,
+        RearBrakeTorque = 1900f,
+        // Reverse is not published: a game figure.
+        GearRatios = [-3.0f, 0f, 3.08f, 2.19f, 1.63f, 1.29f, 1.03f, 0.84f, 0.69f],
+        FinalDrive = 5.14f,
+        ClutchMaxTorque = 1200f,
+        // A flat-plane crank and a light flywheel behind a dual-clutch box.
+        EngineInertia = 0.18f,
+        // 295/35 R20 behind (0.357 m), 235/35 R20 in front (0.336): one radius here, between the two, so a model drawn
+        // with both sits on the road (tools/car_models.py sets the hubs at their mean). It is also about the driven tyre's
+        // rolling radius under load (a tyre rolls on about 97 % of its free radius: 0.346), which sets the speed of each
+        // gear: 330 km/h at 9000 rpm in seventh, so the real car's "over 325" is within a few per cent of its cut too.
+        // Here it tops out at 323 km/h on the cut, the model's road load not growing with speed (design audit item 23);
+        // on the free 0.357 it ran to 335 km/h, still on the cut (cars13 review).
+        WheelRadius = 0.345f,
+        // A rear corner's rotating parts: a 295/35 ZR20 tyre of about 12.5 kg turning at a radius of gyration of about
+        // 0.32 m (1.3 kg m^2), a forged 20 x 10.5 in wheel of about 11 kg (0.45), the 360 mm carbon-ceramic disc, the hub
+        // and the half shaft (0.1): about 1.8 kg m^2, a game estimate (Ferrari publishes no inertias; the front corners,
+        // on 235/35 tyres, are nearer 1.5, but the model has one figure and the driven wheels' sets the drive). At the
+        // default 1.3 the rear wheels' speeds alternated against each other at the step rate for 31 steps launching out
+        // of a tight turn (launch control, 60 % steer; the 570S's 5: cars13 review); at 1.8, for 1.
+        WheelInertia = 1.8f,
+    };
+
+    /// <summary>
+    /// The five-cylinder hatch of 2001, after the Fiat Bravo HGT 2.0 20V of the 1998-2001 facelift (the 155 PS car): the
+    /// 1,998 cc twenty-valve five, 155 PS at 6500 and 186 N m at 3750, the five-speed C.510 box (3.55 / 2.24 / 1.52 /
+    /// 1.16 / 0.95: cars-data.com's listing of the 1998 car; final drive 3.56: carfolio.com) to an open front
+    /// differential, 205/50 R15 tyres (auto-data.net; cars-data lists 195/55 R15), ventilated discs in front and discs
+    /// behind with ABS, 1165 kg at the kerb (auto-data.net and cars-data.com agree). Fiat's figures: 0-100 km/h in 8.5 s
+    /// (8.0 in cars-data's table), 213 km/h, which the gearing puts at 6,530 rpm in fifth, on the power peak.
+    /// </summary>
+    /// <remarks>
+    /// Its size is the Bravo's: 4025 x 1755 x 1410 mm, 2540 mm between the axles, tracks of 1471 mm in front and 1430
+    /// behind (auto-data.net, cars-data.com), one track of 1.45 m here (the mean). The overhangs are the ones the
+    /// three-door Bravo's loft was keyed on (875 / 614 mm, CarView.Hatchbacks.cs), and that loft, fitted to these axles,
+    /// draws the car until its model lands (CarStyle.HgtFive). About 62/38: no measured axle loads were found, and a
+    /// transverse five with its gearbox hangs ahead of the front axle as the 205's four does (62.8 %). Cd: no figure was
+    /// found, 0.32 for the smooth three-door body of 1995 (a game figure). The springs give the hot hatch's sag at this
+    /// mass (see HotHatch's remarks), the bars sit between the 205's and the R32's; reverse is not published.
+    /// </remarks>
+    public static VehicleSpec HgtFive => new()
+    {
+        Name = "HATCH 2.0 20V '01",
+        Style = CarStyle.HgtFive,
+        FrontTire = new(205f, 50f, 15f),
+        RearTire = new(205f, 50f, 15f),
+        FrontAntiRoll = 17000f,
+        RearAntiRoll = 9000f,
+        CentreOfMassOffset = new(0f, -0.09f, 0.01f),
+        AntiLockBrakes = true,
+        LimitedSlipLocking = 0f,
+        LimitedSlipPreload = 0f,
+        Engine = EngineSpec.HgtFive,
+        // Its speedometer reads to 240 km/h.
+        SpeedoMaxMph = 150f,
+        // 1165 kg at the kerb with a driver.
+        MassKg = 1240f,
+        // The R32's inertias at 1240 kg and the Bravo's wheelbase, width and height (see HotHatch's remarks).
+        InertiaRoll = 375f,
+        InertiaYaw = 1630f,
+        InertiaPitch = 1585f,
+        HalfTrack = 0.725f,
+        FrontAxle = 0.975f,
+        RearAxle = 1.565f,
+        BodyFront = 1.85f,
+        BodyRear = 2.179f,
+        BodyHalfWidth = 0.8775f,
+        HubHeight = -0.20f,
+        DragCoefficient = 0.32f,
+        // 1.755 m wide and 1.41 m tall.
+        FrontalArea = 2.0f,
+        FrontLiftArea = 0.08f,
+        RearLiftArea = 0.05f,
+        // Performance tyres of the late 1990s on 15 in rims: between the 205's (1.0) and the R32's (1.08).
+        TireGrip = 1.03f,
+        WheelRadius = 0.293f,
+        SuspensionRest = 0.22f,
+        // The hot hatch's sag (985 kg on 25,920 N/m) at 1240 kg.
+        SuspensionStiffness = 32630f,
+        SuspensionDamping = 3100f,
+        MaxCompression = 0.13f,
+        MaxSteerLowSpeedDeg = 33f,
+        MaxSteerHighSpeedDeg = 7f,
+        // Ventilated discs in front, solid discs behind (cars-data), proportioned so the fronts lock first on a 62/38 car.
+        FrontBrakeTorque = 2300f,
+        RearBrakeTorque = 450f,
+        GearRatios = [-3.55f, 0f, 3.55f, 2.24f, 1.52f, 1.16f, 0.95f],
+        FinalDrive = 3.56f,
+        ClutchMaxTorque = 350f,
+        EngineInertia = 0.14f,
+        WheelInertia = 0.9f,
+        FrontWheelDrive = true,
+    };
+
+    /// <summary>
+    /// The 1.6 hatch of 2001, after the Fiat Bravo 1.6 16V of the same body: the 1,581 cc sixteen-valve four, 103 PS at
+    /// 5750 and 144 N m at 4000, five speeds to an open front differential, 185/65 R14 tyres, discs in front and drums
+    /// behind, ABS (standard on the GT trim and optional below it: the car has it), 1060 kg at the kerb for the SX
+    /// (auto-data.net; 1025 for the base three-door, 1065 for the five-door Brava). Its figures: 0-100 km/h in 11.0 s
+    /// and 184 km/h, 2,900 rpm at 100 km/h in fifth (cars-data.com's listing of the 1.6 16V GT).
+    /// </summary>
+    /// <remarks>
+    /// The HGT's body: 4025 x 1755 x 1414 mm, 2540 mm between the axles, tracks of 1439 / 1441 mm on its 14 in wheels
+    /// (cars-data), one track of 1.44 m here, the same overhangs and the same loft (CarStyle.HatchSixteen). No gearing
+    /// was found published for the 1.6 16V's five-speed (Fiat's C.514 family): the ratios are the C.514's as a Fiat
+    /// forum gives them for the Punto 1.2 16V (3.909 / 2.158 / 1.480 / 1.121 / 0.921, reverse 3.818) on a 3.56 final
+    /// drive, which gives cars-data's 2,900 rpm at 100 km/h (2,918 here) and puts 184 km/h at 5,370 rpm in fifth, near
+    /// the power peak. About 62/38 as the HGT; the sag the hot hatch's; Cd as the HGT's; the inertias the HGT's at this
+    /// mass.
+    /// </remarks>
+    public static VehicleSpec HatchSixteen => new()
+    {
+        Name = "HATCH 1.6 16V '01",
+        Style = CarStyle.HatchSixteen,
+        FrontTire = new(185f, 65f, 14f),
+        RearTire = new(185f, 65f, 14f),
+        // Softer than the HGT's: a family hatch's bars.
+        FrontAntiRoll = 14000f,
+        RearAntiRoll = 6500f,
+        CentreOfMassOffset = new(0f, -0.09f, 0f),
+        AntiLockBrakes = true,
+        LimitedSlipLocking = 0f,
+        LimitedSlipPreload = 0f,
+        Engine = EngineSpec.HatchSixteen,
+        // Its speedometer reads to 220 km/h.
+        SpeedoMaxMph = 137f,
+        // 1060 kg at the kerb with a driver.
+        MassKg = 1135f,
+        InertiaRoll = 345f,
+        InertiaYaw = 1500f,
+        InertiaPitch = 1460f,
+        HalfTrack = 0.72f,
+        FrontAxle = 0.975f,
+        RearAxle = 1.565f,
+        BodyFront = 1.85f,
+        BodyRear = 2.179f,
+        BodyHalfWidth = 0.8775f,
+        HubHeight = -0.20f,
+        DragCoefficient = 0.32f,
+        FrontalArea = 2.0f,
+        FrontLiftArea = 0.10f,
+        RearLiftArea = 0.06f,
+        // Economy tyres of the 2000s, the Egea's 0.94.
+        TireGrip = 0.94f,
+        WheelRadius = 0.298f,
+        SuspensionRest = 0.22f,
+        // The hot hatch's sag at 1135 kg.
+        SuspensionStiffness = 29870f,
+        SuspensionDamping = 2800f,
+        MaxCompression = 0.13f,
+        MaxSteerLowSpeedDeg = 33f,
+        MaxSteerHighSpeedDeg = 7f,
+        // Discs in front, drums behind.
+        FrontBrakeTorque = 1800f,
+        RearBrakeTorque = 350f,
+        GearRatios = [-3.818f, 0f, 3.909f, 2.158f, 1.480f, 1.121f, 0.921f],
+        FinalDrive = 3.56f,
+        ClutchMaxTorque = 260f,
+        EngineInertia = 0.12f,
+        WheelInertia = 0.8f,
+        FrontWheelDrive = true,
+    };
+
+    /// <summary>
+    /// The hot hatch of 2018, after the SEAT Leon Cupra 300 (the Mk3 facelift, type 5F, 2017-18): the 2.0 TSI EA888,
+    /// 300 PS from 5500 to 6200 and 380 N m from 1800 to 5500, the six-speed manual (3.357 / 2.087 / 1.481 / 1.088 on a
+    /// 3.944 final drive, 1.097 / 0.912 on 3.087, reverse 3.990: SEAT's technical sheet of the Leon SC CUPRA 300 of
+    /// 02/2017), front-wheel drive with the VAQ, 235/35 R19 tyres (225/40 R18 on the 18 in wheels), 340 x 30 mm
+    /// ventilated discs in front and 310 x 22 behind, ESC with ABS and traction control, 1375 kg in running order with a
+    /// driver for the three-door (the five-door is listed 20 kg heavier). SEAT's figures: 0-100 km/h in 5.7 s (5.8 for
+    /// the five-door), 250 km/h, limited. The user asked for a 240 HP Cupra: the 2018 car was sold at 300 PS until the
+    /// petrol particulate filter of autumn 2018 brought it to 290 PS with its 380 N m kept (ADAC's listings of the Cupra
+    /// 290 of 09/2019: 213 kW, 380 N m), and the game follows the 300 PS car of SEAT's sheet, the tune published in full
+    /// with its gearing; the 290 can be set later by lowering the top of the curve.
+    /// </summary>
+    /// <remarks>
+    /// Its size is the five-door's: 4281 x 1816 x 1443 mm, 2631 mm between the axles, tracks of 1536 / 1510 mm on the
+    /// 19 in wheels (SEAT's sheet: 1534 / 1511 on 18 in), one track of 1.523 m here; the overhangs about 880 / 770 mm
+    /// (the SC's 4246 and 2596 give the same 1650 together). The R32's loft (keyed on the 2007 Leon), fitted to these
+    /// axles, draws the car until its model lands (CarStyle.CupraTsi). The VAQ (Vorderachsquersperre): a multi-plate
+    /// clutch across the front differential pressed by an electro-hydraulic actuator built on Haldex's fifth-generation
+    /// coupling, locking up to 1600 N m as the ESC's controller reads the steering angle, the wheel speeds and the yaw
+    /// rate (Volkswagen's description of the Golf GTI Performance's unit; PistonHeads, "VW's VAQ diff explained"; a VAG
+    /// service guide, jcr-leeds.com). It is modelled as the game's clutch-type unit with a locking share of 40 % of the
+    /// drive torque under power (a game figure: the controller's law is not published; the 1600 N m is more than the
+    /// axle sees above second gear) and no preload (open without pressure), which hands the drive to the outside wheel out
+    /// of a bend as the unit is meant to; the brake function of its ESC (XDS) is left out, the VAQ doing its work. The
+    /// 250 km/h is the limiter's (<see cref="SpeedLimiterKmh"/>): the car has the power for more. About 60/40 (a
+    /// transverse four and its gearbox ahead of the axle; no axle loads were found); Cd 0.32 (none published for the
+    /// Cupra; the Leon 5F is given as 0.30-0.31 in its economy trims: a game figure); the springs give the R32's sag.
+    /// </remarks>
+    public static VehicleSpec CupraTsi => new()
+    {
+        Name = "HOT HATCH 2.0 TSI '18",
+        Style = CarStyle.CupraTsi,
+        FrontTire = new(235f, 35f, 19f),
+        RearTire = new(235f, 35f, 19f),
+        // A hot hatch of 2018 with its balance set by a stiff rear, so that it turns in rather than ploughs on.
+        FrontAntiRoll = 28000f,
+        RearAntiRoll = 18000f,
+        CentreOfMassOffset = new(0f, -0.09f, 0f),
+        AntiLockBrakes = true,
+        // The VAQ (see the remarks).
+        LimitedSlipLocking = 0.4f,
+        LimitedSlipPreload = 0f,
+        Engine = EngineSpec.TsiFour,
+        // Its speedometer reads to 280 km/h.
+        SpeedoMaxMph = 175f,
+        SpeedLimiterKmh = 250f,
+        // SEAT's 1375 kg for the three-door with a driver; the five-door's 1395.
+        MassKg = 1395f,
+        // The R32's inertias at 1395 kg and the Leon's wheelbase, width and height (see HotHatch's remarks).
+        InertiaRoll = 475f,
+        InertiaYaw = 1965f,
+        InertiaPitch = 1910f,
+        HalfTrack = 0.7615f,
+        FrontAxle = 1.052f,
+        RearAxle = 1.579f,
+        BodyFront = 1.932f,
+        BodyRear = 2.349f,
+        BodyHalfWidth = 0.908f,
+        HubHeight = -0.20f,
+        DragCoefficient = 0.32f,
+        // 1.816 m wide and 1.443 m tall.
+        FrontalArea = 2.15f,
+        FrontLiftArea = 0.06f,
+        RearLiftArea = 0.03f,
+        // 235/35 R19 performance tyres of 2018: between the R32's 18 in sports tyres (1.08) and the 570S's (1.15).
+        TireGrip = 1.12f,
+        TractionControl = true,
+        WheelRadius = 0.324f,
+        SuspensionRest = 0.22f,
+        // The R32's sag (1550 kg on 39,800 N/m) at 1395 kg.
+        SuspensionStiffness = 35830f,
+        SuspensionDamping = 3700f,
+        MaxCompression = 0.13f,
+        MaxSteerLowSpeedDeg = 32f,
+        MaxSteerHighSpeedDeg = 7f,
+        // 340 x 30 mm ventilated discs in front, 310 x 22 behind, proportioned so the fronts lock first on a 60/40 car.
+        FrontBrakeTorque = 3300f,
+        RearBrakeTorque = 720f,
+        // The box drives gears 1-4 and 5-6 through two final drives, as the R32's 02M: 5th and 6th are given on the
+        // first one (1.097 x 3.087 / 3.944, 0.912 x 3.087 / 3.944); reverse is taken on the first.
+        GearRatios = [-3.99f, 0f, 3.357f, 2.087f, 1.481f, 1.088f, 0.8587f, 0.7138f],
+        FinalDrive = 3.944f,
+        ClutchMaxTorque = 600f,
+        // The EA888's dual-mass flywheel.
+        EngineInertia = 0.17f,
+        WheelInertia = 1.1f,
+        FrontWheelDrive = true,
+    };
+
+    /// <summary>
+    /// The coupe of 2013, after the Subaru BRZ (ZC6, 2012-16, before the facelift of 2017): the two-litre FA20 boxer four,
+    /// 200 PS at 7000 and 205 N m at 6400-6600, the six-speed manual (3.626 / 2.188 / 1.541 / 1.213 / 1.000 / 0.767,
+    /// reverse 3.437, final drive 4.10 until 2016 and 4.30 from 2017: Subaru's 2013 and 2017 specification sheets) to a
+    /// Torsen limited-slip rear differential, 215/45 R17 tyres, ventilated discs of 294 mm (11.6 in) in front and 290 mm
+    /// (11.4 in) behind with ABS, VSC with traction control, 53/47; 2762 lb (1253 kg) at the kerb for the US manual car,
+    /// 1240 kg as listed in Europe. Its figures: 0-100 km/h in 7.6 s and 226 km/h (Subaru Europe); Edmunds' Inside Line
+    /// ran a manual BRZ of 2012 to 60 mph in 7.3 s and over the quarter mile in 15.3 s at 92.1 mph (autoblog.com's report
+    /// of the test), which takes third gear: second runs out at the limiter's 7,400 rpm at 97 km/h on the free tyre
+    /// radius, about 95 on the loaded one, just short of 60 mph. Its 215/45 R17 Michelin Primacy HP touring tyres held
+    /// about 0.9 g in the road tests of 2012-13 (Car and Driver's and Motor Trend's BRZ and FR-S).
+    /// </summary>
+    /// <remarks>
+    /// Its size is the BRZ's: 4240 x 1775 x 1285 mm, 2570 mm between the axles, tracks of 1520 mm in front and 1540
+    /// behind (Subaru's sheet: 59.8 / 60.6 in), one track of 1.53 m here; the overhangs about 920 / 750 mm. Cd 0.29
+    /// (Subaru Canada's sheet, without the rear spoiler; 0.28 with it). The Torsen's bias ratio is not published: a
+    /// Type-2 unit's 2.5:1 is taken, a locking share of (2.5 - 1) / (2 x 3.5) = 0.21 as the Delta's rear is reckoned
+    /// (FourWheelDrive.RearLocking), with no preload. The law passes that share of the drive torque from the faster
+    /// wheel whatever the slower one can take, so with a wheel in the air it still sends a fifth of the axle's torque to
+    /// the grounded one, where a real Torsen, biasing torque against the other wheel's, sends almost none: the Delta's
+    /// rear works the same way, and a law with the bias's own limit is left to a pass on both. The V8's loft, fitted to
+    /// these axles, stands in for it until its model lands (CarStyle.Boxer): the nearest in height and proportion,
+    /// though its glass engine deck belongs to a mid-engined car. The inertias follow the sports cars' (the dynamic index
+    /// about 0.9); the springs and bars a sports coupe's of 1315 kg (game figures, none published).
+    /// </remarks>
+    public static VehicleSpec Boxer => new()
+    {
+        Name = "COUPE 2.0 BOXER '13",
+        Style = CarStyle.Boxer,
+        FrontTire = new(215f, 45f, 17f),
+        RearTire = new(215f, 45f, 17f),
+        FrontAntiRoll = 22000f,
+        RearAntiRoll = 14000f,
+        // 53/47 with the reference point 1.21 / 1.36 m from the axles; 0.14 m under it: the boxer sits low and far back.
+        CentreOfMassOffset = new(0f, -0.14f, 0f),
+        AntiLockBrakes = true,
+        // The Torsen (see the remarks).
+        LimitedSlipLocking = 0.21f,
+        LimitedSlipPreload = 0f,
+        Engine = EngineSpec.BoxerFour,
+        // Its speedometer reads to 260 km/h.
+        SpeedoMaxMph = 162f,
+        // No speed limiter: its published top speed (226 km/h, 230 in cars-data's listing of the Sport) is the drag's,
+        // in sixth at about 6,000 rpm; Subaru's specification sheets give no limited speed, and an owner's run to an
+        // indicated 237 km/h (Carscoops, 2013) ended on the drag. On the published curve, Cd 0.29 and the frontal area
+        // estimated from its size the car runs to about 245 km/h here, 8 % over 226 (the HGT and the Bravo 1.6 are 3-4 %
+        // over theirs): the model's rolling and driveline losses do not grow with speed as a real car's do.
+        // 1240 kg at the kerb with a driver.
+        MassKg = 1315f,
+        InertiaRoll = 420f,
+        InertiaYaw = 2000f,
+        InertiaPitch = 1900f,
+        HalfTrack = 0.765f,
+        FrontAxle = 1.21f,
+        RearAxle = 1.36f,
+        BodyFront = 2.13f,
+        BodyRear = 2.11f,
+        BodyHalfWidth = 0.8875f,
+        HubHeight = -0.16f,
+        DragCoefficient = 0.29f,
+        // 1.775 m wide and 1.285 m tall.
+        FrontalArea = 2.0f,
+        FrontLiftArea = 0.08f,
+        RearLiftArea = 0.04f,
+        // Touring tyres, chosen for the car's balance rather than its grip: the flat-twelve's 1.0 (about 0.9 g).
+        TireGrip = 1.0f,
+        TractionControl = true,
+        WheelRadius = 0.313f,
+        SuspensionRest = 0.24f,
+        SuspensionStiffness = 36000f,
+        SuspensionDamping = 3600f,
+        MaxCompression = 0.14f,
+        // A 13.1:1 rack: quick.
+        MaxSteerLowSpeedDeg = 32f,
+        MaxSteerHighSpeedDeg = 7f,
+        // Ventilated discs of 294 mm (11.6 in) in front and 290 mm (11.4 in) behind, two-piston callipers in front,
+        // proportioned for a 53/47 car.
+        FrontBrakeTorque = 2600f,
+        RearBrakeTorque = 1100f,
+        GearRatios = [-3.437f, 0f, 3.626f, 2.188f, 1.541f, 1.213f, 1.000f, 0.767f],
+        FinalDrive = 4.10f,
+        ClutchMaxTorque = 400f,
+        EngineInertia = 0.14f,
+        WheelInertia = 1.0f,
+    };
+
+    /// <summary>
+    /// The cars the player can choose from, in menu order; the five of cars13 are appended after the eight of 0.24.0, so
+    /// a saved choice (its index) still names the car it did.
+    /// </summary>
+    public static VehicleSpec[] Catalogue => [FlatTwelve, V8Evo, HotHatch, FiveHatch, TurboHatch, Saloon, Estate, Fleet, FlatPlaneV8, HgtFive, HatchSixteen, CupraTsi, Boxer];
 }
 
 /// <summary>
@@ -786,4 +1214,31 @@ public enum CarStyle
     /// game draws; a front-wheel-drive 1.4 after the Fiat Egea before).
     /// </summary>
     Fleet,
+    /// <summary>
+    /// The mid-engined flat-plane V8 of 2010 (after the Ferrari 458 Italia; cars13). Model key "458", sound folder
+    /// "v8flat" once its banks land; drawn with the V8's loft until its model does.
+    /// </summary>
+    FlatPlaneV8,
+    /// <summary>
+    /// The front-wheel-drive five-cylinder hatch of 2001 (after the Fiat Bravo HGT 2.0 20V; cars13). Model key
+    /// "bravohgt", sound folder "five" once its banks land; drawn with the five-cylinder hatch's loft (keyed on the
+    /// 1995 Bravo) until its model does.
+    /// </summary>
+    HgtFive,
+    /// <summary>
+    /// The front-wheel-drive 1.6 hatch of 2001 (after the Fiat Bravo 1.6 16V; cars13). Model key "bravo16", sound
+    /// folder "four16v" once its banks land; drawn with the same Bravo loft until its model does.
+    /// </summary>
+    HatchSixteen,
+    /// <summary>
+    /// The front-wheel-drive turbo hot hatch of 2018 (after the SEAT Leon Cupra 300; cars13). Model key "leoncupra",
+    /// sound folder "tsi4" once its banks land; drawn with the V6 hatch's loft (keyed on the 2007 Leon) until its model
+    /// does.
+    /// </summary>
+    CupraTsi,
+    /// <summary>
+    /// The rear-wheel-drive boxer coupe of 2013 (after the Subaru BRZ; cars13). Model key "brz", sound folder "boxer4"
+    /// once its banks land; drawn with the V8's loft until its model does.
+    /// </summary>
+    Boxer,
 }
