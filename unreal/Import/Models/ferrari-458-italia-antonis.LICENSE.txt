@@ -1,0 +1,37 @@
+Title:        ferrari 458 italia
+Kind:         2009-2015 mid-engined V8 berlinetta (Ferrari 458 Italia) - the catalogue's FlatPlaneV8 ("V8 4.5 '10"); shell without a cabin
+Licence:      Creative Commons Attribution 4.0 International (CC BY 4.0)
+Licence URL:  https://creativecommons.org/licenses/by/4.0/
+Author:       Antonis_zks (Sketchfab user "Antonis_zks", https://sketchfab.com/Antonis_zks)
+Source URL:   https://sketchfab.com/3d-models/9fc3bebac5ee4ad1a7fb1d743e0db7d3  (original Sketchfab page; published 2022-05-27)
+Mirror:       Objaverse 1.0 dataset (allenai/objaverse on Hugging Face), object uid 9fc3bebac5ee4ad1a7fb1d743e0db7d3
+Download URL: https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-011/9fc3bebac5ee4ad1a7fb1d743e0db7d3.glb
+Downloaded:   2026-11-02
+File:         ferrari-458-italia-antonis.glb (14,777,800 bytes, glTF 2.0 binary, Sketchfab-13.31.0 export;
+              SHA-256 08791e797956c5bb6af766ef5e328a8f03de438f3db4f18f708973e2c98d85e0;
+              437,222 triangles, 44 mesh nodes, 26 untextured materials, no images, no animations)
+Licence evidence: Objaverse 1.0 metadata snapshot (collected late 2022): license "by", isDownloadable true, name
+              "ferrari 458 italia", tags "cars, car", description "This is a simple 3d ferrari model I made."
+              The Sketchfab page returns 404 as of 2026-11-02 (the same rights-holder take-down pattern as every Ferrari
+              model checked on 2026-11-01, see testarossa-liosh.LICENSE.txt); the CC BY 4.0 grant is irrevocable for a copy
+              obtained under it, which this one was (the mirror holds the licence the model was published with). The author's
+              remaining uploads (McLaren 570S, Porsche 911 GT3 RS 4.0, Mazda 3 hatchback, a generic electric saloon, all
+              2022-05-26/27, tagged blender3dmodel) show a hobbyist's portfolio modelled in Blender; the node names here
+              (body.008, back lights.003, front grill.001, Circle.011, Cylinder.023, exhaust.001, Plane.010) are Blender
+              working names, the materials are plain colours, and nothing points to a game asset.
+Geometry:     lies along x, nose at -x (front grill at x = -1.85, tail lamps at +0.86); wheelbase 1.7612 file units, so
+              1 unit = 1.5046 m at the 458's 2650 mm wheelbase; then 4.53 m long (Ferrari: 4527), 1.97 m wide (1937),
+              1.18 m high (1213), tyres 0.697 m across (235/35 R20 0.672, 295/35 R20 0.715), hubs 0.35 m over the lowest
+              point, track 1.67 m (Ferrari: 1672 front, 1606 rear). Four tyres (Object_7, 62, 75, 88; 83,200 triangles
+              each), rims (Object_5, 60, 73, 86), discs (Object_9, 64, 77, 90), hub caps and nuts; red calipers Object_11,
+              70, 81, 96 sit at the wheels and must stay with the body. Paint is the material named "Material" (0.93, 0, 0)
+              on body.008; the glasshouse is body.013 (Material.029) and the rear window back window.001 (Material.048), the
+              headlamps front headlights.002 / front glass headlights (Material.047 / .046), the tail lamps back lights.003
+              and back glass lights.001 (Material.025 / .045). No cabin, no seats, no steering wheel, no dashboard, no
+              rear-view mirror: the game borrows a cabin (tools/car_models.json cabin_from) as it does for the Testarossa.
+
+Attribution text to show in the game credits (CC BY 4.0 requires attribution, a licence link and a note of changes):
+  "ferrari 458 italia" by Antonis_zks (https://sketchfab.com/3d-models/9fc3bebac5ee4ad1a7fb1d743e0db7d3) is licensed under
+  Creative Commons Attribution 4.0 International (CC BY 4.0) (https://creativecommons.org/licenses/by/4.0/).
+  Obtained via the Objaverse dataset (Deitke et al., 2022). Modified for use in GrudgeLap (re-scaled, re-rigged, given a
+  borrowed cabin, materials corrected).

@@ -1,0 +1,36 @@
+Title:        Scion FR-S 2015
+Kind:         2012-2016 front-engined rear-drive 2+2 coupe: the Scion FR-S is the North American twin of the Subaru BRZ (ZC6)
+              and the Toyota 86 (ZN6), the same body shell from the same Gunma line; the catalogue's Boxer ("COUPE 2.0 BOXER
+              '13") is drawn as it. Shell without a cabin.
+Licence:      Creative Commons Attribution 4.0 International (CC BY 4.0)
+Licence URL:  https://creativecommons.org/licenses/by/4.0/
+Author:       RoninVR (Sketchfab user "RoninVR", https://sketchfab.com/RoninVR)
+Source URL:   https://sketchfab.com/3d-models/3a68c66a5e3a451cb78f90fef59becc7  (original Sketchfab page; published 2017-06-01)
+Mirror:       Objaverse 1.0 dataset (allenai/objaverse on Hugging Face), object uid 3a68c66a5e3a451cb78f90fef59becc7
+Download URL: https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-022/3a68c66a5e3a451cb78f90fef59becc7.glb
+Downloaded:   2026-11-02
+File:         scion-frs-2015-roninvr.glb (37,446,620 bytes, glTF 2.0 binary, Sketchfab-12.66.0 export, materials in
+              KHR_materials_pbrSpecularGlossiness; SHA-256 43c3c9cc0aefc9af476db6516ab94ff9be40f96fb0fb399dc3c7ea66c1b240cc;
+              1,373,630 triangles (about a million of them in the four rims), 617 mesh nodes, 13 untextured materials, no
+              images, no animations)
+Licence evidence: live check 2026-11-02, api.sketchfab.com/v3/models/3a68c66a5e3a451cb78f90fef59becc7: HTTP 200, licence
+              slug "by" (CC Attribution), isDownloadable true, 687,271 faces, published 2017-06-01; the same licence in the
+              Objaverse 1.0 metadata snapshot. Description by the author: "Scion FR-S 2015. The back is unfinished as I had
+              other projects I was working on. Feel free to use it!"; tags scion, fr-s, blender, car. The node names
+              (5WheelFront.003, 5WheelFrontRim, 3SideWindows, 2HeadlightsGlass, 6Grillback, 7SideMIrrorMirror, Torus.1311)
+              are a modeller's working names from Blender and the materials plain colours; nothing points to a game asset.
+Geometry:     lies along z, nose at -z (headlamps at z = -2.0); wheelbase 2.8869 file units, so 1 unit = 0.8902 m at the
+              BRZ's 2570 mm wheelbase; then 4.16 m long (Subaru: 4240; the author's unfinished tail is the short end),
+              1.90 m wide over the mirrors (1775 without them), 1.25 m high (1285), tyres 0.639 m across (215/45 R17: 0.625),
+              hubs 0.32 m over the lowest point, track 1.51 m (Subaru: 1520 / 1540). Tyres 5WheelFront_0, 5WheelFront.001_0,
+              .002_0, .003_0 (2,240 triangles each); two rim meshes per wheel (5WheelFrontRim*, 128,043 and 111,573
+              triangles) and a flat 5WheelInside disc; no separate calipers. Side windows are 3SideWindows (material
+              "Windows"), the lamp covers 2HeadlightsGlass (material "glass"), both mirrors' housings one mesh 1SideMIrror
+              and both glasses one mesh 7SideMIrrorMirror. No cabin, no seats, no steering wheel, no dashboard: the game
+              borrows a cabin (tools/car_models.json cabin_from).
+
+Attribution text to show in the game credits (CC BY 4.0 requires attribution, a licence link and a note of changes):
+  "Scion FR-S 2015" by RoninVR (https://sketchfab.com/3d-models/3a68c66a5e3a451cb78f90fef59becc7) is licensed under
+  Creative Commons Attribution 4.0 International (CC BY 4.0) (https://creativecommons.org/licenses/by/4.0/).
+  Obtained via the Objaverse dataset (Deitke et al., 2022). Modified for use in GrudgeLap (re-scaled, re-rigged, given a
+  borrowed cabin, materials corrected).
