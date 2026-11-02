@@ -155,7 +155,8 @@ internal sealed partial class Hud : Control
             var y = panel.Position.Y + 70f;
             Centred(font, "GRUDGELAP", y, 58, white);
             Centred(font, $"<   {car.Spec.Name}   >", y + 62f, 28, white);
-            Centred(font, $"{CarFigures(car.Spec)}      left / right or the stick: car {CarNumber(car.Spec)} of {VehicleSpec.Catalogue.Length}      down or a click on the name: showroom", y + 90f, 15, grey);
+            // Held inside the panel's 880 px: with "or the stick" and the showroom's hint the line ran over its edge.
+            Centred(font, $"{CarFigures(car.Spec)}     left / right: car {CarNumber(car.Spec)} of {VehicleSpec.Catalogue.Length}     down or click the name: showroom", y + 90f, 15, grey);
             var options = new (string Key, string Label, TransmissionMode Mode)[]
             {
                 ("1", "AUTOMATIC", TransmissionMode.Automatic),
@@ -214,7 +215,9 @@ internal sealed partial class Hud : Control
     /// <summary>
     /// The showroom (<see cref="Game.Showroom"/>): its stage full-screen, the car's name over it, the chevrons at the
     /// sides, and on a panel at the foot the facts its spec gives, the paints as swatches (the chosen one framed, the
-    /// ORIGINAL one in the car's own colour) and the keys. The rects are the showroom's, so the mouse hits what is drawn.
+    /// ORIGINAL one in the car's own colour, the last one the car's mixed colour over a strip of hues), the paint's name
+    /// and the keys; the colour picker over the stage while it is open. The rects are the showroom's and the picker's,
+    /// so the mouse hits what is drawn.
     /// </summary>
     private void DrawShowroom(Font font, Vector2 size, Showroom room)
     {
@@ -238,24 +241,85 @@ internal sealed partial class Hud : Control
         Centred(font, Showroom.LayoutLine(room.Spec), y + 38f, 19, grey);
         Centred(font, Showroom.FiguresLine(room.Spec), y + 70f, 20, white);
         var first = Showroom.Swatch(size, 0);
-        var last = Showroom.Swatch(size, CarView.Paints.Length - 1);
         DrawString(font, new Vector2(first.Position.X - 112f, first.Position.Y + 25f), "PAINT", HorizontalAlignment.Right, 96f, 20, grey);
-        for (var i = 0; i < CarView.Paints.Length; i++)
+        for (var i = 0; i < Showroom.SlotCount; i++)
         {
             var swatch = Showroom.Swatch(size, i);
-            var colour = CarView.Paints[i].Paint?.Colour ?? room.CarColour;
+            var colour = i == Showroom.CustomSlot ? room.MixedChoice.Colour : CarView.Paints[i].Paint?.Colour ?? room.CarColour;
             DrawRect(swatch, new Color(colour.R, colour.G, colour.B));
-            if (i == room.PaintIndex) DrawRect(swatch.Grow(4f), gold, false, 3f);
+            // The mixed colour's swatch stands on a strip of every hue: the one that opens the picker.
+            if (i == Showroom.CustomSlot) DrawTextureRect(ColourPicker.HueStrip, new Rect2(swatch.Position.X, swatch.End.Y - 6f, swatch.Size.X, 6f), false);
+            if (i == room.PaintSlot) DrawRect(swatch.Grow(4f), gold, false, 3f);
         }
-        DrawString(font, new Vector2(last.End.X + 16f, first.Position.Y + 25f), CarView.Paints[room.PaintIndex].Name, HorizontalAlignment.Left, 240f, 20, gold);
+        var choice = room.Choice;
+        Centred(font, choice.IsCustom ? $"{choice.Name}   {choice.Hex}" : choice.Name, y + 160f, 18, gold);
         var take = Showroom.TakeButton(size);
         var back = Showroom.BackButton(size);
         DrawRect(take, new Color(1f, 0.85f, 0.3f, 0.16f));
         DrawString(font, new Vector2(take.Position.X, take.Position.Y + 29f), "TAKE IT   (ENTER)", HorizontalAlignment.Center, take.Size.X, 20, gold);
         DrawRect(back, new Color(1f, 1f, 1f, 0.06f));
         DrawString(font, new Vector2(back.Position.X, back.Position.Y + 29f), "BACK   (ESC)", HorizontalAlignment.Center, back.Size.X, 20, grey);
-        Centred(font, "left / right or A / D: car     up / down or W / S: paint     drag the car to turn it, the wheel brings it closer     ENTER, SPACE or A: take it     ESC or B: back", y + 176f, 15, grey);
-        Centred(font, room.FromMenu ? "another car starts a new game; the car and the paint are kept for next time" : "the car and the paint are kept for next time", y + 204f, 14, new Color(0.55f, 0.58f, 0.62f));
+        Centred(font, "left / right or A / D: car     up / down or W / S: paint     C or Y: mix a colour     drag the car to turn it, the wheel brings it closer     ENTER or A: take it     ESC or B: back", y + 190f, 15, grey);
+        Centred(font, room.FromMenu ? "another car starts a new game; the car and every car's paint are kept for next time" : "the car and every car's paint are kept for next time", y + 216f, 14, new Color(0.55f, 0.58f, 0.62f));
+        if (room.Picker is { } picker) DrawPicker(font, size, picker);
+    }
+
+    /// <summary>
+    /// The colour picker (<see cref="ColourPicker"/>): the square of saturation and lightness in the picker's hue with a
+    /// ring at the colour, the bar of hues with a mark at its hue, the three values and the finish as rows (the focused
+    /// one lit, as the menu's line under its cursor), and DONE and CANCEL.
+    /// </summary>
+    private void DrawPicker(Font font, Vector2 size, ColourPicker picker)
+    {
+        var white = new Color(1f, 1f, 1f);
+        var grey = new Color(0.72f, 0.75f, 0.8f);
+        var gold = new Color(1f, 0.85f, 0.3f);
+        var panel = ColourPicker.Panel(size);
+        DrawRect(panel, new Color(0.03f, 0.03f, 0.04f, 0.88f));
+        var choice = picker.Choice;
+        DrawString(font, new Vector2(panel.Position.X + 20f, panel.Position.Y + 36f), "MIX A COLOUR", HorizontalAlignment.Left, -1f, 22, white);
+        DrawRect(new Rect2(panel.End.X - 58f, panel.Position.Y + 16f, 38f, 26f), choice.Colour);
+        DrawString(font, new Vector2(panel.Position.X, panel.Position.Y + 36f), choice.Hex, HorizontalAlignment.Right, panel.Size.X - 68f, 16, grey);
+
+        var square = ColourPicker.Square(size);
+        DrawTextureRect(picker.SquareTexture, square, false);
+        var at = new Vector2(square.Position.X + picker.Saturation * square.Size.X, square.Position.Y + (1f - picker.Lightness) * square.Size.Y);
+        // A ring that shows on any colour: black inside white.
+        DrawArc(at, 8f, 0f, MathF.Tau, 24, new Color(0f, 0f, 0f, 0.8f), 3f, true);
+        DrawArc(at, 6f, 0f, MathF.Tau, 24, white, 2f, true);
+        var bar = ColourPicker.HueBar(size);
+        DrawTextureRect(ColourPicker.HueColumn, bar, false);
+        var hueY = bar.Position.Y + picker.Hue * bar.Size.Y;
+        DrawRect(new Rect2(bar.Position.X - 4f, hueY - 3f, bar.Size.X + 8f, 6f), new Color(0f, 0f, 0f, 0.8f), false, 2f);
+        DrawRect(new Rect2(bar.Position.X - 2f, hueY - 1.5f, bar.Size.X + 4f, 3f), white);
+
+        var values = new[] { ("HUE", $"{picker.Hue * 360f:0}°"), ("SATURATION", $"{picker.Saturation * 100f:0} %"), ("LIGHTNESS", $"{picker.Lightness * 100f:0} %") };
+        for (var i = 0; i < values.Length; i++)
+        {
+            var row = ColourPicker.RowRect(size, (ColourPicker.Row)i);
+            var focused = picker.Focus == (ColourPicker.Row)i;
+            if (focused) DrawRect(row, new Color(1f, 0.85f, 0.3f, 0.16f));
+            DrawString(font, new Vector2(row.Position.X + 8f, row.Position.Y + 22f), values[i].Item1, HorizontalAlignment.Left, -1f, 16, focused ? gold : grey);
+            DrawString(font, new Vector2(row.Position.X, row.Position.Y + 22f), values[i].Item2, HorizontalAlignment.Right, row.Size.X - 8f, 16, focused ? gold : white);
+        }
+        var finishRow = ColourPicker.RowRect(size, ColourPicker.Row.Finish);
+        var finishFocused = picker.Focus == ColourPicker.Row.Finish;
+        if (finishFocused) DrawRect(finishRow, new Color(1f, 0.85f, 0.3f, 0.16f));
+        DrawString(font, new Vector2(finishRow.Position.X + 8f, finishRow.Position.Y + 22f), "FINISH", HorizontalAlignment.Left, -1f, 16, finishFocused ? gold : grey);
+        foreach (var finish in Enum.GetValues<PaintFinish>())
+        {
+            var button = ColourPicker.FinishButton(size, finish);
+            var chosen = finish == picker.Finish;
+            DrawRect(button, chosen ? new Color(1f, 0.85f, 0.3f, 0.28f) : new Color(1f, 1f, 1f, 0.06f));
+            DrawString(font, new Vector2(button.Position.X, button.Position.Y + 21f), PaintChoice.FinishName(finish), HorizontalAlignment.Center, button.Size.X, 13, chosen ? gold : grey);
+        }
+        var done = ColourPicker.DoneButton(size);
+        var cancel = ColourPicker.CancelButton(size);
+        DrawRect(done, new Color(1f, 0.85f, 0.3f, 0.16f));
+        DrawString(font, new Vector2(done.Position.X, done.Position.Y + 24f), "DONE  (ENTER)", HorizontalAlignment.Center, done.Size.X, 15, gold);
+        DrawRect(cancel, new Color(1f, 1f, 1f, 0.06f));
+        DrawString(font, new Vector2(cancel.Position.X, cancel.Position.Y + 24f), "CANCEL  (ESC)", HorizontalAlignment.Center, cancel.Size.X, 15, grey);
+        DrawString(font, new Vector2(panel.Position.X, panel.End.Y - 14f), "up / down: row     left / right: change", HorizontalAlignment.Center, panel.Size.X, 13, grey);
     }
 
     /// <summary>The end of the credit: the score, the entry of the initials when it made the table, and the table.</summary>

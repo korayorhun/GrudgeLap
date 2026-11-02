@@ -828,10 +828,96 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
   run-up's place as the throttle closes. A limiter on the master bus. Loops imported compressed (QOA) must end
   at `GetLength() × MixRate` frames, not at the data's byte count: that once cut every loop to its first
   fifth, with a click at each turn.
-- The menu (`PauseMenu`, Esc or the pad's Back): carry on, new game, camera, graphics, 1989 mode, units, full
-  screen and quit, with the keys, the d-pad or the mouse. While it is open the session does not step, no input
-  reaches the car and the master bus is muted. Until 0.8.1 the game could only be left by closing its window,
-  which a full-screen window does not offer.
+- The menu (`PauseMenu`, Esc or the pad's Back): carry on, new game, the car (its showroom, 0.25), the car's paint,
+  camera, graphics, weather, 1989 mode, units, full screen, replay music and quit, with the keys, the d-pad or the
+  mouse. While it is open the session does not step, no input reaches the car and the master bus is muted. Until
+  0.8.1 the game could only be left by closing its window, which a full-screen window does not offer. Twelve lines
+  since the CAR line, at a 44 px pitch, so the panel still clears a 720-line window (the 48 px pitch would not).
+- The showroom (0.25, `Showroom`): the player asked for a menu where the cars turn round so a car is chosen by
+  seeing it; until then a car was a name on the title screen's line. It opens from the menu's CAR line (Enter, or
+  left / right, which step straight on to the next car) and from the title screen (down, the key or the d-pad, not
+  the brake trigger a resting foot holds, or a click on the car's name). The car is drawn with its real model on a
+  turntable that turns a full circle in about 24 s (0.26 rad/s, slow enough to look at a panel as it passes), first
+  seen from the front three-quarter on the driver's side; left / right (A / D, the chevrons) step through
+  `VehicleSpec.Catalogue` with a 0.32 s slide (the car leaves sideways, the next comes in from the other side, its
+  name fading out and in, the title screen's chime), up / down (W / S) through the paints, C or the pad's Y opens
+  the colour picker; a drag turns the table (letting go keeps a little of the spin, dying away in about a second),
+  the wheel brings the camera closer or further (0.55 to 1.8 of its framing), and the chevrons, the swatches and the
+  buttons take clicks. Enter, Space or A take the car and the paints chosen: another car starts a new game, as the
+  title screen's left / right always did, the same car is repainted where it stands; Esc, B or Back go back with
+  nothing changed. Either way the player is where the showroom was opened, the title screen or the menu.
+  - The stage is a world of its own (a `SubViewport` with `OwnWorld3D`), so the game's sun, weather and fog do not
+    reach it, and the main viewport draws no 3D while it is open (`Disable3D`): a paused frame of the track costs
+    what a driven one does, and would be drawn under the stage unseen. The light is a photographer's: a grey dome
+    with the studio's lamps in it (`StudioSky`, a sky shader: three long strips overhead across the car and three tall
+    softboxes round it at the height of its flanks, behind the camera and to either side, all out of the lens's view),
+    a soft key from the front quarter with the shadows that set the car on the floor, a cooler fill from the other
+    side, a rim from behind and above, a dark glossy floor that fades into the dome by a thin fog so the stage has no
+    edge, screen-space reflections on the floor, AgX as on the road so a paint reads the same colour in both. The lamps
+    are in the sky because a car's clearcoat mirrors the sky alone: as meshes in the room, caught by a reflection probe,
+    they reached the paint only through the base coat's rough reflection, and every flank read as satin. Only the key
+    has a highlight of its own, and a weak one (0.35): at full strength the key and the rim, small sources, drew hard
+    white spots with a halo of glow on the bonnet and the roof (seen from the front, the bonnet mirrors the space above
+    and behind the car, where the rim stands), where a studio's lamps are softboxes whose reflections are broad soft
+    patches. A 32 degree lens (vertical) from 11 degrees above, at 2.9 times the car's half-length (or 1.25 times its
+    height, the larger) and aimed under its middle, so the car stands over the panel.
+  - The ORIGINAL swatch is the car's own colour, the model's paint that covers the most of it, now by area: counted by
+    its surfaces' indices (since 0.21, for the crash's debris), the McLaren's finely cut maroon parts outnumbered its
+    orange panels and the orange car's swatch was maroon; the debris takes the orange too. The area is worked out once
+    a run for a model with more than one paint.
+  - The facts under the car come from its spec alone, so a car added to the catalogue appears with them and its
+    own paint key and nothing else to write: the year from the '84 that ends the name; where the engine sits, read
+    from the weight on each axle (`RearAxle`, `CentreOfMassOffset`: more than half on the rear is an engine behind
+    the seats, the flat-twelve's 40 / 60 and the V8's 42 / 58); the cylinders and the induction (a governor is a
+    diesel's, a boost share a turbo's); the driven wheels; the gears and the gearbox (a change under 0.125 s is a
+    dual-clutch box handing over); the front / rear split; peak power (metric horsepower, torque times revs over
+    7023, as the title screen prints it) and peak torque, each with its revs, from the full-throttle torque curve;
+    the mass, the power to weight and the tyres.
+  - The neighbours' models load on a thread while the player looks at a car (`ResourceLoader.LoadThreadedRequest`),
+    so a step does not wait on the disk: a prepared model is 20 to 70 MB, and read on the main thread it held the
+    picture for most of a second. Only the two neighbours are kept: every car's textures at once would be hundreds of
+    megabytes of video memory. The graphics preset reaches the stage (Low: three quarters of the pixels, FXAA, no
+    SSAO or reflections; 1989 mode a third of the pixels and no glow).
+  - Frame time, measured with `--perf-log` on the development laptop (RTX 5060 Laptop), hidden runs at the game's
+    frame cap (32 frames a second on the hidden window's 32 Hz screen), five-second averages once the first car is
+    in (the first ones carry its loading): the showroom on the V8 held the cap with 4.3 to 5.9 ms of GPU and 8 to 11
+    ms of CPU a frame, 4.6 to 5.1 and 9 to 14 with the colour picker open (its square rebuilt only when the hue moves),
+    where driving the same car took 6.5 to 8.6 and 13 to 16; other runs shared the machine (cars/menu).
+- Each car's paint (0.25, `PaintBook`, `PaintChoice`, `ColourPicker`): the player asked to choose the colour in the
+  showroom, every car starting from its own, the model's factory colour (ORIGINAL, as since 0.22), and to mix one of
+  their own. A car's paint is its own colour, a preset (`CarView.Paints`) or a mixed colour in a finish, kept per car
+  in the settings as text, `paint.<car>` in the game section, the car named by its style (`paint.flattwelve`,
+  `paint.hothatch`..., so a car added to the catalogue has its own key with nothing to write): `ORIGINAL`, a
+  preset's name (`DARK BLUE`), or the colour as hex and its finish (`#1E4FA0 METALLIC`), readable in the file and
+  untouched if the presets are reordered. Until 0.24 one paint (`paint`, an index into the presets) served whatever
+  car was driven: the first start of 0.25 gives every car that paint, so a choice is not lost, and drops the old
+  key, so the migration happens once. The menu's PAINT line steps through the presets and the colour the car was
+  last mixed in, for the car of the credit; `--paint=` takes a preset or `#RRGGBB[:solid|metallic|pearl]` for the
+  run's car, this run only. An automated run (`--invisible`, `--screenshot`, `--quit-after`) reads the paints but
+  never writes the player's file, which the test runs share; `--paint-book-test` writes, reads back and migrates
+  them in a file of its own (`user://paint-book-test.cfg`) and quits with 0 when every check holds. The drones keep
+  the traffic's palette and the ghost its glow. Paints chosen in the showroom are edits until a car is taken, then
+  every car's is kept; Esc forgets them.
+  - The picker (C or Y, or a click on the last swatch, which stands on a strip of every hue): a square of
+    saturation (across) and lightness (down) beside a bar of hue, HSL rather than HSV so the pastels and the dark
+    shades of one hue lie on one line from white through the full colour to black, and under them the hue,
+    saturation, lightness and finish as rows: up / down choose a row, left / right change it (a tap a degree or a
+    per cent, held faster and faster from a quarter of a second, 30 to 150 steps a second), the mouse clicks or
+    drags the square and the bar. The turning car is repainted as the colour moves, the texture-painted cars too (the
+    205's and the VAZ's atlases, the Delta's white: the mask path of 0.21), and the camera slides the car left,
+    clear of the picker's panel. Enter, Space, A, C or Y keep the colour; Esc, B or Back put back the paint the car
+    had, and its mixed swatch. A car's last mixed colour stays its swatch while the game runs, and after a restart
+    when the car is still in it. A colour starts from the car's last mixed one, or from its own colour as a solid.
+  - The finishes: solid as the classic paints (metallic 0.05, roughness 0.38 under the clearcoat), metallic as the
+    silver (0.6, 0.3), and pearl (0.3, 0.32 and a flop). A pearl's mica is coated thinly enough to colour the light it
+    returns by interference, so its colour shifts with the angle it is seen at; the models' paint shaders blend
+    towards a tint as a panel turns edge-on (the two-tone blend on the view angle that real-time car paints use for
+    it, 0.55 times the cube of one minus the cosine, so a panel seen at 60 degrees keeps nearly all its colour), the
+    tint the colour's hue moved on by a twelfth of the circle and 12 % darker, or for a white, silver or black, which
+    have no hue to move, the warm gold of the mica. The lofted bodies' standard material cannot, and draw a pearl as
+    its metallic base. A mixed colour is held inside what a paint reflects, 0.03 to 0.92 a channel (sRGB, about the
+    black's 0.035 and the white's 0.90), so the picker's pure white does not glow in the sun and its pure black is not
+    a hole in the picture.
 - A fault in the sound update is logged once and the frame carries on (`Bootstrap._Process`). In 0.8.0 the
   world sound kept the players of the last credit's drones, freed with their views, and threw on every frame of
   the next credit: the view stopped following the car, which stood at the line while the engine revved and the
@@ -1042,8 +1128,13 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
   scripted driver runs the course until a thing of that kind is near and drives into it, or into a tree planted
   on the start straight: the crash replay on film),
   `--no-traffic`, `--weather=dry|overcast|wet|rain` (the credit's weather; otherwise every credit draws one),
-  `--lofted` (the lofted bodies instead of the real models), `--paint=<original|red|white|silver|black|dark-blue|green|yellow>`
-  (the player's paint for the run), `--look=drone:<n>[:distance[:bearing[:height]]]` (the camera on the n-th drone), `--seat-look=<yaw>,<pitch>` (the cockpit view turned,
+  `--lofted` (the lofted bodies instead of the real models), `--paint=<original|red|white|silver|black|dark-blue|green|yellow|#RRGGBB[:solid|metallic|pearl]>`
+  (the run's car in that paint, this run only), `--showroom[=<car>]` (the showroom open from the start, on that car,
+  over the title screen), `--showroom-entry=menu` (reached through the menu's CAR line instead), `--turn=<degrees>`
+  (the turntable held at that angle; a drag still turns it), `--showroom-paint=<paint>` (the showroom's car in that
+  paint, a mixed colour mixed through the picker), `--picker` (the colour picker open), `--paint-book-test` (the
+  per-car paints' settings round trip and migration, then quit: 0 when every check holds),
+  `--look=drone:<n>[:distance[:bearing[:height]]]` (the camera on the n-th drone), `--seat-look=<yaw>,<pitch>` (the cockpit view turned,
   degrees, left and up positive: pictures of a cabin), `--dent-test` (a deep dent in the nose two seconds in),
   `--perf-log` (the measured GPU and CPU time a frame, every five seconds, under the frame cap),
   `--drop=<file>` (a file dropped on the window two seconds in: the replay music's path),

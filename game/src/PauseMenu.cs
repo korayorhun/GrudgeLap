@@ -21,7 +21,7 @@ internal sealed class PauseMenu
         NewGame,
         /// <summary>The car, chosen in the showroom (0.25, <see cref="Showroom"/>): taking the line opens it on the car of the credit.</summary>
         Car,
-        /// <summary>The car's colour: its own (its model's) or one of the classic paints (0.21); the car's own by default.</summary>
+        /// <summary>The car's colour: its own (its model's), one of the classic paints (0.21) or the colour mixed for it in the showroom (0.25); each car's own by default, and kept per car.</summary>
         Paint,
         Camera,
         Graphics,

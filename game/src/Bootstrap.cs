@@ -18,7 +18,10 @@ namespace GrudgeLap.Game;
 /// of that length), <c>--try-table</c> (the attract driver's credit is offered to the high-score table: checks of the
 /// entry screen), <c>--quality=low|medium|high</c> (the graphics preset for this run), <c>--showroom[=&lt;car&gt;]</c>
 /// (the showroom open from the start, on that car, through the title screen or with <c>--showroom-entry=menu</c> through
-/// the Esc menu's CAR line; <c>--turn=&lt;degrees&gt;</c> the turntable held at that angle) and <c>--quit-after=&lt;seconds&gt;</c>.
+/// the Esc menu's CAR line; <c>--turn=&lt;degrees&gt;</c> the turntable held at that angle; <c>--showroom-paint=&lt;paint&gt;</c>
+/// its car in that paint, as if chosen there; <c>--picker</c> the colour picker open), <c>--paint-book-test</c> (the
+/// per-car paint settings written, read back and migrated in a file of their own, then quit with 0 when every check
+/// holds) and <c>--quit-after=&lt;seconds&gt;</c>.
 /// </summary>
 public sealed partial class Bootstrap : Node3D
 {
@@ -79,6 +82,9 @@ public sealed partial class Bootstrap : Node3D
     private string? _showroomArg;       // automation: the showroom open from the start, on this car (--showroom[=car])
     private bool _showroomFromMenu;     // automation: reached through the Esc menu's CAR line (--showroom-entry=menu)
     private float _turn = float.NaN;    // automation: the turntable held at this angle, degrees (--turn=)
+    private string? _showroomPaint;     // automation: the showroom's car in this paint (--showroom-paint=)
+    private bool _showroomPicker;       // automation: the colour picker open (--picker)
+    private bool _paintBookTest;        // automation: the paint settings' round trip, then quit (--paint-book-test)
     private bool _startChase;
     private bool _retro;
     private GraphicsQuality _quality = GraphicsQuality.High;
@@ -89,7 +95,8 @@ public sealed partial class Bootstrap : Node3D
     private bool _noTraffic;
     private Weather? _weather;   // --weather=: a fixed weather for automated runs; otherwise the menu's choice
     private int _weatherChoice;  // the menu's weather: 0-3 a fixed Weather, 4 random for every credit; kept in the settings
-    private int _paintChoice;    // the menu's paint (CarView.Paints, 0 the car's own colour); kept in the settings
+    private PaintBook _paints = null!;   // every car's paint (0.25: the showroom, the menu's PAINT line); kept in the settings
+    private string? _paintArg;   // --paint=: the run's car in this paint, this run only
     private bool _repaintLofted; // a lofted car repainted during a crash's replay: built again in the new colour next credit
     private bool _noHud;        // pictures of the 3D scene alone, e.g. to compare it with another engine's
     private Vector3? _orbit;
@@ -117,9 +124,16 @@ public sealed partial class Bootstrap : Node3D
         _quality = (GraphicsQuality)Math.Clamp(LoadChoice("quality", (int)GraphicsQuality.High), 0, 2);
         // The weather (0.15): clear by default; the menu chooses clear, overcast, wet road, rain or random, and keeps it.
         _weatherChoice = Math.Clamp(LoadChoice("weather", 0), 0, 4);
-        // The paint (0.21): the car's own colour by default; the menu chooses another, and keeps it.
-        _paintChoice = Math.Clamp(LoadChoice("paint", 0), 0, CarView.Paints.Length - 1);
         ParseArgs();   // may override the saved car with --car= and the paint with --paint=
+        // The paints (0.21, per car since 0.25): every car in its own colour by default; the showroom and the menu
+        // choose another, and keep it. An automated run reads them but never writes the player's file.
+        var automated = _invisible || _screenshotPath is not null || _quitAfter >= 0f;
+        _paints = PaintBook.Load(SettingsFile, keep: !automated);
+        if (_paintArg is not null)
+        {
+            if (PaintChoice.TryParse(_paintArg, out var paint)) _paints.Set(_carIndex, paint, keep: false);
+            else GD.PrintErr($"--paint={_paintArg}: not a paint (a preset's name, or #RRGGBB with SOLID, METALLIC or PEARL)");
+        }
         if (_invisible)
         {
             HideWindow();
@@ -133,6 +147,12 @@ public sealed partial class Bootstrap : Node3D
             SingleInstance.ActivateOther();
             HideWindow();
             GetTree().Quit();
+            return;
+        }
+        if (_paintBookTest)
+        {
+            _leaving = true;
+            GetTree().Quit(PaintBookTest() ? 0 : 1);
             return;
         }
 
@@ -220,6 +240,23 @@ public sealed partial class Bootstrap : Node3D
                 _menu.Select((int)PauseMenu.Item.Car);
             }
             OpenShowroom(_showroomArg == "" ? _carIndex : CarIndex(_showroomArg, _carIndex));
+            if (_showroom is { } room)
+            {
+                if (_showroomPaint is not null && PaintChoice.TryParse(_showroomPaint, out var paint))
+                {
+                    if (!paint.IsCustom) room.ChooseSlot(paint.Preset);
+                    else
+                    {
+                        // Mixed as a player mixes it: in the picker, then (without --picker) done.
+                        room.OpenPicker();
+                        room.Picker!.Set(paint);
+                        room.ApplyPicker();
+                        if (!_showroomPicker) room.ClosePicker(keep: true);
+                    }
+                }
+                else if (_showroomPaint is not null) GD.PrintErr($"--showroom-paint={_showroomPaint}: not a paint");
+                if (_showroomPicker) room.OpenPicker();
+            }
         }
         // Automated runs never phone home; a player can also switch the check off in settings.cfg.
         if (!_attract && _screenshotPath is null && System.Environment.GetEnvironmentVariable("GRUDGELAP_NO_UPDATE") is null) _updater.CheckIfDue(manual: false);
@@ -293,12 +330,15 @@ public sealed partial class Bootstrap : Node3D
                 CarView.UseModels = false;
             }
             else if (arg.StartsWith("--car=", System.StringComparison.Ordinal)) _carIndex = CarIndex(arg["--car=".Length..], _carIndex);
-            else if (arg.StartsWith("--paint=", System.StringComparison.Ordinal)) _paintChoice = PaintIndex(arg["--paint=".Length..], _paintChoice);   // this run only
+            else if (arg.StartsWith("--paint=", System.StringComparison.Ordinal)) _paintArg = arg["--paint=".Length..];   // this run only
             else if (arg.StartsWith("--look=", System.StringComparison.Ordinal)) _look = arg["--look=".Length..];
             else if (arg.StartsWith("--seat-look=", System.StringComparison.Ordinal)) _seatLook = ParseVector2(arg["--seat-look=".Length..]);
             else if (arg == "--showroom" || arg.StartsWith("--showroom=", System.StringComparison.Ordinal)) _showroomArg = arg.StartsWith("--showroom=", System.StringComparison.Ordinal) ? arg["--showroom=".Length..] : "";   // automated runs: the showroom open from the start, on this car
             else if (arg.StartsWith("--showroom-entry=", System.StringComparison.Ordinal)) _showroomFromMenu = arg["--showroom-entry=".Length..] == "menu";
             else if (arg.StartsWith("--turn=", System.StringComparison.Ordinal)) float.TryParse(arg["--turn=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _turn);
+            else if (arg.StartsWith("--showroom-paint=", System.StringComparison.Ordinal)) _showroomPaint = arg["--showroom-paint=".Length..];
+            else if (arg == "--picker") _showroomPicker = true;
+            else if (arg == "--paint-book-test") _paintBookTest = true;
             else if (arg == "--lofted") CarView.UseModels = false;
             else if (arg == "--perf-log") _perfLog = true;
             else if (arg == "--dent-test") _dentTest = true;
@@ -320,17 +360,8 @@ public sealed partial class Bootstrap : Node3D
         return index >= 0 && index < VehicleSpec.Catalogue.Length ? index : current;
     }
 
-    /// <summary>The paint a --paint= switch names: its name in the menu (dark-blue or darkblue for DARK BLUE) or its index.</summary>
-    private static int PaintIndex(string name, int current)
-    {
-        var wanted = name.Replace("-", "").Replace("_", "").Replace(" ", "").ToUpperInvariant();
-        var index = System.Array.FindIndex(CarView.Paints, p => p.Name.Replace(" ", "") == wanted);
-        if (index < 0 && int.TryParse(name, out var number)) index = number;
-        return index >= 0 && index < CarView.Paints.Length ? index : current;
-    }
-
-    /// <summary>The player's paint: a colour and its finish, or null for the car's own (its model's).</summary>
-    private CarView.CarPaint? PlayerPaint => CarView.Paints[_paintChoice].Paint;
+    /// <summary>The player's paint, the car's own in the book: a colour and its finish, or null for its own (its model's).</summary>
+    private CarView.CarPaint? PlayerPaint => _paints[_carIndex].Paint;
 
     /// <summary>
     /// What only the player's car has: the lit instruments in its binnacle, a working rear-view mirror, and the
@@ -452,6 +483,107 @@ public sealed partial class Bootstrap : Node3D
         settings.Load(SettingsFile);
         settings.SetValue("game", key, value);
         settings.Save(SettingsFile);
+    }
+
+    /// <summary>
+    /// Automation (--paint-book-test): the per-car paints' round trip through a settings file of their own
+    /// (user://paint-book-test.cfg, never the player's): an 0.24 file's one paint migrated to every car and its key
+    /// dropped with the car's choice beside it untouched; a paint of every kind written for each car and read back the
+    /// same; a second start migrating nothing; an automated run's book changing nothing on disk; the texts the file
+    /// and --paint= take read as they should be; the picker's hue, saturation and lightness keeping a colour's hex.
+    /// Prints each check and is true when all hold.
+    /// </summary>
+    private static bool PaintBookTest()
+    {
+        const string file = "user://paint-book-test.cfg";
+        var failures = 0;
+        void Check(bool ok, string what)
+        {
+            GD.Print($"paint book: {(ok ? "ok  " : "FAIL")}  {what}");
+            if (!ok) failures++;
+        }
+        DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(file));
+        var cars = VehicleSpec.Catalogue.Length;
+        string Saved(ConfigFile settings, int car) => settings.GetValue("game", PaintBook.Key(VehicleSpec.Catalogue[car]), "").AsString();
+
+        // An 0.24 file: SILVER (3) for whatever car was driven, and the car.
+        var old = new ConfigFile();
+        old.SetValue("game", "paint", 3);
+        old.SetValue("game", "car", 2);
+        old.Save(file);
+        var book = PaintBook.Load(file, keep: true);
+        Check(Enumerable.Range(0, cars).All(i => book[i] == PaintChoice.OfPreset(3)), $"0.24's one paint (SILVER) given to every car ({cars})");
+        var migrated = new ConfigFile();
+        migrated.Load(file);
+        Check(!migrated.HasSectionKey("game", "paint"), "the 0.24 key dropped");
+        Check(migrated.GetValue("game", "car", -1).AsInt32() == 2, "the car's choice beside it untouched");
+        Check(Saved(migrated, 0) == "SILVER", $"the migrated paint written as text ({PaintBook.Key(VehicleSpec.Catalogue[0])}=\"{Saved(migrated, 0)}\")");
+
+        // A paint of every kind (the car's own, presets, mixed colours in each finish), one for each car.
+        PaintChoice[] kinds =
+        [
+            PaintChoice.Original,
+            PaintChoice.OfPreset(5),
+            PaintChoice.Mixed(Color.FromHtml("#1E4FA0"), PaintFinish.Metallic),
+            PaintChoice.Mixed(Color.FromHtml("#C8102E"), PaintFinish.Pearl),
+            PaintChoice.Mixed(Color.FromHtml("#F2F2EE"), PaintFinish.Solid),
+            PaintChoice.OfPreset(7),
+        ];
+        for (var i = 0; i < cars; i++) book.Set(i, kinds[i % kinds.Length]);
+        var reread = PaintBook.Load(file, keep: true);
+        Check(Enumerable.Range(0, cars).All(i => reread[i] == kinds[i % kinds.Length]), "every car's paint read back as it was written");
+        Check(reread.LastMixed(2) == kinds[2] && reread.LastMixed(1) is null, "a mixed colour is its car's mixed swatch after a restart, and only its car's");
+        var written = new ConfigFile();
+        written.Load(file);
+        Check(Saved(written, 2) == "#1E4FA0 METALLIC" && Saved(written, 0) == "ORIGINAL" && Saved(written, 1) == "DARK BLUE", $"written as text (\"{Saved(written, 0)}\", \"{Saved(written, 1)}\", \"{Saved(written, 2)}\")");
+        Check(!written.HasSectionKey("game", "paint") && written.GetValue("game", "car", -1).AsInt32() == 2, "a second start migrates nothing");
+        var menu = reread.Options(3);
+        Check(menu.Length == CarView.Paints.Length + 1 && menu[^1] == kinds[3] && reread.Options(1).Length == CarView.Paints.Length, "the menu's PAINT line offers a car its mixed colour after the presets");
+
+        // An automated run's book: changes held in memory, the file as it was.
+        var held = PaintBook.Load(file, keep: false);
+        held.Set(0, PaintChoice.OfPreset(1));
+        Check(held[0] == PaintChoice.OfPreset(1) && PaintBook.Load(file, keep: true)[0] == kinds[0], "an automated run's paint never reaches the file");
+        old.Save(file);
+        var memory = PaintBook.Load(file, keep: false);
+        var untouched = new ConfigFile();
+        untouched.Load(file);
+        Check(memory[cars - 1] == PaintChoice.OfPreset(3) && untouched.HasSectionKey("game", "paint"), "an automated run migrates an 0.24 file in memory only");
+
+        // The texts the file and --paint= take.
+        var blue = Color.FromHtml("#1E4FA0");
+        (string Text, PaintChoice? Expected)[] texts =
+        [
+            ("ORIGINAL", PaintChoice.Original),
+            ("dark-blue", PaintChoice.OfPreset(5)),
+            ("darkblue", PaintChoice.OfPreset(5)),
+            ("DARK BLUE", PaintChoice.OfPreset(5)),
+            ("3", PaintChoice.OfPreset(3)),
+            ("#1e4fa0", PaintChoice.Mixed(blue, PaintFinish.Solid)),
+            ("#1e4fa0:pearl", PaintChoice.Mixed(blue, PaintFinish.Pearl)),
+            ("#1E4FA0 METALLIC", PaintChoice.Mixed(blue, PaintFinish.Metallic)),
+            ("#1e4fa0:chrome", null),
+            ("#1e4fa", null),
+            ("purple", null),
+            ("99", null),
+            ("", null),
+        ];
+        foreach (var (text, expected) in texts)
+        {
+            var read = PaintChoice.TryParse(text, out var choice);
+            Check(expected is { } wanted ? read && choice == wanted : !read, $"\"{text}\" -> {(expected is { } e ? e.Format() : "refused")}");
+        }
+
+        // The picker holds a colour as hue, saturation and lightness: a colour opened in it and kept is the same hex.
+        foreach (var hex in new[] { "#1E4FA0", "#C8102E", "#F2F2EE", "#000000", "#FFFFFF", "#7F7F7F", "#D9A400" })
+        {
+            var (hue, saturation, lightness) = Hsl.From(Color.FromHtml(hex));
+            var back = PaintChoice.Mixed(Hsl.ToColour(hue, saturation, lightness), PaintFinish.Solid).Hex;
+            Check(back == hex, $"{hex} through hue, saturation and lightness: {back}");
+        }
+        DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(file));
+        GD.Print($"paint book: {(failures == 0 ? "every check holds" : $"{failures} checks FAILED")}");
+        return failures == 0;
     }
 
     private static LapRecording? LoadBestLap()
@@ -966,10 +1098,15 @@ public sealed partial class Bootstrap : Node3D
         }
     }
 
-    /// <summary>The showroom's mouse: a drag turns the car, the wheel brings it closer, a click takes a chevron, a swatch or a button.</summary>
+    /// <summary>
+    /// The showroom's mouse: a drag turns the car, the wheel brings it closer, a click takes a chevron, a swatch or a
+    /// button; with the picker open, a click or a drag on its square or its hue bar mixes the colour, and its buttons
+    /// take a finish, keep the colour or cancel it.
+    /// </summary>
     private void HandleShowroomMouse(Showroom room, InputEvent @event)
     {
         var size = GetViewport().GetVisibleRect().Size;
+        if (room.Picker is { } picker && HandlePickerMouse(room, picker, size, @event)) return;
         switch (@event)
         {
             case InputEventMouseButton { ButtonIndex: MouseButton.Left } button when !button.Pressed:
@@ -988,8 +1125,10 @@ public sealed partial class Bootstrap : Node3D
                         _audio.Chime();
                         break;
                     case Showroom.Hit.Swatch:
-                        if (index == room.PaintIndex) break;
-                        room.CyclePaint(index - room.PaintIndex);
+                        // The mixed colour's swatch opens the picker on it; another swatch is that paint.
+                        if (index == Showroom.CustomSlot) room.OpenPicker();
+                        else if (index == room.PaintSlot) break;
+                        else room.ChooseSlot(index);
                         _audio.Chime();
                         break;
                     case Showroom.Hit.Take:
@@ -1012,6 +1151,49 @@ public sealed partial class Bootstrap : Node3D
             case InputEventMouseMotion motion when room.Dragging:
                 room.Drag(motion.Relative.X, (float)GetProcessDeltaTime());
                 break;
+        }
+    }
+
+    /// <summary>The picker's part of the mouse; true when the event was the picker's (the rest is the showroom's).</summary>
+    private bool HandlePickerMouse(Showroom room, ColourPicker picker, Vector2 size, InputEvent @event)
+    {
+        switch (@event)
+        {
+            case InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: false } when picker.Dragging != ColourPicker.Hit.Nothing:
+                picker.Dragging = ColourPicker.Hit.Nothing;
+                return true;
+            case InputEventMouseMotion motion when picker.Dragging != ColourPicker.Hit.Nothing:
+                picker.Pick(size, picker.Dragging, motion.Position);
+                room.ApplyPicker();
+                return true;
+            case InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true } button:
+                var (hit, finish) = ColourPicker.HitTest(size, button.Position);
+                switch (hit)
+                {
+                    case ColourPicker.Hit.Square or ColourPicker.Hit.HueBar:
+                        picker.Dragging = hit;
+                        picker.Pick(size, hit, button.Position);
+                        room.ApplyPicker();
+                        break;
+                    case ColourPicker.Hit.Finish:
+                        picker.SetFinish(finish);
+                        room.ApplyPicker();
+                        break;
+                    case ColourPicker.Hit.Done:
+                        room.ClosePicker(keep: true);
+                        _audio.Chime();
+                        break;
+                    case ColourPicker.Hit.Cancel:
+                        room.ClosePicker(keep: false);
+                        break;
+                    case ColourPicker.Hit.Panel:
+                        break;
+                    default:
+                        return false;
+                }
+                return true;
+            default:
+                return false;
         }
     }
 
@@ -1043,13 +1225,15 @@ public sealed partial class Bootstrap : Node3D
     }
 
     /// <summary>
-    /// The menu's paint (0.21): left and right step through the car's own colour and the classic ones; the car is
-    /// repainted at once and the choice kept. A lofted body (a checkout without the models) is built again in it.
+    /// The menu's paint (0.21): left and right step through the car's own colour, the classic ones and the colour it was
+    /// last mixed in (the showroom's picker, 0.25); the car is repainted at once and the choice kept for this car. A
+    /// lofted body (a checkout without the models) is built again in it.
     /// </summary>
     private void CyclePaint(int step)
     {
-        _paintChoice = (_paintChoice + step + CarView.Paints.Length) % CarView.Paints.Length;
-        SaveChoice("paint", _paintChoice);
+        var options = _paints.Options(_carIndex);
+        var at = System.Array.IndexOf(options, _paints[_carIndex]);
+        _paints.Set(_carIndex, options[(Math.Max(at, 0) + step + options.Length) % options.Length]);
         if (_carView.Repaint(PlayerPaint)) return;
         // During a crash's replay the car is the scene's (CrashScene): it is built again with the next credit.
         if (_crash is null) BuildPlayerCar();
@@ -1121,7 +1305,8 @@ public sealed partial class Bootstrap : Node3D
     private void OpenShowroom(int carIndex)
     {
         if (_showroom is not null) return;
-        _showroom = Showroom.Create(carIndex, _paintChoice, float.IsNaN(_turn) ? Showroom.StartYawDegrees : _turn, fromMenu: _menu.Open, held: !float.IsNaN(_turn));
+        _showroom = Showroom.Create(carIndex, _paints, float.IsNaN(_turn) ? Showroom.StartYawDegrees : _turn, fromMenu: _menu.Open, held: !float.IsNaN(_turn));
+        _showroom.ScreenSize = GetViewport().GetVisibleRect().Size;
         AddChild(_showroom);
         _showroom.Resize(GetWindow().Size);
         _showroom.ApplyGraphics(_quality, _retro);
@@ -1133,10 +1318,10 @@ public sealed partial class Bootstrap : Node3D
     }
 
     /// <summary>
-    /// Closes the showroom. Taken (Enter), the car and the paint are kept ("car" and "paint" in the settings) and
-    /// applied: another car by a new session, as the title screen's left/right always did, a paint on the car where it
-    /// stands. Left (Esc), nothing changes. Either way the player is back where the showroom was opened, the title or
-    /// the menu.
+    /// Closes the showroom. Taken (Enter), the car and the paints chosen there are kept ("car" and each car's
+    /// "paint.&lt;car&gt;" in the settings, <see cref="PaintBook"/>) and applied: another car by a new session, as the
+    /// title screen's left/right always did, a paint on the car where it stands. Left (Esc), nothing changes. Either way
+    /// the player is back where the showroom was opened, the title or the menu.
     /// </summary>
     private void CloseShowroom(bool take)
     {
@@ -1150,11 +1335,15 @@ public sealed partial class Bootstrap : Node3D
         _clicked = false;
         _menuClick = false;
         if (!take) return;
+        // A colour still being mixed is the car's: Enter in the picker and Enter here both mean "this one".
+        room.ClosePicker(keep: true);
         var anotherCar = room.Index != _carIndex;
         _carIndex = room.Index;
-        _paintChoice = room.PaintIndex;
+        foreach (var (car, paint) in room.Edits)
+        {
+            if (paint != _paints[car]) _paints.Set(car, paint);
+        }
         SaveChoice("car", _carIndex);
-        SaveChoice("paint", _paintChoice);
         if (anotherCar)
         {
             ShowMenu(false);
@@ -1171,16 +1360,29 @@ public sealed partial class Bootstrap : Node3D
     }
 
     /// <summary>
-    /// The showroom's keys: left and right (A, D, the stick, the d-pad) step the car, up and down (W, S) the paint, Enter,
-    /// Space or A take the car and the paint, Esc, Back or B leave it as it was. A step chimes, as the title screen's did.
+    /// The showroom's keys: left and right (A, D, the stick, the d-pad) step the car, up and down (W, S) the paint, C or
+    /// Y open the colour picker, Enter, Space or A take the car and the paint, Esc, Back or B leave it as it was. A step
+    /// chimes, as the title screen's did. While the picker is open the keys are its own (<see cref="HandlePicker"/>).
     /// </summary>
     private void HandleShowroom()
     {
         var room = _showroom!;
         room.Resize(GetWindow().Size);
+        room.ScreenSize = GetViewport().GetVisibleRect().Size;
         var abort = Input.IsActionJustPressed(InputSetup.Abort);
         // Space and the pad's B share an action: Space takes, as it starts the game on the title screen; B goes back.
         var padB = abort && Input.IsJoyButtonPressed(InputSetup.Pad, JoyButton.B);
+        if (room.Picker is { } picker)
+        {
+            HandlePicker(room, picker, abort, padB);
+            return;
+        }
+        if (Input.IsActionJustPressed(InputSetup.Camera))
+        {
+            room.OpenPicker();
+            _audio.Chime();
+            return;
+        }
         if (Input.IsActionJustPressed(InputSetup.Menu) || padB || _showroomBack)
         {
             CloseShowroom(take: false);
@@ -1203,6 +1405,32 @@ public sealed partial class Bootstrap : Node3D
             room.CyclePaint(paint);
             _audio.Chime();
         }
+    }
+
+    /// <summary>
+    /// The colour picker's keys: up and down choose the row (hue, saturation, lightness, finish), left and right change
+    /// it (a tap a step, held faster and faster), Enter, Space, A, C or Y keep the colour, Esc, Back or B put the paint
+    /// back as it was. Taking the car or leaving the showroom waits for the picker to close, so neither happens by a key
+    /// meant for the picker.
+    /// </summary>
+    private void HandlePicker(Showroom room, ColourPicker picker, bool abort, bool padB)
+    {
+        if (Input.IsActionJustPressed(InputSetup.Menu) || padB)
+        {
+            room.ClosePicker(keep: false);
+            return;
+        }
+        if (Input.IsActionJustPressed(InputSetup.Ignition) || Input.IsActionJustPressed(InputSetup.Camera) || abort)
+        {
+            room.ClosePicker(keep: true);
+            _audio.Chime();
+            return;
+        }
+        if (Input.IsActionJustPressed(InputSetup.Throttle)) picker.MoveFocus(-1);
+        if (Input.IsActionJustPressed(InputSetup.Brake)) picker.MoveFocus(1);
+        var held = (Input.IsActionPressed(InputSetup.SteerRight) ? 1 : 0) - (Input.IsActionPressed(InputSetup.SteerLeft) ? 1 : 0);
+        var pressed = (Input.IsActionJustPressed(InputSetup.SteerRight) ? 1 : 0) - (Input.IsActionJustPressed(InputSetup.SteerLeft) ? 1 : 0);
+        if (picker.Nudge(held, pressed, (float)GetProcessDeltaTime())) room.ApplyPicker();
     }
 
     /// <summary>The menu's keys: up and down move, Enter or A takes the line, left and right turn a setting, Space or B goes back.</summary>
@@ -1275,7 +1503,7 @@ public sealed partial class Bootstrap : Node3D
         labels[(int)PauseMenu.Item.Camera] = $"CAMERA:  {(_cameraRig.Mode == CameraMode.Cockpit ? "DRIVER'S SEAT" : "BEHIND THE CAR")}";
         labels[(int)PauseMenu.Item.Graphics] = $"GRAPHICS:  {_quality.ToString().ToUpperInvariant()}";
         labels[(int)PauseMenu.Item.Weather] = $"WEATHER:  {WeatherLabel()}";
-        labels[(int)PauseMenu.Item.Paint] = $"PAINT:  {CarView.Paints[_paintChoice].Name}";
+        labels[(int)PauseMenu.Item.Paint] = $"PAINT:  {_paints[_carIndex].Name}";
         labels[(int)PauseMenu.Item.Retro] = $"1989 MODE:  {(_retro ? "ON" : "OFF")}";
         // The player's own tune by name (without its extension); the built-in one with the hint that Enter opens the folder.
         labels[(int)PauseMenu.Item.Music] = _audio.CustomReplayMusicName is { } tune
@@ -1308,7 +1536,8 @@ public sealed partial class Bootstrap : Node3D
     private void HandleGlobalKeys()
     {
         if (Input.IsActionJustPressed(InputSetup.Fullscreen)) ToggleFullscreen();
-        if (Input.IsActionJustPressed(InputSetup.Camera)) ToggleCamera();
+        // In the showroom C (and the pad's Y) opens the colour picker: the camera behind it stays as it is.
+        if (Input.IsActionJustPressed(InputSetup.Camera) && _showroom is null) ToggleCamera();
         if (Input.IsActionJustPressed(InputSetup.Units))
         {
             _instruments.UseKmh = !_instruments.UseKmh;

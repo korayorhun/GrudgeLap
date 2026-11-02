@@ -37,9 +37,42 @@ internal sealed partial class CarView : Node3D
     /// A car's paint: its colour and its finish. A solid colour is a coated dielectric (0.11): hardly any metallic,
     /// since a metallic albedo reflects the sky and turned the red pink, a slightly rough colour coat under a hard,
     /// near-mirror clearcoat. A metallic paint's flakes make its base coat partly metal and smoother: a silver drawn
-    /// as a solid was a flat light grey, hardly told from the white.
+    /// as a solid was a flat light grey, hardly told from the white. A pearl (0.25, <see cref="Pearl"/> above 0) is a
+    /// mica paint: its flakes are coated thinly enough to colour the light they return by interference, so the colour
+    /// shifts with the angle it is seen at (the models' paint shaders turn it towards <see cref="PearlTint"/> where a
+    /// panel is seen edge-on; the lofted bodies' standard material cannot, and draws it as its metallic base).
     /// </summary>
-    public readonly record struct CarPaint(Color Colour, float Metallic = 0.05f, float Roughness = 0.38f);
+    public readonly record struct CarPaint(Color Colour, float Metallic = 0.05f, float Roughness = 0.38f, float Pearl = 0f);
+
+    /// <summary>
+    /// A colour mixed in the showroom (0.25) in a finish: solid as the classic paints, metallic as the silver, pearl
+    /// between the two with its flop. The colour is held inside what a paint can reflect: about the white paint's 0.90
+    /// at the top and the black's 0.035 at the foot (sRGB), so the picker's pure white does not glow under the sun and
+    /// its pure black is not a hole in the picture.
+    /// </summary>
+    public static CarPaint MixedPaint(Color colour, PaintFinish finish)
+    {
+        var held = new Color(Math.Clamp(colour.R, 0.03f, 0.92f), Math.Clamp(colour.G, 0.03f, 0.92f), Math.Clamp(colour.B, 0.03f, 0.92f));
+        return finish switch
+        {
+            PaintFinish.Metallic => new CarPaint(held, Metallic: 0.6f, Roughness: 0.3f),
+            PaintFinish.Pearl => new CarPaint(held, Metallic: 0.3f, Roughness: 0.32f, Pearl: 1f),
+            _ => new CarPaint(held),
+        };
+    }
+
+    /// <summary>
+    /// The colour a pearl turns to where its panel is seen edge-on: its hue moved on by about a twelfth of the circle
+    /// and a little darker, as the interference of a mica's coating shifts it (a red pearl towards orange, a blue one
+    /// towards violet); a white, silver or black pearl, which has no hue to move, flops to the warm gold of its mica.
+    /// </summary>
+    public static Color PearlTint(Color colour)
+    {
+        var (hue, saturation, lightness) = Hsl.From(colour);
+        return saturation < 0.12f
+            ? Hsl.ToColour(0.11f, 0.4f, lightness)
+            : Hsl.ToColour((hue + 0.085f) % 1f, saturation, lightness * 0.88f);
+    }
 
     /// <summary>
     /// The paints the player chooses from (the menu's PAINT line): the car's own colour as its model has it (null:

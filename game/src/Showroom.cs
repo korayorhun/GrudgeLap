@@ -6,23 +6,26 @@ namespace GrudgeLap.Game;
 /// <summary>
 /// The showroom (0.25): the car the player is choosing, drawn with its real model on a turntable in a studio of its
 /// own and turning slowly through a full circle, with every car of the catalogue a step to the left or right and the
-/// paints (<see cref="CarView.Paints"/>) a step up or down. Until 0.24 a car was chosen by its name alone, on the title
-/// screen's line; the player asked to see the cars and turn them round before choosing.
+/// paints a step up or down: the car's own colour, the presets (<see cref="CarView.Paints"/>) and a colour of the
+/// player's own, mixed in the picker (<see cref="ColourPicker"/>) in a finish and seen on the car as it is mixed. Until
+/// 0.24 a car was chosen by its name alone, on the title screen's line, and one paint served every car; the player
+/// asked to see the cars and turn them round before choosing, and to choose each one's colour there.
 /// </summary>
 /// <remarks>
 /// The stage renders into its own viewport and world (a <see cref="SubViewport"/> with <c>OwnWorld3D</c>), so the
 /// game's world stands paused behind it without being drawn (<see cref="Bootstrap"/> turns the main viewport's 3D off
 /// while the showroom is open; a paused frame of the track costs the same as a driven one, and the studio in its place
 /// draws one car over a floor): the studio's light is its own and the game's sun, weather and fog do not reach it. The
-/// light is a photographer's: a grey dome for the ambient light and the reflections, three light strips over the car
-/// that its paint mirrors (what a showroom's long strip lights do for a flank), a soft key light from the front
-/// quarter with shadows, a fill and a rim, and a glossy floor that reflects the car through the screen-space
-/// reflections. The reflection probe over the stage leaves the car out (visual layer 2, as the game's travelling probe
-/// does, <see cref="CarView.MarkPlayer"/>), so the paint mirrors the strips and the floor rather than itself.
+/// light is a photographer's: a grey dome with the studio's lamps in it (<see cref="StudioSky"/>: long strips overhead
+/// and softboxes round the car, which the paint, the clearcoat and the glass mirror as it turns), a soft key light from
+/// the front quarter with shadows, a fill and a rim, and a glossy floor that reflects the car through the screen-space
+/// reflections.
 /// The HUD draws the viewport's texture under its text (<c>Hud.DrawShowroom</c>); the layout of what the mouse can
 /// hit lives here, as the menu's does in <see cref="PauseMenu"/>, so the drawing and the hit test agree. The facts
 /// printed about a car are worked out from its <see cref="VehicleSpec"/> alone, so a car added to the catalogue
-/// appears here with them and nothing else to write.
+/// appears here with them and nothing else to write. The paints chosen here are edits until the player takes a car
+/// (<see cref="Edits"/>): Bootstrap writes them to the cars' settings then (<see cref="PaintBook"/>), and leaving with
+/// Esc forgets them.
 /// </remarks>
 internal sealed partial class Showroom : Node
 {
@@ -55,11 +58,23 @@ internal sealed partial class Showroom : Node
     private float _since;           // seconds open, for the automation's notes
     private readonly Dictionary<string, PackedScene> _preloaded = new();
     private readonly HashSet<string> _loading = new();
+    private PaintBook _book = null!;
+    private readonly Dictionary<int, PaintChoice> _edits = new();     // the paints chosen here, by car, until taken
+    private readonly Dictionary<int, PaintChoice> _mixed = new();     // the colour each car was last mixed in here
+    private PaintChoice? _mixedBefore;                                // the car's mixed colour when the picker opened
 
     /// <summary>The car on the turntable, as an index into <see cref="VehicleSpec.Catalogue"/>.</summary>
     public int Index { get; private set; }
-    /// <summary>The paint on it, as an index into <see cref="CarView.Paints"/>.</summary>
-    public int PaintIndex { get; private set; }
+    /// <summary>The paint on it: chosen here, or the one its settings keep.</summary>
+    public PaintChoice Choice => ChoiceOf(Index);
+    /// <summary>The paint as a place in the row of swatches: the presets (0 its own colour), then the mixed colour.</summary>
+    public int PaintSlot => Choice.IsCustom ? CustomSlot : Choice.Preset;
+    /// <summary>The paints chosen here, by car (an index into the catalogue): written to the settings when a car is taken.</summary>
+    public IReadOnlyDictionary<int, PaintChoice> Edits => _edits;
+    /// <summary>The colour picker while it is open (C, or a click on the mixed colour's swatch).</summary>
+    public ColourPicker? Picker { get; private set; }
+    /// <summary>The HUD's size (the canvas's, 1600 x 900 or wider): the camera moves the car clear of the picker by it.</summary>
+    public Vector2 ScreenSize { get; set; } = new(1600f, 900f);
     /// <summary>Opened from the Esc menu (over a paused credit) rather than from the title screen: Esc returns there.</summary>
     public bool FromMenu { get; init; }
     /// <summary>The mouse's left button is down on the stage: the turntable follows the mouse and stands still otherwise.</summary>
@@ -74,20 +89,34 @@ internal sealed partial class Showroom : Node
     public float YawDegrees => Mathf.RadToDeg(_yaw) % 360f;
     /// <summary>The car's own colour (its model's, the lofted body's red), for the ORIGINAL swatch.</summary>
     public Color CarColour => _car?.OwnColour ?? CarView.DefaultPaint;
+    /// <summary>The colour of the last swatch: the car's mixed colour, or the one the picker would start from.</summary>
+    public PaintChoice MixedChoice => MixedFor(Index);
+    /// <summary>The swatches: the presets and the mixed colour.</summary>
+    public static int SlotCount => CarView.Paints.Length + 1;
+    public static int CustomSlot => CarView.Paints.Length;
     /// <summary>How solid the car's name is drawn: it fades out and in again as one car slides out and the next in.</summary>
     public float TextAlpha => _slide >= 1f ? 1f : _slide < 0.5f ? 1f - _slide * 2f : (_slide - 0.5f) * 2f;
 
-    private CarView.CarPaint? Paint => CarView.Paints[PaintIndex].Paint;
-
-    public static Showroom Create(int carIndex, int paintIndex, float startYawDegrees, bool fromMenu, bool held = false) => new()
+    public static Showroom Create(int carIndex, PaintBook book, float startYawDegrees, bool fromMenu, bool held = false) => new()
     {
         Name = "Showroom",
         Index = Math.Clamp(carIndex, 0, Count - 1),
-        PaintIndex = Math.Clamp(paintIndex, 0, CarView.Paints.Length - 1),
+        _book = book,
         FromMenu = fromMenu,
         Held = held,
         _yaw = Mathf.DegToRad(startYawDegrees),
     };
+
+    private PaintChoice ChoiceOf(int car) => _edits.TryGetValue(car, out var choice) ? choice : _book[car];
+
+    /// <summary>
+    /// The colour a car's picker starts from: the one it was last mixed in (here, or kept in the settings), else its
+    /// own colour as a solid, so a player who wants the factory colour a shade darker starts from it.
+    /// </summary>
+    private PaintChoice MixedFor(int car) =>
+        _mixed.TryGetValue(car, out var mixed) ? mixed
+        : _book.LastMixed(car) is { } kept ? kept
+        : PaintChoice.Mixed(car == Index ? CarColour : CarView.DefaultPaint, PaintFinish.Solid);
 
     public override void _Ready()
     {
@@ -128,7 +157,7 @@ internal sealed partial class Showroom : Node
         });
         _camera = new Camera3D { Name = "Camera", Fov = CameraFov, Near = 0.1f, Far = 4000f, Current = true };
         _viewport.AddChild(_camera);
-        _car = Place(Spec);
+        _car = Place(Index);
         _reach = ReachOf(_car);
         _distance = CameraDistance;
         PlaceCamera();
@@ -136,29 +165,60 @@ internal sealed partial class Showroom : Node
     }
 
     /// <summary>
-    /// The studio's light: a neutral grey dome (ambient light and the reflections' background), the key light and its
-    /// shadows, a cooler fill from the other side, a rim from behind, three light strips over the stage for the paint to
-    /// mirror, and a dark glossy floor that fades into the dome. Tone-mapped as the game is (AgX), so a paint reads the
-    /// same colour here and on the road.
+    /// The studio's sky, an HDRI studio of its own: a grey dome (lighter overhead, the floor's grey below the horizon)
+    /// with the lamps a car photographer's studio hangs as its light, three long strips overhead across the car and three
+    /// tall softboxes round it at the height of its flanks, behind the camera and to either side, all out of the lens's
+    /// view. The paint, the clearcoat and the glass mirror them as the car turns (the long bright bands of a showroom
+    /// on a bonnet and a flank) and they light the car with the dome, softly.
+    /// </summary>
+    private const string StudioSky = """
+        shader_type sky;
+        render_mode use_debanding;
+        uniform vec3 top_colour : source_color = vec3(0.46, 0.47, 0.49);
+        uniform vec3 horizon_colour : source_color = vec3(0.235, 0.24, 0.25);
+        uniform vec3 bottom_colour : source_color = vec3(0.215, 0.22, 0.23);
+        uniform vec3 lamp_colour : source_color = vec3(1.0, 0.99, 0.96);
+        uniform float lamp_energy = 1.0;
+        float lamp(vec2 p, vec2 centre, vec2 half_size, float soft) {
+            vec2 d = abs(p - centre) - half_size;
+            return 1.0 - smoothstep(-soft, soft, max(d.x, d.y));
+        }
+        void sky() {
+            vec3 d = normalize(EYEDIR);
+            float up = d.y;
+            vec3 colour = up >= 0.0
+                ? mix(horizon_colour, top_colour, sqrt(clamp(up, 0.0, 1.0)))
+                : mix(horizon_colour, bottom_colour, sqrt(clamp(-up, 0.0, 1.0)));
+            float light = 0.0;
+            if (up > 0.3) {
+                // Where the ray meets a ceiling a unit over the car: the strips 3.2 m up, 2.2 m apart, 7 m by 0.55 m.
+                vec2 p = d.xz / up;
+                for (int i = -1; i <= 1; i++) light += lamp(p, vec2(0.0, float(i) * 0.69), vec2(1.1, 0.086), 0.02);
+            }
+            // The softboxes by bearing (0 towards +Z, where the camera stands) and elevation, radians.
+            vec2 at = vec2(atan(d.x, d.z), asin(clamp(up, -1.0, 1.0)));
+            light += lamp(at, vec2(0.0, 0.2), vec2(0.45, 0.2), 0.03);
+            light += lamp(at, vec2(1.5708, 0.2), vec2(0.3, 0.2), 0.03);
+            light += lamp(at, vec2(-1.5708, 0.2), vec2(0.3, 0.2), 0.03);
+            COLOR = colour + lamp_colour * lamp_energy * min(light, 1.0);
+        }
+        """;
+
+    /// <summary>
+    /// The studio's light: the dome and its lamps (<see cref="StudioSky"/>) for the ambient light and the reflections,
+    /// and a dark glossy floor that fades into the dome; the key, the fill and the rim are BuildStudio's. Tone-mapped as
+    /// the game is (AgX), so a paint reads the same colour here and on the road.
     /// </summary>
     private static Godot.Environment BuildEnvironment()
     {
-        var dome = new ProceduralSkyMaterial
-        {
-            SkyTopColor = new Color(0.46f, 0.47f, 0.49f),
-            SkyHorizonColor = Backdrop,
-            GroundHorizonColor = Backdrop,
-            // The same grey all the way down: the glossy floor mirrors the dome below the horizon, and a darker dome there
-            // showed as a dark band on the floor behind the car.
-            GroundBottomColor = new Color(0.215f, 0.220f, 0.230f),
-            SunAngleMax = 0.1f,
-            SunCurve = 0.01f,
-            EnergyMultiplier = 1.0f,
-        };
+        // The studio's lamps are in its sky (StudioSky): a car's clearcoat mirrors the sky alone, so a lamp that is a
+        // mesh in the room (the long strips and the reflection probe that caught them until the showroom's review)
+        // reached the paint only through the base coat's rough reflection, and every flank read as satin.
+        var dome = new ShaderMaterial { Shader = new Shader { Code = StudioSky } };
         return new Godot.Environment
         {
             BackgroundMode = Godot.Environment.BGMode.Sky,
-            Sky = new Sky { SkyMaterial = dome, RadianceSize = Sky.RadianceSizeEnum.Size256 },
+            Sky = new Sky { SkyMaterial = dome, RadianceSize = Sky.RadianceSizeEnum.Size256, ProcessMode = Sky.ProcessModeEnum.Quality },
             AmbientLightSource = Godot.Environment.AmbientSource.Sky,
             AmbientLightSkyContribution = 1f,
             AmbientLightEnergy = 1.0f,
@@ -174,7 +234,8 @@ internal sealed partial class Showroom : Node
             SsrFadeOut = 2f,
             SsrDepthTolerance = 0.25f,
             GlowEnabled = true,
-            GlowIntensity = 0.25f,
+            // Glow kept faint: a softbox mirrored in a flank or a side window is white, and a stronger glow haloed it into a blob.
+            GlowIntensity = 0.12f,
             GlowBloom = 0f,
             // The floor runs to the horizon and fades into the dome's colour, so the stage has no edge; the car, 7 m off, keeps
             // 97 % of its colour.
@@ -197,13 +258,16 @@ internal sealed partial class Showroom : Node
             Mesh = new PlaneMesh { Size = new Vector2(3000f, 3000f), Material = new StandardMaterial3D { AlbedoColor = new Color(0.17f, 0.17f, 0.18f), Roughness = 0.22f, Metallic = 0.0f } },
         };
         parent.AddChild(floor);
-        // The key light: from the front quarter, high, soft-edged (a 4 degree source), with the shadows that set the car on the floor.
+        // The key light: from the front quarter, high, soft-edged, with the shadows that set the car on the floor. Its own
+        // highlight is held down (LightSpecular): a sun-sized source drew a hard white spot with a halo of glow on the
+        // bonnet and the roof, where a studio's key is a softbox whose reflection is a broad soft patch.
         var key = new DirectionalLight3D
         {
             Name = "Key",
             LightEnergy = 1.35f,
             LightColor = new Color(1f, 0.975f, 0.94f),
-            LightAngularDistance = 1.5f,
+            LightAngularDistance = 4f,
+            LightSpecular = 0.35f,
             ShadowEnabled = true,
             DirectionalShadowMode = DirectionalLight3D.ShadowMode.Orthogonal,
             DirectionalShadowMaxDistance = 40f,
@@ -222,13 +286,14 @@ internal sealed partial class Showroom : Node
             LightEnergy = 0.6f,
             LightColor = new Color(0.90f, 0.93f, 1f),
             LightSize = 1.5f,
-            // No highlight from the fill or the strips' spots (LightSpecular 0): a wide light's highlight on a clearcoat is
-            // the mirror image of its panel, which the probe gives from the strips; the spots' own, as wide as LightSize
-            // makes them, burnt the glass and the bonnet to white.
+            // No highlight from the fill (LightSpecular 0): a wide light's highlight on a clearcoat is the mirror image of
+            // its panel, which the sky's lamps give; its own, as wide as LightSize makes it, burnt the glass to white.
             LightSpecular = 0f,
             ShadowEnabled = false,
         });
-        // The rim: from behind and above, so the roofline and the shoulders catch a bright edge against the dome.
+        // The rim: from behind and above, so the roofline and the shoulders catch a bright edge against the dome. No
+        // highlight of its own: a camera in front of the car sees the bonnet and the roof mirror the space above and
+        // behind it, and the rim's small source there was a hard white spot on them.
         var rim = new SpotLight3D
         {
             Name = "Rim",
@@ -238,70 +303,22 @@ internal sealed partial class Showroom : Node
             LightEnergy = 2.2f,
             LightColor = new Color(1f, 0.98f, 0.95f),
             LightSize = 0.3f,
-            LightSpecular = 0.3f,
+            LightSpecular = 0f,
             ShadowEnabled = true,
         };
         rim.LookAtFromPosition(new Vector3(-2f, 5.5f, -8f), new Vector3(0f, 0.6f, 0f), Vector3.Up);
         parent.AddChild(rim);
-        // The strips: three long panels of light over the stage, faced down. They light nothing (no bounce in this world) but
-        // the paint and the glass mirror them, long and bright, as a showroom's strip lights are mirrored in a flank; the
-        // spot under each gives the light the strip would.
-        var strip = new StandardMaterial3D
-        {
-            AlbedoColor = new Color(1f, 1f, 1f),
-            EmissionEnabled = true,
-            Emission = new Color(1f, 0.99f, 0.96f),
-            EmissionEnergyMultiplier = 1.8f,
-            Roughness = 1f,
-        };
-        foreach (var z in new[] { -2.2f, 0f, 2.2f })
-        {
-            parent.AddChild(new MeshInstance3D
-            {
-                Name = "Strip",
-                Mesh = new QuadMesh { Size = new Vector2(7f, 0.55f), Material = strip },
-                Position = new Vector3(0f, 3.8f, z),
-                RotationDegrees = new Vector3(90f, 0f, 0f),
-                CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-            });
-            parent.AddChild(new SpotLight3D
-            {
-                Name = "StripLight",
-                Position = new Vector3(0f, 3.75f, z),
-                RotationDegrees = new Vector3(-90f, 0f, 0f),
-                SpotRange = 9f,
-                SpotAngle = 60f,
-                SpotAngleAttenuation = 0.8f,
-                LightEnergy = 0.9f,
-                LightColor = new Color(1f, 0.99f, 0.96f),
-                LightSize = 1.2f,
-                LightSpecular = 0f,
-                ShadowEnabled = false,
-            });
-        }
-        // The reflections: a probe the size of the stage, box-projected so the floor's and the strips' mirror images sit
-        // where they should, rendered once (the stage never changes; the car is masked out by its layer).
-        parent.AddChild(new ReflectionProbe
-        {
-            Name = "StageReflections",
-            UpdateMode = ReflectionProbe.UpdateModeEnum.Once,
-            Position = new Vector3(0f, 6f, 0f),
-            Size = new Vector3(40f, 12f, 40f),
-            BoxProjection = true,
-            CullMask = 0xFFFFFu & ~2u,
-            EnableShadows = false,
-            Intensity = 1f,
-        });
     }
 
-    /// <summary>The car on the turntable, in the chosen paint, standing on the disc.</summary>
-    private CarView Place(VehicleSpec spec)
+    /// <summary>The car on the turntable, in its paint, standing on the disc.</summary>
+    private CarView Place(int index)
     {
-        var car = CarView.Create(spec, Paint);
+        var spec = VehicleSpec.Catalogue[index];
+        var car = CarView.Create(spec, ChoiceOf(index).Paint);
         car.Name = $"Car-{spec.Style}";
         car.SetViewpoint(false);
         _turntable.AddChild(car);
-        // Layer 2 keeps it out of the probe, and the contact shadow sets it on the disc.
+        // The contact shadow sets it on the disc.
         car.MarkPlayer();
         car.Position = new Vector3(0f, DiscHeight - car.Extent.Road, 0f);
         return car;
@@ -317,6 +334,8 @@ internal sealed partial class Showroom : Node
     public void Step(int direction)
     {
         if (direction == 0 || Count < 2) return;
+        // A colour being mixed stays on the car it was mixed for.
+        if (Picker is not null) ClosePicker(keep: true);
         if (_leaving is not null)
         {
             // Pressed again before the last change was over: the car on its way out goes now.
@@ -327,20 +346,61 @@ internal sealed partial class Showroom : Node
         _slideDirection = Math.Sign(direction);
         _slide = 0f;
         Index = (Index + _slideDirection + Count) % Count;
-        _car = Place(Spec);
+        _car = Place(Index);
         PlaceCars();
         Preload();
     }
 
-    /// <summary>Steps the paint (up or down): a model is repainted where it stands, a lofted body built again.</summary>
-    public void CyclePaint(int step)
+    /// <summary>Steps the paint (up or down) through the presets and the mixed colour.</summary>
+    public void CyclePaint(int step) => ChooseSlot((PaintSlot + step + SlotCount) % SlotCount);
+
+    /// <summary>A swatch taken: a preset, or the mixed colour (the last one, or the car's own as a solid to start from).</summary>
+    public void ChooseSlot(int slot)
     {
-        PaintIndex = (PaintIndex + step + CarView.Paints.Length) % CarView.Paints.Length;
-        if (_car is null || _car.Repaint(Paint)) return;
+        if (Picker is not null && slot != CustomSlot) ClosePicker(keep: true);
+        SetChoice(slot == CustomSlot ? MixedFor(Index) : PaintChoice.OfPreset(slot));
+    }
+
+    /// <summary>The car's paint chosen here: a model is repainted where it stands, a lofted body built again.</summary>
+    private void SetChoice(PaintChoice choice)
+    {
+        _edits[Index] = choice;
+        if (choice.IsCustom) _mixed[Index] = choice;
+        if (_car is null || _car.Repaint(choice.Paint)) return;
         var old = _car;
-        _car = Place(Spec);
+        _car = Place(Index);
         old.QueueFree();
         PlaceCars();
+    }
+
+    /// <summary>Opens the colour picker on the car's mixed colour (its last one, or its own colour to start from).</summary>
+    public void OpenPicker()
+    {
+        if (Picker is not null) return;
+        var before = Choice;
+        _mixedBefore = _mixed.TryGetValue(Index, out var mixed) ? mixed : null;
+        if (!before.IsCustom) SetChoice(MixedFor(Index));
+        Picker = new ColourPicker(Choice, before);
+    }
+
+    /// <summary>
+    /// Closes the picker: the mixed colour kept on the car, or (cancelled) the car and its mixed swatch put back as
+    /// they were when it opened.
+    /// </summary>
+    public void ClosePicker(bool keep)
+    {
+        if (Picker is not { } picker) return;
+        Picker = null;
+        if (keep) return;
+        SetChoice(picker.Before);
+        if (_mixedBefore is { } mixed) _mixed[Index] = mixed;
+        else _mixed.Remove(Index);
+    }
+
+    /// <summary>The picker's colour or finish changed: the car is repainted in it as it turns.</summary>
+    public void ApplyPicker()
+    {
+        if (Picker is { } picker) SetChoice(picker.Choice);
     }
 
     /// <summary>The mouse dragged across the stage by <paramref name="pixels"/> (right positive): the turntable follows, and keeps a little of the motion when it is let go.</summary>
@@ -402,11 +462,28 @@ internal sealed partial class Showroom : Node
         }
         if (_car is not null) _reach += (ReachOf(_car) - _reach) * Mathf.Clamp(dt * 6f, 0f, 1f);
         _distance += (CameraDistance - _distance) * Mathf.Clamp(dt * 6f, 0f, 1f);
+        _camera.HOffset += (PickerShift - _camera.HOffset) * Mathf.Clamp(dt * 6f, 0f, 1f);
         PlaceCamera();
         CollectPreloaded();
     }
 
     private float CameraDistance => _reach * 2.9f * _zoom;
+
+    /// <summary>
+    /// The camera's sideways move while the picker is open, m: the car centred in the stage left of the picker's panel
+    /// rather than behind it. The fraction of the half-screen it moves by, times the half-width the lens sees at the
+    /// car (its vertical angle and the screen's shape).
+    /// </summary>
+    private float PickerShift
+    {
+        get
+        {
+            if (Picker is null) return 0f;
+            var free = (LeftArrow(ScreenSize).End.X + ColourPicker.Panel(ScreenSize).Position.X) * 0.5f;
+            var fraction = (ScreenSize.X * 0.5f - free) / (ScreenSize.X * 0.5f);
+            return fraction * MathF.Tan(Mathf.DegToRad(CameraFov * 0.5f)) * ScreenSize.X / ScreenSize.Y * _distance;
+        }
+    }
 
     /// <summary>
     /// The camera: a long lens from the front, a little above the car, aimed under the car's middle so the car stands in
@@ -520,9 +597,10 @@ internal sealed partial class Showroom : Node
     public const float SwatchSize = 34f;
     private const float SwatchGap = 12f;
 
+    /// <summary>A swatch of the row: the presets, then (<see cref="CustomSlot"/>) the mixed colour.</summary>
     public static Rect2 Swatch(Vector2 size, int index)
     {
-        var count = CarView.Paints.Length;
+        var count = SlotCount;
         var x0 = size.X * 0.5f - (count * SwatchSize + (count - 1) * SwatchGap) * 0.5f;
         return new Rect2(x0 + index * (SwatchSize + SwatchGap), Panel(size).Position.Y + 96f, SwatchSize, SwatchSize);
     }
@@ -530,7 +608,7 @@ internal sealed partial class Showroom : Node
     public static Rect2 TakeButton(Vector2 size) => new(size.X - 290f, Panel(size).Position.Y + 92f, 250f, 42f);
     public static Rect2 BackButton(Vector2 size) => new(40f, Panel(size).Position.Y + 92f, 250f, 42f);
 
-    /// <summary>What a click lands on.</summary>
+    /// <summary>What a click lands on (the picker's own parts are <see cref="ColourPicker.HitTest"/>'s).</summary>
     public enum Hit { Nothing, Left, Right, Take, Back, Swatch }
 
     public static (Hit Hit, int Index) HitTest(Vector2 size, Vector2 point)
@@ -539,7 +617,7 @@ internal sealed partial class Showroom : Node
         if (RightArrow(size).HasPoint(point)) return (Hit.Right, 0);
         if (TakeButton(size).HasPoint(point)) return (Hit.Take, 0);
         if (BackButton(size).HasPoint(point)) return (Hit.Back, 0);
-        for (var i = 0; i < CarView.Paints.Length; i++)
+        for (var i = 0; i < SlotCount; i++)
         {
             if (Swatch(size, i).Grow(4f).HasPoint(point)) return (Hit.Swatch, i);
         }

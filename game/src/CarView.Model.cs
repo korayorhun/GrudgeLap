@@ -262,7 +262,7 @@ internal sealed partial class CarView
         // One paint material per paint material of the model, shared by its surfaces: the cabin's frame is updated
         // on each of them every frame (_Process), and a model has one to three.
         var paints = new Dictionary<Material, ShaderMaterial>();
-        var covered = new Dictionary<ShaderMaterial, long>();
+        var painted = new List<(Material Source, MeshInstance3D Mesh, int Surface)>();
         _windowOutside ??= new StandardMaterial3D
         {
             AlbedoColor = new Color(0.05f, 0.08f, 0.11f, 0.80f),
@@ -303,12 +303,7 @@ internal sealed partial class CarView
                             paints[source] = paint;
                         }
                         mesh.SetSurfaceOverrideMaterial(s, paint);
-                        // How much of the car each paint covers, by its surfaces' indices (or vertices, unindexed).
-                        if (mesh.Mesh is ArrayMesh array)
-                        {
-                            var size = array.SurfaceGetArrayIndexLen(s);
-                            covered[paint] = covered.GetValueOrDefault(paint) + (size > 0 ? size : array.SurfaceGetArrayLen(s));
-                        }
+                        painted.Add((source, mesh, s));
                         break;
                     case "GLP_Glass":
                         mesh.SetSurfaceOverrideMaterial(s, _windowOutside);
@@ -336,9 +331,47 @@ internal sealed partial class CarView
             }
         }
         // The body's colour first, the paint that covers the most of the car (the McLaren has two, its orange and a
-        // maroon): the model's own colour, for what takes the car's colour from Paint (the debris of a crash).
-        _paints.Sort((a, b) => covered.GetValueOrDefault(b.Material).CompareTo(covered.GetValueOrDefault(a.Material)));
+        // maroon): the model's own colour, for what takes the car's colour from Paint (the debris of a crash) and for
+        // the showroom's ORIGINAL swatch. Measured by area since the showroom (0.25): counted by the surfaces' indices,
+        // the maroon's finely cut parts outnumbered the orange panels, and the orange car's swatch was maroon.
+        if (paints.Count > 1)
+        {
+            var area = paints.ToDictionary(p => p.Value, p => PaintArea(p.Key, painted, model));
+            _paints.Sort((a, b) => area.GetValueOrDefault(b.Material).CompareTo(area.GetValueOrDefault(a.Material)));
+        }
         if (_paintChoice is null && _paints.Count > 0) _paint = _paints[0].Factory;
+    }
+
+    /// <summary>The area a paint material of a model covers, m², worked out once a run (the imported scene and its materials are cached).</summary>
+    private static readonly Dictionary<ulong, double> _paintAreas = new();
+
+    private static double PaintArea(Material source, List<(Material Source, MeshInstance3D Mesh, int Surface)> painted, Node3D model)
+    {
+        if (_paintAreas.TryGetValue(source.GetInstanceId(), out var known)) return known;
+        var area = 0.0;
+        foreach (var (material, mesh, surface) in painted)
+        {
+            if (material != source || mesh.Mesh is null) continue;
+            // The surface in the model's frame, so a mesh scaled under the model counts at its drawn size.
+            var toModel = Transform3D.Identity;
+            for (Node? node = mesh; node is not null && node != model; node = node.GetParent())
+            {
+                if (node is Node3D placed) toModel = placed.Transform * toModel;
+            }
+            var arrays = mesh.Mesh.SurfaceGetArrays(surface);
+            var vertices = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
+            var indices = arrays[(int)Mesh.ArrayType.Index].AsInt32Array();
+            var count = indices.Length > 0 ? indices.Length : vertices.Length;
+            for (var i = 0; i + 2 < count; i += 3)
+            {
+                var a = toModel * vertices[indices.Length > 0 ? indices[i] : i];
+                var b = toModel * vertices[indices.Length > 0 ? indices[i + 1] : i + 1];
+                var c = toModel * vertices[indices.Length > 0 ? indices[i + 2] : i + 2];
+                area += 0.5 * (b - a).Cross(c - a).Length();
+            }
+        }
+        _paintAreas[source.GetInstanceId()] = area;
+        return area;
     }
 
     /// <summary>The model materials already corrected: the imported scene is cached, so its materials are shared by every car drawn with it.</summary>
@@ -413,6 +446,8 @@ internal sealed partial class CarView
                 uniform vec3 paint : source_color = vec3(0.76, 0.03, 0.05);
                 uniform float paint_metallic = 0.05;
                 uniform float paint_roughness = 0.38;
+                uniform float paint_pearl = 0.0;
+                uniform vec3 pearl_tint : source_color = vec3(1.0);
                 uniform vec3 lining : source_color = vec3(0.045, 0.045, 0.05);
                 uniform mat4 to_car = mat4(1.0);
                 uniform vec3 cabin_min = vec3(1.0);
@@ -425,7 +460,12 @@ internal sealed partial class CarView
                     vec3 local = (to_car * vec4(world_position, 1.0)).xyz;
                     bool in_cabin = all(greaterThan(local, cabin_min)) && all(lessThan(local, cabin_max));
                     if (FRONT_FACING || !in_cabin) {
-                        ALBEDO = paint;
+                        // A pearl's flop (CarPaint.Pearl): the colour turns to its tint as the panel is seen edge-on,
+                        // the two-tone blend on the view angle that real-time car paints use for a mica's colour shift;
+                        // cubed, so a panel seen at 60 degrees keeps nearly all its own colour and only the turning
+                        // edges take the tint.
+                        float edge = 1.0 - abs(dot(NORMAL, VIEW));
+                        ALBEDO = mix(paint, pearl_tint, paint_pearl * 0.55 * edge * edge * edge);
                         METALLIC = paint_metallic;
                         ROUGHNESS = paint_roughness;
                         CLEARCOAT = 1.0;
@@ -494,6 +534,8 @@ internal sealed partial class CarView
                 uniform vec3 paint : source_color = vec3(0.76, 0.03, 0.05);
                 uniform float paint_metallic = 0.05;
                 uniform float paint_roughness = 0.38;
+                uniform float paint_pearl = 0.0;
+                uniform vec3 pearl_tint : source_color = vec3(1.0);
                 uniform bool factory_texel = false;
                 uniform bool own_finish = false;
                 uniform float own_clearcoat = 0.0;
@@ -525,7 +567,9 @@ internal sealed partial class CarView
                         vec3 texel = texture(albedo_texture, UV).rgb * albedo_tint.rgb;
                         vec2 mask = texture(paint_mask, UV).rg;
                         float coat = mask.r;
-                        vec3 painted = factory_texel ? texel : min(paint * (mask.g * 2.0), vec3(1.0));
+                        float edge = 1.0 - abs(dot(NORMAL, VIEW));
+                        vec3 colour = mix(paint, pearl_tint, paint_pearl * 0.55 * edge * edge * edge);
+                        vec3 painted = factory_texel ? texel : min(colour * (mask.g * 2.0), vec3(1.0));
                         ALBEDO = mix(texel, painted, coat);
                         float own_roughness = dot(texture(roughness_texture, UV), roughness_channel) * roughness;
                         float own_metallic = dot(texture(metallic_texture, UV), metallic_channel) * metallic;
@@ -608,6 +652,8 @@ internal sealed partial class CarView
         material.SetShaderParameter("paint", paint.Colour);
         material.SetShaderParameter("paint_metallic", paint.Metallic);
         material.SetShaderParameter("paint_roughness", paint.Roughness);
+        material.SetShaderParameter("paint_pearl", paint.Pearl);
+        material.SetShaderParameter("pearl_tint", paint.Pearl > 0f ? PearlTint(paint.Colour) : paint.Colour);
         if (!surface.Textured) return;
         // A paint texture's own colour is the texture itself (not its key's one hue), and its own finish the model's
         // roughness and coat: its roughness map holds the 205's bonnet dust and the VAZ's matt beige, which a new
