@@ -571,18 +571,15 @@ Item 20 came with fleet, when the fleet saloon was made to drive like the car th
     pad, a sprint, a stop and a bend exit matches the branch point's (after dyn5's review) line for line. The native ABI
     is unchanged.
 
-    The sound: the fleet bank (the Punto's and the Bravo's petrol fours) stays and plays this engine's revs, now
-    750-4800; the turbo's whine and vent are synthesised for it, as for any engine with boost (`EngineSpec.BoostShare`
-    0.6; `Cylinders` stays 4 and `SoundFolder` "fleet"); the audio tests pass with it, and since the review the bank's
-    own tests hold it at the diesel's revs (its idle at 750, the firing at 2500 and 4500, the overrun at 4500, the sweep
-    to 4800; they held it at the petrol's 950 and up to 6500 before). On the governor the sound hears the fuel fall
-    away, not a limiter's stutter; the vent stays (`BlowOffValve` keeps its default). A diesel four should sound
-    otherwise, and the banks are being cut again on night/banks: a diesel recording (an OM 651 or a like four) for the
-    fleet bank, its firing at 25-160 Hz over 750-4800 rpm with the combustion's knock (the hard, broadband rattle of a
-    compression-ignition pressure rise, loudest at idle and light load), the turbo's whistle under it and no petrol rasp
-    at the top; and no blow-off vent, which a diesel does not need (no throttle shuts on its boost: the overrun cuts the
-    fuel and the boost runs down through the engine), so the sound's `BlowOffValve` would want a third state, neither
-    vent nor surge. Both are left with the banks.
+    The sound: until diesel6 the fleet bank (the Punto's and the Bravo's petrol fours) played this engine's revs,
+    750-4800, with the turbo's whine and a petrol car's vent synthesised for it, as for any engine with boost
+    (`EngineSpec.BoostShare` 0.6). On the governor the sound hears the fuel fall away, not a limiter's stutter. Since
+    diesel6 it is a diesel four: its banks (`SoundFolder` "diesel4") are cut from a CC0 recording of a TDI's engine bay,
+    the only legitimately licensed one found of a car's turbodiesel four with an idle, a loaded run-up and an overrun
+    (none of an OM 651), with the combustion's knock in them (the hard, broadband rattle of a compression-ignition
+    pressure rise, loudest at idle and light load), and its turbo spools down when the driver lifts, neither venting nor
+    surging (`EngineSpec.LiftOff`, `TurboLiftOff.SpoolsDown`, in place of the bool `BlowOffValve`: no throttle shuts on a
+    diesel's boost, the fuel is cut and the boost runs down through the engine). See *Sound, diesel6* below.
 
 Kept, as earlier decisions: the fixed 240 Hz step with semi-implicit Euler for the body, the raycast wheels, the
 grass's grip and rolling resistance (0.9), the weather's grip figures (0.12), the speed-sensitive steering lock,
@@ -1238,12 +1235,12 @@ ffmpeg's `ebur128` (integrated loudness, mono, everything in the mix: engine, ty
   that; it spools behind the boost and runs on for a second. It whistles at its six blades' passing frequency (Raitor
   and Neise, *J. Sound Vib.* 314, 2008), 5.2 kHz at a third of its speed, climbing out of the mix as it comes on full
   boost, and at the shaft's own frequency (the unbalance's whine, 2.5 kHz on full boost), over the rush of the air.
-  Shutting the throttle on boost vents the charge through the diverter valve (`EngineSpec.BlowOffValve`, true by
-  default, as production turbo cars have one); without a valve the compressor surges (Greitzer, *ASME J. Eng. Power*
-  98, 1976; Galindo et al., *Exp. Therm. Fluid Sci.* 32, 2008): chuffs of air with the shaft stumbling, about 14 a
-  second on full boost falling to 7 as the stored air bleeds away (measured: a 15 dB beat at 9.8 Hz). The whine is the
-  tone heard on boost (review): the turbo four is on full boost within half a second of flooring it, its blade tone
-  then at 15 kHz, past the game's 22.05 kHz mix, and with the whine at a quarter of its present gain the whole turbo
+  Shutting the throttle on boost vents the charge through the diverter valve (`EngineSpec.LiftOff`, `Vents` by
+  default, as production petrol turbo cars have one; a diesel's spools down, diesel6); without a valve the compressor
+  surges (Greitzer, *ASME J. Eng. Power* 98, 1976; Galindo et al., *Exp. Therm. Fluid Sci.* 32, 2008): chuffs of air
+  with the shaft stumbling, about 14 a second on full boost falling to 7 as the stored air bleeds away (measured: a
+  15 dB beat at 9.8 Hz). The whine is the tone heard on boost (review): the turbo four is on full boost within half a
+  second of flooring it, its blade tone then at 15 kHz, past the game's 22.05 kHz mix, and with the whine at a quarter of its present gain the whole turbo
   was under the engine in every third-octave band (the whine 11 dB under in its own). Now the whine is level with the
   engine in its band, +1.9 dB outside and +0.8 dB in the cabin at a shaft gain of 0.1 (`The_turbo_is_heard_on_boost`,
   through `EngineModel`'s boost, on the Delta's run-up; soundfix), and both tones fade to 0.3 with the throttle shut,
@@ -1355,6 +1352,85 @@ ffmpeg's `ebur128` (integrated loudness, mono, everything in the mix: engine, ty
   turbo's state in `glp_state` with a `TurboNoise` voice, and `EngineFollower` in place of its own smoothing; with
   finding 14.
 
+### Sound, diesel6: the fleet saloon's diesel
+
+The fleet saloon has been the E 250 CDI since fleet (dynamics audit, item 20), its OM 651 a 2.1-litre turbodiesel four
+idling at 750 rpm and governed at 4,800, but it still played a petrol four (the Punto's and the Bravo's 1.4 T-Jet) and
+its turbo still vented like a petrol car's blow-off valve when the driver lifted. Both are a diesel's now.
+
+- **The recording** (`game/assets/audio/diesel4`, SOURCES.md). No CC0 or CC BY recording of an OM 651, or of any W212
+  or W204 CDI, was found: the Internet Archive's CC0 `car-engines` holds no diesel; Wikimedia Commons' diesels are four
+  edited YouTube tracks with their licence review pending (a Passat B5 1.9 TDI, an Audi A3, a Seat Toledo, a Chevrolet
+  Cruze), none with a steady loaded run-up near the engine; Freesound's are starts and blips standing (a Mercedes
+  Sprinter, an Astra CDTi, a Jumpy HDi, a 320d, two Mercedes diesels of unknown model), cabin recordings where the road
+  and the wind cover the firing (a Passat, an i40 CRDi, a Master dCi), phone clips, and fastson's two drives of a TDI
+  with the microphone in the engine compartment (#243773 and #243783, CC0): idling, pulling away, accelerating through
+  the low gears, coasting. Those are cut. The car is not named; its idle reads as a four's (a comb of 6.5 Hz, the cam's
+  turn, with its firing at 26 Hz, 780 rpm, and its second harmonic the strongest lines), and whether it is a
+  common-rail or a unit-injector TDI is not said.
+- **Its hiss** (`tools/clean-recording.py`). The drives were recorded at -55 to -60 dBFS, and above about 4 kHz they are
+  the recorder's floor (those bands move by under 3 dB between idle and run-up). The bank tool brings every segment to
+  one loudness, the floor 40 dB up with it: cut raw, the grains' sharpest steps stood 2 to 3.6 times their RMS (every
+  other bank's 0.1 to 0.7), and the audio tests found clicks idling at full throttle (3.2 times the RMS around them) and
+  a step of 2.7 LU where the idle hands over to the run-up in the cabin. The floor is now measured in every bin as its
+  10th percentile over the file and taken away from 700 Hz up (under that the engine is always far over it), with a
+  low-pass at 6 kHz, before the banks are cut; nothing moves in time, so the tool's marks are unchanged by it. The
+  grains' sharpest steps are 0.3 to 0.9 times their RMS after it. The idle is #243773's, whose 1-3 kHz beats 0.54 of
+  its mean at the firing rate (the knock); #243783's first idle beats 0.27 there, its band above 3 kHz hiss, and is left
+  out, its second idle (about 1,000 rpm) kept.
+- **The banks.** The idle at 780 and about 1,000 rpm; the run-up under load from 1,300 to 3,425 rpm in five stretches
+  of the two drives; the overrun from 2,000 down to 1,150 rpm (the revs falling slowly after a change up, the fuel
+  cut). The tool's tracker cannot follow a firing frequency under about 45 Hz (its 12 % search band is then narrower than
+  a bin and may hold none, so the estimate sticks), so the run-up starts at 1,300 rpm and the voice crossfades the idle
+  into it; one stretch is split where the tracker jumped to a partial for a few pulses. Past 3,425 rpm the voice lays
+  the run-up's highest pulses closer up to the governor's 4,800 (1.4 times), and lifting from there plays the overrun's
+  highest pulses closer still, as on the V6 hatch. Every bank test passes (no grain over 3.3 dB under its neighbours,
+  the sharpest 2.9 times its segment's median, every side 0.60 of its period or more; sweeps and idles on five seeds
+  with steps at most 1.5 times the RMS around them; no ticks lifting off; steps across the revs 0.9 LU, sags 0.9; peaks
+  -1.4 dBFS outside and -1.1 in the cabin, 127 samples in 952,560 rounded there; pulling as a tone; the throttle at
+  idle revs 4.6 LU from the governor's throttle to full). The voicing is the saloons' (`SampledEngine.VoicingOf`: front
+  engine, a 1.9 m cabin booming at 90 Hz).
+- **The knock** (`The_diesel_knocks_where_the_petrol_fours_do_not`). A diesel's combustion starts with a steep rise of
+  pressure as the fuel injected into hot air ignites at once, which rings the block and the head (the clatter, strongest
+  at idle and light load, where the ignition delay is longest against the little fuel burnt; Heywood, *Internal
+  Combustion Engine Fundamentals*, ch. 10). In the voice: idling,
+  its 1-3 kHz is -10.5 dB of the sound against the petrol fours' -17.5 (the saloon) to -29.3 (the hot hatch), and at
+  1,500 rpm on a light throttle -10.8 against -15.1 to -27.6; the Punto/Bravo bank gave -29.6 and -26.5. That band
+  follows its firing (its envelope folded on the firing period swings 0.65 and 0.58 of its mean, as every engine's 1-3
+  kHz does): it is the knock of each firing, not hiss. The diesel's top is its governor's 4,800 rpm and its recording's
+  3,425 laid closer, without a petrol engine's rasp at 6,000 and over.
+- **The turbo on lift-off** (`EngineSpec.LiftOff`, `TurboLiftOff`; `TurboState.Lift`, `TurboLift`). A diesel has no
+  throttle plate: its load is the fuel injected, so lifting shuts nothing on the boost, the air goes on through the
+  engine and the turbine, the charge falls with the exhaust's energy, and diesel turbochargers are fitted without a
+  blow-off or diverter valve. The bool `BlowOffValve` (true vents, false surges) is now a three-way choice: `Vents` (the
+  default, every petrol turbo, the Delta among them), `Surges`, and `SpoolsDown` (the diesel): no vent and no surge, the
+  shaft runs down over its second of run-on and the whine with it (driven through `EngineModel`: never venting nor
+  surging, nothing over the steady turbo above 3 kHz or under 2 kHz, a beat of 0.8 dB against the vent's 3.1 and the
+  surge's 14.5, the whine from 2,500 Hz to 2,384 half a second after the lift and 2,074 a second after;
+  `A_diesels_turbo_spools_down_on_lift_off_without_a_vent_or_a_surge`, `Every_turbo_engine_lifts_off_as_its_kind_does`).
+- **The turbo's tones** (`TurboNoise.TonalGain`). Against the diesel's knock, loud around 2.5 kHz, its turbo's whine was
+  1.7 dB under the engine in its band outside and 3.8 in the cabin, under the masked threshold there
+  (`The_turbo_is_heard_on_boost`). The tones now follow the pressure ratio the turbo works at: the work done on the air
+  goes as the tip speed squared (Euler), a fan's or a compressor's sound power as the fifth power of its tip speed (the
+  fan laws, 50 log10 of the speed; ASHRAE Handbook, HVAC Applications), so the tones' pressure as the work to the 1.25,
+  against the rally hatch's turbo, on which the gains were set (`ReferenceBoostShare` 0.48: a gain of exactly 1, its
+  sound unchanged sample for sample). The diesel's 2.5 bar absolute against the Delta's 1.9 gives 4.1 dB: its whine is
+  2.3 dB over the engine in its band outside, 0.2 in the cabin. (A faster shaft for the diesel's smaller high-pressure
+  stage, its whine at 3.7 kHz, was tried first: the knock is as loud there, and the whine fell 1.4 and 4.5 dB under.)
+- **In the game** (hidden, silent 40 s `--write-movie` attract runs at 30 fps, dry, cabin and chase, ffmpeg's `ebur128`
+  over the whole mix, transients counted as the lift-off test counts its ticks): the fleet saloon -13.4 LUFS in its cabin
+  and -13.3 from behind (-13.3 and -13.3 on its petrol banks), the other cars -11.7 (the estate) to -16.0 (the V8), the
+  voice alone trimmed to the reference as every car's (-14.1 LUFS pulling outside, -13.8 in the cabin, among the
+  others' -13.5 to -14.3; `Every_engine_is_about_as_loud_pulling_hard`). Its loudness range is wider, 6.8 and 7.4 LU
+  against 5.6 and 5.7 (the voice held flat out runs from -19.6 LUFS at 800 rpm to -12.7 at 4,800); peaks -0.5 dBFS in
+  the cabin and -0.7 from behind as before (the whole mix's); sharp transients 0 and 0 (0 and 1 before). At top speed its cabin is
+  0.3 LU over the roar and the wind, 2.2 under on the petrol banks.
+- **The Unreal version** reads the "diesel4" folder in its bank table (`GlpAudio.cpp`); it has no turbo voice yet.
+- Left: the recording's car is not named and is not an OM 651; its run-up ends at 3,425 rpm and its overrun at 2,000,
+  so the top of the diesel's revs is its highest pulses laid closer; the drives carry a steady 163-165 Hz tone that does
+  not follow the revs (an auxiliary of the car's), which stays in the grains; the tool's tracker cannot follow a firing
+  under about 45 Hz. A recording of an OM 651 pulling to its governed speed under load would serve better (roadmap).
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and
@@ -1421,7 +1497,9 @@ new-package requests were withdrawn).
 
 1. Force-feedback wheel support through DirectInput (torque = model force + damping + friction + centring,
    the recipe of the expired 1991 patent); until then, keyboard only.
-2. A cleaner twelve-cylinder recording for the 1984 car if one with a usable licence turns up.
+2. A cleaner twelve-cylinder recording for the 1984 car if one with a usable licence turns up; for the fleet saloon, a
+   recording of an OM 651 (or any diesel four) pulling to its governed speed under load and lifting from there, under
+   CC0 or CC BY (its bank's run-up ends at 3,425 rpm and its overrun at 2,000).
 3. A longer overrun recording for the twelve (its bank is one second long); a steam locomotive recorded
    closer than the Welsh one (binaural from a carriage window) if one turns up under CC0.
 4. More circuits built with the same turtle API; the hidden skid pad could grow cones and a timer.

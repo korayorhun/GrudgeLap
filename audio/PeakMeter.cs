@@ -2,8 +2,8 @@ namespace GrudgeLap.Audio;
 
 /// <summary>
 /// The peak of a signal but for its rarest samples: the level that no more than <see cref="RareShare"/> of the samples
-/// pass. A recording's absolute peak is often one click (the fleet saloon's run-up reaches 0.99 where one sample in
-/// 10,000 passes 0.64), and a gain held under it would hold a whole car down for the sake of a sample; the click is
+/// pass. A recording's absolute peak is often one click (the fleet saloon's petrol run-up of 0.10-0.23 reached 0.99 where
+/// one sample in 10,000 passed 0.64), and a gain held under it would hold a whole car down for the sake of a sample; the click is
 /// rounded off by the voice instead (<see cref="GranularEngine.PeakKnee"/>). Used while a bank or a voice is made, off
 /// the audio thread.
 /// </summary>
