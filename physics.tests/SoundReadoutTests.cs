@@ -12,7 +12,7 @@ public sealed class SoundReadoutTests
     /// <summary>
     /// Every engine reports full throttle as 1 whatever its torque: the 1.4 makes a fifth of the V12's torque, and the
     /// torque over 500 N m the sound used until 0.18 read 0.2 for it. The idle governor opens the throttle a little at
-    /// idle, the rev limiter's cut shuts it, and a stopped engine has none.
+    /// idle, the rev limiter's cut (or the diesel's governor) shuts it, and a stopped engine has none.
     /// </summary>
     [Theory]
     [InlineData(0)]
@@ -41,6 +41,48 @@ public sealed class SoundReadoutTests
         Assert.Equal(0f, engine.Throttle);
         engine.Stop();
         Assert.Equal(0f, engine.Throttle);
+    }
+
+    /// <summary>
+    /// Held flat out with nothing to pull (free in neutral, and with a car's inertia behind it), stepped at the physics'
+    /// 240 Hz, the fleet saloon's diesel settles on its governor (fleet review): never a cut for the sound to stutter on,
+    /// and over the third second the revs steady within its last 200 rpm, the fuel there a small, steady share. A petrol
+    /// engine held the same way cuts on its limiter, as before.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void The_diesel_settles_on_its_governor_without_a_cut(bool inGear)
+    {
+        static (int Cuts, float Lowest, float Highest, float ThrottleSpread) Hold(EngineSpec spec, float inertia)
+        {
+            var engine = new EngineModel(spec);
+            engine.Start();
+            engine.AngularVelocity = 0.95f * spec.RedlineRpm / EngineModel.RpmPerRadPerSec;
+            var cuts = 0;
+            var (lowest, highest) = (float.MaxValue, 0f);
+            var (least, most) = (1f, 0f);
+            for (var step = 0; step < 3 * 240; step++)
+            {
+                engine.AngularVelocity += engine.Torque(1f) / inertia * VehicleSim.FixedStep;
+                engine.Tick(VehicleSim.FixedStep);
+                if (engine.LimiterCut) cuts++;
+                if (step < 2 * 240) continue;
+                (lowest, highest) = (MathF.Min(lowest, engine.Rpm), MathF.Max(highest, engine.Rpm));
+                (least, most) = (MathF.Min(least, engine.Throttle), MathF.Max(most, engine.Throttle));
+            }
+            return (cuts, lowest, highest, most - least);
+        }
+        var fleet = VehicleSpec.Fleet;
+        var diesel = Hold(fleet.Engine, fleet.EngineInertia + (inGear ? 3f : 0f));
+        Assert.True(fleet.Engine.Governor);
+        Assert.Equal(0, diesel.Cuts);
+        Assert.InRange(diesel.Lowest, fleet.Engine.RedlineRpm - EngineModel.GovernorSpanRpm, fleet.Engine.RedlineRpm);
+        Assert.InRange(diesel.Highest - diesel.Lowest, 0f, 5f);
+        Assert.InRange(diesel.ThrottleSpread, 0f, 0.02f);
+        var estate = VehicleSpec.Estate;
+        Assert.False(estate.Engine.Governor);
+        Assert.True(Hold(estate.Engine, estate.EngineInertia + (inGear ? 3f : 0f)).Cuts > 100, "the petrol engine should cut on its limiter");
     }
 
     [Theory]

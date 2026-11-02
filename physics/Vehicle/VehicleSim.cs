@@ -940,7 +940,7 @@ public sealed class VehicleSim
     private const float DifferentialPressureLag = 0.02f;
 
     /// <summary>
-    /// The electronic differential (dyn5): McLaren's brake steer, Volkswagen's EDS, Fiat's BLD. On each driven axle, a
+    /// The electronic differential (dyn5): McLaren's brake steer, Volkswagen's EDS, Mercedes's ETS. On each driven axle, a
     /// wheel whose slip speed runs more than <see cref="ElectronicDifferential.SlipLead"/> ahead of its partner's is braked
     /// (<see cref="WheelState.DifferentialBrake"/>, applied with the driver's brake in the wheel's spin), so the open
     /// differential's equal torque is held by the brake instead of spinning the wheel, the engine and the driveline up

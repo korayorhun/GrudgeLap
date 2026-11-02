@@ -12,6 +12,11 @@ public sealed class EngineModel
     public const float IdleRpm = 950f;
     public const float RedlineRpm = 6900f;
     public const float StallRpm = 420f;
+    /// <summary>
+    /// Revs over which a diesel's governor (<see cref="EngineSpec.Governor"/>) takes the injection from full to none, up
+    /// to the redline: a game figure, short enough that the curve stands to its breakaway speed.
+    /// </summary>
+    public const float GovernorSpanRpm = 200f;
 
     private readonly EngineSpec _spec;
     private float _limiterCut;
@@ -30,7 +35,8 @@ public sealed class EngineModel
     public float LastTorque { get; private set; }
     /// <summary>
     /// The throttle the engine ran at in the last <see cref="Torque"/> call, 0 to 1: the driver's, opened a little by the
-    /// idle governor and shut by the rev limiter's cut. It is the engine's load for the sound (0.19): the torque is not,
+    /// idle governor, shut by the rev limiter's cut and cut back by a diesel's governor. It is the engine's load for the
+    /// sound (0.19): the torque is not,
     /// since a 1.4 at full throttle makes a fifth of what a V12 does and once sounded as if it were coasting.
     /// </summary>
     public float Throttle => Running ? _lastThrottle : 0f;
@@ -43,6 +49,7 @@ public sealed class EngineModel
     /// countdown itself, the step whose <see cref="Tick"/> ran the cut out reported no cut with the throttle still shut by
     /// it, and the sound's held load sagged at the end of every cut (0.20 review: down to 0.4-0.7, a dip of about 2 dB).
     /// </remarks>
+    /// <remarks>An engine with a <see cref="EngineSpec.Governor"/> never cuts: it reports false throughout.</remarks>
     public bool LimiterCut => Running && _lastCut;
     /// <summary>The turbo's boost, 0 to 1 (always 0 without a turbo): it builds with the throttle above the threshold revs.</summary>
     public float Boost { get; private set; }
@@ -83,8 +90,14 @@ public sealed class EngineModel
         var idleThrottle = MathUtil.Clamp((_spec.IdleRpm + 80f - rpm) / 400f, 0f, 0.35f);
         throttle = MathF.Max(throttle, idleThrottle);
 
+        if (_spec.Governor)
+        {
+            // A diesel's governor: the injection is cut back steadily from the breakaway speed to none at the redline,
+            // so the engine holds there on part of its fuel and never stutters (see EngineSpec.Governor).
+            throttle = MathF.Min(throttle, MathUtil.Clamp01((_spec.RedlineRpm - rpm) / GovernorSpanRpm));
+        }
         // Rev limiter: cut fuel above the redline for a short burst, like a real ignition cut.
-        if (rpm > _spec.RedlineRpm) _limiterCut = 0.06f;
+        else if (rpm > _spec.RedlineRpm) _limiterCut = 0.06f;
         _lastCut = _limiterCut > 0f;
         if (_lastCut) throttle = 0f;
 
@@ -197,6 +210,15 @@ public sealed record EngineSpec
     /// turbo cars have; without one the compressor surges against the shut throttle and flutters. Only the sound reads it.
     /// </summary>
     public bool BlowOffValve { get; init; } = true;
+    /// <summary>
+    /// A diesel's governor in place of a petrol engine's rev limiter. A diesel has no ignition to cut: its governor (in an
+    /// injection pump's flyweights, or in a common-rail diesel's control unit) takes the injected quantity back steadily
+    /// from the full-load figure at the breakaway speed to none at the maximum no-load speed (Bosch, Diesel-Engine
+    /// Management, the governor's breakaway and high-idle characteristics). Here the redline is that no-load speed and
+    /// the injection falls over the last <see cref="EngineModel.GovernorSpanRpm"/> below it: the engine settles on the
+    /// governor without the limiter's 60 ms cuts, and the sound hears no stutter.
+    /// </summary>
+    public bool Governor { get; init; }
 
     /// <summary>Peak torque around 4500 rpm, peak power near 6300 rpm: a late-80s flat-twelve.</summary>
     private static readonly (float Rpm, float Torque)[] FlatTwelveCurve =
@@ -260,9 +282,10 @@ public sealed record EngineSpec
 
     /// <summary>
     /// The fleet saloon's 2.1-litre common-rail diesel four with its two-stage turbocharger (Mercedes-Benz OM 651, the
-    /// E 250 CDI's tune of 2013): 500 N m from 1600 to 1800, 204 PS at 3800 (377 N m there; Mercedes-Benz's data sheet of
-    /// the E-Class saloon, 11/2012), with full boost. The curve falls away past the rated speed as the injection is cut
-    /// back towards the governor; Mercedes publishes no figure above it.
+    /// E 250 CDI's tune of 2013): 500 N m from 1600 to 1800, 204 PS at 3800 (377 N m there), with full boost
+    /// (thecarspec's listing of the W212 facelift E 250 CDI; auto motor und sport's technical data of the E 250 CDI 4MATIC
+    /// give the same 3800 rpm). The curve falls away past the rated speed as the full-load injection is taken back; no
+    /// figure is published above it, and the governor takes the rest away short of 4800 (see EngineSpec.Governor).
     /// </summary>
     private static readonly (float Rpm, float Torque)[] DieselCurve =
     [
@@ -363,9 +386,10 @@ public sealed record EngineSpec
     public static EngineSpec DieselFour => new()
     {
         IdleRpm = 750f,
-        // The governor's cut: Mercedes publishes the rated speed (3800) and not the governor's; a diesel of the kind runs
-        // out of fuel delivery a thousand rpm or so past its rated speed (a game figure).
+        // The governor's no-load speed: Mercedes publishes the rated speed (3800) and not the governor's; a diesel of the
+        // kind runs out of fuel delivery a thousand rpm or so past its rated speed (a game figure).
         RedlineRpm = 4800f,
+        Governor = true,
         StallRpm = 400f,
         // A diesel has no throttle plate to pump against, but its compression and its injection pump's drive cost more
         // friction than a petrol four's: about the same engine braking as the two-litre petrol hatches.

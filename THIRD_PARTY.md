@@ -14,7 +14,7 @@
 | Freesound #187029 "car Niva.wav" by dobrymolodec | the 1.6 saloon's idle (`saloon/engine_idle`) | CC0 1.0 — https://freesound.org/s/187029/ |
 | Freesound #255122 and #255126, Lada 1500 Combi recordings by YleArkisto | the 1.6 saloon's run-up and overrun (`saloon/engine_drive`, `engine_overrun`) | CC BY 4.0 — https://freesound.org/s/255122/ (credit: YleArkisto) |
 | Freesound #141245 "Reault 19 driving 2" and #141240 "Renault 19 underhood acceleration" by lovretta | the 1.4 estate's banks (`estate/engine_*`) | CC0 1.0 — https://freesound.org/s/141245/ |
-| Wikimedia Commons "Fiat Grande Punto 1.4 T-Jet - engine and exhaust sound" (Adri Drives, YouTube -1zYK0ORqWg) and "Fiat Bravo 1.4 T-Jet - engine and exhaust sound" (michael maurice, YouTube TYdDRfp-LdY) | the 1.4 fleet saloon's banks (`fleet/engine_*`) | CC BY 3.0 (credit: Adri Drives; michael maurice) |
+| Wikimedia Commons "Fiat Grande Punto 1.4 T-Jet - engine and exhaust sound" (Adri Drives, YouTube -1zYK0ORqWg) and "Fiat Bravo 1.4 T-Jet - engine and exhaust sound" (michael maurice, YouTube TYdDRfp-LdY) | the fleet saloon's banks (`fleet/engine_*`) | CC BY 3.0 (credit: Adri Drives; michael maurice) |
 | ambientCG Ground110 (1K) | the gravel shoulders (`shoulder_*.jpg`) | CC0 1.0 — https://ambientcg.com/view?id=Ground110 |
 | Freesound #383476 "Car interior driving 02.wav" by Daphne_in_Wonderland | the tyres' rolling roar on the road (`tyres/road.wav`) | CC0 1.0 — https://freesound.org/s/383476/ |
 | Freesound #850041 "tire-squeal" by JeffPearson | the cornering squeal loop (`tyres/squeal.wav`) | CC0 1.0 — https://freesound.org/s/850041/ |
@@ -60,7 +60,7 @@ from its score by `tools/make-replay-music.py` (no recording or sample goes into
 the CC0 "Horizon Surfer" by congusbongus (OpenGameArt).
 
 The car names ("FLAT-12 GT '84", "V8 GTB '12 SPORT EXHAUST", "HOT HATCH 1.9 8V '88", "RALLY HATCH 2.0 TURBO
-4WD '92", "V6 HATCH 3.2 4WD '03", "SALOON 1.6 '91", "ESTATE 1.4 '93", "SALOON 1.4 16V '17") are descriptions of an engine layout, a body style and a year; they are not the
+4WD '92", "V6 HATCH 3.2 4WD '03", "SALOON 1.6 '91", "ESTATE 1.4 '93", "SALOON 2.1 DIESEL '14") are descriptions of an engine layout, a body style and a year; they are not the
 names of any make or model. The lofted bodies are our own, keyed on the proportions of the period cars; the
 models drawn in their place show real cars (a Ferrari, a McLaren, a Peugeot, a Lancia, a Volkswagen, a VAZ, a
 Renault, a Mercedes-Benz, and cabins of a Lotus and a SAAB), whose names

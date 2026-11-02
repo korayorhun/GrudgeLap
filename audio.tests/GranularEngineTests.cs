@@ -26,7 +26,7 @@ public class GranularEngineTests
     [InlineData("v6", 6, 2500f)]
     [InlineData("saloon", 4, 3200f)]
     [InlineData("estate", 4, 4000f)]
-    [InlineData("fleet", 4, 5000f)]
+    [InlineData("fleet", 4, 4500f)]
     public void Overrun_bank_sounds_off_the_throttle_at_the_firing_frequency(string car, int cylinders, float rpm)
     {
         var with = Load(car, cylinders, overrun: true);
@@ -56,7 +56,7 @@ public class GranularEngineTests
     [InlineData("v6", 6, 2500f)]
     [InlineData("saloon", 4, 3200f)]
     [InlineData("estate", 4, 4000f)]
-    [InlineData("fleet", 4, 5000f)]
+    [InlineData("fleet", 4, 4500f)]
     public void Overrun_is_quieter_than_the_throttle_at_the_same_revs_in_every_band(string car, int cylinders, float rpm)
     {
         var rate = 44100;
@@ -124,7 +124,7 @@ public class GranularEngineTests
     [InlineData("estate", 4, 2200f)]
     [InlineData("estate", 4, 4300f)]
     [InlineData("fleet", 4, 2500f)]
-    [InlineData("fleet", 4, 5500f)]
+    [InlineData("fleet", 4, 4500f)]
     public void Sounds_at_the_firing_frequency_of_the_revs(string car, int cylinders, float rpm)
     {
         var engine = Load(car, cylinders);
@@ -142,12 +142,13 @@ public class GranularEngineTests
     [InlineData("turbohatch", 4)]
     [InlineData("saloon", 4)]
     [InlineData("estate", 4)]
-    [InlineData("fleet", 4)]
-    public void Idles_at_the_idle_firing_frequency(string car, int cylinders)
+    // The fleet saloon's diesel at its own idle, 750 (fleet); the others at 950, as before.
+    [InlineData("fleet", 4, 750f)]
+    public void Idles_at_the_idle_firing_frequency(string car, int cylinders, float idle = 950f)
     {
         var engine = Load(car, cylinders);
-        var x = Hold(engine, 950f, 0.1f, 2f);
-        var firing = 950f * cylinders / 120f;
+        var x = Hold(engine, idle, 0.1f, 2f);
+        var firing = idle * cylinders / 120f;
         var peak = Peak(x, engine.SampleRate, firing * 0.85f, firing * 1.15f);
         Assert.InRange(peak, firing * 0.96f, firing * 1.04f);
     }
@@ -160,7 +161,7 @@ public class GranularEngineTests
     [InlineData("turbohatch", 4, 6800f)]
     [InlineData("saloon", 4, 6000f)]
     [InlineData("estate", 4, 5800f)]
-    [InlineData("fleet", 4, 6500f)]
+    [InlineData("fleet", 4, 4800f)]
     public void Sweeps_without_clicks_and_falls_silent_when_stopped(string car, int cylinders, float top)
     {
         var engine = Load(car, cylinders);

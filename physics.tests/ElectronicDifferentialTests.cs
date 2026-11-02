@@ -40,12 +40,13 @@ public sealed class ElectronicDifferentialTests(ITestOutputHelper output)
     /// so no more than without the function (the R32's Haldex makes its front wheels do it on split grip either way: see
     /// design.md, the dynamics audit's item 14). The fleet saloon, front-driven while it was the Egea, gained half as much
     /// again; as the rear-driven E-Class (fleet) its wheel on the grass carries more of the load as the car squats, so the
-    /// open differential already pulls away harder (5.2 m/s after 2.5 s, the Egea 4.2) and the brake adds less to it.
+    /// open differential already pulls away harder (5.2 m/s after 2.5 s, the Egea 4.2) and the brake adds less to it:
+    /// 6.74 m/s, 1.30 times, where the Egea's bound was 1.3 (the bound is 1.25, a margin like the R32's).
     /// </summary>
     [Theory]
     [InlineData(1, 2f)]
     [InlineData(4, 1.05f)]
-    [InlineData(7, 1.2f)]
+    [InlineData(7, 1.25f)]
     public void A_wheel_spinning_on_split_grip_is_braked_and_the_car_pulls_away(int car, float gainAtLeast)
     {
         var spec = VehicleSpec.Catalogue[car];
@@ -107,15 +108,17 @@ public sealed class ElectronicDifferentialTests(ITestOutputHelper output)
     /// Out of a tight bend on full throttle (22 m, from 9 m/s, as <c>Limited_slip_differential_holds_the_inside_wheel</c>
     /// drives the flat-twelve), the inside driven wheel, unloaded by the roll, spins ahead of the outside one; the brake
     /// holds it within its lead, with the traction control the car has. The fleet saloon gains speed by it, its engine no
-    /// longer cut for one wheel's spin: a few per cent as the rear-driven E-Class (fleet), whose outside rear tyre carries
-    /// the bend as well as the drive the brake hands it (the front-driven Egea gained 14 %, its rear tyres free of the
-    /// drive). The V8 does not gain at all: at 0.9 g round a 22 m circle its outside rear tyre is already near the edge of
+    /// longer cut for one wheel's spin: 3 % as the rear-driven E-Class (fleet: 3.37 m/s against 3.27; the bound is 2.5 %),
+    /// whose outside rear tyre carries the bend as well as the drive the brake hands it (the front-driven Egea gained
+    /// 14 %, its rear tyres free of the drive). Without the brake its spinning inside rear runs the engine up to 4680 rpm,
+    /// onto its governor; until the fleet review it met a petrol limiter's cuts there, and gained 3.23 m/s.
+    /// The V8 does not gain at all: at 0.9 g round a 22 m circle its outside rear tyre is already near the edge of
     /// its friction circle sideways, so the drive the brake hands it costs grip across (the tail steps out a little and
     /// the circle driver gives back lock), as with the flat-twelve's limited-slip unit. A gain of 0 is not checked.
     /// </summary>
     [Theory]
     [InlineData(1, 0f)]
-    [InlineData(7, 1.02f)]
+    [InlineData(7, 1.025f)]
     public void The_inside_wheel_out_of_a_tight_bend_is_held(int car, float gainAtLeast)
     {
         var spec = VehicleSpec.Catalogue[car];

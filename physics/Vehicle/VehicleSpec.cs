@@ -566,10 +566,14 @@ public sealed record VehicleSpec
     /// The fleet saloon of 2014, after the Mercedes-Benz E-Class W212 the game draws, as one of the OM 651 diesels of the
     /// taxi ranks and company fleets of Europe and Turkey: the E 250 CDI of the facelift (2013-15), the 2.1-litre diesel
     /// four with a two-stage turbocharger, 204 PS at 3800 and 500 N m from 1600 to 1800, rear-wheel drive through the
-    /// six-speed manual that was its standard gearbox (5.10 / 2.78 / 1.75 / 1.25 / 1.00 / 0.81, reverse 4.62, final drive
-    /// 2.47), 205/60 R16 tyres, ESP with anti-lock brakes and ETS, Cd 0.26, 1,765 kg (EU: a 68 kg driver, 7 kg of
-    /// luggage, the tank 90 % full). Mercedes-Benz's figures: 0-100 km/h in 7.7 s, 240 km/h (its data sheet of the
-    /// E-Class saloon, 11/2012; the Mercedes-Benz Classic archive's E 250 CDI of 2013-15 agrees).
+    /// six-speed manual that was its standard gearbox, 205/60 R16 tyres, ESP with anti-lock brakes and ETS, 1,765 kg,
+    /// 0-100 km/h in 7.7 s and 240 km/h. The sources: thecarspec's listing of the W212 facelift E 250 CDI (the power and
+    /// torque, the tyres, the size, 1,765 kg, 7.7 s and 240 km/h), cars-data's of the 2013 saloon with the manual (7.7 s,
+    /// 240 km/h; 7.5 s and 242 km/h with the automatic), auto motor und sport's technical data of the E 250 CDI 4MATIC (the
+    /// rated speed 3800, and a final drive of 2.47 behind its 7G-TRONIC) and of its test of the C 250 CDI (W204, 03/2011:
+    /// the same OM 651 at 204 PS behind the six-speed manual, 5.10 / 2.78 / 1.75 / 1.25 / 1.00 / 0.81, reverse 4.62, final
+    /// drive 2.47). No gearing was found published for the manual E-Class: the C's gearbox is taken as its, and the final
+    /// drive the C and the automatic E share is assumed for it.
     /// </summary>
     /// <remarks>
     /// The seven-speed 7G-TRONIC PLUS was the option most of these cars were bought with (0-100 km/h in 7.5 s, 242 km/h);
@@ -609,7 +613,9 @@ public sealed record VehicleSpec
         Engine = EngineSpec.DieselFour,
         // Its speedometer reads to 260 km/h.
         SpeedoMaxMph = 162f,
-        // Mercedes's 1,765 kg with the tank full.
+        // thecarspec's 1,765 kg, which is auto-data's kerb weight of the manual saloon (1,690 kg, without a driver) with the
+        // EU's 75 kg for the driver and luggage, the tank 90 % full; rounded up to 1,770. cars-data lists 1,665-1,675 kg
+        // without a driver for other trims.
         MassKg = 1770f,
         InertiaRoll = 680f,
         InertiaYaw = 3100f,
@@ -621,7 +627,9 @@ public sealed record VehicleSpec
         BodyRear = 2.611f,
         BodyHalfWidth = 0.896f,
         HubHeight = -0.20f,
-        // Cd 0.26 (Mercedes-Benz); 1.85 m wide and 1.47 m tall.
+        // The W212 saloon is given as Cd 0.25 in its most economical trims (auto-data's facelift E 200 CDI; the saloon's
+        // launch figure of 2009); no figure was found for the E 250 CDI, set a hundredth higher (a game figure). 1.85 m wide
+        // and 1.47 m tall (thecarspec).
         DragCoefficient = 0.26f,
         FrontalArea = 2.30f,
         FrontLiftArea = 0.06f,
