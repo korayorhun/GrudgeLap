@@ -2089,6 +2089,30 @@ segments, rebuild commands and every recording checked and passed over are in `g
   3.0, their licence review pending) are a later pass's. Stage 2 wires the folders to the cars, where the catalogue's
   voice tests pin these figures.
 
+### Sound, cars13 stage 2: the banks wired
+
+The five engines name their banks (`EngineSpec.SoundFolder`): the 458 `v8flat`, the Bravo HGT `inline5`, the Bravo 1.6
+`four16v`, the Leon Cupra `tsi4`, the BRZ `boxer4`, and `GlpAudio.cpp`'s bank table the same. The HGT's bank was cut as
+`five/` and is renamed `inline5/` (the .wav, .json and .import moved; the imports' paths regenerated, their uids kept):
+`--car=five` is the Delta's short name, its model files carrying the key of the five-cylinder hatch it replaced, and
+keeps selecting the Delta. Every car has a bank of its own again, so `glp_engine_create`'s folder names one car each;
+`glp_engine_create_for_car` stays the host's call.
+
+- **Voicing.** The 458 is mid-engined as the V8 is (`VoicingOf`, here and in `NativeApi`; `EngineVoiceTests` voices
+  `v8flat` so too, where it took the front-engined default while no car played it); the BRZ, a coupe with a boot, takes
+  the saloons' 1.9 m cabin, which item 23 left until its own bank landed (the audio tests voiced `v6` as the R32 it
+  first belongs to, a hatchback).
+- **The diesel's knock.** The BRZ's exception (`BorrowedSixBanks`) is gone: on `boxer4` it is compared like every petrol
+  four, 6.6 dB under the diesel's 1-3 kHz idling (6 needed) and 5.1 at 1,500 rpm (3.5). On the banks' own recordings
+  the Cupra's idle swung 0.90 on its marks against the diesel's 0.67, but its 1-3 kHz is 44.8 dB of its sound under
+  the rest (the diesel's 9.0): a lavalier at a Golf R's exhaust records almost nothing there idling, and a ripple 36 dB
+  under the diesel's band is no knock anyone hears. The comparison on the marks now leaves out a bank 30 dB or more
+  under the diesel's band; every other petrol bank is compared (the Bravo 1.6's idle, 25 dB under, the furthest), and
+  every petrol voice is held to the share test whatever its bank (the Cupra's -45.7 and -32.3 dB). The Cupra's run-up
+  swings 0.22 on its marks against the diesel's 0.24, the nearest of the petrol run-ups.
+- The v8flat, inline5 and four16v banks are wired as they are; they are to be cut again from recordings whose recordists
+  describe them (stage 1's provenance notes).
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

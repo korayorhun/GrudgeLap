@@ -3,12 +3,12 @@
 importer="wav"
 type="AudioStreamWAV"
 uid="uid://dqdg0hr0f77m6"
-path="res://.godot/imported/engine_idle.wav-a0f34132b3ad96862cec403584308833.sample"
+path="res://.godot/imported/engine_idle.wav-55d8e78c179eb809d7b39ed03cdd6e6d.sample"
 
 [deps]
 
-source_file="res://assets/audio/five/engine_idle.wav"
-dest_files=["res://.godot/imported/engine_idle.wav-a0f34132b3ad96862cec403584308833.sample"]
+source_file="res://assets/audio/inline5/engine_idle.wav"
+dest_files=["res://.godot/imported/engine_idle.wav-55d8e78c179eb809d7b39ed03cdd6e6d.sample"]
 
 [params]
 

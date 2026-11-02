@@ -162,24 +162,27 @@ a crackle by the tool's measure or a grain reaching under 0.6 of its period on a
 
 The five-cylinder hatch of 0.9-0.19 (a Volvo five at idle, credit cmusounddesign, CC BY 4.0, and the S2000 track
 laid at a five's firing frequency, `GranularEngine.FivePattern`) left the game with the car it voiced in 0.21; its banks
-are shipped again since cars13, re-cut, for the Bravo HGT's five (below).
+are shipped again since cars13, re-cut, for the Bravo HGT's five (below; in `inline5/` since cars13 stage 2).
 
-## The cars13 engines (`v8flat/`, `five/`, `four16v/`, `tsi4/`, `boxer4/`)
+## The cars13 engines (`v8flat/`, `inline5/`, `four16v/`, `tsi4/`, `boxer4/`)
 
 Five banks for the five cars of cars13 (catalogue 8-12: the 458 Italia, the Bravo HGT 2.0 20V, the Bravo 1.6 16V, the
-2018 Leon Cupra and the first BRZ). They were cut a stage ahead of the catalogue entries that name them: until each
-engine's `EngineSpec.SoundFolder` names its folder (cars13 stage 2), no car plays them, and the bank-level tests
-(`EngineVoiceTests.Every_bank_is_cut_without_drop_outs_or_crackles`, `Every_grain_reaches_most_of_a_period_either_side`)
-take every bank folder on disk, so they hold for these too.
+2018 Leon Cupra and the first BRZ). They were cut a stage ahead of the catalogue entries that name them, and each
+engine's `EngineSpec.SoundFolder` names its folder since cars13 stage 2, so the catalogue's voice tests hold each of them
+as its car's; the bank-level tests (`EngineVoiceTests.Every_bank_is_cut_without_drop_outs_or_crackles`,
+`Every_grain_reaches_most_of_a_period_either_side`) take every bank folder on disk. The HGT's five was cut as `five/`
+and renamed `inline5/` when the car took it: `--car=five` is the Delta's short name (its model files carry the key of
+the five-cylinder hatch it replaced) and keeps it. The 458's, the HGT's and the 1.6's banks are to be cut again from
+recordings whose recordists describe them (below).
 
 | Bank | Source | Segments (start@end s @ firing Hz at start @ search band Hz [@ harmonic followed]) |
 |---|---|---|
 | `v8flat/engine_idle` | Freesound #241083 "Ferrari 360 Spider - engine sound" by PritzProductions (a Zoom H6 directly above the engine of the standing car), https://freesound.org/s/241083/ (CC0 1.0) | 18.8@20.2@77@60@80, 20.35@26.1@72@60@80, 27.5@29.4@74@55@80 |
 | `v8flat/engine_drive` | `3 Ferrari 458.mp3` from the Internet Archive item "Car Engine Sounds" (above, CC0) | 0.3@3.95@164@120@700, 4.85@5.6@400@330@560, 5.95@6.95@460@330@560, 7.3@9.5@370@300@500, 9.9@10.6@460@330@560, 11.0@14.9@375@300@500 |
 | `v8flat/engine_overrun` | `3 Ferrari 458.mp3` (the throttle shut, the revs falling) | 15.0@16.3@436@380@480, 19.0@20.0@377@300@420 |
-| `five/engine_idle` | Freesound #95838 "RG Volvo Engine.wav" by cmusounddesign (a Volvo 2.4 turbocharged five, the microphone about 8 inches over its turbocharger's heat shield), https://freesound.org/s/95838/ (CC BY 4.0), low-passed at 1.5 kHz (below) | 6.0@23.0@42.5@36@50@2 |
-| `five/engine_drive` | `honda s2000.mp3` (the CC0 item), laid at a five's firing frequency | 12.0@15.5@57@45@215, 2.9@3.75@205@180@300, 3.8@4.6@245@180@300, 4.66@5.55@275@180@300 |
-| `five/engine_overrun` | `honda s2000.mp3` (the throttle shut, the revs falling) | 6.0@6.6@224@150@260, 6.9@8.6@170@60@260, 16.6@17.6@150@80@200 |
+| `inline5/engine_idle` | Freesound #95838 "RG Volvo Engine.wav" by cmusounddesign (a Volvo 2.4 turbocharged five, the microphone about 8 inches over its turbocharger's heat shield), https://freesound.org/s/95838/ (CC BY 4.0), low-passed at 1.5 kHz (below) | 6.0@23.0@42.5@36@50@2 |
+| `inline5/engine_drive` | `honda s2000.mp3` (the CC0 item), laid at a five's firing frequency | 12.0@15.5@57@45@215, 2.9@3.75@205@180@300, 3.8@4.6@245@180@300, 4.66@5.55@275@180@300 |
+| `inline5/engine_overrun` | `honda s2000.mp3` (the throttle shut, the revs falling) | 6.0@6.6@224@150@260, 6.9@8.6@170@60@260, 16.6@17.6@150@80@200 |
 | `four16v/engine_idle` | `mazda MX 5.mp3` (the CC0 item) | 1.0@3.1@29@26@33, 10.4@12.0@28@25@31@2 |
 | `four16v/engine_drive` | `mazda MX 5.mp3` | 15.0@17.9@54@45@200 |
 | `four16v/engine_overrun` | `mazda MX 5.mp3` (the revs falling after its blips) | 19.6@22.8@135@60@150, 8.0@9.3@122@55@135, 4.4@5.4@116@60@130 |
@@ -214,9 +217,9 @@ banks to the byte):
     python tools/make-engine-bank.py game/assets/audio/v8flat/engine_idle 8 "241083.mp3@18.8@20.2@77@60@80" "241083.mp3@20.35@26.1@72@60@80" "241083.mp3@27.5@29.4@74@55@80"
     python tools/make-engine-bank.py game/assets/audio/v8flat/engine_drive 8 "3 Ferrari 458.mp3@0.3@3.95@164@120@700" "3 Ferrari 458.mp3@4.85@5.6@400@330@560" "3 Ferrari 458.mp3@5.95@6.95@460@330@560" "3 Ferrari 458.mp3@7.3@9.5@370@300@500" "3 Ferrari 458.mp3@9.9@10.6@460@330@560" "3 Ferrari 458.mp3@11.0@14.9@375@300@500"
     python tools/make-engine-bank.py game/assets/audio/v8flat/engine_overrun 8 "3 Ferrari 458.mp3@15.0@16.3@436@380@480" "3 Ferrari 458.mp3@19.0@20.0@377@300@420"
-    python tools/make-engine-bank.py game/assets/audio/five/engine_idle 5 "volvo5-1500.wav@6.0@23.0@42.5@36@50@2"
-    python tools/make-engine-bank.py game/assets/audio/five/engine_drive 5 "honda s2000.mp3@12.0@15.5@57@45@215" "honda s2000.mp3@2.9@3.75@205@180@300" "honda s2000.mp3@3.8@4.6@245@180@300" "honda s2000.mp3@4.66@5.55@275@180@300"
-    python tools/make-engine-bank.py game/assets/audio/five/engine_overrun 5 "honda s2000.mp3@6.0@6.6@224@150@260" "honda s2000.mp3@6.9@8.6@170@60@260" "honda s2000.mp3@16.6@17.6@150@80@200"
+    python tools/make-engine-bank.py game/assets/audio/inline5/engine_idle 5 "volvo5-1500.wav@6.0@23.0@42.5@36@50@2"
+    python tools/make-engine-bank.py game/assets/audio/inline5/engine_drive 5 "honda s2000.mp3@12.0@15.5@57@45@215" "honda s2000.mp3@2.9@3.75@205@180@300" "honda s2000.mp3@3.8@4.6@245@180@300" "honda s2000.mp3@4.66@5.55@275@180@300"
+    python tools/make-engine-bank.py game/assets/audio/inline5/engine_overrun 5 "honda s2000.mp3@6.0@6.6@224@150@260" "honda s2000.mp3@6.9@8.6@170@60@260" "honda s2000.mp3@16.6@17.6@150@80@200"
     python tools/make-engine-bank.py game/assets/audio/four16v/engine_idle 4 "mazda MX 5.mp3@1.0@3.1@29@26@33" "mazda MX 5.mp3@10.4@12.0@28@25@31@2"
     python tools/make-engine-bank.py game/assets/audio/four16v/engine_drive 4 "mazda MX 5.mp3@15.0@17.9@54@45@200"
     python tools/make-engine-bank.py game/assets/audio/four16v/engine_overrun 4 "mazda MX 5.mp3@19.6@22.8@135@60@150" "mazda MX 5.mp3@8.0@9.3@122@55@135" "mazda MX 5.mp3@4.4@5.4@116@60@130"
@@ -250,25 +253,26 @@ MP4-12C`, `mclaren 650s coupe`, `McLaren 720S`) are the 570S's own M838T family,
 item (above, on its provenance): the 570S and the 458 share the 458's run-up until a described recording of either is
 found.
 
-**The Bravo HGT's five (`five`).** Restored from release 0.20.0 (`git show v0.20.0:game/assets/audio/five/...`, its
-import settings unchanged) and re-cut with today's tool from the segments documented then (`6.0@23.0@42.5@36@50`;
-`12.0@15.6@57@45@215`, `2.9@5.6@205@180@300`; `6.0@8.6@224@60@260`). Cut as they were, the S2000's segments hold the
-crackles the tool now warns of (15.551-15.593, 3.780-3.788, 4.629-4.640 and 5.572-5.584 s in the run-up, the sharpest
-grain 5.8 times its segment's median; 6.654-6.861 s in the overrun, 8.7 times): the run-up ends at 15.5 s, its top is
-cut in three around them, and the overrun is cut on either side of its crackle (6.0-6.6 and 6.9-8.6 s) and gains the
-revs falling at 16.6-17.6 s (3,830 to 2,250 rpm as a five): from 6.9 s alone it reached 4,060 rpm, and lifting from the
-redline the voice's cabin ticked 13 to 19 times in five seconds (the test allows 20), now 0 to 1. The idle is the
-Volvo's, followed on its second harmonic (its firing is under 45 Hz, `make-engine-bank.py`), from a copy low-passed at
-1.5 kHz (`clean-recording.py`, its floor taken from 700 Hz up). Recorded over the turbo under the bonnet, it carries the
-valve train's ticks, steps between samples 3 to 5 times the RMS around them throughout, and the voice idling at full
-throttle clicked on them (a step 3.0 times the RMS around it, held at the idle and in the sweep from it). It was also 29
-dB brighter (its energy over 1 kHz against under) than the S2000's run-up at the low revs it hands over to: across the
-crossfade it stood 3 LU over the run-up outside and 3 LU under it in the cabin, whose low-pass takes its top away, and
-the voice stepped 1.6 to 2.0 LU there. Low-passed, its sharpest steps are 1.9 times its median and the voice steps 0.4
-LU outside and 0.7 in the cabin. The idle reads 42.3 Hz (1,015 rpm as a five); the five's uneven exhaust beat is the
-voice's (`GranularEngine.FivePattern`), laid over the S2000's pulses as in 0.9. No recording of a five under load with a
-usable licence was found again (el-bee's Volvo S60 ramps, #644881 and its pack, are CC BY-NC), nor of a Fiat or Lancia
-five. Credit: "RG Volvo Engine.wav" by cmusounddesign, CC BY 4.0.
+**The Bravo HGT's five (`inline5`, cut as `five`).** Restored from release 0.20.0 (`git show
+v0.20.0:game/assets/audio/five/...`, its import settings unchanged) and re-cut with today's tool from the segments
+documented then (`6.0@23.0@42.5@36@50`; `12.0@15.6@57@45@215`, `2.9@5.6@205@180@300`; `6.0@8.6@224@60@260`). Cut as
+they were, the S2000's segments hold the crackles the tool now warns of (15.551-15.593, 3.780-3.788, 4.629-4.640 and
+5.572-5.584 s in the run-up, the sharpest grain 5.8 times its segment's median; 6.654-6.861 s in the overrun, 8.7
+times): the run-up ends at 15.5 s, its top is cut in three around them, and the overrun is cut on either side of its
+crackle (6.0-6.6 and 6.9-8.6 s) and gains the revs falling at 16.6-17.6 s (3,830 to 2,250 rpm as a five): from 6.9 s
+alone it reached 4,060 rpm, and lifting from the redline the voice's cabin ticked 13 to 19 times in five seconds (the
+test allows 20), now 0 to 1. The idle is the Volvo's, followed on its second harmonic (its firing is under 45 Hz,
+`make-engine-bank.py`), from a copy low-passed at 1.5 kHz (`clean-recording.py`, its floor taken from 700 Hz up).
+Recorded over the turbo under the bonnet, it carries the valve train's ticks, steps between samples 3 to 5 times the
+RMS around them throughout, and the voice idling at full throttle clicked on them (a step 3.0 times the RMS around it,
+held at the idle and in the sweep from it). It was also 29 dB brighter (its energy over 1 kHz against under) than the
+S2000's run-up at the low revs it hands over to: across the crossfade it stood 3 LU over the run-up outside and 3 LU
+under it in the cabin, whose low-pass takes its top away, and the voice stepped 1.6 to 2.0 LU there. Low-passed, its
+sharpest steps are 1.9 times its median and the voice steps 0.4 LU outside and 0.7 in the cabin. The idle reads 42.3 Hz
+(1,015 rpm as a five); the five's uneven exhaust beat is the voice's (`GranularEngine.FivePattern`), laid over the
+S2000's pulses as in 0.9. No recording of a five under load with a usable licence was found again (el-bee's Volvo S60
+ramps, #644881 and its pack, are CC BY-NC), nor of a Fiat or Lancia five. Credit: "RG Volvo Engine.wav" by
+cmusounddesign, CC BY 4.0.
 
 **The Bravo 1.6 16V (`four16v`).** No CC0 or CC BY recording of Fiat's 1.6 16V was found (Freesound's searches for Fiat
 Bravo, Fiat 16V and Fiat Punto engine: a phone's drive-by of a Punto, #836148 by muumipappa1, CC0). Of the CC0 item's

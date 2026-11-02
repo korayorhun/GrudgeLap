@@ -1215,30 +1215,29 @@ public enum CarStyle
     /// </summary>
     Fleet,
     /// <summary>
-    /// The mid-engined flat-plane V8 of 2010 (after the Ferrari 458 Italia; cars13). Model key "458", sound folder
-    /// "v8flat" once its banks land; drawn with the V8's loft until its model does.
+    /// The mid-engined flat-plane V8 of 2010 (after the Ferrari 458 Italia; cars13). Model key "458" (drawn by
+    /// its model since cars13 stage 2), sound folder "v8flat".
     /// </summary>
     FlatPlaneV8,
     /// <summary>
     /// The front-wheel-drive five-cylinder hatch of 2001 (after the Fiat Bravo HGT 2.0 20V; cars13). Model key
-    /// "bravohgt", sound folder "five" once its banks land; drawn with the five-cylinder hatch's loft (keyed on the
-    /// 1995 Bravo) until its model does.
+    /// "bravohgt", sound folder "inline5"; drawn with the five-cylinder hatch's loft (keyed on the 1995 Bravo) until a
+    /// model of it is found.
     /// </summary>
     HgtFive,
     /// <summary>
     /// The front-wheel-drive 1.6 hatch of 2001 (after the Fiat Bravo 1.6 16V; cars13). Model key "bravo16", sound
-    /// folder "four16v" once its banks land; drawn with the same Bravo loft until its model does.
+    /// folder "four16v"; drawn with the same Bravo loft until a model of it is found.
     /// </summary>
     HatchSixteen,
     /// <summary>
     /// The front-wheel-drive turbo hot hatch of 2018 (after the SEAT Leon Cupra 300; cars13). Model key "leoncupra",
-    /// sound folder "tsi4" once its banks land; drawn with the V6 hatch's loft (keyed on the 2007 Leon) until its model
-    /// does.
+    /// sound folder "tsi4"; drawn with the V6 hatch's loft (keyed on the 2007 Leon) until a model of it is found.
     /// </summary>
     CupraTsi,
     /// <summary>
-    /// The rear-wheel-drive boxer coupe of 2013 (after the Subaru BRZ; cars13). Model key "brz", sound folder "boxer4"
-    /// once its banks land; drawn with the V8's loft until its model does.
+    /// The rear-wheel-drive boxer coupe of 2013 (after the Subaru BRZ; cars13). Model key "brz", sound folder "boxer4";
+    /// drawn with the V8's loft until a model of it is found.
     /// </summary>
     Boxer,
 }

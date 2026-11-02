@@ -468,9 +468,9 @@ public sealed record EngineSpec
     };
 
     /// <summary>
-    /// The 458 Italia's flat-plane V8 (cars13). Its voice is the "v8" bank for now: that bank's run-up and overrun were
-    /// cut from a 458's own recording (game/assets/audio/SOURCES.md), so the car sounds like itself at full throttle
-    /// already; stage 2 of the new cars gives it its own "v8flat" banks (a flat-plane V8's idle too) and swaps the folder.
+    /// The 458 Italia's flat-plane V8 (cars13). Its voice is its own "v8flat" banks (cars13 stage 2): the 458's run-up
+    /// and overrun from the recording the V8's "v8" run-up has been cut from since 0.9, and a Ferrari 360's flat-plane V8
+    /// at idle (game/assets/audio/SOURCES.md), voiced mid-engined as the V8 is (SampledEngine.VoicingOf).
     /// </summary>
     public static EngineSpec FlatPlaneV8 => new()
     {
@@ -481,14 +481,14 @@ public sealed record EngineSpec
         BrakingPerRpm = 0.005f,
         FullThrottleCurve = FlatPlaneV8Curve,
         Cylinders = 8,
-        SoundFolder = "v8",
+        SoundFolder = "v8flat",
     };
 
     /// <summary>
-    /// The Bravo HGT's five (cars13). Its voice is the hot hatch's four ("hothatch") for now, laid at a five's firing with
-    /// the five's uneven exhaust beat (GranularEngine.FivePattern); stage 2 restores the five-cylinder banks of release
-    /// 0.20.0 from the history ("five": a Volvo five's idle, CC BY, and an S2000 run-up laid at a five's firing) and swaps
-    /// the folder.
+    /// The Bravo HGT's five (cars13). Its voice is the five-cylinder banks of release 0.20.0, restored and re-cut
+    /// ("inline5": a Volvo five's idle, CC BY, and an S2000 run-up laid at a five's firing with the five's uneven exhaust
+    /// beat, GranularEngine.FivePattern). Cut as "five", the folder was renamed when the car took it (cars13 stage 2):
+    /// --car=five names the Delta, whose model files carry the key of the five-cylinder hatch it replaced.
     /// </summary>
     public static EngineSpec HgtFive => new()
     {
@@ -500,12 +500,12 @@ public sealed record EngineSpec
         BrakingPerRpm = 0.004f,
         FullThrottleCurve = HgtFiveCurve,
         Cylinders = 5,
-        SoundFolder = "hothatch",
+        SoundFolder = "inline5",
     };
 
     /// <summary>
-    /// The Bravo 1.6 16V's four (cars13). Its voice is the hot hatch's four ("hothatch") for now; stage 2 gives it its own
-    /// sixteen-valve banks ("four16v") and swaps the folder.
+    /// The Bravo 1.6 16V's four (cars13). Its voice is a sixteen-valve four's banks of its own ("four16v", cars13 stage 2):
+    /// an MX-5's four, as no recording of Fiat's 1.6 16V was found (game/assets/audio/SOURCES.md).
     /// </summary>
     public static EngineSpec HatchSixteen => new()
     {
@@ -516,13 +516,12 @@ public sealed record EngineSpec
         BrakingPerRpm = 0.0032f,
         FullThrottleCurve = HatchSixteenCurve,
         Cylinders = 4,
-        SoundFolder = "hothatch",
+        SoundFolder = "four16v",
     };
 
     /// <summary>
-    /// The Leon Cupra's 2.0 TSI (cars13). Its voice is the turbo four of the "turbohatch" recordings (the Pulsar's, the
-    /// Delta's voice too) for now, with the whistle and the diverter valve the view synthesises for any engine with boost;
-    /// stage 2 gives it its own "tsi4" banks and swaps the folder.
+    /// The Leon Cupra's 2.0 TSI (cars13). Its voice is its own "tsi4" banks (cars13 stage 2: a Golf R's EA888 2.0 TSI, the
+    /// same engine), with the whistle and the diverter valve the view synthesises for any engine with boost.
     /// </summary>
     public static EngineSpec TsiFour => new()
     {
@@ -534,7 +533,7 @@ public sealed record EngineSpec
         BrakingPerRpm = 0.004f,
         FullThrottleCurve = TsiFourCurve,
         Cylinders = 4,
-        SoundFolder = "turbohatch",
+        SoundFolder = "tsi4",
         // A 9.3:1 two-litre breathing on its own makes about 170 N m, 45 % of the 380 its IHI turbo gives it; a small
         // modern turbo with a twin-scroll housing is on full boost within about a third of a second and from 1800 rpm
         // (SEAT's 380 N m from 1800), so the threshold sits 600 rpm under that (EngineModel.Tick). Game figures: SEAT
@@ -545,12 +544,10 @@ public sealed record EngineSpec
     };
 
     /// <summary>
-    /// The BRZ's boxer four (cars13). Its voice is the V6 hatch's recordings ("v6") for now, laid at a four's firing;
-    /// stage 2 gives it its own "boxer4" banks (the FA20's own note: equal-length headers, unlike the older Subarus'
-    /// burble) and swaps the folder. Not the hot hatch's, though that four is the nearer in character: its idle was
-    /// recorded at 1,140 rpm, and laid at the FA20's 700 (61 % of its firing) the gaps between its pulses fell 24-28 dB
-    /// for 10 ms at a time (EngineVoiceTests' idle and sweep), where the VR6's idle, recorded at 590-735 rpm of a six
-    /// (30-37 Hz), plays the boxer's 23 Hz without them; the estate's (810 rpm) still sagged 2.6 LU over the revs.
+    /// The BRZ's boxer four (cars13). Its voice is its own "boxer4" banks (cars13 stage 2): the FA20 on a dynamometer, its
+    /// own note (equal-length headers, unlike the older Subarus' burble), played as the even four it is. Until they landed
+    /// it played the V6 hatch's recordings at a four's firing, as no other bank's idle was recorded low enough for its
+    /// 700 rpm (the hot hatch's, at 1,140 rpm, left gaps 24-28 dB deep between its pulses laid that slow).
     /// </summary>
     public static EngineSpec BoxerFour => new()
     {
@@ -565,7 +562,7 @@ public sealed record EngineSpec
         BrakingPerRpm = 0.0038f,
         FullThrottleCurve = BoxerCurve,
         Cylinders = 4,
-        SoundFolder = "v6",
+        SoundFolder = "boxer4",
     };
 }
 

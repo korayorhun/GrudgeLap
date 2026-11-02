@@ -26,7 +26,7 @@ public class DieselCharacterTests(ITestOutputHelper output)
         var folder = car.Engine.SoundFolder;
         var voicing = car.Style switch
         {
-            CarStyle.Saloon or CarStyle.Fleet => new EngineVoicing(EnginePlacement.Front, 1.9f),
+            CarStyle.Saloon or CarStyle.Fleet or CarStyle.Boxer => new EngineVoicing(EnginePlacement.Front, 1.9f),
             CarStyle.Estate => new EngineVoicing(EnginePlacement.Front, 2.8f),
             _ => new EngineVoicing(EnginePlacement.Front, 2.3f),
         };
@@ -87,8 +87,8 @@ public class DieselCharacterTests(ITestOutputHelper output)
         return (10 * Math.Log10(band / all), (folded.Max() - folded.Min()) / folded.Average());
     }
 
-    /// <summary>The 1-3 kHz band's envelope (as <see cref="Knock"/> follows it) at every sample of a recording.</summary>
-    private static double[] KnockEnvelope(ReadOnlySpan<float> x)
+    /// <summary>The 1-3 kHz band (as <see cref="Knock"/> filters it) and its envelope at every sample of a recording.</summary>
+    private static (double[] Envelope, double[] Band) KnockEnvelope(ReadOnlySpan<float> x)
     {
         Biquad h1 = default, h2 = default, l1 = default, l2 = default;
         h1.SetHighPass(1000f, 0.707f, Rate);
@@ -96,27 +96,31 @@ public class DieselCharacterTests(ITestOutputHelper output)
         l1.SetLowPass(3000f, 0.707f, Rate);
         l2.SetLowPass(3000f, 0.707f, Rate);
         var envelope = new double[x.Length];
+        var band = new double[x.Length];
         var follow = Math.Exp(-2 * Math.PI * 400 / Rate);
         double level = 0;
         for (var i = 0; i < x.Length; i++)
         {
-            level = follow * level + (1 - follow) * Math.Abs(l2.Process(l1.Process(h2.Process(h1.Process(x[i])))));
+            band[i] = l2.Process(l1.Process(h2.Process(h1.Process(x[i]))));
+            level = follow * level + (1 - follow) * Math.Abs(band[i]);
             envelope[i] = level;
         }
-        return envelope;
+        return (envelope, band);
     }
 
     /// <summary>
     /// How strongly a bank's own recording knocks at each firing, before any grain is cut from it (diesel6 review): the
     /// 1-3 kHz envelope folded on the bank's marks, each pulse's interval mapped onto one period, its swing against its
-    /// mean. Only intervals of 0.75 to 1.33 periods within one segment are folded (a missed pulse would fold two firings
-    /// into one), and the first quarter of a second is left to the filters to settle.
+    /// mean, and the band's share of the recording over the same intervals (dB). Only intervals of 0.75 to 1.33 periods
+    /// within one segment are folded (a missed pulse would fold two firings into one), and the first quarter of a second
+    /// is left to the filters to settle.
     /// </summary>
-    private static double KnockOnMarks(GrainBank bank)
+    private static (double Swing, double Share) KnockOnMarks(GrainBank bank)
     {
-        var envelope = KnockEnvelope(bank.Samples);
+        var (envelope, band) = KnockEnvelope(bank.Samples);
         var bins = new double[32];
         var counts = new int[32];
+        double inBand = 0, all = 0;
         for (var k = 0; k + 1 < bank.Marks.Length; k++)
         {
             int from = bank.Marks[k], to = bank.Marks[k + 1];
@@ -127,28 +131,24 @@ public class DieselCharacterTests(ITestOutputHelper output)
                 var bin = (int)((long)(i - from) * bins.Length / (to - from));
                 bins[bin] += envelope[i];
                 counts[bin]++;
+                inBand += band[i] * band[i];
+                all += (double)bank.Samples[i] * bank.Samples[i];
             }
         }
         var folded = bins.Select((v, k) => v / Math.Max(counts[k], 1)).ToArray();
-        return (folded.Max() - folded.Min()) / folded.Average();
+        return ((folded.Max() - folded.Min()) / folded.Average(), 10 * Math.Log10(inBand / all));
     }
 
     /// <summary>
-    /// The petrol fours that play a six's banks until their own land, each by its style and the folder it borrows, so
-    /// the exception lapses when the car's own banks take the folder's place, with the idling margin it is held to in
-    /// place of 6 dB. The BRZ (stage 2 of cars13 gives it the "boxer4" banks; VehicleSpec.Boxer) plays the V6 hatch's:
-    /// the VR6's recording, which no four of the catalogue played before, carries -13.7 dB of its sound between 1 and
-    /// 3 kHz idling at the BRZ's 700 rpm against the diesel's -9.3, a six's brighter exhaust rather than a knock, though
-    /// a player hears its idle nearly as bright as the diesel's (the other petrol fours: -17.5 to -29.3 dB). 3.5 dB, a
-    /// decibel under the 4.4 measured, keeps it from growing brighter still until its banks land; at 1,500 rpm it is held
-    /// to the others' 3.5 (measured 9.4 dB under the diesel). On their marks the VR6's recordings swing as a six's
-    /// firing does (its run-up 0.32 against the diesel's 0.24), which says nothing of a four's knock: they are not
-    /// compared there.
+    /// How far under the diesel's a petrol bank's 1-3 kHz band may lie on its marks and still be compared there (cars13
+    /// stage 2). The swing is the band's own, whatever its level: the Leon Cupra's idle ("tsi4", a Golf R recorded with a
+    /// lavalier at its exhaust) has almost nothing between 1 and 3 kHz, 44.8 dB of its sound under the rest against the
+    /// diesel's 9.0, and what little there is swings 0.90 with its firing, a ripple 36 dB under the diesel's band that no
+    /// player hears as a knock. Banks 30 dB or more under it are left out on their marks; every other petrol bank is
+    /// compared (the furthest, the Bravo 1.6's idle, 25 dB under), and every petrol four's voice is held to the share
+    /// test above whatever its bank.
     /// </summary>
-    private static readonly Dictionary<(CarStyle Style, string Folder), double> BorrowedSixBanks = new()
-    {
-        [(CarStyle.Boxer, "v6")] = 3.5,
-    };
+    private const double InaudibleUnderDiesel = 30.0;
 
     /// <summary>
     /// The diesel's knock (diesel6): idling at its governor's throttle and at 1,500 rpm on a light throttle (0.3), where a
@@ -167,13 +167,16 @@ public class DieselCharacterTests(ITestOutputHelper output)
     /// the knock is measured where no grain window can make it, on the banks' own recordings folded on their marks: the
     /// diesel's idle and run-up must swing at least 0.15 more than white noise on the same marks and more than every
     /// petrol four's bank of the same kind. Measured there: the diesel's idle 0.67 and run-up 0.24, white noise 0.04 and
-    /// 0.03, the petrol fours' idles 0.19 to 0.41 and run-ups 0.04 to 0.09.
+    /// 0.03, the petrol fours' idles 0.16 to 0.41 and run-ups 0.04 to 0.22 (the Cupra's, the nearest; 0.09 before
+    /// cars13).
     /// </para>
     /// <para>
-    /// Every petrol four is compared, the cars of cars13 that play another car's banks until their own land too (the
-    /// Bravo 1.6 on the hot hatch's, the Leon Cupra on the rally hatch's). One is an exception, by name and only while
-    /// it plays the banks it borrows (<see cref="BorrowedSixBanks"/>): the BRZ on the V6 hatch's, held to a looser
-    /// idling margin, its banks, a six's recordings, left out of the comparison on their marks.
+    /// Every petrol four is compared, the three fours of cars13 on their own banks (cars13 stage 2) among them: the Bravo
+    /// 1.6's "four16v", the Leon Cupra's "tsi4" and the BRZ's "boxer4". Until its banks landed the BRZ played the V6
+    /// hatch's, a six's brighter exhaust (-13.7 dB of its sound between 1 and 3 kHz idling against the diesel's -9.3), and
+    /// was the one exception, held 3.5 dB under the diesel idling and its six's recordings left out on their marks; on
+    /// its own it is held to the same 6 and 3.5 dB as the others (measured 6.6 and 5.1). On the marks a bank whose band
+    /// is inaudible beside the diesel's is not compared (<see cref="InaudibleUnderDiesel"/>: the Cupra's idle).
     /// </para>
     /// </summary>
     [Fact]
@@ -182,7 +185,6 @@ public class DieselCharacterTests(ITestOutputHelper output)
         var diesel = VehicleSpec.Catalogue.Single(c => c.Engine.Governor);
         var petrols = VehicleSpec.Catalogue.Where(c => c.Engine.Cylinders == 4 && !c.Engine.Governor).ToArray();
         Assert.NotEmpty(petrols);
-        foreach (var key in BorrowedSixBanks.Keys) Assert.Contains(petrols, c => c.Style == key.Style);
         foreach (var (light, margin) in new[] { (false, 6.0), (true, 3.5) })
         {
             (double Share, double Firing) Heard(VehicleSpec car)
@@ -203,29 +205,28 @@ public class DieselCharacterTests(ITestOutputHelper output)
             foreach (var petrol in petrols)
             {
                 var other = Heard(petrol);
-                var needed = !light && BorrowedSixBanks.TryGetValue((petrol.Style, petrol.Engine.SoundFolder), out var borrowed) ? borrowed : margin;
-                output.WriteLine($"  {petrol.Name} ({petrol.Engine.SoundFolder}): {other.Share:0.0} dB, swinging {other.Firing:0.00}; the diesel {knock.Share - other.Share:0.0} dB over it, {needed:0.0} needed");
-                Assert.True(knock.Share >= other.Share + needed, $"{what} the diesel's 1-3 kHz is {knock.Share - other.Share:0.0} dB over the {petrol.Name}'s ({petrol.Engine.SoundFolder}), {needed:0.0} needed");
+                output.WriteLine($"  {petrol.Name} ({petrol.Engine.SoundFolder}): {other.Share:0.0} dB, swinging {other.Firing:0.00}; the diesel {knock.Share - other.Share:0.0} dB over it, {margin:0.0} needed");
+                Assert.True(knock.Share >= other.Share + margin, $"{what} the diesel's 1-3 kHz is {knock.Share - other.Share:0.0} dB over the {petrol.Name}'s ({petrol.Engine.SoundFolder}), {margin:0.0} needed");
             }
         }
 
         foreach (var name in new[] { "engine_idle", "engine_drive" })
         {
             var bank = Bank(diesel.Engine.SoundFolder, name)!;
-            var swing = KnockOnMarks(bank);
-            var hiss = KnockOnMarks(Hiss(bank, 4)!);
-            output.WriteLine($"{diesel.Engine.SoundFolder}/{name} on its marks: swinging {swing:0.00}, hiss on the same marks {hiss:0.00}");
+            var (swing, share) = KnockOnMarks(bank);
+            var hiss = KnockOnMarks(Hiss(bank, 4)!).Swing;
+            output.WriteLine($"{diesel.Engine.SoundFolder}/{name} on its marks: swinging {swing:0.00}, its 1-3 kHz {share:0.0} dB of the sound, hiss on the same marks {hiss:0.00}");
             Assert.True(swing >= hiss + 0.15, $"the diesel's {name} knocks on its marks hardly more than hiss ({swing:0.00} against {hiss:0.00})");
             foreach (var petrol in petrols)
             {
-                if (BorrowedSixBanks.ContainsKey((petrol.Style, petrol.Engine.SoundFolder)))
+                if (Bank(petrol.Engine.SoundFolder, name) is not { } other) continue;
+                var (theirs, theirShare) = KnockOnMarks(other);
+                if (theirShare <= share - InaudibleUnderDiesel)
                 {
-                    output.WriteLine($"  {petrol.Engine.SoundFolder}/{name} ({petrol.Name}'s for now): a six's recording, not compared");
+                    output.WriteLine($"  {petrol.Engine.SoundFolder}/{name}: {theirs:0.00}, its 1-3 kHz {theirShare:0.0} dB, {share - theirShare:0.0} dB under the diesel's: not compared");
                     continue;
                 }
-                if (Bank(petrol.Engine.SoundFolder, name) is not { } other) continue;
-                var theirs = KnockOnMarks(other);
-                output.WriteLine($"  {petrol.Engine.SoundFolder}/{name}: {theirs:0.00}");
+                output.WriteLine($"  {petrol.Engine.SoundFolder}/{name}: {theirs:0.00}, its 1-3 kHz {theirShare:0.0} dB");
                 Assert.True(swing > theirs, $"the diesel's {name} knocks on its marks no more than the {petrol.Engine.SoundFolder}'s ({swing:0.00} against {theirs:0.00})");
             }
         }

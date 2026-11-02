@@ -178,8 +178,8 @@ BRZ: `build_scene.py`'s GLP.Car8-12, `GlpAudio.cpp`'s bank table) have no model 
 its export (`--car=458|bravohgt|bravo16|leoncupra|brz --export-world=../unreal/Import/track_<name>.glb`, the name
 as the build's loop spells it) with the lofted stand-in the game draws, and a slot whose export is missing stays
 empty, which the title screen skips. Their engine voices come from the simulation core by car
-(`glp_engine_create_for_car`), so a car playing another's banks until its own land is still voiced and trimmed as
-itself.
+(`glp_engine_create_for_car`), each on its own banks since cars13 stage 2 (`v8flat`, `inline5`, `four16v`, `tsi4`,
+`boxer4`), and a car playing another's banks would still be voiced and trimmed as itself.
 
 Since 0.16 the Godot game draws real models too, with their own cabins (`tools/prepare_car_models.py` and
 `tools/car_models.json`, the shared rigging in `tools/car_models.py`; credited in `THIRD_PARTY.md`): there the V8

@@ -239,8 +239,9 @@ public sealed unsafe class NativeApiTests
                 destroy(engine);
             }
 
-            // glp_engine_create_for_car (cars13): the Bravo HGT (car 9) on the hot hatch's banks renders as the managed
-            // voice made for it, which is not the hot hatch's (five cylinders against four, a redline of 7000 against 6700).
+            // glp_engine_create_for_car (cars13): the Bravo HGT (car 9) on the hot hatch's banks, as it played them until
+            // its own landed (cars13 stage 2), renders as the managed voice made for it, which is not the hot hatch's (five
+            // cylinders against four, a redline of 7000 against 6700): a car on another car's folder is voiced as itself.
             var createForCar = (delegate* unmanaged[Cdecl]<byte*, int, nint>)NativeLibrary.GetExport(library, "glp_engine_create_for_car");
             var hatchFolder = FindInRepository(Path.Combine("game", "assets", "audio", "hothatch"));
             Assert.NotNull(hatchFolder);
@@ -277,9 +278,9 @@ public sealed unsafe class NativeApiTests
     /// car since cars13): voiced for its body (the flat-twelve, the V8 and the 458 mid-engined, their cabins at 4 kHz
     /// booming at 132 Hz; the estate's at 61 Hz) and trimmed over its redline, so it is as loud as the game's and peaks
     /// no higher (the trims equal a voice made with the car's voicing and redline). glp_engine_create, which knows only
-    /// the folder, makes the first car's voice of a folder that several cars share (the hot hatch's for "hothatch", which
-    /// the Bravo HGT and the Bravo 1.6 play until their own banks land; the V6 hatch's for "v6", which the BRZ plays),
-    /// and the front-engined default for a folder no car uses.
+    /// the folder, makes the voice of the first car of the folder (each folder has one car since cars13 stage 2; before
+    /// it the Bravos played the hot hatch's and the BRZ the V6 hatch's), and the front-engined default for a folder no
+    /// car uses.
     /// </summary>
     [Fact]
     public void EngineVoiceIsVoicedAndTrimmedForItsCar()

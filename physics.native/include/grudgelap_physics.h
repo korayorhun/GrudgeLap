@@ -213,8 +213,8 @@ int32_t glp_load_best_lap(glp_session session, const uint8_t* data, int32_t leng
 glp_engine glp_engine_create(const char* folder, int32_t cylinders);
 /* The voice of the catalogue's car (0 .. glp_car_count() - 1) from the banks in folder, with that car's cylinders,
  * voiced for its body and trimmed over its redline. glp_engine_create finds the car by the folder's name, which names
- * one car only while every car has banks of its own: the five cars added in cars13 play the nearest existing banks
- * until theirs land, so a host that knows the car calls this one. ABI 8; the rest is ABI 7's, unchanged, but for the
+ * one car only while every car has banks of its own (the five cars added in cars13 played the nearest existing banks
+ * until theirs landed in cars13 stage 2), so a host that knows the car calls this one. ABI 8; the rest is ABI 7's, unchanged, but for the
  * catalogue's five more cars (glp_car_count, glp_car_spec's style 8-12). */
 glp_engine glp_engine_create_for_car(const char* folder, int32_t car);
 void glp_engine_destroy(glp_engine engine);

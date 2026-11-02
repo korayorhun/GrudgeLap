@@ -24,9 +24,9 @@ internal sealed partial class SampledEngine : Node
     private readonly Vector2[] _frames = new Vector2[Chunk];
     private AudioStreamGeneratorPlayback? _playback;
     private GranularEngine? _engine;
-    // What the voice was made from. The cylinders are part of it since cars13: the cars that borrow another's banks
-    // (the Bravo HGT's five on the hot hatch's four) can differ from the banks' owner in them alone, and the voice,
-    // laid at the other car's firing, would stay.
+    // What the voice was made from. The cylinders are part of it since cars13: a car on another's banks (the Bravo HGT's
+    // five played the hot hatch's four until cars13 stage 2 gave every car its own) can differ from the banks' owner in
+    // them alone, and the voice, laid at the other car's firing, would stay.
     private (string Folder, int Cylinders, EngineVoicing Voicing, float Redline)? _loaded;
     /// <summary>The voice being made for the car last loaded; the one it replaces plays until it is ready.</summary>
     private Task<GranularEngine?>? _making;
@@ -81,18 +81,19 @@ internal sealed partial class SampledEngine : Node
     }
 
     /// <summary>
-    /// How a car's body passes its engine's sound (<see cref="EngineVoicing"/>, 0.20). The flat-twelve and the V8 are
-    /// mid-engined, the engine behind the seats of a two-seat cell about 1.3 m long, with big twin tailpipes; every other
-    /// car has its engine in front. The cabin is measured from the dash to where its air ends: a hatchback's and an
+    /// How a car's body passes its engine's sound (<see cref="EngineVoicing"/>, 0.20). The flat-twelve, the V8 and the 458
+    /// are mid-engined, the engine behind the seats of a two-seat cell about 1.3 m long, with big twin tailpipes; every
+    /// other car has its engine in front. The cabin is measured from the dash to where its air ends: a hatchback's and an
     /// estate's load space is one space with the cabin (about 2.3 m and 2.8 m), a saloon's boot is shut off behind the
-    /// rear seats (about 1.9 m). A car of a style not named here is taken for a front-engined hatchback: the two Bravos
-    /// and the Leon Cupra are; the BRZ, a coupe with a boot, is left at it too while it plays the V6 hatch's banks, until
-    /// its own land (its cabin then the saloons' 1.9 m, here and in NativeApi.VoicingOf alike).
+    /// rear seats (about 1.9 m), and so is the BRZ's, a coupe with a boot. A car of a style not named here is taken for a
+    /// front-engined hatchback: the two Bravos and the Leon Cupra are. The BRZ was left at the hatchback's 2.3 m while it
+    /// played the V6 hatch's banks, which the audio tests voice as the first car of the folder, the R32; on its own
+    /// "boxer4" banks (cars13 stage 2) it takes the saloons' cabin, here and in NativeApi.VoicingOf alike.
     /// </summary>
     internal static EngineVoicing VoicingOf(VehicleSpec spec) => spec.Style switch
     {
         CarStyle.FlatTwelve or CarStyle.V8 or CarStyle.FlatPlaneV8 => new EngineVoicing(EnginePlacement.Mid, 1.3f, TailpipeRadius: 0.035f),
-        CarStyle.Saloon or CarStyle.Fleet => new EngineVoicing(EnginePlacement.Front, 1.9f),
+        CarStyle.Saloon or CarStyle.Fleet or CarStyle.Boxer => new EngineVoicing(EnginePlacement.Front, 1.9f),
         CarStyle.Estate => new EngineVoicing(EnginePlacement.Front, 2.8f),
         _ => new EngineVoicing(EnginePlacement.Front, 2.3f),
     };

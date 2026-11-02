@@ -61,10 +61,10 @@ internal static class NativeApi
     /// The engine voice of the catalogue's car <paramref name="car"/> from the grain banks in <paramref name="folder"/>
     /// (glp_engine_create_for_car, cars13): voiced for that car's body and trimmed over its redline, with its cylinders.
     /// <see cref="CreateEngine"/> finds the car by the folder's name, which names one car only while every car has its
-    /// own banks; the five cars of cars13 play the nearest existing banks until theirs land (the Bravo HGT's five and
-    /// the Bravo 1.6's four the hot hatch's, the 458's V8 the V8's, the Leon Cupra's turbo four the rally hatch's, the
-    /// BRZ's boxer the V6 hatch's), and by the folder alone they would be voiced and trimmed as the first car of that
-    /// folder.
+    /// own banks, as every car has since cars13 stage 2; until then the five cars of cars13 played the nearest existing
+    /// banks (the two Bravos the hot hatch's, the 458 the V8's, the Leon Cupra the rally hatch's, the BRZ the V6
+    /// hatch's), and by the folder alone they would have been voiced and trimmed as the first car of that folder. A host
+    /// that knows the car still calls this one, so a folder shared again later keeps each car's own voice.
     /// </summary>
     public static GranularEngine CreateEngineForCar(string folder, int car)
     {
@@ -93,7 +93,7 @@ internal static class NativeApi
     internal static EngineVoicing VoicingOf(VehicleSpec spec) => spec.Style switch
     {
         CarStyle.FlatTwelve or CarStyle.V8 or CarStyle.FlatPlaneV8 => new EngineVoicing(EnginePlacement.Mid, 1.3f, TailpipeRadius: 0.035f),
-        CarStyle.Saloon or CarStyle.Fleet => new EngineVoicing(EnginePlacement.Front, 1.9f),
+        CarStyle.Saloon or CarStyle.Fleet or CarStyle.Boxer => new EngineVoicing(EnginePlacement.Front, 1.9f),
         CarStyle.Estate => new EngineVoicing(EnginePlacement.Front, 2.8f),
         _ => new EngineVoicing(EnginePlacement.Front, 2.3f),
     };

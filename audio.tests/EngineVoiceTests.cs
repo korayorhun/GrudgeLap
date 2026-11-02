@@ -55,8 +55,8 @@ public class EngineVoiceTests(ITestOutputHelper output)
 
     private static EngineVoicing VoicingOf(string car) => car switch
     {
-        "flat12" or "v8" => new EngineVoicing(EnginePlacement.Mid, 1.3f, TailpipeRadius: 0.035f),
-        "saloon" or "diesel4" => new EngineVoicing(EnginePlacement.Front, 1.9f),
+        "flat12" or "v8" or "v8flat" => new EngineVoicing(EnginePlacement.Mid, 1.3f, TailpipeRadius: 0.035f),
+        "saloon" or "diesel4" or "boxer4" => new EngineVoicing(EnginePlacement.Front, 1.9f),
         "estate" => new EngineVoicing(EnginePlacement.Front, 2.8f),
         _ => new EngineVoicing(EnginePlacement.Front, 2.3f),
     };
