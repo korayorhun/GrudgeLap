@@ -700,16 +700,24 @@ Item 21 came with dims6, when the cars respecified to the real cars the game dra
     the driver's line) and 0.154 m under its roof skin, the head's top 3 cm under it. The regulations' stand-in for a
     driver's eyes, the V points of UN Regulation 125 (Directive 77/649/EEC before it), sit 589-665 mm over the seat's
     R point and 68 mm behind it at a 25 degree seat-back; no H-point of the 570S is published, so the model's cushion
-    stands for it. The mirror hangs at (0, +0.411, -0.506), 5.6 cm over the eyes and 36 degrees right; the dials on the
-    binnacle at (-0.389, +0.114, -0.787) are read over the rim's top, which crosses their lower third as the car's
-    own 0.34 m wheel does. At the frame's centre column the dash top is now at 58 % of the height with 83 rows of
-    road over it (was 1), where the other cars' seats have it (flat-twelve 63, Delta 60, estate 58, E-Class 56 %).
-    The grey wash was neither the cabin probe nor the glass: the model's dashboard, scuttle and door tops are gloss
-    black (roughness 0.18-0.22) and mirrored the sky at the low eye's grazing angle, where the real car's are leather
-    or Alcantara; the entry now corrects their finish (`materials` in `tools/car_models.json`, applied by the
-    preparation: plastic.black 0.6, McLaren.black 0.55), and the dash top's band at the right of the frame fell from a
-    mean of 88 to 56 of 255 with its specular streak gone. The other seven models prepare to the same bytes. Test
-    `A_seat_pair_in_one_mesh_does_not_lower_the_eyes`.
+    stands for it. The model's seat back is no guide to the eyes: at their height its face is 5 cm behind them
+    (z +0.035 across the bucket), where a head, a man's some 20 cm long with its back about 18 cm behind the eyes,
+    would stand 13 cm into it; read off that seat the eyes would be 0.42 m behind the wheel's centre at most, closer
+    than a driver sits. The model's buckets sit forward of where its wheel puts the driver, and the eyes follow the wheel,
+    which the driver sees; the seat behind them shows only to a look across the cabin (the passenger's head restraint
+    level with the eyes, at the edge of a look 60 degrees right). The mirror hangs at (0, +0.411, -0.506), 5.6 cm over
+    the eyes and 36 degrees right; the dials on the binnacle at (-0.389, +0.114, -0.787) read over the rim's top and
+    through the wheel's upper opening. Ray-cast from the eyes, the rim covers the panel from 40 to 62 % of its height
+    over the gear, 64-98 % under the speedometer's centre and 46-69 % across the tachometer's, and the binnacle's
+    hood lip its top 6 % over the one and 26 % over the other: the speed from 40 to 280 km/h, the gear and both
+    needles read, the tachometer's hub is hidden. At the frame's centre column the dash top is now at 58 % of
+    the height with 83 rows of road over it (was 1), where the other cars' seats have it (flat-twelve 63, Delta 60,
+    estate 58, E-Class 56 %). The grey wash was neither the cabin probe nor the glass: the model's dashboard, scuttle
+    and door tops are gloss black (roughness 0.18-0.22) and mirrored the sky at the low eye's grazing angle, where the
+    real car's are leather or Alcantara; the entry now corrects their finish (`materials` in `tools/car_models.json`,
+    applied by the preparation: plastic.black 0.6, McLaren.black 0.55), and the dash top's band at the right of the
+    frame fell from a mean of 88 to 56 of 255 with its specular streak gone. The other seven models prepare to the
+    same bytes. Test `A_seat_pair_in_one_mesh_does_not_lower_the_eyes`.
 
 Kept, as earlier decisions: the fixed 240 Hz step with semi-implicit Euler for the body, the raycast wheels, the
 grass's grip and rolling resistance (0.9), the weather's grip figures (0.12), the speed-sensitive steering lock,
