@@ -450,14 +450,20 @@ internal sealed partial class EngineAudio : Node
                 case RaceEvent.Knocked: Knock(session.LastKnock); break;
             }
         }
-        // A turbo: its whistle follows the shaft, and shutting the throttle on boost vents it or makes it surge (TurboNoise).
+        // A turbo: its whistle follows the shaft, and shutting the throttle on boost vents it or makes it surge, or on the
+        // diesel, which has no throttle to shut, lets it spool down (TurboNoise).
         _turboState = new TurboState(
             Boost: _running ? engine.Boost : 0f,
             Throttle: _running ? _follower.Load : 0f,
             // The follower holds its last revs through the replay; the turbo runs down with the engine instead.
             RevShare: _running ? _follower.Rpm / _engineSpec.RedlineRpm : 0f,
             BoostShare: _engineSpec.BoostShare,
-            BlowOffValve: _engineSpec.BlowOffValve,
+            Lift: _engineSpec.LiftOff switch
+            {
+                TurboLiftOff.Surges => TurboLift.Surge,
+                TurboLiftOff.SpoolsDown => TurboLift.SpoolDown,
+                _ => TurboLift.Vent,
+            },
             Interior: Interior,
             CabinCutoff: _cabinCutoff);
         // Accumulated until the block is rendered: a frame whose generator was full renders nothing and passes its time on.

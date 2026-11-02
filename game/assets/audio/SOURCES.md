@@ -141,7 +141,7 @@ The five-cylinder hatch of 0.9-0.19 (a Volvo five at idle, credit cmusounddesign
 laid at a five's firing frequency, `GranularEngine.FivePattern`) left the game with the car it voiced; its banks are
 no longer shipped.
 
-## The everyday cars (`saloon/`, `estate/`, `fleet/`, 0.10.0)
+## The everyday cars (`saloon/`, `estate/`, 0.10.0)
 
 | Bank | Source | Segments (start@end s @ firing Hz at start @ search band Hz) |
 |---|---|---|
@@ -151,15 +151,100 @@ no longer shipped.
 | `estate/engine_idle` | Freesound #141240 "Renault 19 underhood acceleration" and #141245 "Reault 19 driving 2" by lovretta (the carburetted Cleon 1.4 of the same family as the estate's), https://freesound.org/s/141240/ (CC0 1.0) | 141240: 0.6@2.9@27@20@36; 141245: 3.0@7.2@36@28@44 |
 | `estate/engine_drive` | Freesound #141245, as above | 10.8@16.2@50@40@105, 25.5@33.3@92@80@160, 121.2@126.8@91@80@170 |
 | `estate/engine_overrun` | Freesound #141245, as above | 133.2@139.4@194@95@215 |
-| `fleet/engine_idle` | Wikimedia Commons "Fiat Grande Punto 1.4 T-Jet - engine and exhaust sound (YouTube -1zYK0ORqWg)" by Adri Drives (the 1.4 Fire family), CC BY 3.0 | 19.2@27.0@27@20@36 |
-| `fleet/engine_drive` | the same, and "Fiat Bravo 1.4 T-Jet - engine and exhaust sound (YouTube TYdDRfp-LdY)" by michael maurice, CC BY 3.0 | Punto 64.0@70.2@64@55@115, 72.4@74.95@91@80@130, 75.02@77.4@105@80@130; Bravo 10.0@10.72@153@140@220, 10.88@12.19@166@140@220, 12.24@12.73@187@140@220, 12.78@14.4@191@140@220 |
-| `fleet/engine_overrun` | the Bravo recording | 57.6@57.95@168@130@190, 58.0@58.56@165@130@190, 58.62@60.45@163@130@190 |
 
 No CC0 or CC BY recording of the cars themselves was found (a phone clip of a Renault 12 was too short); the banks
-are their engines' closest siblings: the Lada's Fiat-124 four for the saloon's Fiat 131 pushrod four, the Renault 19's
-carburetted Cleon 1.4 for the estate's, the Punto's and the Bravo's 1.4 Fire for the fleet saloon's (turbocharged
-there, which shows little through the pulses the voice uses). The two Commons files come from YouTube uploads marked
-with YouTube's Creative Commons Attribution licence; their licence review was pending on Commons on 29 October 2026.
+are their engines' closest siblings: the Lada's Fiat-124 four for the saloon's Fiat 131 pushrod four and the Renault
+19's carburetted Cleon 1.4 for the estate's.
+
+The fleet saloon played the Punto's and the Bravo's 1.4 T-Jet petrol fours (`fleet/`, Wikimedia Commons, CC BY 3.0, by
+Adri Drives and michael maurice) from 0.10 until it became the E 250 CDI, a diesel, and its own banks were cut (below);
+those banks are no longer shipped.
+
+## The fleet saloon's diesel (`diesel4/`, diesel6)
+
+| Bank | Source | Segments (start@end s @ firing Hz at start @ search band Hz) |
+|---|---|---|
+| `diesel4/engine_idle` | Freesound #243773 "Diesel-drive2.wav" and #243783 "Diesel-drive.wav" by fastson, https://freesound.org/s/243773/ and https://freesound.org/s/243783/ (CC0 1.0), notched at 159-166 Hz | #243773 0.5@8.8@26@20@32@2; #243783 28.0@40.0@33.5@28@38@2 (the firing followed on its second harmonic) |
+| `diesel4/engine_drive` | the same | #243773 94.4@98.2@45@38@75, 98.45@100.2@61@50@85; #243783 90.3@93.6@54@45@100; #243773 27.4@29.0@58@50@100, 29.0@29.88@91@85@130 |
+| `diesel4/engine_overrun` | #243773 (the revs falling slowly after a change up, the level down: the fuel cut) | 32.3@42.0@62@38@70 |
+
+Both recordings are a short drive of one car with a TDI engine (the uploader's tag), recorded with a Sony PCM-M10 and a
+Shure SM-58 in the engine compartment (the uploader's description): idling, pulling away, accelerating through the
+low gears to about 50 km/h, coasting. The make and model are not given; the firing reads as a four's: at idle the
+spectrum is a comb of 6.5 Hz (the camshaft's turn, half the crank's), its strongest lines at 26 and 52 Hz, a four's
+firing at 780 rpm and its second harmonic (a three or a five firing at that rate would turn its crank and cam at other
+rates than the comb's), and that idle is where the TDIs' sit. Whether its injection is common-rail or by unit injectors
+is not said. It is the only legitimately licensed recording found of a car's four-cylinder turbodiesel that holds an
+idle, a run-up under load and an overrun, from close to the engine; none of an OM 651 (or of any W212 or W204 CDI) was
+found.
+
+The recordings were made at -55 to -60 dBFS, and above about 4 kHz they are the recorder's floor (those bands move by
+under 3 dB between the idle and the run-up): cut as they were, the bank tool lifted the floor 40 dB with the engine,
+and the grains' sharpest steps stood 2 to 3.6 times their RMS where every other bank's stand at 0.1 to 0.7: hiss at
+every firing pulse. Each is first cleaned with `tools/clean-recording.py` (the floor measured in every frequency bin as
+its 10th percentile over the file and taken away from 700 Hz up, then a low-pass at 6 kHz; nothing is moved in time),
+and the banks are cut from the cleaned files. After it the grains' sharpest steps are 0.3 to 0.9 times their RMS, and
+the knock at idle is the recording's: its 1-3 kHz follows the firing (the band's envelope beats 0.54 of its mean at the
+firing rate in #243773's idle; in #243783's first idle, 5-21 s, 0.27, with the band above 3 kHz hiss, so that stretch
+is not used). The high-quality previews were taken (MP3s of about 190 kbit/s; the WAV originals need a login).
+Rebuild:
+
+    python tools/clean-recording.py 243773.mp3 diesel-drive2.wav
+    python tools/clean-recording.py 243783.mp3 diesel-drive.wav
+    python tools/clean-recording.py 243773.mp3 diesel-drive2-idle.wav 700 6000 159-166
+    python tools/clean-recording.py 243783.mp3 diesel-drive-idle.wav 700 6000 159-166
+    python tools/make-engine-bank.py game/assets/audio/diesel4/engine_idle 4 "diesel-drive2-idle.wav@0.5@8.8@26@20@32@2" "diesel-drive-idle.wav@28.0@40.0@33.5@28@38@2"
+    python tools/make-engine-bank.py game/assets/audio/diesel4/engine_drive 4 "diesel-drive2.wav@94.4@98.2@45@38@75" "diesel-drive2.wav@98.45@100.2@61@50@85" "diesel-drive.wav@90.3@93.6@54@45@100" "diesel-drive2.wav@27.4@29.0@58@50@100" "diesel-drive2.wav@29.0@29.88@91@85@130"
+    python tools/make-engine-bank.py game/assets/audio/diesel4/engine_overrun 4 "diesel-drive2.wav@32.3@42.0@62@38@70"
+
+What the recordings give and what they do not: the idle at 780 and about 1,000 rpm (the game's diesel idles at 750),
+the run-up under load from 1,300 to 3,425 rpm in five stretches (#243773's run-up is split at 98.2-98.45 s, where the
+firing tracker jumped to a partial for a few pulses, and at 29.0 s, past which it follows the firing only within a
+higher band), and the overrun from 2,000 down to 1,150 rpm. The fleet saloon's governor is at 4,800 rpm: past 3,425 the
+voice lays the run-up's highest pulses closer, as for the V6 hatch, and lifting from high revs plays the overrun's
+highest pulses closer still. A recording of the same kind of engine revving higher under load would serve better.
+
+Both recordings carry a steady tone that does not follow the revs (an auxiliary of the car's): 162.7 Hz idling at 780
+rpm in #243773, 161.3 at about 980 in #243783, the strongest line of either idle, level with the second firing
+harmonic. Cut into grains and laid at the firing rate it was chopped into a buzz: the voice idled with 160-167 Hz 7.1 dB
+over its firing line outside and 8.9 in the cabin, where the petrol cars' sit well under theirs (diesel6 review). The
+idle is cut from copies notched at 159-166 Hz (the last argument above: a zero-phase second-order band-stop), and the
+voice now idles with that band 10.4 dB under its firing line outside and 8.6 in the cabin
+(`The_diesel_idles_without_a_steady_hum`). #243783's fifth firing harmonic (about 163 Hz) goes with it; #243773's
+sixth (156 Hz) is kept. The run-up and the overrun are cut from the un-notched files: through them every firing harmonic
+passes the band in turn, and a notch would cut each as it went by; the tone is no louder than the harmonics around it
+there.
+
+The bank tool's tracker cannot follow a firing frequency under about 45 Hz (1,350 rpm for a four): its search band of
+12 % either side is then narrower than a bin of its 4,096-sample frames, often holds none, and the estimate stays where it
+was. The run-up starts at 1,300 rpm for that reason, and the voice crossfades the idle into it. The idles are followed
+on their second harmonic (the segment's last field, 2: a band twice as wide in hertz), since the steady idle did not
+save them from it (diesel6 review): followed on the firing, #243773's idle was labelled 26.00 Hz on every pulse and
+#243783's 28.63 Hz on 150 of its 352 (its pulses' spacing gives 30.9 there and 32.6 where the tracker followed, its
+spectrum 32.5 to 33), 7 to 12 % slow, with 104 of the bank's grains spanning over 1.4 periods on a side where a pulse was
+missed. On the second harmonic the labels' medians are 26.07 and 32.84 Hz, as the spectra and the spacing give (26.0 and
+32.5-33; 25.6 and 32.8), and 45 grains span over 1.4 periods.
+
+What was searched (2 November 2026), CC0 and CC BY only:
+
+- the Internet Archive's CC0 item `car-engines` (above): 70 tracks, all petrol sports and muscle cars, no diesel;
+- Wikimedia Commons (its search for diesel, TDI, CDI, dCi, HDi, CRDi, W212, W204, E-Class and "engine and exhaust
+  sound"; its category "Sounds of automobiles", 456 files): four YouTube "engine and exhaust sound" tracks of diesels or
+  likely ones, the "Volkswagen Passat B5 1.9 TDI (remapped, 185 hp)" (tomeko0o3769, CC BY 3.0), an "Audi A3" (Importex
+  Cartuning & Sound), a "Seat Toledo" and a "Chevrolet Cruze", all with their licence review pending and edited from
+  videos (cuts, drive-bys, blips standing, music over the A3's first half); none holds a steady loaded run-up near the
+  engine, and none is an OM 651;
+- Freesound (searches for diesel car, TDI, CDI, CDTi, CRDi, dCi, HDi, JTD, Multijet, TDCi, 320d, Mercedes diesel,
+  Sprinter, C220, E220, diesel engine bay, diesel clatter, diesel rev): besides fastson's, a Mercedes diesel starting
+  outside (#213729, PITFACTORY, CC0; model not given, start and idle), a Mercedes diesel's idle and blips (#399773,
+  Iridiuss, CC0), a 2026 Mercedes Sprinter revved standing up to about 2,700 rpm (#873236, Robo9418, CC0; its OM 654 is
+  the OM 651's successor, but nothing under load), an Opel Astra 1.9 CDTi started, idled and revved in a garage
+  (#28641, digifishmusic, CC BY 4.0), a Citroen Jumpy 2.0 HDi likewise (#500193, chlund, CC0), a BMW 320d passing two
+  microphones and revved in neutral (#33459-33461, pempi, CC BY 4.0), recordings in the cabin of a 2007 Passat diesel
+  (#89948-89951, Loffy, CC BY 3.0), a Hyundai i40 1.7 CRDi on the motorway (#569683, RadioOAF, CC0), a 1.9 diesel in
+  Belgium (#521768 and #521769, gecop, CC0) and a Renault Master dCi 135 (#425851, Soundholder, CC BY 3.0), where the
+  road and the wind cover the firing; and phone clips of a Skoda Octavia TDI idling ten metres away (#827862,
+  Mihacappy, CC0) and a New Beetle TDI (#448217, Evilmikie, CC0).
 
 ## Cows (`cow/moo1.wav` ... `cow/moo5.wav`)
 

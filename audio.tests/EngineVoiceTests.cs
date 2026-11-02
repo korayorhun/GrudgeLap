@@ -39,7 +39,7 @@ public class EngineVoiceTests(ITestOutputHelper output)
     private static EngineVoicing VoicingOf(string car) => car switch
     {
         "flat12" or "v8" => new EngineVoicing(EnginePlacement.Mid, 1.3f, TailpipeRadius: 0.035f),
-        "saloon" or "fleet" => new EngineVoicing(EnginePlacement.Front, 1.9f),
+        "saloon" or "diesel4" => new EngineVoicing(EnginePlacement.Front, 1.9f),
         "estate" => new EngineVoicing(EnginePlacement.Front, 2.8f),
         _ => new EngineVoicing(EnginePlacement.Front, 2.3f),
     };
@@ -347,8 +347,9 @@ public class EngineVoiceTests(ITestOutputHelper output)
     /// fleet saloon peaked at +2.8 dBFS, the V8 at +1.2 and the turbo hatch at +1.1, and the mix's limiter ducked the
     /// whole mix with them. The trims are held under <see cref="GranularEngine.PeakCeiling"/> by their own renders' peaks;
     /// what those miss is rounded off above <see cref="GranularEngine.PeakKnee"/>, which must stay rare: at most one
-    /// sample in a thousand (measured: at most 18 in 952,560, the saloon's cabin, and none at all on five of the cars:
-    /// the flat-twelve, the V8, the hot hatch, the rally hatch and the V6 hatch).
+    /// sample in a thousand (measured: at most 127 in 952,560, the diesel's cabin, its knock's sharp edges, 18 on the
+    /// saloon's, and none at all on five of the cars: the flat-twelve, the V8, the hot hatch, the rally hatch and the V6
+    /// hatch; diesel6).
     /// </summary>
     [Theory]
     [MemberData(nameof(Cars))]
@@ -417,12 +418,13 @@ public class EngineVoiceTests(ITestOutputHelper output)
     /// revs more evenly once its banks are evened, on the two engines whose run-ups join the most different segments:
     /// the spread of the timbre about its trend falls from 2.3 to 1.0 dB on the rally hatch's turbo four (in 0.19 brighter
     /// at 3350 rpm than at 4700, most of that a compressor's flutter in one of its recordings, cut out of the bank since)
-    /// and from 3.0 to 2.0 dB on the fleet saloon (the Punto's run-up joined to the Bravo's). On the
+    /// and from 0.67 to 0.58 dB on the fleet saloon's diesel (two drives of one car; diesel6), whose petrol banks before it
+    /// (the Punto's run-up joined to the Bravo's) it took from 3.0 to 2.0. On the
     /// others it moves by a tenth of a decibel or less (the V8's spread is its recordings' own, not their joins').
     /// </summary>
     [Theory]
     [InlineData("turbohatch")]
-    [InlineData("fleet")]
+    [InlineData("diesel4")]
     public void The_timbre_follows_the_revs_more_evenly(string car)
     {
         double Spread(bool even)
@@ -482,6 +484,8 @@ public class EngineVoiceTests(ITestOutputHelper output)
     /// lies a few decibels under the noise's own level in the same critical band (Zwicker and Fastl, Psychoacoustics, the
     /// masking of tones by noise). Measured in 0.20: overall from 2.2 LU under (the fleet saloon's cabin) to 3.7 over
     /// (the flat-twelve from behind), the prominent band from 5.3 dB over (the hot hatch's cabin, the closest) to 16.9.
+    /// Since diesel6 the fleet saloon's diesel is 0.3 LU over in its cabin, and the closest are the V6 hatch's and the
+    /// saloon's cabins, 0.7 LU under.
     /// </summary>
     [Fact]
     public void The_engine_stays_audible_over_the_roar_and_the_wind_at_top_speed()
@@ -799,9 +803,9 @@ public class EngineVoiceTests(ITestOutputHelper output)
     /// V8 at 1,900 rpm 7 LU under both ends), the V8's run-up began with 25 pulses of its recording fading in (14 dB under
     /// the rest after levelling) and stepped 2.7 LU at 2,300 rpm, and a gap of 9 dB in its run-up at 6,700 rpm stepped it
     /// 1.9 LU. Measured: steps at most 1.1 LU (the V8 in its cabin at 6,900 rpm); sags at most 1.5 LU (the V8 in its cabin
-    /// at 6,600 rpm) but on two cars: the fleet saloon in its cabin 2.0 LU at 1,700 rpm, where its run-up is laid under the
-    /// 1,820 rpm its recording starts at (the run-up alone sags 1.4 LU there), and the estate 1.7 LU at 1,200 rpm, where the
-    /// idle recorded at 1,100 rpm plays, quieter pulling than the one recorded at 810.
+    /// at 6,600 rpm) but on the estate, 1.7 LU at 1,200 rpm, where the idle recorded at 1,100 rpm plays, quieter pulling
+    /// than the one recorded at 810. The fleet saloon's petrol banks sagged 2.0 LU in its cabin at 1,700 rpm, their run-up
+    /// laid under the 1,820 rpm its recording started at; its diesel's banks (diesel6) step 0.9 LU and sag 0.9 at most.
     /// </summary>
     [Theory]
     [MemberData(nameof(Cars))]

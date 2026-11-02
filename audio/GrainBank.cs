@@ -15,8 +15,8 @@ namespace GrudgeLap.Audio;
 /// through them (its slope from within the segments, <see cref="BrightnessTrend"/>), and each segment is tilted (a
 /// gentle shelf about 1 kHz, level kept) until its grains sit on the trend on average. The rise of brightness with the
 /// revs, which is the engine's own, is kept; the steps at the joins go. The segments' levels are then evened the same
-/// way onto a trend of level (<see cref="LevelTrend"/>): the fleet saloon's run-up joins a Punto's to a Bravo's recorded
-/// 4 dB quieter, which left it buried by the wind at the top of its revs. No segment's peaks are raised past the raw
+/// way onto a trend of level (<see cref="LevelTrend"/>): the fleet saloon's petrol run-up (0.10-0.23) joined a Punto's to a
+/// Bravo's recorded 4 dB quieter, which left it buried by the wind at the top of its revs. No segment's peaks are raised past the raw
 /// recording's peak, though, but for its rarest samples (<see cref="PeakMeter"/>: a click, which the voice rounds off):
 /// tilted 6 dB, the fleet saloon's Bravo segment is peakier than it was, and with its whole gain its typical peaks
 /// would have gone over the recording's (0.20 review: the bank peaked at 1.49, the voice at +2.8 dBFS). A bank of one

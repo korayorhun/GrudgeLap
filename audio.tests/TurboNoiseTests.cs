@@ -16,7 +16,15 @@ public class TurboNoiseTests(ITestOutputHelper output)
     private const float Dt = 1f / 60f;
 
     /// <summary>A turbo four's figures: 45 % of its torque from the boost (the rally hatch's, EngineSpec.RallyTurboFour, is 48 %).</summary>
-    private static TurboState State(float boost, float throttle, float revShare = 0.7f, bool valve = true) => new(boost, throttle, revShare, 0.45f, valve, Interior: false);
+    private static TurboState State(float boost, float throttle, float revShare = 0.7f, TurboLift lift = TurboLift.Vent) => new(boost, throttle, revShare, 0.45f, lift, Interior: false);
+
+    /// <summary>The sound's lift-off for an engine's own figure, as the game maps it (EngineAudio).</summary>
+    private static TurboLift LiftOf(EngineSpec spec) => spec.LiftOff switch
+    {
+        TurboLiftOff.Surges => TurboLift.Surge,
+        TurboLiftOff.SpoolsDown => TurboLift.SpoolDown,
+        _ => TurboLift.Vent,
+    };
 
     /// <summary>Renders a sequence of frame states, one 1/60 s frame each.</summary>
     private static float[] Render(TurboNoise turbo, IEnumerable<TurboState> frames)
@@ -87,9 +95,9 @@ public class TurboNoiseTests(ITestOutputHelper output)
     [Fact]
     public void A_shut_throttle_on_boost_vents_or_flutters()
     {
-        IEnumerable<TurboState> Lift(bool valve) => Hold(State(0.9f, 1f, valve: valve), 1.5f).Concat(Hold(State(0.85f, 0f, valve: valve), 1.2f));
-        var vented = Render(new TurboNoise(Rate), Lift(valve: true));
-        var surging = Render(new TurboNoise(Rate), Lift(valve: false));
+        IEnumerable<TurboState> Lift(TurboLift lift) => Hold(State(0.9f, 1f, lift: lift), 1.5f).Concat(Hold(State(0.85f, 0f, lift: lift), 1.2f));
+        var vented = Render(new TurboNoise(Rate), Lift(TurboLift.Vent));
+        var surging = Render(new TurboNoise(Rate), Lift(TurboLift.Surge));
         var after = (int)(1.5f * Rate);
         var (ventRate, ventDepth) = Beat(vented.AsSpan(after, (int)(0.6f * Rate)));
         var (surgeRate, surgeDepth) = Beat(surging.AsSpan(after, (int)(0.6f * Rate)));
@@ -108,9 +116,9 @@ public class TurboNoiseTests(ITestOutputHelper output)
         Assert.True(vent > 6, "the vent is not heard");
         Assert.True(flutter > 6, "the surge is not heard");
         var turbo = new TurboNoise(Rate);
-        Render(turbo, Hold(State(0.9f, 1f, valve: false), 1.5f).Concat(Hold(State(0.85f, 0f, valve: false), 0.2f)));
+        Render(turbo, Hold(State(0.9f, 1f, lift: TurboLift.Surge), 1.5f).Concat(Hold(State(0.85f, 0f, lift: TurboLift.Surge), 0.2f)));
         Assert.True(turbo.Surging);
-        Render(turbo, Hold(State(0.85f, 1f, valve: false), 0.05f));
+        Render(turbo, Hold(State(0.85f, 1f, lift: TurboLift.Surge), 0.05f));
         Assert.False(turbo.Surging, "an open throttle does not end the surge");
 
         var demo = Environment.GetEnvironmentVariable("GRUDGELAP_AUDIO_DEMO");
@@ -118,6 +126,106 @@ public class TurboNoiseTests(ITestOutputHelper output)
         Directory.CreateDirectory(demo);
         Wav.WritePcm16(Path.Combine(demo, "turbo_vent.wav"), vented, Rate);
         Wav.WritePcm16(Path.Combine(demo, "turbo_surge.wav"), surging, Rate);
+    }
+
+    /// <summary>
+    /// A diesel lifting on boost (diesel6): no throttle shuts on its boost (its load is the fuel injected), so nothing
+    /// vents and nothing surges; the boost falls with the exhaust's energy and the shaft runs down over its second of
+    /// run-on, its whine falling with it. The fleet saloon's diesel (EngineSpec.DieselFour) driven through
+    /// <see cref="EngineModel"/> flat out at 70 % of its governed speed for 1.5 s and then off the fuel for 1.5 s: the
+    /// turbo is never venting nor surging, nothing rises over the steady turbo in the vent's band (above 3 kHz, first
+    /// 100 ms) or the surge's (under 2 kHz, first 250 ms), its level does not beat, the shaft never speeds up again once
+    /// the driver has lifted, and the whine (the shaft's own tone) is lower half a second after the lift than before it
+    /// and a tenth lower again a second after. Its level fades with the shaft rather than stepping down as the foot comes
+    /// off: no throttle cuts the air through the compressor, so the whine's band is within 3 dB in the first 100 ms after
+    /// the lift of the 100 ms before it (the diesel6 review measured 10.5 dB gone in 50 ms with the pedal setting the
+    /// flow), and is lower a second after. Measured: nothing over the steady turbo (above 3 kHz 0.4 dB under it, the air's
+    /// rush going on as the boost falls, 25 dB under while the pedal set the flow; under 2 kHz 1.5 dB under), a beat of
+    /// 0.5 dB (the vent's 3.1, the surge's 14.5), the whine's band 0.3 dB down in the first 100 ms and 10.5 dB a second
+    /// after, its pitch from 2,499 Hz to 2,384 and 2,086.
+    /// </summary>
+    [Fact]
+    public void A_diesels_turbo_spools_down_on_lift_off_without_a_vent_or_a_surge()
+    {
+        var spec = EngineSpec.DieselFour;
+        Assert.Equal(TurboLift.SpoolDown, LiftOf(spec));
+        var engine = new EngineModel(spec);
+        engine.Start();
+        var rpm = 0.7f * spec.RedlineRpm;
+        var turbo = new TurboNoise(Rate);
+        var x = new List<float>();
+        var block = new float[Rate / 60];
+        var shafts = new List<float>();
+        for (var frame = 0; frame < 180; frame++)
+        {
+            var throttle = frame < 90 ? 1f : 0f;
+            for (var t = 0f; t < Dt; t += VehicleSim.FixedStep)
+            {
+                engine.AngularVelocity = rpm / EngineModel.RpmPerRadPerSec;
+                engine.Torque(throttle);
+                engine.Tick(VehicleSim.FixedStep);
+            }
+            Array.Clear(block);
+            turbo.Render(block, new TurboState(engine.Boost, throttle, 0.7f, spec.BoostShare, LiftOf(spec), Interior: false), Dt);
+            x.AddRange(block);
+            Assert.False(turbo.Venting, "the diesel's turbo vents");
+            Assert.False(turbo.Surging, "the diesel's turbo surges");
+            shafts.Add(turbo.Shaft);
+        }
+        var lifted = 90 * block.Length;
+        Assert.InRange(shafts[89], 0.95f, 1f);
+        for (var k = 91; k < shafts.Count; k++) Assert.True(shafts[k] <= shafts[k - 1] + 1e-6f, $"the shaft speeds up {(k - 90) / 60f:0.00} s after the lift");
+        var sound = x.ToArray();
+        double Rise(int length, double lo, double hi) =>
+            Spectrum.BandDb(sound.AsSpan(lifted, length), Rate, lo, hi, 1024) - Spectrum.BandDb(sound.AsSpan(lifted - length, length), Rate, lo, hi, 1024);
+        var high = Rise(Rate / 10, 3000, 9000);
+        var low = Rise(Rate / 4, 50, 2000);
+        var (beatRate, beatDepth) = Beat(sound.AsSpan(lifted, (int)(0.6f * Rate)));
+        double Whine(double from) => Spectrum.PeakHz(sound.AsSpan((int)(from * Rate), Rate / 4), Rate, 300, 4500, 4096);
+        var (before, half, second) = (Whine(1.2), Whine(2.0), Whine(2.5));
+        double WhineDb(int from) => Spectrum.BandDb(sound.AsSpan(from, Rate / 10), Rate, 2000, 2800, 1024);
+        var (levelBefore, levelLifted, levelSecond) = (WhineDb(lifted - Rate / 10), WhineDb(lifted), WhineDb(lifted + Rate));
+        output.WriteLine($"the whine's band {levelLifted - levelBefore:+0.0;-0.0} dB in the first 100 ms after the lift, {levelSecond - levelBefore:+0.0;-0.0} dB a second after");
+        output.WriteLine($"lifted: above 3 kHz {high:+0.0;-0.0} dB, under 2 kHz {low:+0.0;-0.0} dB over the steady turbo; beats {beatDepth:0.0} dB at {beatRate:0.0} Hz; " +
+            $"the whine at {before:0} Hz before, {half:0} Hz half a second after, {second:0} Hz a second after; the shaft from {shafts[89]:0.00} to {shafts[^1]:0.00}");
+        Assert.True(high < 0, $"something vents: {high:+0.0} dB above 3 kHz");
+        Assert.True(low < 0, $"something surges: {low:+0.0} dB under 2 kHz");
+        Assert.True(beatDepth < 6, $"the level beats by {beatDepth:0.0} dB");
+        Assert.True(half < before && second < 0.9 * half, "the whine does not fall as the turbo spools down");
+        Assert.True(levelLifted - levelBefore > -3, $"the whine steps down {levelBefore - levelLifted:0.0} dB as the foot comes off");
+        Assert.True(levelSecond < levelBefore - 3, $"the whine does not fade as the turbo spools down ({levelSecond - levelBefore:+0.0} dB a second after)");
+    }
+
+    /// <summary>
+    /// Each turbo engine of the catalogue lifts off as its kind does (diesel6): the diesel (the engine with a governor,
+    /// the fleet saloon's) spools down, and every petrol turbo vents through its diverter valve as before (the rally
+    /// hatch's Delta).
+    /// </summary>
+    [Fact]
+    public void Every_turbo_engine_lifts_off_as_its_kind_does()
+    {
+        Assert.Equal(TurboLiftOff.Vents, EngineSpec.RallyTurboFour.LiftOff);
+        Assert.Equal(TurboLiftOff.SpoolsDown, EngineSpec.DieselFour.LiftOff);
+        foreach (var car in VehicleSpec.Catalogue.Where(c => c.Engine.BoostShare > 0f))
+        {
+            Assert.Equal(car.Engine.Governor ? TurboLift.SpoolDown : TurboLift.Vent, LiftOf(car.Engine));
+        }
+    }
+
+    /// <summary>
+    /// The compressor's tones grow with the pressure ratio it works at (diesel6, <see cref="TurboNoise.TonalGain"/>): the
+    /// rally hatch's turbo, on which the gains were set, keeps them exactly (a gain of 1, so its sound is unchanged sample
+    /// for sample); the diesel's, at 2.5 bar absolute against 1.9 (the game's ratios, from each engine's boost share; the
+    /// OM 651's own just under 3 bar would give 6.3 dB), is 4.1 dB louder; a turbo working at a lower ratio is quieter.
+    /// </summary>
+    [Fact]
+    public void The_tones_follow_the_pressure_ratio_and_the_rally_hatch_keeps_its_own()
+    {
+        Assert.Equal(1f, TurboNoise.TonalGain(EngineSpec.RallyTurboFour.BoostShare));
+        var diesel = 20 * Math.Log10(TurboNoise.TonalGain(EngineSpec.DieselFour.BoostShare));
+        output.WriteLine($"the diesel's tones {diesel:+0.0} dB, a share of 0.45 {20 * Math.Log10(TurboNoise.TonalGain(0.45f)):+0.0} dB");
+        Assert.InRange(diesel, 4.0, 4.2);
+        Assert.True(TurboNoise.TonalGain(0.45f) < 1f);
     }
 
     /// <summary>
@@ -167,7 +275,7 @@ public class TurboNoiseTests(ITestOutputHelper output)
         var whole = Loudness.Lufs(spooled.AsSpan(spooled.Length - Rate), Rate);
         var vent = Render(new TurboNoise(Rate), Hold(State(1f, 1f), 1.5f).Concat(Hold(State(1f, 0f), 0.2f))).Select(s => s * gain).ToArray();
         var rush = Loudness.Lufs(vent.AsSpan((int)(1.5f * Rate), Rate / 10), Rate);
-        var surge = Render(new TurboNoise(Rate), Hold(State(1f, 1f, valve: false), 1.5f).Concat(Hold(State(1f, 0f, valve: false), 0.3f))).Select(s => s * gain).ToArray();
+        var surge = Render(new TurboNoise(Rate), Hold(State(1f, 1f, lift: TurboLift.Surge), 1.5f).Concat(Hold(State(1f, 0f, lift: TurboLift.Surge), 0.3f))).Select(s => s * gain).ToArray();
         var flutter = Loudness.Lufs(surge.AsSpan((int)(1.5f * Rate), Rate / 4), Rate);
         output.WriteLine($"engine {engine:0.0} LUFS, turbo on full boost {whole:0.0}, the vent's first 100 ms {rush:0.0}, the surge's first 250 ms {flutter:0.0}");
         Assert.True(whole < engine - 12, $"the turbo is only {engine - whole:0.0} LU under the engine");
@@ -183,7 +291,9 @@ public class TurboNoiseTests(ITestOutputHelper output)
     /// there): a tone level with the noise of its own band is well over its masked threshold (Zwicker and Fastl,
     /// Psychoacoustics). With the whine at a quarter of its gain the turbo was under the engine in every band on boost
     /// outside (7.5 dB under at best, its rush at 6.4 kHz) and the whine 11 dB under in its own band. (Measured on the
-    /// rally hatch, the one car with boost: the whine 1.9 dB over the engine in its band outside, 0.8 dB in the cabin.)
+    /// rally hatch, the one car with boost: the whine 1.9 dB over the engine in its band outside, 0.8 dB in the cabin. The
+    /// fleet saloon's diesel, its knock loud around 2.5 kHz, 2.3 and 0.2 dB over with its tones at the higher pressure
+    /// ratio's level, <see cref="TurboNoise.TonalGain"/>; at the rally hatch's level it was 1.7 and 3.8 dB under; diesel6.)
     /// </summary>
     [Theory]
     [MemberData(nameof(BoostedCars))]
@@ -214,7 +324,7 @@ public class TurboNoiseTests(ITestOutputHelper output)
         var heard = pulling.AsSpan(voice.SampleRate);
 
         var gain = 0.8f * MathF.Pow(10f, -6f / 20f);
-        var state = new TurboState(engine.Boost, 1f, 0.7f, spec.BoostShare, spec.BlowOffValve, interior, voicing.CabinCutoff);
+        var state = new TurboState(engine.Boost, 1f, 0.7f, spec.BoostShare, LiftOf(spec), interior, voicing.CabinCutoff);
         var noise = new TurboNoise(Rate);
         var turbo = Render(noise, Hold(state, 3f)).Select(s => s * gain).ToArray().AsSpan(2 * Rate);
         var whineHz = TurboNoise.MaxShaftHz * noise.Shaft;

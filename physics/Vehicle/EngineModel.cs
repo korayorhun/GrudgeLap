@@ -206,10 +206,11 @@ public sealed record EngineSpec
     /// <summary>Revs below which the turbo makes no boost.</summary>
     public float BoostThresholdRpm { get; init; } = 1800f;
     /// <summary>
-    /// A turbo engine vents its boost when the throttle shuts on it, through a diverter (recirculating) valve as production
-    /// turbo cars have; without one the compressor surges against the shut throttle and flutters. Only the sound reads it.
+    /// What a turbo engine's boost does when the driver lifts (<see cref="TurboLiftOff"/>): vented through a diverter valve
+    /// as production petrol turbo cars have, the default; or, without one, surging against the shut throttle; or, on a
+    /// diesel, nothing at all, as no throttle shuts on it. Only the sound reads it.
     /// </summary>
-    public bool BlowOffValve { get; init; } = true;
+    public TurboLiftOff LiftOff { get; init; } = TurboLiftOff.Vents;
     /// <summary>
     /// A diesel's governor in place of a petrol engine's rev limiter. A diesel has no ignition to cut: its governor (in an
     /// injection pump's flyweights, or in a common-rail diesel's control unit) takes the injected quantity back steadily
@@ -380,8 +381,8 @@ public sealed record EngineSpec
     /// own a diesel of its size makes about two fifths of what this one does on the boost of the 150 kW tune, just under
     /// 3 bar absolute (Mercedes-Benz's description of the OM 651, as motor-car.net gives it). The small high-pressure
     /// stage, which takes all the exhaust at low revs, has it on full boost by 1400 rpm and spools in about half a second
-    /// (game figures: none is published). Its voice is still the fleet bank's petrol four: the banks are being cut again
-    /// elsewhere (see docs/design.md, the dynamics audit's item 20).
+    /// (game figures: none is published). Its voice is a diesel four's (the "diesel4" recordings, a VW Group TDI's engine
+    /// bay; diesel6), and its turbo spools down when the driver lifts, neither venting nor surging (<see cref="TurboLiftOff"/>).
     /// </summary>
     public static EngineSpec DieselFour => new()
     {
@@ -397,9 +398,34 @@ public sealed record EngineSpec
         BrakingPerRpm = 0.004f,
         FullThrottleCurve = DieselCurve,
         Cylinders = 4,
-        SoundFolder = "fleet",
+        SoundFolder = "diesel4",
         BoostShare = 0.6f,
         BoostSeconds = 0.5f,
         BoostThresholdRpm = 800f,
+        // No throttle plate: lifting cuts the fuel, the air goes on through the engine and the turbo spools down.
+        LiftOff = TurboLiftOff.SpoolsDown,
     };
+}
+
+/// <summary>
+/// What a turbocharged engine's boost does when the driver lifts off (<see cref="EngineSpec.LiftOff"/>), as its sound
+/// hears it (the game's TurboNoise).
+/// </summary>
+public enum TurboLiftOff
+{
+    /// <summary>
+    /// A petrol engine's throttle shuts on the boost and a diverter (recirculating) valve, opened by the manifold's vacuum,
+    /// lets the charge round the compressor: a short rush. Production petrol turbo cars have one.
+    /// </summary>
+    Vents,
+
+    /// <summary>The throttle shuts on the boost with no valve to relieve it: the compressor surges against it and flutters.</summary>
+    Surges,
+
+    /// <summary>
+    /// A diesel has no throttle plate (its load is the injected fuel), so lifting shuts nothing on the boost: the air goes on
+    /// through the engine, the charge falls with the exhaust's energy and the turbo spools down, neither venting nor
+    /// surging. Diesel turbochargers are fitted without a blow-off or diverter valve for that reason.
+    /// </summary>
+    SpoolsDown,
 }

@@ -30,9 +30,10 @@ namespace GrudgeLap.Audio;
 /// pulling, its pulses are levelled onto the run-up's trend like the run-up's own and brought to the loudness of the
 /// run-up's pulses across the revs where the two take over from each other (<see cref="LoadedIdleGain"/>). Held every
 /// 100 rpm from the idle to the redline at full throttle, the voice now moves by at most 1.1 LU from one step to the
-/// next, and no point lies more than 1.5 LU under the loudest within 600 rpm on both sides but on two cars: the fleet
-/// saloon in its cabin, 2.0 LU at 1,700 rpm, where its run-up plays under the revs its recording starts at, and the
-/// estate, 1.7 LU at 1,200 rpm, where the quieter of its two idle recordings plays (banks review; the tests pin both).
+/// next, and no point lies more than 1.5 LU under the loudest within 600 rpm on both sides but on the estate, 1.7 LU at
+/// 1,200 rpm, where the quieter of its two idle recordings plays (banks review; the tests pin it). The fleet saloon's
+/// petrol banks sagged 2.0 LU in its cabin at 1,700 rpm, where their run-up played under the revs its recording started
+/// at; its diesel's banks (diesel6) sag 0.9 LU at most.
 /// At a light throttle the idle keeps its own level, and between a light throttle and a full one it rises evenly in
 /// decibels (<see cref="IdleLevel"/>).
 /// </para>
@@ -64,7 +65,7 @@ namespace GrudgeLap.Audio;
 /// </para>
 /// <para>
 /// Peaks (0.20 review): trimmed to the reference alone, three cars peaked over full scale at the game's volume of 0.9 (the
-/// fleet saloon at +2.8 dBFS, the turbo hatch at +1.1, the V8 at +1.2), and the mix's limiter pulled everything down with
+/// fleet saloon's petrol banks at +2.8 dBFS, the turbo hatch at +1.1, the V8 at +1.2), and the mix's limiter pulled everything down with
 /// them, tyres and wind included, by up to 3.3 dB. Neither trim may now lift the voice's peaks at full throttle and full
 /// <see cref="Volume"/> over <see cref="PeakCeiling"/>: the trim's renders, taken on every 5 % from 30 % of the redline
 /// to the redline, give the peak (but for its rarest samples, <see cref="PeakMeter"/>), and a car whose recording is
@@ -465,7 +466,7 @@ public sealed class GranularEngine
     /// against the run-up at its own bottom revs instead (tried in the banks review), the idle was the louder across the
     /// crossfade, where its pulses, held to the period, keep only their loudest part and grow louder with the revs, and
     /// the run-up's grow quieter laid under their recording: at full throttle the voice sagged where the run-up took over
-    /// (the hot hatch 1.8 LU at 2,000 rpm, the V6 hatch 1.6 at 1,300, the fleet saloon in its cabin 2.2 at 1,700).
+    /// (the hot hatch 1.8 LU at 2,000 rpm, the V6 hatch 1.6 at 1,300, the fleet saloon's petrol banks in its cabin 2.2 at 1,700).
     /// Matched stream against stream at the same revs, they are as loud as each other across the crossfade.
     /// </remarks>
     private float LoadedIdleGain(GrainBank idle)

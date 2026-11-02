@@ -14,7 +14,7 @@
 | Freesound #187029 "car Niva.wav" by dobrymolodec | the 1.6 saloon's idle (`saloon/engine_idle`) | CC0 1.0 — https://freesound.org/s/187029/ |
 | Freesound #255122 and #255126, Lada 1500 Combi recordings by YleArkisto | the 1.6 saloon's run-up and overrun (`saloon/engine_drive`, `engine_overrun`) | CC BY 4.0 — https://freesound.org/s/255122/ (credit: YleArkisto) |
 | Freesound #141245 "Reault 19 driving 2" and #141240 "Renault 19 underhood acceleration" by lovretta | the 1.4 estate's banks (`estate/engine_*`) | CC0 1.0 — https://freesound.org/s/141245/ |
-| Wikimedia Commons "Fiat Grande Punto 1.4 T-Jet - engine and exhaust sound" (Adri Drives, YouTube -1zYK0ORqWg) and "Fiat Bravo 1.4 T-Jet - engine and exhaust sound" (michael maurice, YouTube TYdDRfp-LdY) | the fleet saloon's banks (`fleet/engine_*`) | CC BY 3.0 (credit: Adri Drives; michael maurice) |
+| Freesound #243773 "Diesel-drive2.wav" and #243783 "Diesel-drive.wav" by fastson (a TDI's engine bay) | the fleet saloon's diesel banks (`diesel4/engine_*`), cleaned of the recorder's hiss and, for the idle, of a steady 161-163 Hz auxiliary tone (`tools/clean-recording.py`) | CC0 1.0 — https://freesound.org/s/243773/ |
 | ambientCG Ground110 (1K) | the gravel shoulders (`shoulder_*.jpg`) | CC0 1.0 — https://ambientcg.com/view?id=Ground110 |
 | Freesound #383476 "Car interior driving 02.wav" by Daphne_in_Wonderland | the tyres' rolling roar on the road (`tyres/road.wav`) | CC0 1.0 — https://freesound.org/s/383476/ |
 | Freesound #850041 "tire-squeal" by JeffPearson | the cornering squeal loop (`tyres/squeal.wav`) | CC0 1.0 — https://freesound.org/s/850041/ |

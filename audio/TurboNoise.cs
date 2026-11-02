@@ -3,23 +3,39 @@ namespace GrudgeLap.Audio;
 /// <summary>
 /// The turbocharger's state as its sound needs it, once a frame: the boost (0 to 1 of the most the engine makes), the
 /// throttle, the revs against the redline, the turbo's share of the full-throttle torque (which sets the most boost it
-/// makes), whether a valve vents the boost when the throttle shuts, whether the listener is in the cabin, and the corner
-/// of the low-pass the cabin hears the engine bay through (<see cref="EngineVoicing.CabinCutoff"/>).
+/// makes), what the boost does when the driver lifts (<see cref="TurboLift"/>), whether the listener is in the cabin, and
+/// the corner of the low-pass the cabin hears the engine bay through (<see cref="EngineVoicing.CabinCutoff"/>).
 /// </summary>
 public readonly record struct TurboState(
     float Boost,
     float Throttle,
     float RevShare,
     float BoostShare,
-    bool BlowOffValve,
+    TurboLift Lift,
     bool Interior,
     float CabinCutoff = 2200f);
 
 /// <summary>
+/// What the turbo's sound does when the driver lifts on boost (see <see cref="TurboNoise"/>'s remarks): the game maps the
+/// engine's own figure (the simulation's <c>EngineSpec.LiftOff</c>) onto it.
+/// </summary>
+public enum TurboLift
+{
+    /// <summary>A diverter valve vents the boost round the compressor as the throttle shuts: a short soft rush.</summary>
+    Vent,
+
+    /// <summary>No valve: the compressor surges against the shut throttle and flutters.</summary>
+    Surge,
+
+    /// <summary>No throttle shuts on the boost (a diesel): no vent and no surge, the shaft just runs down.</summary>
+    SpoolDown,
+}
+
+/// <summary>
 /// The turbocharger's sounds, synthesised (0.20, audit finding 11): the compressor's whistle following the shaft's speed,
 /// the rush of the air it pushes, and what happens when the throttle shuts on boost, the vent of a blow-off valve or,
-/// without one, the flutter of the compressor surging. Kept subtle: well under the engine. Allocates nothing per call;
-/// one thread.
+/// without one, the flutter of the compressor surging; on a diesel, whose turbo has no throttle shut on it, neither
+/// (diesel6). Kept subtle: well under the engine. Allocates nothing per call; one thread.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -56,7 +72,16 @@ public readonly record struct TurboState(
 /// Eng. Power 98, 1976; measured on small automotive compressors by Galindo, Serrano, Climent and Tiseira, Experiments
 /// and modelling of surge in small centrifugal compressor for automotive engines, Exp. Therm. Fluid Sci. 32, 2008): the
 /// flutter, each cycle a chuff of air with the shaft stumbling. Production turbo cars fit a diverter valve that opens
-/// on the manifold's vacuum and lets the boost round the compressor instead: a short soft rush (<see cref="TurboState.BlowOffValve"/>).
+/// on the manifold's vacuum and lets the boost round the compressor instead: a short soft rush (<see cref="TurboLift.Vent"/>,
+/// <see cref="TurboLift.Surge"/> without one).
+/// </para>
+/// <para>
+/// The diesel (diesel6). A diesel has no throttle plate: its load is the fuel injected, so lifting shuts nothing on the
+/// boost. The fuel is cut, the air goes on through the cylinders and the turbine, the charge falls with the exhaust's
+/// energy, and the turbo, fitted without a blow-off valve as diesels' are, spools down: its whine follows the shaft down
+/// over the second it runs on, with no rush and no flutter (<see cref="TurboLift.SpoolDown"/>). The air drawn through
+/// the compressor, which carries its tones out of the inlet and makes its rush, follows the falling boost rather than
+/// the pedal, so the whine fades with the shaft instead of dropping when the foot comes off.
 /// </para>
 /// </remarks>
 public sealed class TurboNoise
@@ -67,6 +92,12 @@ public sealed class TurboNoise
     public const int Blades = 6;
     /// <summary>Peak of the blade tone, of the shaft's own tone, RMS of the air's rush at full boost, and of the vent and the surge's chuffs.</summary>
     public const float WhistleGain = 0.012f, ShaftGain = 0.1f, RushGain = 0.02f, VentGain = 0.12f, SurgeGain = 0.3f;
+    /// <summary>
+    /// The turbo's share of the torque the tones' gains were set at: the rally hatch's (EngineSpec.RallyTurboFour), against
+    /// whose run-up they were set (0.20 review). Its tones play at <see cref="WhistleGain"/> and <see cref="ShaftGain"/>
+    /// exactly; a turbo working at another pressure ratio is scaled by <see cref="TonalGain"/>.
+    /// </summary>
+    public const float ReferenceBoostShare = 0.48f;
 
     private readonly float _rate;
     private uint _noise = 0x2545F491u;
@@ -109,6 +140,29 @@ public sealed class TurboNoise
         return MathF.Max(MathF.Sqrt(MathF.Max(work, 0f)), exhaust);
     }
 
+    /// <summary>
+    /// The level of the compressor's tones on full boost against the reference turbo's (<see cref="ReferenceBoostShare"/>),
+    /// from the pressure ratio each makes (diesel6). The ratio is set by the blades' tip speed: the work done on the air
+    /// grows as the tip speed squared (Euler's turbine equation, as in the remarks), so the tip speed goes as the square
+    /// root of the work. A fan's or a compressor's sound power grows about as the fifth power of its tip speed (the fan
+    /// laws' sound-power term, 50 log10 of the speed ratio at a fixed size, as AMCA Publication 301 applies it), its
+    /// pressure as the tip speed to the 2.5, so as the work to the 1.25. The pressure ratios are the game's own, from each
+    /// engine's torque without boost against with it (<see cref="TurboState.BoostShare"/>): 2.5 bar absolute for the fleet
+    /// saloon's diesel against 1.9 for the rally hatch's, so its tones are 4.1 dB louder, as its clatter, broadband around
+    /// the whine's 2.5 kHz, would otherwise mask them (1.7 dB under its run-up there outside, 3.8 in the cabin). The OM 651's
+    /// 150 kW tune is described as running just under 3 bar (EngineSpec.DieselFour), which the same law would make 6.3 dB;
+    /// the game's 2.5 is kept so that the sound's boost is the one its torque model makes (diesel6 review).
+    /// </summary>
+    public static float TonalGain(float boostShare) => MathF.Pow(Work(boostShare) / Work(ReferenceBoostShare), 1.25f);
+
+    /// <summary>The compressor's work at the most boost a turbo with this share of the torque makes, as a share of c_p T.</summary>
+    private static float Work(float boostShare)
+    {
+        var share = Math.Clamp(boostShare, 0.05f, 0.8f);
+        // gamma = 1.4 for air: (gamma - 1) / gamma = 0.2857.
+        return MathF.Pow(1f / (1f - share), 0.2857f) - 1f;
+    }
+
     /// <summary>Adds the turbo's sounds for a frame of <paramref name="dt"/> seconds to <paramref name="output"/> (mixed into what is there).</summary>
     public void Render(Span<float> output, in TurboState state, float dt)
     {
@@ -120,12 +174,13 @@ public sealed class TurboNoise
         var target = ShaftTarget(state);
         // Spools behind the boost (which already lags the throttle) and runs on for about a second when it falls.
         _shaft += (target - _shaft) * Math.Clamp(dt / (target > _shaft ? 0.15f : 1.2f), 0f, 1f);
-        // The throttle shuts on boost: the stored charge is vented or surges back through the compressor.
+        // The throttle shuts on boost: the stored charge is vented or surges back through the compressor. A diesel's
+        // lift shuts nothing on it, and the shaft only runs down (TurboLift.SpoolDown).
         if (state.Throttle < 0.15f && _lastThrottle >= 0.15f && state.Boost > 0.3f && !_venting && !_surging)
         {
             _stored = state.Boost;
-            _venting = state.BlowOffValve;
-            _surging = !state.BlowOffValve;
+            _venting = state.Lift == TurboLift.Vent;
+            _surging = state.Lift == TurboLift.Surge;
             _surgePhase = 0f;
         }
         // Opening the throttle again closes the valve or ends the surge.
@@ -141,11 +196,21 @@ public sealed class TurboNoise
         var whistleFrom = _whistleLevel;
         var shaftFrom = _shaftLevel;
         var rushFrom = _rushLevel;
-        // Both tones leave mostly through the compressor's inlet with the air it draws: fainter with the throttle shut.
-        var drawn = 0.3f + 0.7f * Math.Clamp(state.Throttle, 0f, 1f);
-        _whistleLevel = WhistleGain * _shaft * drawn;
-        _shaftLevel = ShaftGain * _shaft * _shaft * drawn;
-        _rushLevel = RushGain * Math.Clamp(state.Boost, 0f, 1f) * Math.Clamp(state.Throttle, 0f, 1f);
+        // The air through the compressor: a petrol engine's throttle sets it, so it collapses the moment the throttle shuts.
+        // A diesel's lift shuts nothing (TurboLift.SpoolDown): the charge keeps flowing as it falls, so the flow follows
+        // the boost down instead of the pedal. Held, the boost settles at most at the throttle (its target is the throttle
+        // times the revs' share), so this matters on the lift and as the throttle eases: the whine had dropped 10.5 dB in
+        // the first 50 ms while its pitch had barely moved, a step down where the spool-down should be heard (diesel6
+        // review). The petrol turbos are unchanged.
+        var throttle = Math.Clamp(state.Throttle, 0f, 1f);
+        var flow = state.Lift == TurboLift.SpoolDown ? MathF.Max(throttle, Math.Clamp(state.Boost, 0f, 1f)) : throttle;
+        // Both tones leave mostly through the compressor's inlet with the air it draws: fainter as that flow falls.
+        var drawn = 0.3f + 0.7f * flow;
+        // Louder for a turbo working at a higher pressure ratio than the reference (exactly 1 for the reference's).
+        var tonal = TonalGain(state.BoostShare);
+        _whistleLevel = WhistleGain * tonal * _shaft * drawn;
+        _shaftLevel = ShaftGain * tonal * _shaft * _shaft * drawn;
+        _rushLevel = RushGain * Math.Clamp(state.Boost, 0f, 1f) * flow;
         var nyquist = 0.5f * _rate;
         var n = output.Length;
         for (var i = 0; i < n; i++)
