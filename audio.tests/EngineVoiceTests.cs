@@ -28,6 +28,23 @@ public class EngineVoiceTests(ITestOutputHelper output)
         return cars;
     }
 
+    /// <summary>
+    /// Every engine bank the game ships, by folder: those of the catalogue's cars and those cut before their cars join it
+    /// (cars13: the five new engines' banks were cut a stage ahead of the catalogue entries that name them), so the
+    /// checks that look at a bank alone, not at a car's voice, hold for every bank from the day it is cut.
+    /// </summary>
+    public static readonly TheoryData<string> Banks = BanksOnDisk();
+
+    private static TheoryData<string> BanksOnDisk()
+    {
+        var banks = new TheoryData<string>();
+        foreach (var folder in Directory.GetDirectories(Audio).Where(d => File.Exists(Path.Combine(d, "engine_drive.wav"))).Select(Path.GetFileName).Order(StringComparer.Ordinal))
+        {
+            banks.Add(folder!);
+        }
+        return banks;
+    }
+
     /// <summary>The catalogue's index of the car whose engine sounds from <paramref name="folder"/>.</summary>
     private static int IndexOf(string folder)
     {
@@ -543,13 +560,14 @@ public class EngineVoiceTests(ITestOutputHelper output)
     /// overrun 5, the hot hatch's run-up 4 and its overrun 3, the estate's overrun 1), most of them 40 to 160 dB under,
     /// which the voice played as a drop-out of a firing period; and the rally hatch's idle and overrun, the hot hatch's
     /// overrun, the saloon's idle and the fleet saloon's Bravo segments held crackles. Measured on the re-cut banks: the
-    /// deepest grain 9.8 dB under its neighbours (the V6 hatch's run-up, a blip's last pulse).
+    /// deepest grain 9.8 dB under its neighbours (the V6 hatch's run-up, a blip's last pulse). Every bank folder is
+    /// checked (<see cref="Banks"/>), the five cut in cars13 ahead of their cars among them: at most 7.6 dB (the HGT's
+    /// overrun) and 3.9 times (the 1.6's overrun).
     /// </summary>
     [Theory]
-    [MemberData(nameof(Cars))]
-    public void Every_bank_is_cut_without_drop_outs_or_crackles(string car, int index)
+    [MemberData(nameof(Banks))]
+    public void Every_bank_is_cut_without_drop_outs_or_crackles(string car)
     {
-        _ = index;
         foreach (var name in new[] { "engine_idle", "engine_drive", "engine_overrun" })
         {
             var bank = Bank(car, name, even: false);
@@ -585,13 +603,13 @@ public class EngineVoiceTests(ITestOutputHelper output)
     /// tracker read, two such sides no longer met and left a gap no grain covered (6 ms of digital silence, 28 dB under the
     /// idle around it). The tool now keeps the stronger of
     /// two peaks closer than 0.6 of a period and fills only gaps of 1.75 periods, three quarters of a period from either
-    /// side. Measured: at least 0.60 (the V8's run-up and the flat-twelve's idle), 0.69 on the hot hatch's idle.
+    /// side. Measured: at least 0.60 (the V8's run-up and the flat-twelve's idle; the BRZ's idle and run-up of cars13),
+    /// 0.69 on the hot hatch's idle.
     /// </summary>
     [Theory]
-    [MemberData(nameof(Cars))]
-    public void Every_grain_reaches_most_of_a_period_either_side(string car, int index)
+    [MemberData(nameof(Banks))]
+    public void Every_grain_reaches_most_of_a_period_either_side(string car)
     {
-        _ = index;
         foreach (var name in new[] { "engine_idle", "engine_drive", "engine_overrun" })
         {
             var bank = Bank(car, name, even: false);
