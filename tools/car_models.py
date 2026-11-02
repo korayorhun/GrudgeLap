@@ -31,6 +31,12 @@ SPECS = {
     "saloon": dict(front=1.17, rear=1.32, track=0.678, hub=-0.20, rest=0.25, mass=1050.0, stiffness=24000.0, radius=0.2875),
     "estate": dict(front=1.00, rear=1.441, track=0.656, hub=-0.20, rest=0.26, mass=1045.0, stiffness=22000.0, radius=0.289),
     "fleet": dict(front=1.121, rear=1.753, track=0.80, hub=-0.20, rest=0.24, mass=1770.0, stiffness=45385.0, radius=0.326),
+    # cars13 (VehicleSpec.FlatPlaneV8, HgtFive, HatchSixteen, CupraTsi, Boxer): keyed by the model files the model track delivers.
+    "458": dict(front=1.325, rear=1.325, track=0.82, hub=-0.12, rest=0.26, mass=1560.0, stiffness=48000.0, radius=0.345),
+    "bravohgt": dict(front=0.975, rear=1.565, track=0.725, hub=-0.20, rest=0.22, mass=1240.0, stiffness=32630.0, radius=0.293),
+    "bravo16": dict(front=0.975, rear=1.565, track=0.72, hub=-0.20, rest=0.22, mass=1135.0, stiffness=29870.0, radius=0.298),
+    "leoncupra": dict(front=1.052, rear=1.579, track=0.7615, hub=-0.20, rest=0.22, mass=1395.0, stiffness=35830.0, radius=0.324),
+    "brz": dict(front=1.21, rear=1.36, track=0.765, hub=-0.16, rest=0.24, mass=1315.0, stiffness=36000.0, radius=0.313),
 }
 
 
@@ -304,8 +310,9 @@ def is_glass_material(material):
     return "KHR_materials_transmission" in extensions
 
 
-def rig(model, entry, spec, car):
-    """Finds the model's tyres and what rolls with them, and the transform into the game's car frame.
+def rig(model, entry, spec, car, blob=None):
+    """Finds the model's tyres and what rolls with them, and the transform into the game's car frame. With the model's
+    binary chunk (blob), a part its accessors make bigger than a tyre is measured again by its vertices.
 
     Returns a dict: worlds (node world matrices), mesh_nodes (kept mesh nodes), bounds (world boxes), dropped,
     tyres (FL, FR, RL, RR), assemblies (per wheel: the tyre and what rolls with it), pivots (hub centres, model
@@ -374,7 +381,14 @@ def rig(model, entry, spec, car):
         for w, pivot in enumerate(pivots):
             tyre_size = bounds[tyres[w]][1] - bounds[tyres[w]][0]
             reach = 0.5 * np.max(tyre_size)
-            if np.linalg.norm(centre - pivot) < reach * 0.6 and np.max(size) <= np.max(tyre_size) * 1.05 and not matches(i, name_of(i), fixed):
+            near = np.linalg.norm(centre - pivot) < reach * 0.6
+            if near and np.max(size) > np.max(tyre_size) * 1.05 and blob is not None:
+                # A box is its accessors' min and max, which an exporter may write over a vertex list the part shares
+                # with others: the 458's rims (models13) read 0.51 file units across, against their tyres' 0.46 and
+                # their own 0.40, and stood still in the body while the tyres round them rolled and steered.
+                points = mesh_points(model, blob, nodes[i]["mesh"], worlds[i])
+                size = points.max(axis=0) - points.min(axis=0)
+            if near and np.max(size) <= np.max(tyre_size) * 1.05 and not matches(i, name_of(i), fixed):
                 assemblies[w].append(i)
                 assigned.add(i)
                 break

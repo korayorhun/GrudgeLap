@@ -185,7 +185,8 @@ best lap's ghost out of the picture.
   steel lattice, the drawbridge's white A-frame towers with cables, pad, grass tufts, trees from leaf cards,
   a wood beyond the fields, fields, textured buildings, the green fork gantry with its traffic light, the
   red checkpoint banner, signs, the train on its railway), real car models with their own cabins (0.16: CC BY
-  models of a Ferrari Testarossa (with a Lotus Esprit's cabin), a McLaren 570S, a Peugeot 205 GTi, a Lancia Delta
+  models of a Ferrari Testarossa (with a Lotus Esprit's cabin), a McLaren 570S, a Ferrari 458 Italia (with the 570S's
+  cabin), a Peugeot 205 GTi, a Lancia Delta
   Integrale, a Volkswagen Golf R32 (with a SAAB 9-5's cabin), a VAZ-2106, a Renault 12 and a Mercedes-Benz E-Class, set to
   the simulation's wheelbase, their wheels and steering wheel turning, the live dials in their binnacles, the
   rear-view mirror on their own; `tools/prepare_car_models.py`; in their own colours or the one the menu picks, a

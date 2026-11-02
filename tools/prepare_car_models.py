@@ -65,6 +65,12 @@ def is_paint(name):
     return bool(tokens & PAINT_WORDS) or ("body" in tokens and tokens <= BODY_WORDS)
 
 
+def is_entry_glass(entry, name):
+    """A material the entry names as a window (glass: material-name parts, "==Name" exactly), for the models whose
+    windows are an opaque material named like any other (the 458's black "Material.048")."""
+    return any((name == w[2:]) if w.startswith("==") else (w.lower() in name.lower()) for w in entry.get("glass", []))
+
+
 def basis_facing(direction, up=(0.0, 1.0, 0.0)):
     """A rotation whose +Z is direction and whose +X stays level (towards the car's right for a face looking back)."""
     z = np.array(direction, dtype=float)
@@ -466,7 +472,7 @@ def borrow_cabin(model, blob, r, world, boxes, car, spec, donor_entry, cabin):
     if donor_entry.get("split"):
         cm.split_nodes(donor, donor_blob, [s.lower() for s in donor_entry["split"]])
     cm.strip_unlit(donor)
-    rd = cm.rig(donor, donor_entry, spec, car)
+    rd = cm.rig(donor, donor_entry, spec, car, donor_blob)
     to_car = rd["to_car"]
     if donor_entry.get("mirror_x"):
         to_car = np.diag([-1.0, 1.0, 1.0, 1.0]) @ to_car
@@ -475,6 +481,10 @@ def borrow_cabin(model, blob, r, world, boxes, car, spec, donor_entry, cabin):
     # Parts drawn only from the driver's seat (CarView: nodes named "Inside_..."): a donor's part that pokes through
     # the shell, as the Esprit's door cards stand out over the Testarossa's doors as a cream bar from outside.
     inside_words = [s.lower() for s in cabin.get("inside_only", [])]
+    # The donor's seats where their names do not say so (seats: its parts named "Seat_..."), for the eyes to pass over:
+    # the 570S's two buckets are one mesh, Object_16, 1.34 m across, and the 458 that borrows them had its eyes set 13 cm
+    # under their tops, 0.86 m over the road, where the binnacle hid the road (models13).
+    seat_words = [s.lower() for s in cabin.get("seats", [])]
     picked = [i for i in rd["body_nodes"] if cm.matches(i, rd["name_of"](i), words)]
     offsets = cm.merge(model, blob, donor, donor_blob)
     added = []
@@ -482,6 +492,8 @@ def borrow_cabin(model, blob, r, world, boxes, car, spec, donor_entry, cabin):
         name = rd["name_of"](i)
         if inside_words and cm.matches(i, name, inside_words):
             name = "Inside_" + name
+        elif seat_words and cm.matches(i, name, seat_words):
+            name = "Seat_" + name
         model["nodes"].append({"name": name, "mesh": donor["nodes"][i]["mesh"] + offsets["meshes"]})
         k = len(model["nodes"]) - 1
         world[k] = shift @ to_car @ rd["worlds"][i]
@@ -535,7 +547,7 @@ def prepare(car, entry, inspect=False, config=None):
         print(f"  {cm.split_nodes(model, blob, [s.lower() for s in entry['split']])} merged wheel mesh(es) split by corner")
     if cm.strip_unlit(model):
         print("  unlit materials made lit")
-    r = cm.rig(model, entry, spec, car)
+    r = cm.rig(model, entry, spec, car, blob)
     entry = in_present_frame(entry, spec)
     nodes = model["nodes"]
     name_of = r["name_of"]
@@ -745,7 +757,7 @@ def prepare(car, entry, inspect=False, config=None):
             top = None
             for i in body:
                 glassy = contains(name_of(i), GLASS_WORDS) or any(
-                    contains(model["materials"][q["material"]].get("name", ""), GLASS_WORDS)
+                    contains(model["materials"][q["material"]].get("name", ""), GLASS_WORDS) or is_entry_glass(entry, model["materials"][q["material"]].get("name", ""))
                     for q in model["meshes"][nodes[i]["mesh"]]["primitives"] if "material" in q)
                 if not glassy:
                     continue
@@ -790,6 +802,13 @@ def prepare(car, entry, inspect=False, config=None):
             material["name"] = "GLP_Brake"
             continue
         if any(w.lower() in lower for w in entry.get("keep", [])):
+            continue
+        # Windows drawn in an opaque material whose name does not say glass (glass: material-name parts, "==Name"
+        # exactly): the 458's whole glasshouse, windscreen to engine cover, is one black "Material.048", and from the
+        # seat it hid everything but a sliver of road (models13).
+        if is_entry_glass(entry, name):
+            material["name"] = "GLP_Glass"
+            print(f"  {name} drawn as glass (the entry's glass)")
             continue
         painted = any((name == w[2:]) if w.startswith("==") else (w in lower) for w in entry.get("paint", [])) if paint_words else is_paint(name)
         if painted:

@@ -1,7 +1,7 @@
 Title:        Scion FR-S 2015
 Kind:         2012-2016 front-engined rear-drive 2+2 coupe: the Scion FR-S is the North American twin of the Subaru BRZ (ZC6)
-              and the Toyota 86 (ZN6), the same body shell from the same Gunma line; the catalogue's Boxer ("COUPE 2.0 BOXER
-              '13") is drawn as it. Shell without a cabin.
+              and the Toyota 86 (ZN6), the same body shell from the same Gunma line; evaluated for the catalogue's Boxer
+              ("COUPE 2.0 BOXER '13") and not used (Status). Shell without a cabin.
 Licence:      Creative Commons Attribution 4.0 International (CC BY 4.0)
 Licence URL:  https://creativecommons.org/licenses/by/4.0/
 Author:       RoninVR (Sketchfab user "RoninVR", https://sketchfab.com/RoninVR)
@@ -13,6 +13,16 @@ File:         scion-frs-2015-roninvr.glb (37,446,620 bytes, glTF 2.0 binary, Ske
               KHR_materials_pbrSpecularGlossiness; SHA-256 43c3c9cc0aefc9af476db6516ab94ff9be40f96fb0fb399dc3c7ea66c1b240cc;
               1,373,630 triangles (about a million of them in the four rims), 617 mesh nodes, 13 untextured materials, no
               images, no animations)
+Status:       NOT USED (models13 review). Evaluated as the boxer coupe and left out: its tail is unfinished where the
+              chase camera looks. There is no lower rear bumper; the rear quarter panels end in ragged flaps hanging
+              beside the wheels; the rear wheel arches are open at the back, so the tyres' insides and the road show
+              through the tail (from straight behind, 17.9 % of the band 0.10-0.35 m over the road is see-through, the
+              458's 0 %; tyre shows over 14.4 % of it, the 458's 7.0 %); and there are no tail lamps, only a dark-tinted
+              cover (2TailIghtsGlass, material "glass") over the painted body. The boxer coupe keeps the game's lofted
+              body and unreal/Scripts/fetch_models.py does not fetch this file; the note stays as the record of the one
+              BRZ, 86 or FR-S of a credible origin found (the others: game texture names, Need for Speed or Gran Turismo
+              tags, a SketchUp mesh without wheels, scans, non-commercial licences), for a pass that repairs the tail
+              (then a chase-view screenshot is the acceptance check).
 Licence evidence: live check 2026-11-02, api.sketchfab.com/v3/models/3a68c66a5e3a451cb78f90fef59becc7: HTTP 200, licence
               slug "by" (CC Attribution), isDownloadable true, 687,271 faces, published 2017-06-01; the same licence in the
               Objaverse 1.0 metadata snapshot. Description by the author: "Scion FR-S 2015. The back is unfinished as I had
@@ -21,15 +31,24 @@ Licence evidence: live check 2026-11-02, api.sketchfab.com/v3/models/3a68c66a5e3
               are a modeller's working names from Blender and the materials plain colours; nothing points to a game asset.
 Geometry:     lies along z, nose at -z (headlamps at z = -2.0); wheelbase 2.8869 file units, so 1 unit = 0.8902 m at the
               BRZ's 2570 mm wheelbase; then 4.16 m long (Subaru: 4240; the author's unfinished tail is the short end),
-              1.90 m wide over the mirrors (1775 without them), 1.25 m high (1285), tyres 0.639 m across (215/45 R17: 0.625),
-              hubs 0.32 m over the lowest point, track 1.51 m (Subaru: 1520 / 1540). Tyres 5WheelFront_0, 5WheelFront.001_0,
-              .002_0, .003_0 (2,240 triangles each); two rim meshes per wheel (5WheelFrontRim*, 128,043 and 111,573
-              triangles) and a flat 5WheelInside disc; no separate calipers. Side windows are 3SideWindows (material
-              "Windows"), the lamp covers 2HeadlightsGlass (material "glass"), both mirrors' housings one mesh 1SideMIrror
-              and both glasses one mesh 7SideMIrrorMirror. No cabin, no seats, no steering wheel, no dashboard: the game
-              borrows a cabin (tools/car_models.json cabin_from).
+              1.74 m wide over the body and 1.90 m over the mirrors (1775 without them), 1.25 m high (1285 for the US
+              FR-S; Australian BRZ listings say 1245), tyres 0.639 m across (215/45 R17: 0.625), hubs 0.32 m over the
+              lowest point, track 1.514 m (Subaru: 1520 / 1540). The wheels are not square to the body: their centre
+              line is 11 mm to one side of the body's, and the left rear wheel sits 20.4 mm further back than the right.
+              Tyres 5WheelFront_0, 5WheelFront.001_0, .002_0, .003_0 (2,240 triangles each); each rim is one mesh the
+              exporter split in two at its vertex limit (5WheelFrontRim*, 65,532 and 57,256 vertices, 128,043 and
+              111,573 triangles), both halves needed, not duplicates; a flat 5WheelInside disc behind each; no separate
+              calipers. Side windows 3SideWindows (material "Windows"), the lamp covers 2HeadlightsGlass,
+              2SubHeadGlass and 2TailIghtsGlass (material "glass"), both mirrors' housings one mesh 1SideMIrror and both
+              glasses one mesh 7SideMIrrorMirror.
+Materials:    the paint is the material named "material" (black, on 1Hood, 1Roof, 1Side, 1Trunk, 1Bumper, 1Door and
+              the rest of the shell): name it "==material" exactly (a recolour checked in the review); the materials are
+              KHR_materials_pbrSpecularGlossiness, which Godot imports with 57 conversion warnings.
+Cabin:        none (no seats, steering wheel, dashboard): the game would borrow one (tools/car_models.json cabin_from).
+              A saloon's cabin needs cabin_from's scale and offset to fit a 1.25 m coupe: borrowed as it is, the SAAB
+              9-5's dashboard poked through the bonnet and the eyes came 3.2 cm under the roof.
 
-Attribution text to show in the game credits (CC BY 4.0 requires attribution, a licence link and a note of changes):
+Attribution text, should the model be used (CC BY 4.0 requires attribution, a licence link and a note of changes):
   "Scion FR-S 2015" by RoninVR (https://sketchfab.com/3d-models/3a68c66a5e3a451cb78f90fef59becc7) is licensed under
   Creative Commons Attribution 4.0 International (CC BY 4.0) (https://creativecommons.org/licenses/by/4.0/).
   Obtained via the Objaverse dataset (Deitke et al., 2022). Modified for use in GrudgeLap (re-scaled, re-rigged, given a
