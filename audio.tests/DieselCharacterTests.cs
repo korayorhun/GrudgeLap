@@ -152,12 +152,22 @@ public class DieselCharacterTests(ITestOutputHelper output)
     /// petrol four's bank of the same kind. Measured there: the diesel's idle 0.67 and run-up 0.24, white noise 0.04 and
     /// 0.03, the petrol fours' idles 0.19 to 0.41 and run-ups 0.04 to 0.09.
     /// </para>
+    /// <para>
+    /// The petrol fours are the four-cylinder cars whose banks were recorded from a four (cars13): a car that plays another
+    /// car's banks until its own land is a four's voice only if the banks' owner, the first car of the folder, is one. The
+    /// Bravo 1.6 and the Leon Cupra, on the hot hatch's and the rally hatch's banks, are compared; the BRZ, on the V6
+    /// hatch's, is not: the VR6's recording, which no four of the catalogue played before, carries -13.7 dB of its sound
+    /// between 1 and 3 kHz idling at the BRZ's 700 rpm, a six's exhaust and not a knock.
+    /// </para>
     /// </summary>
     [Fact]
     public void The_diesel_knocks_where_the_petrol_fours_do_not()
     {
         var diesel = VehicleSpec.Catalogue.Single(c => c.Engine.Governor);
-        var petrols = VehicleSpec.Catalogue.Where(c => c.Engine.Cylinders == 4 && !c.Engine.Governor).ToArray();
+        var petrols = VehicleSpec.Catalogue
+            .Where(c => c.Engine.Cylinders == 4 && !c.Engine.Governor
+                && VehicleSpec.Catalogue.First(owner => owner.Engine.SoundFolder == c.Engine.SoundFolder).Engine.Cylinders == 4)
+            .ToArray();
         Assert.NotEmpty(petrols);
         foreach (var (light, margin) in new[] { (false, 6.0), (true, 3.5) })
         {

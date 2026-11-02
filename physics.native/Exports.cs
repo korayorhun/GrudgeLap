@@ -106,6 +106,21 @@ public static unsafe class Exports
         }
     }
 
+    [UnmanagedCallersOnly(EntryPoint = "glp_engine_create_for_car", CallConvs = [typeof(CallConvCdecl)])]
+    public static nint EngineCreateForCar(byte* folder, int car)
+    {
+        try
+        {
+            var path = Marshal.PtrToStringUTF8((nint)folder) ?? throw new ArgumentNullException(nameof(folder));
+            return GCHandle.ToIntPtr(GCHandle.Alloc(NativeApi.CreateEngineForCar(path, car)));
+        }
+        catch (Exception error)
+        {
+            _lastError = error.ToString();
+            return 0;
+        }
+    }
+
     [UnmanagedCallersOnly(EntryPoint = "glp_engine_destroy", CallConvs = [typeof(CallConvCdecl)])]
     public static void EngineDestroy(nint engine)
     {

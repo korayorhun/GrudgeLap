@@ -53,6 +53,7 @@ bool FGlpLibrary::Load()
 	Resolve(BestLap, TEXT("glp_best_lap"));
 	Resolve(LoadBestLap, TEXT("glp_load_best_lap"));
 	Resolve(EngineCreate, TEXT("glp_engine_create"));
+	Resolve(EngineCreateForCar, TEXT("glp_engine_create_for_car"));
 	Resolve(EngineDestroy, TEXT("glp_engine_destroy"));
 	Resolve(EngineSampleRate, TEXT("glp_engine_sample_rate"));
 	Resolve(EngineRender, TEXT("glp_engine_render"));

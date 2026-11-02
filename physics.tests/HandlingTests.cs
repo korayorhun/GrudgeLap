@@ -54,6 +54,20 @@ public sealed class HandlingTests(ITestOutputHelper output)
     // saloon of 53/47 is traction-limited in first). ESP with ABS; auto motor und sport stopped the E 250 CGI Coupe of the
     // same platform from 100 km/h in 36.4 m (03/2010), on wider 17 in tyres: a tenth either side of that.
     [InlineData(7, 6.9f, 8.5f, 33f, 40f)]
+    // The five cars of cars13, a tenth of the published figure either side. Flat-plane V8: Ferrari quotes under 3.4 s
+    // for the 458 Italia with its launch control and 32.5 m from 100 km/h on its carbon-ceramic brakes. ABS.
+    [InlineData(8, 3.0f, 3.8f, 29f, 36f)]
+    // Five-cylinder hatch: Fiat quoted 8.5 s for the Bravo HGT 2.0 20V (cars-data's table has 8.0); ABS, no published
+    // stop (the ABS hatchbacks of the late 1990s on 15 in tyres, the Delta's and the R32's class: 34-44 m).
+    [InlineData(9, 7.6f, 9.4f, 34f, 44f)]
+    // 1.6 hatch: 11.0 s for the Bravo 1.6 16V (cars-data); ABS, drums behind, no published stop (the class: 38-47 m).
+    [InlineData(10, 9.9f, 12.1f, 38f, 47f)]
+    // Hot hatch of 2018: SEAT quotes 5.7 s for the Leon Cupra 300 three-door (5.8 for the five-door); ESC with ABS, no
+    // published stop (a hot hatch of 2018 on 235/35 R19 performance tyres with 340 mm discs: 31-38 m).
+    [InlineData(11, 5.1f, 6.3f, 31f, 38f)]
+    // Boxer coupe: Subaru quotes 7.6 s for the BRZ; ABS; Car and Driver stopped a 2013 BRZ from 70 mph in 165 ft, about
+    // 39.6 m from 100 km/h on its touring tyres.
+    [InlineData(12, 6.8f, 8.4f, 35f, 44f)]
     public void Sprints_and_stops_within_the_real_cars_ranges(int car, float sprintMin, float sprintMax, float stopMin, float stopMax)
     {
         var spec = VehicleSpec.Catalogue[car];
@@ -90,6 +104,11 @@ public sealed class HandlingTests(ITestOutputHelper output)
     [InlineData(4)]
     [InlineData(6)]
     [InlineData(7)]
+    [InlineData(8)]
+    [InlineData(9)]
+    [InlineData(10)]
+    [InlineData(11)]
+    [InlineData(12)]
     public void Standing_starts_hold_the_launch_revs_and_the_tyres_short_of_their_peak(int car)
     {
         var spec = VehicleSpec.Catalogue[car];
@@ -145,6 +164,11 @@ public sealed class HandlingTests(ITestOutputHelper output)
     [InlineData(2)]
     [InlineData(5)]
     [InlineData(7)]
+    [InlineData(8)]
+    [InlineData(9)]
+    [InlineData(10)]
+    [InlineData(11)]
+    [InlineData(12)]
     public void Flooring_it_from_rest_launches_without_a_bog(int car)
     {
         var spec = VehicleSpec.Catalogue[car];
@@ -238,6 +262,8 @@ public sealed class HandlingTests(ITestOutputHelper output)
     [InlineData(1)]
     [InlineData(4)]
     [InlineData(7)]
+    [InlineData(8)]
+    [InlineData(11)]
     public void Weight_moves_forward_under_braking_as_statics_says(int car)
     {
         var spec = VehicleSpec.Catalogue[car];
@@ -270,7 +296,8 @@ public sealed class HandlingTests(ITestOutputHelper output)
     /// was quoted at 40/60), 42/58 for the V8 (McLaren quotes 42:58 for the 570S), about 63 % in front for the 205,
     /// about 60 % for the two four-wheel-drive hatchbacks (their propshafts and rear differentials behind), 53 % for
     /// the rear-wheel-drive saloon and about 53 % for the fleet saloon (auto motor und sport weighed the E 250 CGI Coupe
-    /// of its platform at 53.4/46.6).
+    /// of its platform at 53.4/46.6); of cars13, 42/58 for the 458 (Ferrari), 53/47 for the BRZ (Subaru), about 62 % in
+    /// front for the two Bravos and 60 % for the Leon Cupra (no axle loads published; transverse engines ahead of the axle).
     /// </summary>
     [Theory]
     [InlineData(0, 0.38f, 0.42f)]
@@ -280,6 +307,11 @@ public sealed class HandlingTests(ITestOutputHelper output)
     [InlineData(4, 0.59f, 0.62f)]
     [InlineData(5, 0.51f, 0.55f)]
     [InlineData(7, 0.51f, 0.55f)]
+    [InlineData(8, 0.40f, 0.44f)]
+    [InlineData(9, 0.60f, 0.64f)]
+    [InlineData(10, 0.60f, 0.64f)]
+    [InlineData(11, 0.58f, 0.62f)]
+    [InlineData(12, 0.51f, 0.55f)]
     public void Static_weight_distribution_matches_the_car(int car, float min, float max)
     {
         var spec = VehicleSpec.Catalogue[car];
@@ -314,6 +346,15 @@ public sealed class HandlingTests(ITestOutputHelper output)
     [InlineData(5, 0.8f, 3.0f, 3.8f, 6.5f)]
     [InlineData(6, 1.5f, 5.0f, 4.5f, 7.5f)]
     [InlineData(7, 1.4f, 2.6f, 3.0f, 4.2f)]
+    // cars13 (no understeer gradient or roll rate is published for any of the five): the class's range narrowed round
+    // each car's own figure (0.6 deg/g either side of it), so a change shows, as the fleet saloon's was. Measured: the
+    // 458 1.10 and 1.50 deg/g, the Bravo HGT 1.78 and 2.99, the Bravo 1.6 2.16 and 3.26, the Leon Cupra 1.73 and 2.31,
+    // the BRZ 1.25 and 2.12.
+    [InlineData(8, 0.5f, 1.7f, 1.0f, 2.1f)]
+    [InlineData(9, 1.2f, 2.4f, 2.4f, 3.6f)]
+    [InlineData(10, 1.5f, 2.8f, 2.7f, 3.9f)]
+    [InlineData(11, 1.1f, 2.3f, 1.8f, 2.9f)]
+    [InlineData(12, 0.7f, 1.9f, 1.6f, 2.7f)]
     public void Understeer_and_roll_on_the_skid_pad(int car, float gradientMin, float gradientMax, float rollMin, float rollMax)
     {
         var spec = VehicleSpec.Catalogue[car];
@@ -406,6 +447,7 @@ public sealed class HandlingTests(ITestOutputHelper output)
     [Theory]
     [InlineData(0)]
     [InlineData(1)]
+    [InlineData(8)]
     public void Lifting_off_at_the_limit_tucks_the_tail_of_a_mid_engined_car(int car)
     {
         var spec = VehicleSpec.Catalogue[car];

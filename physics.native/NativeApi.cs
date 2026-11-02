@@ -57,6 +57,28 @@ internal static class NativeApi
         return new GranularEngine(Bank("engine_idle"), drive, cylinders, voicing, car?.Engine.RedlineRpm ?? 0f, overrun: Bank("engine_overrun"));
     }
 
+    /// <summary>
+    /// The engine voice of the catalogue's car <paramref name="car"/> from the grain banks in <paramref name="folder"/>
+    /// (glp_engine_create_for_car, cars13): voiced for that car's body and trimmed over its redline, with its cylinders.
+    /// <see cref="CreateEngine"/> finds the car by the folder's name, which names one car only while every car has its
+    /// own banks; the five cars of cars13 play the nearest existing banks until theirs land (the Bravo HGT's five and
+    /// the Bravo 1.6's four the hot hatch's, the 458's V8 the V8's, the Leon Cupra's turbo four the rally hatch's, the
+    /// BRZ's boxer the V6 hatch's), and by the folder alone they would be voiced and trimmed as the first car of that
+    /// folder.
+    /// </summary>
+    public static GranularEngine CreateEngineForCar(string folder, int car)
+    {
+        var spec = Spec(car);
+        GrainBank? Bank(string name)
+        {
+            var wav = Path.Combine(folder, name + ".wav");
+            var marks = Path.Combine(folder, name + ".json");
+            return File.Exists(wav) && File.Exists(marks) ? GrainBank.FromFiles(wav, marks) : null;
+        }
+        var drive = Bank("engine_drive") ?? throw new FileNotFoundException($"no engine_drive.wav and .json in {folder}");
+        return new GranularEngine(Bank("engine_idle"), drive, spec.Engine.Cylinders, VoicingOf(spec), spec.Engine.RedlineRpm, overrun: Bank("engine_overrun"));
+    }
+
     /// <summary>The catalogue's car whose engine sounds from <paramref name="folder"/> (by its last name), if any.</summary>
     internal static VehicleSpec? CarOfSoundFolder(string folder)
     {
@@ -70,7 +92,7 @@ internal static class NativeApi
     /// </summary>
     internal static EngineVoicing VoicingOf(VehicleSpec spec) => spec.Style switch
     {
-        CarStyle.FlatTwelve or CarStyle.V8 => new EngineVoicing(EnginePlacement.Mid, 1.3f, TailpipeRadius: 0.035f),
+        CarStyle.FlatTwelve or CarStyle.V8 or CarStyle.FlatPlaneV8 => new EngineVoicing(EnginePlacement.Mid, 1.3f, TailpipeRadius: 0.035f),
         CarStyle.Saloon or CarStyle.Fleet => new EngineVoicing(EnginePlacement.Front, 1.9f),
         CarStyle.Estate => new EngineVoicing(EnginePlacement.Front, 2.8f),
         _ => new EngineVoicing(EnginePlacement.Front, 2.3f),

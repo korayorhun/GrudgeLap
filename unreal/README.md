@@ -170,7 +170,11 @@ source and the credit line the licence asks for in the `LICENSE.txt` beside `mod
 
 The estate keeps its lofted body (no suitable model was found). The models' makes are the authors' subjects; the
 game itself still names its cars by description. The Ferrari models found were taken down from Sketchfab since
-the dataset's snapshot and were not used.
+the dataset's snapshot and were not used. The five cars of cars13 (the 458, the two Bravos, the Leon Cupra and the
+BRZ: `build_scene.py`'s GLP.Car8-12, `GlpAudio.cpp`'s bank table) have no export and no model yet; their slots stay
+empty and the title screen skips them until the exports (`--car=458|bravohgt|bravo16|leoncupra|brz`) and the
+models are made. Their engine voices come from the simulation core by car (`glp_engine_create_for_car`), so a car
+playing another's banks until its own land is still voiced and trimmed as itself.
 
 Since 0.16 the Godot game draws real models too, with their own cabins (`tools/prepare_car_models.py` and
 `tools/car_models.json`, the shared rigging in `tools/car_models.py`; credited in `THIRD_PARTY.md`): there the V8

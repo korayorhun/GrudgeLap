@@ -510,8 +510,9 @@ internal sealed partial class EngineAudio : Node
         }
         if (jolt > 0.8f) _thump = MathF.Max(_thump, MathUtil.Clamp01((jolt - 0.8f) / 2.5f));
         // Sport exhaust: lifting off at high revs sets off two to four pops over the next half second (the driver lifting,
-        // not the limiter's cut, which shuts the throttle for a moment too).
-        if (_style == CarStyle.V8 && _running && !cut && _lastLoad > 0.5f && load < 0.15f && _follower.Rpm > 4800f && _popsPending.Count == 0)
+        // not the limiter's cut, which shuts the throttle for a moment too). The 458's flat-plane V8 crackles on the
+        // overrun as the 570S's sports exhaust does (cars13).
+        if (_style is CarStyle.V8 or CarStyle.FlatPlaneV8 && _running && !cut && _lastLoad > 0.5f && load < 0.15f && _follower.Rpm > 4800f && _popsPending.Count == 0)
         {
             var count = 2 + _random.Next(3);
             var at = 0.04f;

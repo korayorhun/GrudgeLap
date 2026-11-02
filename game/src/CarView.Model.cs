@@ -87,6 +87,12 @@ internal sealed partial class CarView
         CarStyle.Saloon => "saloon",
         CarStyle.Estate => "estate",
         CarStyle.Fleet => "fleet",
+        // cars13: the keys the parallel model track delivers; until a file is there the lofted body is drawn.
+        CarStyle.FlatPlaneV8 => "458",
+        CarStyle.HgtFive => "bravohgt",
+        CarStyle.HatchSixteen => "bravo16",
+        CarStyle.CupraTsi => "leoncupra",
+        CarStyle.Boxer => "brz",
         _ => "flat12",
     };
 

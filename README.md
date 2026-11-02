@@ -1,12 +1,16 @@
 # GrudgeLap
 
-**EN** · A homage to the 1989 arcade driving simulators. Eight cars — a four-speed flat-twelve of 1984, a
+**EN** · A homage to the 1989 arcade driving simulators. Thirteen cars — a four-speed flat-twelve of 1984, a
 seven-speed V8 of 2012 with a sports exhaust, three hatchbacks of 1988-2003 (a front-wheel-drive eight-valve
 1.9, a four-wheel-drive two-litre turbo with a viscous-coupled centre differential and a four-wheel-drive 3.2 V6 with
-an on-demand coupling) and three everyday cars of Turkey's roads (a 1.6
+an on-demand coupling), three everyday cars of Turkey's roads (a 1.6
 rear-wheel-drive saloon of the 1990s, a 1.4 estate of the same years and a 2.1 rear-wheel-drive diesel fleet saloon of
-the 2010s, with their
-published weights, gearing and power), all with real engine recordings — a fork between a long
+the 2010s) and five more of cars13 (a 4.5 flat-plane V8 of 2010 with a seven-speed dual-clutch gearbox and an
+electronically controlled differential, a five-cylinder and a 1.6 sixteen-valve hatchback of 2001, a 300 PS turbo
+hot hatch of 2018 with a clutch-pack front differential and a 250 km/h limiter, and a 2.0 boxer coupe of 2013 with a
+Torsen; drawn with stand-in bodies and voiced from the nearest existing recordings until their own models and
+sounds land), all with their
+published weights, gearing and power and real engine recordings — a fork between a long
 *speed* route and a short *stunt* route with an open drawbridge, a vertical loop and a banked 180, dips,
 traffic in both directions that keeps its distance, checkpoints against the clock, knocks that dent the car and bounce
 it off (only a hard hit, or one too many, is a crash), an instant replay with its own music after every crash in which
@@ -155,9 +159,12 @@ best lap's ghost out of the picture.
 ## How it is made
 
 - `physics/` — the simulation: raycast-wheel rigid body at 240 Hz, Pacejka-style tyres, torque-curve
-  engines (flat-twelve, V8, the fours, a two-litre turbo four with its boost lag and a VR6),
+  engines (flat-twelve, two V8s, the fours, a five, two turbo fours with their boost lag, a VR6, a boxer four and a
+  turbodiesel with its governor),
   front-, rear- or four-wheel drive (a centre differential with a viscous coupling, or an on-demand coupling to the
-  rear axle, and a differential per axle), clutch lock/slip with a launch assist, gearboxes, the track as a graph
+  rear axle, and a differential per axle: open, clutch-type or Torsen, with the electronically controlled units of
+  the 2010s as clutch-type shares), speed limiters where the real cars have them, clutch lock/slip with a launch
+  assist, gearboxes, the track as a graph
   of road frames built by a turtle API (loop, drawbridge, banked curve, overpass, dips), the wear of the road
   (a slow undulation and potholes in the wheel tracks that the wheels feel and the view draws), a ground
   field that gives the terrain its embankments and cuttings, traffic drones, the rules of a credit, the

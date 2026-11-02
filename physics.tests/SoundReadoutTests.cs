@@ -23,6 +23,11 @@ public sealed class SoundReadoutTests
     [InlineData(5)]
     [InlineData(6)]
     [InlineData(7)]
+    [InlineData(8)]
+    [InlineData(9)]
+    [InlineData(10)]
+    [InlineData(11)]
+    [InlineData(12)]
     public void The_throttle_is_the_engines_load_whatever_its_size(int car)
     {
         var spec = VehicleSpec.Catalogue[car].Engine;

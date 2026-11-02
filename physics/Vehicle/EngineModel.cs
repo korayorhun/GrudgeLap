@@ -294,6 +294,67 @@ public sealed record EngineSpec
         (2000f, 490f), (2500f, 465f), (3000f, 432f), (3500f, 400f), (3800f, 377f), (4200f, 330f), (4500f, 280f), (4800f, 200f),
     ];
 
+    /// <summary>
+    /// The 458 Italia's 4.5-litre flat-plane V8 (F136 FB), as Ferrari published it: 540 N m at 6000 rpm, 80 % of it from
+    /// 3250, 570 CV at 9000 (445 N m there), a 12.5:1 compression ratio and a 9000 rpm redline (Ferrari's 2009 press
+    /// release, as conceptcarz.com and autozine.org carry it; Wikipedia's 458 page). The points between the published
+    /// ones follow a naturally aspirated engine with variable valve timing on both camshafts: a curve that climbs almost to
+    /// the redline, the power peaking at the limiter.
+    /// </summary>
+    private static readonly (float Rpm, float Torque)[] FlatPlaneV8Curve =
+    [
+        (0f, 0f), (600f, 170f), (1000f, 260f), (2000f, 370f), (3000f, 428f), (3250f, 432f), (4000f, 468f), (5000f, 510f),
+        (6000f, 540f), (7000f, 532f), (8000f, 495f), (8600f, 462f), (9000f, 445f), (9400f, 340f),
+    ];
+
+    /// <summary>
+    /// The Bravo HGT's two-litre twenty-valve five (Fiat 182 A1.000, the 155 PS tune of 1998-2001): 186 N m at 3750 and
+    /// 155 PS at 6500 (167.5 N m there; auto-data.net gives the peak at 6700, cars-data at 6500), an inline five with a
+    /// broad plateau from 3000 to 5500 and a long top end, as the twenty-valve head gave it.
+    /// </summary>
+    private static readonly (float Rpm, float Torque)[] HgtFiveCurve =
+    [
+        (0f, 0f), (600f, 95f), (1000f, 125f), (1500f, 150f), (2000f, 165f), (2500f, 175f), (3000f, 182f), (3750f, 186f),
+        (4500f, 184f), (5000f, 181f), (5500f, 177f), (6000f, 172f), (6500f, 167.5f), (6900f, 150f), (7200f, 115f),
+    ];
+
+    /// <summary>
+    /// The Bravo 1.6 16V's four (Fiat 182 A4.000, 1,581 cc): 144 N m at 4000 and 103 PS at 5750 (125.8 N m there), the
+    /// figures cars-data.com and auto-data.net list for the 2001 car; an everyday sixteen-valve of its time, even from 2500
+    /// to 5000 and out of breath past 6000.
+    /// </summary>
+    private static readonly (float Rpm, float Torque)[] HatchSixteenCurve =
+    [
+        (0f, 0f), (600f, 78f), (1000f, 100f), (1500f, 115f), (2000f, 126f), (2500f, 134f), (3000f, 139f), (3500f, 142f),
+        (4000f, 144f), (4500f, 141f), (5000f, 135f), (5500f, 129f), (5750f, 125.8f), (6200f, 112f), (6500f, 95f), (6800f, 70f),
+    ];
+
+    /// <summary>
+    /// The Leon Cupra 300's 2.0 TSI (Volkswagen EA888 generation 3, 1,984 cc, 9.3:1) with full boost: 380 N m from 1800 to
+    /// 5500 and 300 PS from 5500 to 6200 (SEAT's technical sheet of the Leon SC CUPRA 300, 02/2017: 221 kW at 5500-6200,
+    /// 380 N m at 1800-5500), the flat table of a small turbo held on its wastegate, falling past 5500 as the boost is
+    /// taken back for the rated power. Off boost it makes about 45 % (see <see cref="TsiFour"/>).
+    /// </summary>
+    private static readonly (float Rpm, float Torque)[] TsiFourCurve =
+    [
+        (0f, 0f), (600f, 120f), (1000f, 200f), (1200f, 250f), (1500f, 330f), (1800f, 380f), (5500f, 380f), (5800f, 363f),
+        (6200f, 340f), (6500f, 315f), (6800f, 270f), (7100f, 180f),
+    ];
+
+    /// <summary>
+    /// The BRZ's two-litre boxer four (Subaru FA20, 12.5:1, port and direct injection): 205 N m (151 lb ft) at 6400-6600
+    /// and 200 PS (200 hp) at 7000 (200.6 N m there), as Subaru's 2013 specification sheet gives them; the well-known
+    /// trough between 3500 and 4500, where the engine makes about 165 N m before the torque climbs again to its peak
+    /// near the redline (road tests of the 86 and BRZ of 2012-16 plot it; the figures between the published points are
+    /// game figures).
+    /// </summary>
+    private static readonly (float Rpm, float Torque)[] BoxerCurve =
+    [
+        (0f, 0f), (600f, 95f), (1000f, 130f), (1500f, 160f), (2000f, 175f), (2500f, 180f), (3000f, 180f), (3500f, 172f),
+        (4000f, 166f), (4500f, 170f), (5000f, 185f), (5500f, 198f), (6000f, 203f), (6400f, 205f), (6600f, 205f),
+        (7000f, 200.6f), (7400f, 190f), (7700f, 140f),
+    ];
+
     public static EngineSpec FlatTwelve => new();
 
     public static EngineSpec V8 => new()
@@ -404,6 +465,106 @@ public sealed record EngineSpec
         BoostThresholdRpm = 800f,
         // No throttle plate: lifting cuts the fuel, the air goes on through the engine and the turbo spools down.
         LiftOff = TurboLiftOff.SpoolsDown,
+    };
+
+    /// <summary>
+    /// The 458 Italia's flat-plane V8 (cars13). Its voice is the "v8" bank for now: that bank's run-up and overrun were
+    /// cut from a 458's own recording (game/assets/audio/SOURCES.md), so the car sounds like itself at full throttle
+    /// already; stage 2 of the new cars gives it its own "v8flat" banks (a flat-plane V8's idle too) and swaps the folder.
+    /// </summary>
+    public static EngineSpec FlatPlaneV8 => new()
+    {
+        // About 1000 rpm, as the 458's tachometer reads at rest in road tests; Ferrari publishes no idle speed.
+        IdleRpm = 1000f,
+        RedlineRpm = 9000f,
+        BrakingTorque = 22f,
+        BrakingPerRpm = 0.005f,
+        FullThrottleCurve = FlatPlaneV8Curve,
+        Cylinders = 8,
+        SoundFolder = "v8",
+    };
+
+    /// <summary>
+    /// The Bravo HGT's five (cars13). Its voice is the hot hatch's four ("hothatch") for now, laid at a five's firing with
+    /// the five's uneven exhaust beat (GranularEngine.FivePattern); stage 2 restores the five-cylinder banks of release
+    /// 0.20.0 from the history ("five": a Volvo five's idle, CC BY, and an S2000 run-up laid at a five's firing) and swaps
+    /// the folder.
+    /// </summary>
+    public static EngineSpec HgtFive => new()
+    {
+        IdleRpm = 850f,
+        // The twenty-valve five's limiter sits a little past its power peak (155 PS at 6500).
+        RedlineRpm = 7000f,
+        StallRpm = 380f,
+        BrakingTorque = 15f,
+        BrakingPerRpm = 0.004f,
+        FullThrottleCurve = HgtFiveCurve,
+        Cylinders = 5,
+        SoundFolder = "hothatch",
+    };
+
+    /// <summary>
+    /// The Bravo 1.6 16V's four (cars13). Its voice is the hot hatch's four ("hothatch") for now; stage 2 gives it its own
+    /// sixteen-valve banks ("four16v") and swaps the folder.
+    /// </summary>
+    public static EngineSpec HatchSixteen => new()
+    {
+        IdleRpm = 850f,
+        RedlineRpm = 6500f,
+        StallRpm = 380f,
+        BrakingTorque = 11f,
+        BrakingPerRpm = 0.0032f,
+        FullThrottleCurve = HatchSixteenCurve,
+        Cylinders = 4,
+        SoundFolder = "hothatch",
+    };
+
+    /// <summary>
+    /// The Leon Cupra's 2.0 TSI (cars13). Its voice is the turbo four of the "turbohatch" recordings (the Pulsar's, the
+    /// Delta's voice too) for now, with the whistle and the diverter valve the view synthesises for any engine with boost;
+    /// stage 2 gives it its own "tsi4" banks and swaps the folder.
+    /// </summary>
+    public static EngineSpec TsiFour => new()
+    {
+        IdleRpm = 800f,
+        // Volkswagen's limiter on the EA888 is a little past the rated speed's band (300 PS to 6200).
+        RedlineRpm = 6800f,
+        StallRpm = 400f,
+        BrakingTorque = 14f,
+        BrakingPerRpm = 0.004f,
+        FullThrottleCurve = TsiFourCurve,
+        Cylinders = 4,
+        SoundFolder = "turbohatch",
+        // A 9.3:1 two-litre breathing on its own makes about 170 N m, 45 % of the 380 its IHI turbo gives it; a small
+        // modern turbo with a twin-scroll housing is on full boost within about a third of a second and from 1800 rpm
+        // (SEAT's 380 N m from 1800), so the threshold sits 600 rpm under that (EngineModel.Tick). Game figures: SEAT
+        // publishes neither the spool time nor the off-boost torque.
+        BoostShare = 0.55f,
+        BoostSeconds = 0.35f,
+        BoostThresholdRpm = 1200f,
+    };
+
+    /// <summary>
+    /// The BRZ's boxer four (cars13). Its voice is the V6 hatch's recordings ("v6") for now, laid at a four's firing;
+    /// stage 2 gives it its own "boxer4" banks (the FA20's own note: equal-length headers, unlike the older Subarus'
+    /// burble) and swaps the folder. Not the hot hatch's, though that four is the nearer in character: its idle was
+    /// recorded at 1,140 rpm, and laid at the FA20's 700 (61 % of its firing) the gaps between its pulses fell 24-28 dB
+    /// for 10 ms at a time (EngineVoiceTests' idle and sweep), where the VR6's idle, recorded at 590-735 rpm of a six
+    /// (30-37 Hz), plays the boxer's 23 Hz without them; the estate's (810 rpm) still sagged 2.6 LU over the revs.
+    /// </summary>
+    public static EngineSpec BoxerFour => new()
+    {
+        // The FA20 idles at 650 +/- 100 rpm with the manual gearbox (Subaru's BRZ service manual of 2013; 550-750 in
+        // the 2015 service data): 700, within both and what road tests' tachometers show warm.
+        IdleRpm = 700f,
+        // Subaru's redline: 7400 rpm, the limiter a little past it.
+        RedlineRpm = 7400f,
+        StallRpm = 380f,
+        BrakingTorque = 13f,
+        BrakingPerRpm = 0.0038f,
+        FullThrottleCurve = BoxerCurve,
+        Cylinders = 4,
+        SoundFolder = "v6",
     };
 }
 

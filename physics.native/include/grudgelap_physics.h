@@ -143,7 +143,8 @@ typedef struct glp_state
 /* The catalogue's static facts about a car: what instruments and a car body need. */
 typedef struct glp_car_spec
 {
-    int32_t style;            /* 0 flat-12, 1 V8, 2 hot hatch, 3 rally hatch (turbo four), 4 V6 hatch, 5 saloon, 6 estate, 7 fleet saloon (CarStyle) */
+    int32_t style;            /* 0 flat-12, 1 V8, 2 hot hatch, 3 rally hatch (turbo four), 4 V6 hatch, 5 saloon, 6 estate, 7 fleet saloon,
+                                 8 flat-plane V8, 9 five-cylinder hatch, 10 1.6 hatch, 11 turbo hot hatch of 2018, 12 boxer coupe (CarStyle) */
     int32_t forward_gears;
     float speedo_max_mph;
     float redline_rpm;
@@ -210,6 +211,11 @@ int32_t glp_load_best_lap(glp_session session, const uint8_t* data, int32_t leng
  * one thread at a time (a host's audio thread) and is independent of sessions.
  */
 glp_engine glp_engine_create(const char* folder, int32_t cylinders);
+/* The voice of the catalogue's car (0 .. glp_car_count() - 1) from the banks in folder, with that car's cylinders,
+ * voiced for its body and trimmed over its redline. glp_engine_create finds the car by the folder's name, which names
+ * one car only while every car has banks of its own: the five cars added in cars13 play the nearest existing banks
+ * until theirs land, so a host that knows the car calls this one. Added after ABI 7's functions; the rest are unchanged. */
+glp_engine glp_engine_create_for_car(const char* folder, int32_t car);
 void glp_engine_destroy(glp_engine engine);
 /* The rate the voice renders at, its recordings' (Hz). */
 int32_t glp_engine_sample_rate(glp_engine engine);

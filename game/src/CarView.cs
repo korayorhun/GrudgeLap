@@ -125,6 +125,13 @@ internal sealed partial class CarView : Node3D
                 CarStyle.Saloon => BodyStyle.Saloon,
                 CarStyle.Estate => BodyStyle.Estate,
                 CarStyle.Fleet => BodyStyle.Fleet,
+                // cars13, until their models land: the nearest lofts, fitted to each car's axles. The 458 and the BRZ take
+                // the V8's (a low two-door; the BRZ is front-engined, so the glass deck is a stand-in), the two Bravos the
+                // loft keyed on the 1995 Bravo (BodyStyle.FiveHatch), the Leon Cupra the one keyed on the 2007 Leon
+                // (BodyStyle.TurboHatch).
+                CarStyle.FlatPlaneV8 or CarStyle.Boxer => BodyStyle.V8,
+                CarStyle.HgtFive or CarStyle.HatchSixteen => BodyStyle.FiveHatch,
+                CarStyle.CupraTsi => BodyStyle.TurboHatch,
                 _ => BodyStyle.FlatTwelve,
             }).FittedTo(spec),
         };
