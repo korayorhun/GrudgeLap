@@ -100,22 +100,32 @@ public sealed class VehicleTests
     /// the throttle fed in against wheelspin (<see cref="ScriptedDriver.FeatherThrottle"/>), and each gear held until
     /// <see cref="RoadTestShiftDue"/>.
     /// </summary>
-    private static float RoadTestZeroToSixty(VehicleSpec spec, float limit = 20f)
+    private static float RoadTestZeroToSixty(VehicleSpec spec, float limit = 20f) => RoadTestTimes(spec, limit, 60f)[0];
+
+    /// <summary>
+    /// Seconds from the brake's release to each of <paramref name="mph"/> (ascending) in the standing start of
+    /// <see cref="RoadTestZeroToSixty"/>, infinite for a speed not reached within <paramref name="limit"/>: the marks a
+    /// road test reads off one run, such as 30 and 70 mph for a time through the gears (cars/phys2). The run ends at the
+    /// last mark, so to 60 mph it is step for step the run the 0-60 time always was.
+    /// </summary>
+    private static float[] RoadTestTimes(VehicleSpec spec, float limit, params float[] mph)
     {
+        var times = Enumerable.Repeat(float.PositiveInfinity, mph.Length).ToArray();
         var car = new VehicleSim(spec, DragStrip());
         car.Drivetrain.Mode = TransmissionMode.ManualAutoClutch;
         car.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Ignition = true, Clutch = 1f }, Dt);
         car.Step(new DriverInputs { Gear = 1, Clutch = 1f, Brake = 1f }, Dt);
         for (var t = 0f; t < 1.5f; t += Dt) car.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Brake = 1f, Throttle = 1f }, Dt);
         var lastGear = car.Drivetrain.Gear;
-        for (var t = 0f; t < limit; t += Dt)
+        var next = 0;
+        for (var t = 0f; t < limit && next < mph.Length; t += Dt)
         {
             var shift = RoadTestShiftDue(car) && car.Drivetrain.ClutchLocked && car.Drivetrain.Gear == lastGear;
             car.Step(new DriverInputs { Throttle = ScriptedDriver.FeatherThrottle(car, 1f), Steer = FollowRoad(car), Gear = DriverInputs.NoGearChange, ShiftUp = shift }, Dt);
             if (shift) lastGear = car.Drivetrain.Gear;
-            if (car.SpeedMph >= 60f) return t + Dt;
+            while (next < mph.Length && car.SpeedMph >= mph[next]) times[next++] = t + Dt;
         }
-        return float.PositiveInfinity;
+        return times;
     }
 
     /// <summary>
@@ -267,7 +277,9 @@ public sealed class VehicleTests
     [InlineData(8, false, 2.9f, 3.55f, 182f, 222f)]   // 458 Italia: under 3.4 s to 100 km/h, over 325 km/h (202 mph); rear-wheel drive
     [InlineData(9, true, 7.3f, 8.9f, 119f, 146f)]     // Bravo HGT 2.0 20V: 8.5 s, 213 km/h (132 mph)
     [InlineData(10, true, 9.4f, 11.5f, 103f, 126f)]   // Bravo 1.6 16V: 11.0 s, 184 km/h (114 mph)
-    [InlineData(11, true, 5.0f, 6.05f, 150f, 158f)]   // Leon Cupra 300 five-door: 5.8 s (the three-door's 5.7), 250 km/h limited (155 mph)
+    // Leon Cupra five-door with the 245 PS tune of its platform (cars/phys2): the Golf GTI Performance's 6.2 s, 250 km/h
+    // limited (155 mph). The 300 PS alternative (docs/design.md item 23): 5.0-6.05 s round SEAT's 5.8 s for the five-door.
+    [InlineData(11, true, 5.3f, 6.5f, 150f, 158f)]
     [InlineData(12, false, 6.5f, 7.9f, 126f, 154f)]   // BRZ: 7.6 s, 226 km/h (140 mph)
     public void The_cars_of_cars13_match_their_published_figures(int car, bool frontWheelDrive, float zeroToSixtyMin, float zeroToSixtyMax, float topMin, float topMax)
     {
@@ -282,6 +294,23 @@ public sealed class VehicleTests
         Assert.InRange(reached, zeroToSixtyMin, zeroToSixtyMax);
         Assert.InRange(top.SpeedMph, topMin, topMax);
         Assert.True(top.OnRoad);
+    }
+
+    /// <summary>
+    /// The Leon Cupra's 245 PS tune against the one independent road test of its platform found (cars/phys2,
+    /// VehicleSpec.CupraTsi): Auto Express timed a six-speed manual Octavia vRS 245 hatch from 30 to 70 mph through the
+    /// gears in 5.5 s ("Skoda Octavia vRS 245 vs Ford Focus ST", 16 August 2017; 1,365 kg at the kerb against the Leon's
+    /// 1,320 without its driver), held here to a tenth either side. Through the gears the launch does not count, so the
+    /// time reads the curve, the boost, the gearing and the mass; the magazine's 0-60 mph (6.8 s, slower than Skoda's own
+    /// 6.6 s to 62 mph for the car) is left to the makers' figures the test above holds the launch to.
+    /// </summary>
+    [Fact]
+    public void The_Leon_Cupra_runs_30_to_70_mph_through_the_gears_as_its_platforms_road_test()
+    {
+        var spec = VehicleSpec.Catalogue[11];
+        var times = RoadTestTimes(spec, 20f, 30f, 60f, 70f);
+        _out.WriteLine($"{spec.Name}: 30 mph at {times[0]:F2} s, 60 at {times[1]:F2} s, 70 at {times[2]:F2} s: 30-70 mph {times[2] - times[0]:F2} s");
+        Assert.InRange(times[2] - times[0], 4.95f, 6.05f);
     }
 
     /// <summary>
@@ -303,7 +332,7 @@ public sealed class VehicleTests
     [InlineData(8, 2.650f, 1.639f)]       // 458 Italia: 2650 mm, tracks 1672 / 1606 (Ferrari)
     [InlineData(9, 2.540f, 1.4505f)]      // Bravo HGT 2.0 20V: 2540 mm, tracks 1471 / 1430 (auto-data.net, cars-data)
     [InlineData(10, 2.540f, 1.440f)]      // Bravo 1.6 16V: 2540 mm, tracks 1439 / 1441 on 14 in wheels (cars-data)
-    [InlineData(11, 2.631f, 1.523f)]      // Leon Cupra 300 five-door: 2631 mm, tracks 1536 / 1510 on 19 in wheels (SEAT's sheet: 1534 / 1511 on 18 in)
+    [InlineData(11, 2.631f, 1.523f)]      // Leon Cupra five-door: 2631 mm, tracks 1536 / 1510 on 19 in wheels (SEAT's sheet: 1534 / 1511 on 18 in)
     [InlineData(12, 2.570f, 1.530f)]      // BRZ: 2570 mm, tracks 1520 / 1540 (Subaru's 2013 sheet: 59.8 / 60.6 in)
     public void Every_car_has_the_size_of_the_car_it_follows(int car, float wheelbase, float meanTrack)
     {

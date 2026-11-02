@@ -760,8 +760,9 @@ they drive like the real cars before their models and sounds land:
     tracks). Appended after the fleet saloon (catalogue indices 8-12, so a saved choice keeps its car): the flat-plane
     V8 of 2010 (`VehicleSpec.FlatPlaneV8`, after the Ferrari 458 Italia of 2009-15), the five-cylinder and the 1.6
     hatchbacks of 2001 (`HgtFive` and `HatchSixteen`, after the Fiat Bravo HGT 2.0 20V of the 1998-2001 facelift and the
-    Bravo 1.6 16V), the hot hatch of 2018 (`CupraTsi`, after the SEAT Leon Cupra 300, the Mk3 facelift) and the coupe of
-    2013 (`Boxer`, after the Subaru BRZ ZC6 of 2012-16). Each is set from published figures as items 19-21 set the
+    Bravo 1.6 16V), the hot hatch of 2018 (`CupraTsi`, after the SEAT Leon Cupra 300, the Mk3 facelift; since phys2
+    the same car with its platform's 245 PS tune, below, so the table's Cupra column is the 300 PS car of cars13) and the
+    coupe of 2013 (`Boxer`, after the Subaru BRZ ZC6 of 2012-16). Each is set from published figures as items 19-21 set the
     others (the sources in the specs' comments; a figure none publishes is said to be a game figure there), the mass
     with a 75 kg driver as every spec carries it, the size the real car's (one track, the published mean), the engine's
     curve through the published torque and power points.
@@ -818,7 +819,8 @@ they drive like the real cars before their models and sounds land:
     of every car could take up.
     The Cupra: the user asked for a 240 HP car; the 2018 Leon Cupra was sold at 300 PS until the petrol particulate
     filter of autumn 2018 brought it to 290 PS (its 380 N m kept), and the game follows the 300 PS car of SEAT's sheet,
-    the tune published in full with its gearing; 290 can be set later by lowering the top of the curve. The Bravo 1.6's
+    the tune published in full with its gearing; 290 can be set later by lowering the top of the curve (phys2, below,
+    gave it its platform's 245 PS tune instead, as an assumption the user can reverse). The Bravo 1.6's
     gearing: no ratio table was found for its five-speed, so the C.514's ratios as a Fiat forum gives them for the Punto
     1.2 16V stand in on a final drive that gives cars-data's 2,900 rpm at 100 km/h; its ABS is the GT trim's (standard
     there, optional below). The HGT's final drive is carfolio's 3.56 under cars-data's ratios, which put its 213 km/h at
@@ -945,7 +947,8 @@ they drive like the real cars before their models and sounds land:
     opening not modelled). Open for the user: the Cupra. The user asked for a "Seat Leon Cupra 2018 240HP 2.0TSI";
     no 2018 Leon Cupra had 240 HP. The 240 PS Cupra is the Mk2 (2006-12, sold as the "2.0 TSI Cupra" from 2009:
     300 N m from 2200 rpm, 6.4 s to 100 km/h, 247 km/h), and the nearest later one the Cupra Leon VZ 245 (2020 on).
-    The 300 PS Mk3 of SEAT's 2017 sheet stays until the user chooses among the three.
+    The 300 PS Mk3 of SEAT's 2017 sheet stays until the user chooses among the three. (Phys2, below, took the
+    nearest to the request as an assumption the user can reverse: the 2018 car with the 245 PS tune of its platform.)
 
     Stage 2 (cars/stage2: phys13, models13 and sound13 merged onto 0.25.0, the McLaren's cockpit fix and the
     showroom's paint in it). The table's last two rows are history now: the 458 is drawn by its model (models13, with
@@ -956,6 +959,94 @@ they drive like the real cars before their models and sounds land:
     and the diesel's knock test holds it to the same margins as every petrol four. Each car's ORIGINAL paint is its
     real car's launch or press colour (under Each car's paint). No physics value changed: the eight cars' and the
     five's figures are this item's.
+
+    Phys2 (cars/phys2, on cars/stage2): two spec decisions, the Cupra's engine and the BRZ's generation, in
+    `VehicleSpec.cs` and `EngineModel.cs` with their tests. Every other car is bit for bit as it was: the whole-state
+    hash of the cars13 review (both routes dry and wet, with and without traffic, the assisted manual and the automatic,
+    three laps each, the 40 m pad, a sprint to top speed and the stops dry and wet) matches cars/stage2's line for line
+    for cars 0-10, and cars 0-7 match 0.25.0's as they did. The prepared models are byte for byte stage 2's (no geometry
+    changed).
+
+    The Cupra: the 245 PS tune of its platform, an assumption the user can reverse. The user asked for a "Seat Leon
+    Cupra 2018 240HP 2.0TSI", and no 2018 Leon Cupra had 240 HP (above). The game keeps the 2018 Mk3 five-door's body
+    and chassis (its size, 1395 kg with a driver, 235/35 R19 tyres, brakes, the VAQ, the 250 km/h limiter, the R32's
+    loft until its model lands) and gives it the 245 PS (180 kW, 241.6 hp) tune of the EA888 generation-3 two-litre that
+    the same MQB platform carried in 2017-20 in the Volkswagen Golf GTI Performance (Mk7.5) and the Skoda Octavia RS
+    245: 245 PS from 5000 to 6700 rpm and 370 N m from 1600 to 4300 at 9.6:1 (Skoda's technical data of the Octavia
+    Combi RS 245, 5 June 2017; Volkswagen's newsroom, 13 April 2018; ADAC's catalogue gives the Golf's band as
+    4,700-6,200), the full boost from 1600 rpm with the turbo's threshold 600 under it (1000 rpm; the off-boost share,
+    45 %, and the 6,800 rpm limiter are the 300's), in `EngineSpec.TsiFour` and `TsiFourCurve`. The gearbox is the
+    six-speed manual of the 245 PS cars (3.77 / 2.09 / 1.48 / 1.09 on a 3.45 final drive, 1.10 / 0.91 on 2.76, reverse
+    4.55: Skoda's sheet), not the seven-speed DSG (DQ381: 3.40 / 2.75 / 1.77 / 0.93 / 0.71 / 0.76 / 0.64, reverse 2.90,
+    on 4.17 / 3.13, the same sheet). Both sets of ratios are published there; the one independent road test found drove
+    a manual (Auto Express's six-speed Octavia vRS 245 hatch, 16 August 2017: 6.8 s to 60 mph, 5.5 s from 30 to 70 mph
+    through the gears, 4.1 s from 30 to 50 in fourth; the same figures for the vRS Challenge of 18 June 2019), no
+    magazine's timing of a DSG car of the tune turned up, and the manual carries the 250 km/h both makers publish (the
+    DSG Golf's is 248). The showroom's facts line says 6-SPEED MANUAL and is right: the two final drives the spec
+    carried, which the stage-2 report took for a DSG's, were those SEAT's sheet gives the Cupra 300's manual (two output
+    shafts, as on the R32's 02M), and the 245 PS manual has two as well; only the order 1-4 on the first and 5-6 on the
+    second keeps its overall ratios falling. The mass stays the 300's (the same engine with a manual of the same family;
+    ADAC lists the 245 PS Golf five-door manual at 1387 kg with a driver). The targets: Volkswagen's 6.2 s to 100 km/h
+    for the Golf GTI Performance with either gearbox, the Leon's twin in size and mass, a tenth either side for the
+    sprint (5.6-6.8 s, `HandlingTests`) and, less a twentieth, for the 0-60 mph road-test launch (5.3-6.5 s,
+    `VehicleTests.The_cars_of_cars13_match_their_published_figures`), a window Skoda's 6.6 s for the heavier Octavia
+    falls in too; 250 km/h, limited (150-158 mph); and Auto Express's 30-70 mph through the gears, a tenth either side
+    (4.95-6.05 s, the new `VehicleTests.The_Leon_Cupra_runs_30_to_70_mph_through_the_gears_as_its_platforms_road_test`,
+    on `RoadTestTimes`, the marks of the 0-60 run). The magazine's 0-60 mph, 6.8 s, slower than Skoda's own 6.6 s to
+    62 mph for the car, is not taken as the launch's. No quarter-mile time was found for any car of the tune.
+
+    | Leon Cupra | 300 PS (cars13 to stage 2) | 245 PS (phys2) | published, the 245 PS cars |
+    |---|---|---|---|
+    | engine | 300 PS at 5500-6200, 380 N m at 1800-5500, full boost from 1800 | 245 PS at 5000-6700, 370 N m at 1600-4300, full boost from 1600 | Skoda, Volkswagen |
+    | gearbox | 6-speed manual, 3.357-1.088 on 3.944, 1.097 / 0.912 on 3.087 | 6-speed manual, 3.77-1.09 on 3.45, 1.10 / 0.91 on 2.76 | Skoda's sheet |
+    | showroom's figures line | 300 HP AT 6200 RPM, 380 NM AT 1800 RPM | 245 HP AT 5000 RPM, 370 NM AT 1600 RPM | 180 kW, 370 N m |
+    | 0-100 km/h, revved on the brake (floored from idle) | 6.07 s (6.22) | 6.13 (6.27) | 6.2 (Golf), 6.6 (Octavia) |
+    | 0-60 mph, road-test launch | 5.77 s | 5.83 | 6.8 (Auto Express, Octavia) |
+    | 30-70 mph through the gears | 4.47 s | 5.05 | 5.5 (Auto Express, Octavia) |
+    | 30-50 mph in fourth (a scratch rig, not a test) | 3.23 s | 3.80 | 4.1 (Auto Express, Octavia) |
+    | 0-100 mph; the quarter mile | 12.2 s; 14.0 s at 108.2 mph | 14.0; 14.4 at 101.7 | none found |
+    | top speed | 247 km/h in 6th at 5,790 rpm, on the speed limiter | 247 in 5th at 6,240 rpm, on the speed limiter | 250 km/h, limited |
+    | 100-0 km/h dry (rain) | 33.8 m (47.7) | 33.8 (47.7) | none |
+    | understeer, roll (40 m circle) | 1.73, 2.31 deg/g | 1.72, 2.31 | none |
+    | loop run-up (needs 1.35 m/s^2); launch revs | 5.93; 2,000 rpm | 4.78; 2,000 | |
+    | scripted laps, stunt / speed route, dry, no traffic | 91.0 / 103.9 s | 91.7 / 104.4 | |
+
+    How to switch back to the 300 PS car (every place is marked "The 300 PS alternative" in its comments): in
+    `EngineModel.cs` put the points in `TsiFourCurve`'s remarks back as the curve and `TsiFour`'s `BoostThresholdRpm`
+    back to 1200; in `VehicleSpec.CupraTsi` set `GearRatios = [-3.99f, 0f, 3.357f, 2.087f, 1.481f, 1.088f, 0.8587f,
+    0.7138f]` and `FinalDrive = 3.944f` (the comment over them) and restore its summary's figures (SEAT's 5.8 s for the
+    five-door, 250 km/h limited); in the tests put `HandlingTests`' sprint row for car 11 back to 5.2-6.4 s and
+    `VehicleTests`' cars13 row to 5.0-6.05 s (both rows' comments give them), and drop the 30-70 mph test, which holds
+    the 245 PS tune to its platform's road test (the 300 runs it in 4.47 s; no 300's figure was sourced for it); then
+    the docs (this item, the feel checklist's cars13 rows, both READMEs' "245 PS"). The 290 PS car of autumn 2018 would
+    be the 300's curve with its top taken down to 213 kW.
+
+    The BRZ: it stays the 2013-16 car. The drawn model is a facelifted first-generation twin (a Toyota 86), still the
+    ZC6. The facelift of 2017-20 compared: in Europe it kept the engine and every figure the spec follows (200 PS,
+    205 N m at 6400-6600, 7.6 s to 100 km/h, 226 km/h, 215/45 R17; 1243 kg at the kerb against 1240: motor1.com's German
+    test of the facelift, 19 January 2017), with its revised springs and dampers and larger rear anti-roll bar published
+    without rates (Subaru of America's release of 24 October 2016; motor1.com) and no final drive published. The
+    American and Japanese manual took 205 hp at 7000, 156 lb ft at 6400 and a 4.30 final drive in place of the 4.10
+    (Subaru of America, 24 October 2016), and Car and Driver timed its twin, a 2017 Toyota 86 manual on the same
+    Michelin Primacy HP 215/45 R17 tyres (2,754 lb), at 6.2 s to 60 mph, 16.8 s to 100 mph, the quarter mile in 14.8 s
+    at 95 mph, 134 mph flat out (drag-limited), 161 ft from 70 mph and 0.89 g (13 October 2016, as Yahoo Autos carries
+    it). Those figures are well sourced, and set to them (the curve through 205 hp at 7000 and 212 N m at 6400-6800,
+    `FinalDrive = 4.30`, the rest as it is) the car here runs 7.13 s to 60 mph launched as a road test (7.20 as it is),
+    16.5 s to 100 mph and the quarter mile in 15.3 s at 95.8 mph: as far off that test's 0-60 mph as the 2013 car is off
+    Car and Driver's 2013 figures (6.3-6.4 s; 0-60specs.com's list of the magazine's tests), its trap speed the test's.
+    But flat out it runs to 253 km/h at 7,200 rpm in sixth, 12 % over Subaru's 226 and 17 % over Car and Driver's
+    134 mph, out of the tenth either side every car's top speed is held to (the 4.10 car's 246 is 8 % over already): the
+    model's road load does not grow with speed (above). The facelift's targets could not be kept with its figures, so
+    the BRZ stays the 2013-16 car, which in Europe is also the facelift's engine and published figures; its targets are
+    unchanged (Subaru's 7.6 s and 226 km/h, Edmunds' 7.3 s to 60 mph and 15.3 s at 92.1 mph over the quarter mile). One
+    correction, the stage-2 report's open point: the curve's redline point is 189 N m (190 before), so the power peaks
+    at 7000 rpm as Subaru publishes it and the showroom reads 200 HP AT 7000 RPM (7400 before, 0.1 % over the peak). It
+    changes only the race runs' state, where the engine passes 7000 rpm, not their lap times; the pad, the sprint, the
+    stops and every figure the tests print are as they were (7.20 s to 60 mph, 246 km/h, 96.5 / 107.1 s a lap); the
+    quarter mile, run on past second gear's limiter, is 15.43 s at 94.1 mph (15.42 at 94.0). To move to the American
+    facelift later: that curve and final drive, the name's year '17, and the top speed's window settled first, by a pass
+    on every car's road load or a published top speed of the 4.30 car (Subaru gives none; Car and Driver's 134 mph is
+    the 86's).
 
 Kept, as earlier decisions: the fixed 240 Hz step with semi-implicit Euler for the body, the raycast wheels, the
 grass's grip and rolling resistance (0.9), the weather's grip figures (0.12), the speed-sensitive steering lock,

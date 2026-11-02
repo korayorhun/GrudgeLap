@@ -330,15 +330,26 @@ public sealed record EngineSpec
     ];
 
     /// <summary>
-    /// The Leon Cupra 300's 2.0 TSI (Volkswagen EA888 generation 3, 1,984 cc, 9.3:1) with full boost: 380 N m from 1800 to
-    /// 5500 and 300 PS from 5500 to 6200 (SEAT's technical sheet of the Leon SC CUPRA 300, 02/2017: 221 kW at 5500-6200,
-    /// 380 N m at 1800-5500), the flat table of a small turbo held on its wastegate, falling past 5500 as the boost is
-    /// taken back for the rated power. Off boost it makes about 45 % (see <see cref="TsiFour"/>).
+    /// The Leon Cupra's 2.0 TSI in the 245 PS tune (cars/phys2; Volkswagen EA888 generation 3, 1,984 cc, 9.6:1) with full
+    /// boost: 370 N m from 1600 to 4300 and 245 PS (180 kW) from 5000 to 6700, the tune the MQB cars carried in 2017-20
+    /// (Skoda's technical data of the Octavia Combi RS 245, 5 June 2017, cdn.skoda-storyboard.com: 180 kW at 5000-6700,
+    /// 370 N m at 1600-4300, 9.6:1; Volkswagen's newsroom on the Golf GTI Performance, 13 April 2018: 180 kW, 370 N m
+    /// between 1,600 and 4,300 rpm; ADAC's catalogue gives the Golf's power band as 4,700-6,200). The plateau of a turbo
+    /// held on its wastegate, then the power held across the band, the torque falling as the revs rise, and taken back past
+    /// its top; the points between the published ones are game figures. Off boost it makes about 45 % (see
+    /// <see cref="TsiFour"/>). The 5000 rpm point carries the band's 180 kW exactly and the others a hair under it, so the
+    /// showroom's figures line reads the power at the start of the band.
     /// </summary>
+    /// <remarks>
+    /// The 300 PS alternative (SEAT's technical sheet of the Leon SC CUPRA 300, 02/2017: 221 kW at 5500-6200, 380 N m at
+    /// 1800-5500, 9.3:1; the curve the game carried until cars/phys2), kept for a switch back (docs/design.md item 23 says
+    /// how): (0, 0), (600, 120), (1000, 200), (1200, 250), (1500, 330), (1800, 380), (5500, 380), (5800, 363), (6200, 340),
+    /// (6500, 315), (6800, 270), (7100, 180).
+    /// </remarks>
     private static readonly (float Rpm, float Torque)[] TsiFourCurve =
     [
-        (0f, 0f), (600f, 120f), (1000f, 200f), (1200f, 250f), (1500f, 330f), (1800f, 380f), (5500f, 380f), (5800f, 363f),
-        (6200f, 340f), (6500f, 315f), (6800f, 270f), (7100f, 180f),
+        (0f, 0f), (600f, 120f), (1000f, 200f), (1200f, 255f), (1400f, 320f), (1600f, 370f), (4300f, 370f), (5000f, 343.8f),
+        (5500f, 312.5f), (6000f, 286.4f), (6500f, 264.4f), (6700f, 256.5f), (6900f, 215f), (7100f, 150f),
     ];
 
     /// <summary>
@@ -346,13 +357,16 @@ public sealed record EngineSpec
     /// and 200 PS (200 hp) at 7000 (200.6 N m there), as Subaru's 2013 specification sheet gives them; the well-known
     /// trough between 3500 and 4500, where the engine makes about 165 N m before the torque climbs again to its peak
     /// near the redline (road tests of the 86 and BRZ of 2012-16 plot it; the figures between the published points are
-    /// game figures).
+    /// game figures). The power peaks at 7000 as published: the redline's point gives 199 PS (until cars/phys2 its 190 N m
+    /// gave 200.2 PS, 0.1 % over the peak, and the showroom read the peak at 7400). The European BRZ of the 2017 facelift
+    /// kept these figures (200 PS, 205 N m at 6400-6600: motor1.com's German test of January 2017); the American and
+    /// Japanese manual's 205 hp at 7000 and 156 lb ft at 6400 are not taken (VehicleSpec.Boxer's remarks say why).
     /// </summary>
     private static readonly (float Rpm, float Torque)[] BoxerCurve =
     [
         (0f, 0f), (600f, 95f), (1000f, 130f), (1500f, 160f), (2000f, 175f), (2500f, 180f), (3000f, 180f), (3500f, 172f),
         (4000f, 166f), (4500f, 170f), (5000f, 185f), (5500f, 198f), (6000f, 203f), (6400f, 205f), (6600f, 205f),
-        (7000f, 200.6f), (7400f, 190f), (7700f, 140f),
+        (7000f, 200.6f), (7400f, 189f), (7700f, 140f),
     ];
 
     public static EngineSpec FlatTwelve => new();
@@ -520,13 +534,15 @@ public sealed record EngineSpec
     };
 
     /// <summary>
-    /// The Leon Cupra's 2.0 TSI (cars13). Its voice is its own "tsi4" banks (cars13 stage 2: a Golf R's EA888 2.0 TSI, the
-    /// same engine), with the whistle and the diverter valve the view synthesises for any engine with boost.
+    /// The Leon Cupra's 2.0 TSI (cars13; the 245 PS tune since cars/phys2, <see cref="TsiFourCurve"/>). Its voice is its own
+    /// "tsi4" banks (cars13 stage 2: a Golf R's EA888 2.0 TSI, the same engine), with the whistle and the diverter valve the
+    /// view synthesises for any engine with boost.
     /// </summary>
     public static EngineSpec TsiFour => new()
     {
         IdleRpm = 800f,
-        // Volkswagen's limiter on the EA888 is a little past the rated speed's band (300 PS to 6200).
+        // The limiter a little past the top of the rated band (245 PS to 6700; the 300 PS tune's band ended at 6200 under
+        // the same 6800): a game figure, as neither maker publishes the EA888's cut. The sound's run-up reaches 6,720 rpm.
         RedlineRpm = 6800f,
         StallRpm = 400f,
         BrakingTorque = 14f,
@@ -534,13 +550,15 @@ public sealed record EngineSpec
         FullThrottleCurve = TsiFourCurve,
         Cylinders = 4,
         SoundFolder = "tsi4",
-        // A 9.3:1 two-litre breathing on its own makes about 170 N m, 45 % of the 380 its IHI turbo gives it; a small
-        // modern turbo with a twin-scroll housing is on full boost within about a third of a second and from 1800 rpm
-        // (SEAT's 380 N m from 1800), so the threshold sits 600 rpm under that (EngineModel.Tick). Game figures: SEAT
-        // publishes neither the spool time nor the off-boost torque.
+        // A two-litre of 9.3-9.6:1 breathing on its own makes about 170 N m: 45 % of the 370 the 245 PS tune's turbo gives
+        // it (the 300 PS tune's 380 likewise). A small modern turbo is on full boost within about a third of a second and,
+        // on this tune, from 1600 rpm (Skoda's 370 N m from 1600), so the threshold sits 600 rpm under that
+        // (EngineModel.Tick). Game figures: neither SEAT nor Skoda publishes the spool time or the off-boost torque. The
+        // 300 PS alternative (TsiFourCurve's remarks) has its full boost from 1800 (SEAT's 380 N m from 1800) and its
+        // threshold at 1200.
         BoostShare = 0.55f,
         BoostSeconds = 0.35f,
-        BoostThresholdRpm = 1200f,
+        BoostThresholdRpm = 1000f,
     };
 
     /// <summary>
