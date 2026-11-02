@@ -299,6 +299,29 @@ public sealed class VehicleTests
         Assert.Contains("in_present_frame(entry, spec)", File.ReadAllText(Path.Combine(root, "tools/prepare_car_models.py")));
     }
 
+    /// <summary>
+    /// The preparation sets the eyes 13 cm under whatever lies over them and passes over a seat by its shape, since a
+    /// backrest stands at head height just behind the eyes. The 570S model's two bucket seats are one mesh 1.34 m across,
+    /// wider than the single seat the rule knew (0.7 m): their tops had its eyes set at 0.845 m over the road, where the
+    /// wheel and the dashboard hid the road (v8seat). The rule takes a seat pair now, and the McLaren's entry raises the
+    /// eyes over the preparation's default to where a reclined supercar seat has them, 0.33 m over the wheel's centre
+    /// and 0.55 m behind it, and corrects its dashboard's finish from the model's gloss black to the car's matt leather.
+    /// </summary>
+    [Fact]
+    public void A_seat_pair_in_one_mesh_does_not_lower_the_eyes()
+    {
+        var root = TrackTests.FindRepoRoot();
+        var prepare = File.ReadAllText(Path.Combine(root, "tools/prepare_car_models.py"));
+        Assert.Contains("hi_i[0] - lo_i[0] < 1.4 and hi_i[2] - lo_i[2] < 0.9", prepare);
+        using var config = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "tools/car_models.json")));
+        var v8 = config.RootElement.GetProperty("v8");
+        var eye = v8.GetProperty("eye").EnumerateArray().Select(v => v.GetSingle()).ToArray();
+        _out.WriteLine($"570S eyes {0.28f + eye[1]:F2} m over the wheel's centre, {0.52f + eye[2]:F2} m behind it");
+        Assert.InRange(0.28f + eye[1], 0.32f, 0.36f);
+        Assert.InRange(0.52f + eye[2], 0.54f, 0.60f);
+        Assert.True(v8.GetProperty("materials").GetProperty("plastic.black").GetProperty("roughness").GetSingle() >= 0.5f);
+    }
+
     [Fact]
     public void Top_speed_lands_in_the_150_mph_class()
     {

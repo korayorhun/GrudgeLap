@@ -686,6 +686,31 @@ Item 21 came with dims6, when the cars respecified to the real cars the game dra
       against the simulation's 0.319. Fitting the tread's circle away from the flat would cure both, but it changes
       `car_models.rig`, which both preparations share, for every model, and wants its own pass.
 
+22. **The 570S's driving position** (fixed in v8seat). From the McLaren's seat the road was a strip a pixel high
+    between the wheel and the header, the dashboard and the wheel filled the lower half of the frame and the right
+    half was a grey wash. The preparation sets the eyes 13 cm under whatever lies over them and passes over a seat
+    by its shape (item 21: no wider than 0.7 m), since a backrest stands at head height just behind the eyes; the
+    570S model's two bucket seats are one mesh 1.34 m across, which the rule let through, and their tops, 1.04 m
+    over the road, had the eyes set at 0.845 m (the preparation's default put them at 0.936; the real car's roof is
+    1.202 m high and its driver's eyes near a metre up). The rule now passes over a mesh up to 1.4 m wide, a seat
+    pair, that is no deeper than a seat and rises from 0.4 m under the eyes, which nothing over the head does. On
+    top of that the entry corrects the 570S's eyes 5 cm up and 3 cm back on the default (28 cm over and 52 cm behind
+    the wheel's centre), to 0.33 m over and 0.55 m behind it, as a reclined supercar seat has them: the eyes at
+    (-0.358, +0.355, -0.014), 0.986 m over the road, 0.67 m over the model's cushion (0.30-0.32 m up, measured along
+    the driver's line) and 0.154 m under its roof skin, the head's top 3 cm under it. The regulations' stand-in for a
+    driver's eyes, the V points of UN Regulation 125 (Directive 77/649/EEC before it), sit 589-665 mm over the seat's
+    R point and 68 mm behind it at a 25 degree seat-back; no H-point of the 570S is published, so the model's cushion
+    stands for it. The mirror hangs at (0, +0.411, -0.506), 5.6 cm over the eyes and 36 degrees right; the dials on the
+    binnacle at (-0.389, +0.114, -0.787) are read over the rim's top, which crosses their lower third as the car's
+    own 0.34 m wheel does. At the frame's centre column the dash top is now at 58 % of the height with 83 rows of
+    road over it (was 1), where the other cars' seats have it (flat-twelve 63, Delta 60, estate 58, E-Class 56 %).
+    The grey wash was neither the cabin probe nor the glass: the model's dashboard, scuttle and door tops are gloss
+    black (roughness 0.18-0.22) and mirrored the sky at the low eye's grazing angle, where the real car's are leather
+    or Alcantara; the entry now corrects their finish (`materials` in `tools/car_models.json`, applied by the
+    preparation: plastic.black 0.6, McLaren.black 0.55), and the dash top's band at the right of the frame fell from a
+    mean of 88 to 56 of 255 with its specular streak gone. The other seven models prepare to the same bytes. Test
+    `A_seat_pair_in_one_mesh_does_not_lower_the_eyes`.
+
 Kept, as earlier decisions: the fixed 240 Hz step with semi-implicit Euler for the body, the raycast wheels, the
 grass's grip and rolling resistance (0.9), the weather's grip figures (0.12), the speed-sensitive steering lock,
 the clutch's lock/slip machine, and the low-speed fades of the slip angle (no jitter at rest).
@@ -996,8 +1021,9 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
   node's frame (faced to -Z, scaled to the simulation's wheelbase, hubs at the rest height), splits meshes that
   hold an axle's or all four wheels (`split`), scales each wheel to the simulation's tyre radius (measured from
   the tyre's vertices, as a wheel stored turned has a swollen box), finds the steering wheel's column axis
-  (its thinnest direction), and places the eyes (half a metre behind the wheel's centre and 28 cm over it, 13 cm
-  under the headlining), the dials (on the named instrument meshes, or where the line of sight over the hub meets
+  (its thinnest direction), and places the eyes (half a metre behind the wheel's centre and 28 cm over it, plus the
+  entry's `eye` correction, 13 cm under the headlining; a seat or a seat pair under them is passed over, item 22), the
+  dials (on the named instrument meshes, or where the line of sight over the hub meets
   the dashboard) and the mirror (the model's own glass, sized to it, or hung by the game under the windscreen 36
   degrees right of straight ahead when the model's is out of view, as in the Esprit). Paint is found by whole
   words of a material's name ("lack" inside "Black" had painted every black part) and drawn in the car's colour

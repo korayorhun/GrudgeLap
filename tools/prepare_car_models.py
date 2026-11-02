@@ -648,10 +648,13 @@ def prepare(car, entry, inspect=False, config=None):
                 continue
             lo_i, hi_i = boxes[i]
             # A seat by its shape where its name does not say so (the 205's meshes are all "defaultMaterial"): no wider
-            # or deeper than a seat and rising from the floor, well below the eyes. Its backrest stands at head height
-            # just behind the eyes; at the 205's real size (dims6) its top came 4 cm over them and had the eyes lowered
-            # 10 cm, as if under a roof.
-            if hi_i[0] - lo_i[0] < 0.7 and hi_i[2] - lo_i[2] < 0.9 and lo_i[1] < eye[1] - 0.4:
+            # than a pair of seats, no deeper than one, and rising from the floor, well below the eyes. Its backrest
+            # stands at head height just behind the eyes; at the 205's real size (dims6) its top came 4 cm over them
+            # and had the eyes lowered 10 cm, as if under a roof. The 570S's two buckets are one mesh 1.34 m across
+            # (v8seat): their tops, 1.04 m over the road, had its eyes set 13 cm under them, at 0.85 m, where the
+            # wheel and the dashboard hid the road. A roof lining, a header or a visor hangs over the eyes and never
+            # reaches 0.4 m under them, so the width alone tells a seat pair from nothing that is over the head.
+            if hi_i[0] - lo_i[0] < 1.4 and hi_i[2] - lo_i[2] < 0.9 and lo_i[1] < eye[1] - 0.4:
                 continue
             if lo_i[0] - 0.15 < eye[0] < hi_i[0] + 0.15 and lo_i[2] - 0.15 < eye[2] < hi_i[2] + 0.15 and hi_i[1] > eye[1]:
                 pts = cm.mesh_points(model, blob, nodes[i]["mesh"], world[i])
@@ -764,6 +767,12 @@ def prepare(car, entry, inspect=False, config=None):
     # The paint atlases (paint_atlas): materials whose texture holds the paint with the rest of the car's details.
     atlas = {k.lower(): v for k, v in entry.get("paint_atlas", {}).items()}
     atlas_materials = {}
+    # The entry's corrections to a material's finish (materials: {name: {roughness, metallic}}), where the model is
+    # wrong about the real car: the 570S's dashboard, scuttle and door tops are leather or Alcantara, matt, and its
+    # model has them in gloss black (roughness 0.18-0.22), which mirrored the sky from the seat as a grey wash over the
+    # right half of the frame (v8seat). Only the named materials change; a model without them prepares as before.
+    finishes = {k.lower(): v for k, v in entry.get("materials", {}).items()}
+    finished = set()
     for index, material in enumerate(model.get("materials", [])):
         name = material.get("name", "")
         lower = name.lower()
@@ -771,6 +780,10 @@ def prepare(car, entry, inspect=False, config=None):
         # Some exporters mark every material see-through (the VAZ's): an opaque one is drawn alpha-tested instead, so
         # it casts its shadow and sorts with the glass; a texture's holes (a grille) still show through.
         pbr = material.setdefault("pbrMetallicRoughness", {})
+        if lower in finishes:
+            finished.add(lower)
+            for key, value in finishes[lower].items():
+                pbr[f"{key}Factor"] = float(value)
         alpha = pbr.get("baseColorFactor", [1, 1, 1, 1])
         # Nothing real is black as 0: black plastic, rubber and leather reflect 3-5 % of the light. An untextured
         # pure black (the Delta's whole cabin) drew as a void with no shape; it is lifted to 0.035.
@@ -801,6 +814,11 @@ def prepare(car, entry, inspect=False, config=None):
     for name in atlas:
         if name not in {n.lower() for n in atlas_materials.values()}:
             print(f"  paint_atlas names {name}, which the model has no material of")
+    for name in finishes:
+        if name not in finished:
+            print(f"  materials names {name}, which the model has no material of")
+    if finished:
+        print(f"  finish corrected on {sorted(finished)}")
 
     # A paint drawn from a texture (an atlas, or a paint material with a texture of its own, as the Delta's white
     # with its Martini lettering) gets the mask the game recolours it by: those the prepared scene draws (a borrowed
