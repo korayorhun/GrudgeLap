@@ -10,13 +10,15 @@ at either end). Writes a 16-bit WAV peaking at -1 dBFS (the bank tool levels eac
 time, so the firing pulses the bank tool marks stay where they were recorded.
 
 Why (cars13): the voice levels a run-up's grains onto a trend of level against the revs whose slope is the one measured
-within each recording, up to 3 dB an octave (GrainBank.LevelTrend), and levels the idle's grains onto the same trend.
-A dynamometer run of the BRZ's FA20 (Freesound #183654) rises some 8 dB an octave from 2,000 to 7,500 rpm in fourth gear
-(the rollers' load and the room the microphones were in), where every other bank's run-up keeps its level within a
-recording (their trends' slopes are 0): cut as it was, the trend fell 6 dB from the run-up to the idle's revs, the
+within each recording's stretches, held between 0 and 3 dB an octave (GrainBank.LevelTrend), and levels the idle's
+grains onto the same trend. A dynamometer run of the BRZ's FA20 (Freesound #183654) rises 9 to 13 dB an octave from
+2,000 to 7,500 rpm through one gear (the rollers' load and the room the microphones were in), so its trend took the full
+3 dB an octave. So do the flat-twelve's, the estate's and the diesel's (their run-ups rise 5.6 to 11.4 dB an octave
+within their stretches; the other run-ups' slopes are 0 or nearly), but the boxer's idle lies the furthest under its
+run-up of the four (2.75 octaves), and cut as it was, the trend fell 6 dB from the run-up to the idle's revs, the
 idle's grains were held 6 dB down pulling (the most GrainBank.LevelGains moves a grain), and opening the throttle at
-the idle revs raised the level by under 1 LU where every other car rises 3 LU or more. Levelled, the boxer's run-up
-rises with the revs as the others do, by the voice's own law.
+the idle revs raised the level by under 1 LU where every other car rises 3 LU or more. Levelled, the boxer's run-up's
+slope within its stretches is 0 and it rises with the revs as the others do, by the voice's own law.
 """
 import site
 import subprocess

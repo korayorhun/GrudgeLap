@@ -1593,14 +1593,27 @@ segments, rebuild commands and every recording checked and passed over are in `g
   crank's line at half the firing, labelled 1,060-1,560 rpm where the revs fell from 6,250 and 5,600; a stretch of the
   360's idle wavering between 860 and 1,300 rpm). The FR-S's firing line runs among lines at 1.5 and 2.5 times it and a
   steady tone of the room; it was found from the top of the run (250 Hz at the 7,500 rpm limiter) and anchored every few
-  seconds down to 2,000 rpm.
-- **The boxer's run-up levelled** (`tools/level-recording.py`, new). The dynamometer run rises some 8 dB an octave;
-  every other run-up keeps its level within a recording, and the voice levels grains onto a trend whose slope is the
-  recordings' own (`GrainBank.LevelTrend`, up to 3 dB an octave). Cut as it was, the trend fell 6 dB from the run-up to
-  the idle's revs, the idle pulling was held 6 dB down (the most `LevelGains` moves a grain), and full throttle at the
-  idle revs was 0.9 LU over the governor's (the tests' floor is 2.5, the other cars 3 to 12). Levelled over one-second
-  windows, the run's pulses against their neighbours untouched, the trend is flat as on the others and the rise is 4.0
-  LU.
+  seconds down to 2,000 rpm. Cut in six stretches searched over bands up to 50 % wide, it was still mis-tracked in
+  places (the cars13 review, against those anchors: 8 % of its 2,866 labels more than 5 % off, 3.9 % more than
+  15 %, at worst 45 %; 24 and 28 jumps of over 3 % from one pulse to the next in two stretches, 0 to 5 in every
+  other run-up): it is re-cut in eighteen stretches of one to one and a half seconds, each band about 7 % either side
+  of the anchors, the room's 188 Hz tone kept out of them and 5.0-5.3 s, where the firing line is 7 to 20 dB under that
+  tone, left out. 0.5 % of its 2,830 labels lie more than 5 % off, none more than 8 %, with 8 such jumps in
+  all. It plays as it did: the bank-level figures 5.7 dB, 2.1 times and a side of 0.601 at worst; the tone's share held
+  every 100 rpm from 1,900 to 7,400 a mean -2.1 dB (-2.0 before), at least -3.4; the level across the revs stepping 1.0
+  LU at most outside (2,100 rpm, as before) and 0.8 in the cabin (3,900, 0.6 before; a re-cut with a join at 6.0 s
+  stepped 1.13 LU at 2,500 rpm outside, the joins at 6.5 s 1.01).
+- **The boxer's run-up levelled** (`tools/level-recording.py`, new). The dynamometer run rises 9 to 13 dB an octave (8.8
+  within the six stretches first cut, 12.8 by one-second RMS over the run), and the voice levels grains onto a trend
+  whose slope is the one within the recordings' stretches, held between 0 and 3 dB an octave (`GrainBank.LevelTrend`):
+  the boxer's took the 3 in full. So do the flat-twelve's, the estate's and the diesel's (5.6, 11.4 and 6.0 dB an octave
+  within their stretches; the other run-ups' are 0 or nearly, the hot hatch's 0.3), but the boxer's idle lies the
+  furthest under its run-up of the four (2.75 octaves under the run-up's median firing, against 2.40, 1.72 and 1.01).
+  Cut as it was, the trend fell 6 dB from the run-up to the idle's revs, the idle pulling was held 6 dB down (the most
+  `LevelGains` moves a grain), and full throttle at the idle revs was 0.9 LU over the governor's (the tests' floor is
+  2.5, the other cars 3 to 12). Levelled over one-second windows, the run's pulses against their neighbours untouched,
+  its slope within the stretches is 0 (-0.4 dB an octave, held to 0) and the rise is 3.9 LU (4.1 before the re-cut
+  above).
 - **The HGT's idle low-passed.** Recorded under the bonnet, the Volvo's idle ticks (steps 3 to 5 times the RMS around
   them), and it was 29 dB brighter than the S2000's run-up where it hands over: the voice clicked idling at full
   throttle (3.0 times the RMS) and stepped 2.0 LU at 1,100 rpm outside, 1.6 at 1,400 once the ticks were gone at 6 kHz
@@ -1614,18 +1627,27 @@ segments, rebuild commands and every recording checked and passed over are in `g
   sweep from idle to the redline and off, five seeds, outside and in the cabin, and ten seconds idling at the governor's
   and at full throttle, without a click or a drop-out; the level held every 100 rpm from idle to redline stepping 1.1 LU
   at most (the Cupra's cabin at 3,000 rpm, where its run-up's recording begins) and sagging 1.1 LU at most (the 458's
-  cabin at 6,700 rpm); opening the throttle at the idle revs 3.9 (the 458) to 8.0 LU (the HGT) louder, each step 0.5 LU
-  or more; pulling a tone (the harmonics' share at least -4.0 dB, the 458 at its 9,000 rpm redline); peaks -1.3 dBFS at
-  worst (the Cupra's cabin, 280 of 952,560 samples rounded off; 3 outside), none rounded on the others; lifting off from
-  the redline, at most 8 ticks in five seconds (the HGT's cabin 13 to 19 before its overrun gained 6.0-6.6 s, now 0 to
-  1); -13.9 to -14.6 LUFS pulling hard (the reference -14); the idle 8.3 LU or more under pulling at 60 % of the
-  redline.
-- Left: the 458 and the 570S share the 458's run-up recording (the 570S's own M838T is in the CC0 item's McLaren tracks,
-  for a later pass); the Cupra's lap never pulls hard under 2,900 rpm, so under its run-up the voice crossfades from the
-  idle; the 1.6 is an MX-5's four, not Fiat's; the HGT's run-up is still a four laid at a five's firing; the BRZ's idle
-  is 807 rpm (the car idles at about 700). Wikimedia Commons' YouTube recordings of a 458 Speciale, an F430, a Cupra
-  León, a BRZ and a Golf GTI (CC BY 3.0, their licence review pending) are a later pass's. Stage 2 wires the folders to
-  the cars, where the catalogue's voice tests pin these figures.
+  cabin at 6,700 rpm); opening the throttle at the idle revs 3.9 (the 458 and the BRZ) to 8.0 LU (the HGT) louder, each
+  step 0.5 LU or more; pulling a tone (the harmonics' share at least -4.0 dB, the 458 at its 9,000 rpm redline and the
+  BRZ at 6,660 rpm); peaks -1.3 dBFS at worst (the Cupra's cabin, 280 of 952,560 samples rounded off; 3 outside), 5 in
+  the BRZ's cabin, none on the others; lifting off from the redline, at most 8 ticks in five seconds (the HGT's cabin 13
+  to 19 before its overrun gained 6.0-6.6 s, now 0 to 1); -13.9 to -14.6 LUFS pulling hard (the reference -14); the idle
+  8.3 LU or more under pulling at 60 % of the redline.
+- Left: three of the five lean on the CC0 Internet Archive item `car-engines` (the 458's run-up and overrun, the HGT's
+  run-up and overrun, all three of the 1.6's banks), whose CC0 is only its uploader's word: it names no recordist, its
+  tracks carry a compilation's track numbers, one is a video's soundtrack, the S2000's and the MX-5's are mastered
+  (peaks over full scale, the MX-5 idling within 1 dB of its pull), and the 458's has the form of the ringtones Ferrari
+  gave away in 2009 (SOURCES.md lists the evidence). No further bank is cut from it; the 1.6's, which has no other
+  source, is the first to replace, and the search after the review found no described recording of a sixteen-valve four
+  pulling through its revs (a Mazda 323 under the bonnet, CC BY 4.0, pulls only to 3,500 rpm). The 458 and the 570S
+  share the 458's run-up recording (the 570S's own M838T is in the same item's McLaren tracks, so not used); the Cupra's
+  lap never pulls hard under 2,900 rpm, so under its run-up the voice crossfades from the idle; the 1.6 is an MX-5's
+  four, not Fiat's; the HGT's run-up is still a four laid at a five's firing; the BRZ's idle is 807 rpm (the car idles
+  at about 700); `--car=five` names the Delta, whose model files carry the key of the five-cylinder hatch it replaced,
+  not the HGT whose banks are in `five/`: stage 2 gives the HGT a short name of its own (or renames the folder) when it
+  wires it. Wikimedia Commons' YouTube recordings of a 458 Speciale, an F430, a Cupra León, a BRZ and a Golf GTI (CC BY
+  3.0, their licence review pending) are a later pass's. Stage 2 wires the folders to the cars, where the catalogue's
+  voice tests pin these figures.
 
 ## Unreal Engine version (`unreal/`)
 
