@@ -22,6 +22,13 @@ MODELS = {
     "lancia-delta-integrale-tarantula.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-140/85614131e0dc4613a948472aaa935fc7.glb",
     "golf-r32-mk4.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-060/8171332b39be45e896a7fdf3c3e66354.glb",
     "renault-12-boitaloran.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-074/f8c26a68a3dd45b492d6d9a33cda6fcd.glb",
+    # models13: the flat-plane V8 as a Ferrari 458 Italia (Antonis_zks; a shell without a cabin, like the Testarossa, so
+    # the game lends it the 570S's). No CC BY model of the first-generation Fiat Bravo or of the 2018 SEAT Leon Cupra
+    # exists in the mirror (a search of the whole Objaverse catalogue, Sketchfab's CC BY/CC0 listings, archive.org,
+    # Commons and OpenGameArt on 2026-11-02 found none that is not a game rip or behind a login), and the only BRZ, 86
+    # or FR-S of a credible origin, RoninVR's Scion FR-S 2015, has an unfinished tail the chase camera looks into (its
+    # LICENSE.txt; not fetched): those three keep the game's lofted bodies.
+    "ferrari-458-italia-antonis.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-011/9fc3bebac5ee4ad1a7fb1d743e0db7d3.glb",
 }
 
 folder = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "Import", "Models")

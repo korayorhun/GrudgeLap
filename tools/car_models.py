@@ -310,8 +310,9 @@ def is_glass_material(material):
     return "KHR_materials_transmission" in extensions
 
 
-def rig(model, entry, spec, car):
-    """Finds the model's tyres and what rolls with them, and the transform into the game's car frame.
+def rig(model, entry, spec, car, blob=None):
+    """Finds the model's tyres and what rolls with them, and the transform into the game's car frame. With the model's
+    binary chunk (blob), a part its accessors make bigger than a tyre is measured again by its vertices.
 
     Returns a dict: worlds (node world matrices), mesh_nodes (kept mesh nodes), bounds (world boxes), dropped,
     tyres (FL, FR, RL, RR), assemblies (per wheel: the tyre and what rolls with it), pivots (hub centres, model
@@ -380,7 +381,14 @@ def rig(model, entry, spec, car):
         for w, pivot in enumerate(pivots):
             tyre_size = bounds[tyres[w]][1] - bounds[tyres[w]][0]
             reach = 0.5 * np.max(tyre_size)
-            if np.linalg.norm(centre - pivot) < reach * 0.6 and np.max(size) <= np.max(tyre_size) * 1.05 and not matches(i, name_of(i), fixed):
+            near = np.linalg.norm(centre - pivot) < reach * 0.6
+            if near and np.max(size) > np.max(tyre_size) * 1.05 and blob is not None:
+                # A box is its accessors' min and max, which an exporter may write over a vertex list the part shares
+                # with others: the 458's rims (models13) read 0.51 file units across, against their tyres' 0.46 and
+                # their own 0.40, and stood still in the body while the tyres round them rolled and steered.
+                points = mesh_points(model, blob, nodes[i]["mesh"], worlds[i])
+                size = points.max(axis=0) - points.min(axis=0)
+            if near and np.max(size) <= np.max(tyre_size) * 1.05 and not matches(i, name_of(i), fixed):
                 assemblies[w].append(i)
                 assigned.add(i)
                 break

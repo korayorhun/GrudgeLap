@@ -1,0 +1,58 @@
+Title:        ferrari 458 italia
+Kind:         2009-2015 mid-engined V8 berlinetta (Ferrari 458 Italia) - the catalogue's FlatPlaneV8 ("V8 4.5 '10"); shell without a cabin
+Licence:      Creative Commons Attribution 4.0 International (CC BY 4.0)
+Licence URL:  https://creativecommons.org/licenses/by/4.0/
+Author:       Antonis_zks (Sketchfab user "Antonis_zks", https://sketchfab.com/Antonis_zks)
+Source URL:   https://sketchfab.com/3d-models/9fc3bebac5ee4ad1a7fb1d743e0db7d3  (original Sketchfab page; published 2022-05-27, 404 since)
+Mirror:       Objaverse 1.0 dataset (allenai/objaverse on Hugging Face), object uid 9fc3bebac5ee4ad1a7fb1d743e0db7d3
+Download URL: https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-011/9fc3bebac5ee4ad1a7fb1d743e0db7d3.glb
+Downloaded:   2026-11-02
+File:         ferrari-458-italia-antonis.glb (14,777,800 bytes, glTF 2.0 binary, Sketchfab-13.31.0 export;
+              SHA-256 08791e797956c5bb6af766ef5e328a8f03de438f3db4f18f708973e2c98d85e0;
+              437,222 triangles, 44 mesh nodes, 26 untextured materials, no images, no animations)
+Licence evidence: Objaverse 1.0 metadata snapshot (collected late 2022): license "by", isDownloadable true, name
+              "ferrari 458 italia", tags "cars, car", description "This is a simple 3d ferrari model I made."; the file's own
+              metadata (asset.extras) names the author, CC-BY-4.0 and the source page as well.
+              The Sketchfab page returns 404 as of 2026-11-02, as do all 23 Ferrari-named or Ferrari-tagged models of the
+              2022 snapshot (a voxel 458, a Lancia Stratos and two Lamborghinis that were only tagged "ferrari" among them):
+              a take-down of the brand's models of that period, the same as the Testarossa's (testarossa-liosh.LICENSE.txt).
+              Ferrari models uploaded since are live under CC BY (zairiqzairiqpixa's "2009 Ferrari 458", 2026-10-28;
+              Tyler_Dave's "2015 Ferrari 458 Italia"). The CC BY 4.0 grant is irrevocable for a copy obtained under it,
+              which this one was (the mirror holds the licence the model was published with). It covers the modeller's
+              copyright only: the car's name and design are Ferrari's, which Ferrari evidently enforces on Sketchfab
+              (THIRD_PARTY.md says whose they are; with the Testarossa the game draws two Ferrari bodies).
+              The author's other uploads (a McLaren 570S, a Porsche 911 GT3 RS 4.0, a Mazda 3 hatchback and a generic
+              electric saloon, 2022-05-26/27; the Mazda tagged blender3dmodel, the McLaren and the saloon "cars, car", the
+              Porsche untagged) show a hobbyist's portfolio; the node names here (body.008, back lights.003, front
+              grill.001, Circle.011, Cylinder.023, exhaust.001, Plane.010) are Blender working names, the materials plain
+              colours, and nothing points to a game asset (no level-of-detail, collision or shadow nodes, no textures).
+Geometry:     lies along x, nose at -x (front grill at x = -1.85, tail lamps at +0.86); wheelbase 1.7612 file units, so
+              1 unit = 1.5046 m at the 458's 2650 mm wheelbase; then 4.53 m long (Ferrari: 4527), 1.95 m wide over the
+              body and 1.97 m over its small door mirrors (1937 without them), 1.18 m high (1213), hubs 0.35 m over the
+              lowest point, both tracks 1.673 m (Ferrari: 1672 front, 1606 rear). The four tyres are alike, 0.697 m
+              across and 0.220 m wide, where the real car's are staggered: 235/35 R20 in front (0.672 m) and 295/35 R20
+              behind (0.715 m); the game draws one tyre radius a car, so it does not show. Tyres Object_7, 62, 75, 88
+              (83,200 triangles each); rims Object_5, 60, 73, 86, whose accessors' min and max make them 0.51 units
+              across (their vertices 0.40, the tyre 0.46): the preparation measures a part bigger than its tyre again by
+              its vertices, or the rims stay with the body and stand still in the rolling, steering tyres; discs
+              Object_9, 64, 77, 90, hub caps and nuts. The red calipers Object_11, 70, 81, 96 sit at the wheels and must
+              stay with the body (fixed).
+Materials:    the paint is the material named "Material" (0.93, 0, 0) on body.008: name it "==Material" exactly, since
+              "Material" is part of every "Material.0NN". The whole glasshouse (windscreen, side windows, rear window
+              and the engine cover's glass: back window.001, Object_27) is one opaque black material, Material.048,
+              whose name does not say glass, so the entry names it (glass "==Material.048"), or the driver sees nothing
+              but a sliver of road. body.013 (Material.029, black) is not glass but the inner tub, the cabin's and the
+              engine bay's floor and walls, which the glass shows. Headlamps front headlights.002 under front glass
+              headlights.001 (Material.047 / .046, an opaque grey cover); tail lamps back lights.003 (Material.025)
+              under back glass lights.001 (Material.045, the lens, lit when braking: brake "==Material.045").
+Cabin:        none (no seats, steering wheel, dashboard or rear-view mirror): the game borrows the McLaren 570S's
+              (tools/car_models.json cabin_from: its interior tub, dashboard, seats and steering wheel, at the 458's
+              wheelbase without offset or scale; the 570S's two seats are one mesh 1.34 m across, named as seats so the
+              eyes pass over them).
+
+Attribution text to show in the game credits (CC BY 4.0 requires attribution, a licence link and a note of changes):
+  "ferrari 458 italia" by Antonis_zks (https://sketchfab.com/3d-models/9fc3bebac5ee4ad1a7fb1d743e0db7d3) is licensed under
+  Creative Commons Attribution 4.0 International (CC BY 4.0) (https://creativecommons.org/licenses/by/4.0/).
+  Obtained via the Objaverse dataset (Deitke et al., 2022), https://huggingface.co/datasets/allenai/objaverse (the
+  Sketchfab page has been taken down). Modified for use in GrudgeLap (re-scaled, re-rigged, given a borrowed cabin,
+  materials corrected).

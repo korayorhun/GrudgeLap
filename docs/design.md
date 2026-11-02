@@ -1379,6 +1379,42 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
   positions, gaps and knocks unchanged (shots at `--look=drone:<n>:3.5:90:0.25`, before and after). Since dims6 each
   is also moved forward by half its overhangs' difference, centred on the traffic's knock box (dynamics audit item 21's
   follow-ups).
+- models13 (the models for the five cars of cars13, drawn once its catalogue entries are in: `CarView.ModelKey`
+  names them 458, bravohgt, bravo16, leoncupra and brz, and a key without a prepared file keeps its loft). The
+  flat-plane V8 is a Ferrari 458 Italia (Antonis_zks's, CC BY as recorded in the Objaverse mirror: Sketchfab has
+  taken down every Ferrari model of that period, the Testarossa's with them), a shell without a cabin that borrows the
+  McLaren 570S's (its interior tub, dashboard, seats and steering wheel, rigged at the 458's 2.65 m wheelbase with no
+  offset or scale: the two mid-engined cabins sit alike). Three additions to the preparation, each idle for a model
+  whose entry does not ask for it, so the eight cars before it prepare to the same bytes (SHA-256 against main's):
+  `glass` names the materials that are windows though their names do not say so: the 458's whole glasshouse
+  (windscreen, side windows, rear window and the engine cover's glass) is one opaque black Material.048, and from the
+  seat the review saw black with a sliver of road; the mirror's glass finder counts it as well, so the hung mirror
+  sits 6 cm under the windscreen. A part its accessors make bigger than its tyre is measured again by the vertices
+  its triangles use (`car_models.rig`, given the binary chunk): the 458's rims share a vertex list whose bounds make
+  them 0.51 file units across against the tyre's 0.46 (their own 0.40), so they had stayed in the body, standing
+  still inside the rolling, steering tyres (the turning discs behind them hid it); the Unreal preparation rigs without
+  the chunk, as before. `cabin_from.seats` names a donor's parts that are seats though their names do not say so,
+  prepared as `Seat_...` for the eyes to pass over: the 570S's two buckets are one mesh 1.34 m across, whose tops the
+  headroom check took for a roof, setting the 458's eyes 13 cm under them, 0.86 m over the road, where the binnacle
+  hid the road at the frame's centre column; now 0.95 m (0.52 m behind and 0.28 m over the wheel's centre, 21 cm under
+  the roof skin), the road in rows 462-509 of 900 at the centre column over a dash top at 57 % of the frame.
+  The 458's paint is the material named "Material", given as "==Material" since the name is part of every
+  Material.0NN; the lens over its round tail lamps lights when braking; its calipers stay with the body. Its tyres
+  are alike in the model where the real car's are staggered (235/35 R20 in front, 0.672 m; 295/35 R20 behind,
+  0.715 m), which the game's one radius a car would not show anyway. The boxer coupe keeps its loft: the only BRZ,
+  86 or FR-S of a credible origin, RoninVR's Scion FR-S 2015, is unfinished at the tail the chase camera looks into
+  (no lower bumper, ragged rear quarters, arches open at the back: 17.9 % of the band 0.10-0.35 m over the road
+  see-through from straight behind, the 458's none; no tail lamps under their covers), so it is not fetched and its
+  LICENSE.txt keeps the record and the measurements for a pass that repairs the tail, with a chase view as the
+  check. No CC-licensed model of the first-generation Fiat Bravo or of the 2018 Leon Cupra exists outside a login
+  (the Objaverse catalogue's 80 Fiat records, Sketchfab with and without the downloadable filter, archive.org's
+  Thingiverse clips), so the Bravos and the Cupra keep theirs too. `CarModelSourceTests` pins the 458's entry and ties
+  the four places a model is named: every file `fetch_models.py` fetches has its LICENSE.txt (with its Sketchfab uid) and is drawn by the game
+  or the Unreal level, and THIRD_PARTY.md credits exactly the models the game draws (this branch first credited two
+  models no entry drew and fetched their 52 MB on every fresh build). Left: the 570S cabin's gloss-black dashboard
+  mirrors the sky in the 458 as it did in the V8 (cars/v8seat's `materials` corrects the V8's; the 458's entry wants
+  the same once both are in), and with the Testarossa the game draws two Ferrari bodies, whose names and designs are
+  Ferrari's (THIRD_PARTY.md), a maker that has had its models taken down from Sketchfab.
 - Real car models (0.16, `tools/prepare_car_models.py`, `CarView.Model.cs`). The lofted bodies and the boxes of
   their cabins read as toys, from the seat most of all, so the catalogue's cars are drawn as CC BY models of real
   cars with cabins of their own (THIRD_PARTY.md): the flat-twelve a Lotus Esprit Turbo 1983 (right-hand drive,

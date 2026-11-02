@@ -31,7 +31,7 @@
 | Poly Haven HDRI "kloofendal_43d_clear_puresky" (2K) | sky, lighting and reflections | CC0 1.0 — https://polyhaven.com |
 | "Ferrari Testarossa" by li_osh | the flat-twelve's body (`tools/car_models.json`) | CC BY 4.0 — https://sketchfab.com/3d-models/762c958bd80f4cac8e4dc76f847fca49; modified: re-scaled, re-rigged and given the Esprit's cabin for GrudgeLap. The Sketchfab page has since been taken down; the licence it was published under stands for the copy used |
 | "Lotus Esprit Turbo 1983" by esprit3d.website (Shogos_esprit) | the flat-twelve's cabin (mirrored to left-hand drive) | CC BY 4.0 — https://sketchfab.com/3d-models/886bcf8ce52f46e3b36115e01319ec44; modified: re-scaled and re-rigged for GrudgeLap |
-| "Mclaren 570S Coupè" by MMC Works (mmcworks) | the V8's body and cabin | CC BY 4.0 — https://sketchfab.com/3d-models/869feee8011d4803894318f6f0ddf2c6; modified: re-scaled and re-rigged for GrudgeLap |
+| "Mclaren 570S Coupè" by MMC Works (mmcworks) | the V8's body and cabin, and the flat-plane V8's cabin | CC BY 4.0 — https://sketchfab.com/3d-models/869feee8011d4803894318f6f0ddf2c6; modified: re-scaled and re-rigged for GrudgeLap |
 | "Peugeot 205 Gti" by la_freizz | the hot hatch's body and cabin | CC BY 4.0 — https://sketchfab.com/3d-models/b52c8e5e8070463ab1485039246f527c; modified: re-scaled and re-rigged for GrudgeLap |
 | "FREE Lancia Delta HF Integrale evo 2" by TARANTULA (begemot.988888) | the rally hatch's body and cabin | CC BY 4.0 — https://sketchfab.com/3d-models/85614131e0dc4613a948472aaa935fc7; modified: re-scaled and re-rigged for GrudgeLap |
 | "Golf R32" by Nick Broad (nickbroad) | the V6 hatch's body (with the SAAB 9-5's cabin) | CC BY 4.0 — https://sketchfab.com/3d-models/8171332b39be45e896a7fdf3c3e66354; modified: re-scaled and re-rigged for GrudgeLap |
@@ -39,6 +39,7 @@
 | "Renault 12" by boitaloran | the 1.4 estate's body and cabin (the saloon: the Toros shares everything ahead of the B-pillar) | CC BY 4.0 — https://sketchfab.com/3d-models/f8c26a68a3dd45b492d6d9a33cda6fcd; modified: re-scaled and re-rigged for GrudgeLap |
 | "VAZ-2106" by domhathair | the 1990s saloon's body and cabin | CC BY 4.0 — https://sketchfab.com/3d-models/a73b3cdeddd846209bf7c73d5f04d20f; modified: re-scaled, re-rigged and lit for GrudgeLap |
 | "Mercedes-Benz E-Class W212" by Peter_D (better_peter) | the fleet saloon's body and cabin | CC BY 4.0 — https://sketchfab.com/3d-models/119c5e10733142b197aa53b86f6aeb04; modified: re-scaled and re-rigged for GrudgeLap |
+| "ferrari 458 italia" by Antonis_zks | the flat-plane V8's body (`tools/car_models.json` "458", with the 570S's cabin) | CC BY 4.0 — https://sketchfab.com/3d-models/9fc3bebac5ee4ad1a7fb1d743e0db7d3, the copy used from the Objaverse mirror, https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-011/9fc3bebac5ee4ad1a7fb1d743e0db7d3.glb; modified: re-scaled, re-rigged and given the 570S's cabin for GrudgeLap. The Sketchfab page has since been taken down, as was every Ferrari model of that period; the licence it was published under, recorded in the mirror, stands for the copy used |
 | xunit, Microsoft.NET.Test.Sdk | tests only, not shipped | Apache-2.0 / MIT |
 | Inno Setup 6 | builds the installer, not shipped | Inno Setup License |
 | ffmpeg, numpy, Pillow, SciPy | offline tools (grain bank, loop and one-shot cutting, icon, the replay music's render and its Vorbis encoding, the car models' paint masks), not shipped | LGPL/GPL, BSD, MIT-CMU, BSD |
@@ -60,11 +61,15 @@ from its score by `tools/make-replay-music.py` (no recording or sample goes into
 the CC0 "Horizon Surfer" by congusbongus (OpenGameArt).
 
 The car names ("FLAT-12 GT '84", "V8 GTB '12 SPORT EXHAUST", "HOT HATCH 1.9 8V '88", "RALLY HATCH 2.0 TURBO
-4WD '92", "V6 HATCH 3.2 4WD '03", "SALOON 1.6 '91", "ESTATE 1.4 '93", "SALOON 2.1 DIESEL '14") are descriptions of an engine layout, a body style and a year; they are not the
+4WD '92", "V6 HATCH 3.2 4WD '03", "SALOON 1.6 '91", "ESTATE 1.4 '93", "SALOON 2.1 DIESEL '14", "V8 4.5 '10",
+"HATCH 2.0 20V '01", "HATCH 1.6 16V '01", "HOT HATCH 2.0 TSI '18", "COUPE 2.0 BOXER '13") are descriptions of an engine layout, a body style and a year; they are not the
 names of any make or model. The lofted bodies are our own, keyed on the proportions of the period cars; the
-models drawn in their place show real cars (a Ferrari, a McLaren, a Peugeot, a Lancia, a Volkswagen, a VAZ, a
+models drawn in their place show real cars (two Ferraris, a McLaren, a Peugeot, a Lancia, a Volkswagen, a VAZ, a
 Renault, a Mercedes-Benz, and cabins of a Lotus and a SAAB), whose names
-and designs belong to their makers, as stand-ins for the catalogue's cars.
+and designs belong to their makers, as stand-ins for the catalogue's cars. No CC-licensed model of the first-generation
+Fiat Bravo or of the 2018 SEAT Leon Cupra could be found (none exists in the Objaverse mirror, and what Sketchfab lists needs an account),
+and the only Subaru BRZ twin of a credible origin, a Scion FR-S, has an unfinished tail
+(`unreal/Import/Models/scion-frs-2015-roninvr.LICENSE.txt`), so those cars are drawn as the game's own lofted bodies.
 
 Not affiliated with, endorsed by, or derived from the assets of any arcade manufacturer or car maker. The
 game mechanics it pays homage to are described in expired U.S. patents (5,044,956; 5,005,148; 5,269,687;
