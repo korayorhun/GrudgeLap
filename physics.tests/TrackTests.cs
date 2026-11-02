@@ -15,7 +15,7 @@ public sealed class TrackTests
     /// <summary>Folder for human-inspectable artefacts (maps); git-ignored.</summary>
     internal static string ArtifactDir => Path.Combine(FindRepoRoot(), "artifacts");
 
-    private static string FindRepoRoot()
+    internal static string FindRepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "GrudgeLap.sln"))) dir = dir.Parent;

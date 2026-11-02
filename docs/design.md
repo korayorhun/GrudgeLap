@@ -443,10 +443,9 @@ Items 18 and 19 came with cars3, when the three hatchbacks were made to drive li
     the first generation did, and the launch assist lets them. The skid-pad
     ranges were narrowed round each car within its class (no understeer gradient is published for any of the three).
     All three lap both routes without a crash and make the loop (`Every_car_laps_both_routes`, `LoopRunUp`). The
-    wheelbase, track, ride height and body footprint stay those `tools/car_models.py` prepares the drawn models to (2.47,
-    2.54 and 2.58 m between the axles, against the real 2.42, 2.48 and 2.51); the springs were scaled with the masses so
-    the cars sit at the height the models are set to. Moving the geometry to the real cars is one change with the
-    models' preparation. Where no figure was found the spec says so: the Delta's and the R32's axle loads, the Delta's
+    wheelbase, track, ride height and body footprint stayed those `tools/car_models.py` prepared the drawn models to
+    (2.47, 2.54 and 2.58 m between the axles, against the real 2.42, 2.48 and 2.52) until dims6 moved them to the real
+    cars' (item 21); the springs were scaled with the masses so the cars sit at the height the models are set to. Where no figure was found the spec says so: the Delta's and the R32's axle loads, the Delta's
     drag, the couplings' rates and the Haldex's lead are game figures.
 
 Item 20 came with fleet, when the fleet saloon was made to drive like the car the game draws:
@@ -558,11 +557,11 @@ Item 20 came with fleet, when the fleet saloon was made to drive like the car th
     gearing gives that: 2.0 overall on a 0.326 m tyre), without stalling, and gains 16 km/h in 20 s on its off-boost
     torque, where the Egea's short petrol gearing pulled to 80 km/h.
 
-    The axles, the track, the ride height and the body's footprint stay those `tools/car_models.py` prepares the model to
-    (2.636 m between the axles, the Egea's, where the W212 has 2.874: the model is drawn at 92 % of the car's size), and
-    the springs were scaled with the mass (45,385 N/m) so it sits at the same height; the model rig's mass, rate and wheel
-    radius were changed with them (`tools/car_models.py`, `unreal/Scripts/prepare_car_model.py`). Moving the geometry to
-    the real car is one change with the model's preparation, as for the hatchbacks. Its tyres are 0.9 cm larger in
+    The axles, the track, the ride height and the body's footprint stayed those `tools/car_models.py` prepared the model
+    to (2.636 m between the axles, the Egea's, where the W212 has 2.874: the model was drawn at 92 % of the car's size)
+    until dims6 moved them to the real car's (item 21), and the springs were scaled with the mass (45,385 N/m) so it
+    sits at the same height; the model rig's mass, rate and wheel radius were changed with them (`tools/car_models.py`,
+    `unreal/Scripts/prepare_car_model.py`). Its tyres are 0.9 cm larger in
     radius, so the drawn car, and the drones drawn as it (`CarView.SetTrafficPose` lifts each by its own static ride
     height), stand that much higher. The traffic's own motion does not read the spec (the drones are scripted on
     `Traffic`), and its tests pass unchanged. `--car=fleet` (and 7) still picks it; its alias is now `w212`, not `egea`.
@@ -583,6 +582,78 @@ Item 20 came with fleet, when the fleet saloon was made to drive like the car th
     at the top; and no blow-off vent, which a diesel does not need (no throttle shuts on its boost: the overrun cuts the
     fuel and the boost runs down through the engine), so the sound's `BlowOffValve` would want a third state, neither
     vent nor surge. Both are left with the banks.
+
+Item 21 came with dims6, when the cars respecified to the real cars the game draws were given those cars' size:
+
+21. **The drawn cars at their real size** (fixed in dims6). Items 19 and 20 gave the 205 GTi, the Delta, the R32 and the
+    E-Class their engines, masses, tyres and gearing but kept the wheelbase, the track and the body's footprint of the
+    cars they had followed before, and the preparation scales each model to the simulation's wheelbase
+    (`tools/car_models.py`, `tools/prepare_car_models.py`; `CarView.Model.cs` hangs the wheels at the model's hubs):
+    the E-Class was drawn at 92 % of its size (2.636 m between the axles, the Egea's, against the W212's 2.874), the
+    205 at 102 %, the Delta at 102 %, the R32 at 102.5 %. Now each has its real car's wheelbase and track, from
+    published figures (the specs' remarks cite them): the 205 GTi 1.9 from auto motor und sport's data of its test car
+    (3705 x 1572 x 1355 mm, wheelbase 2420, tracks 1382 / 1339), the Delta Integrale Evoluzione from supercars.net's
+    specification of the 1991 car (3900 x 1770 x 1365, 2480, 1502 / 1500), the R32 from auto-data.net's and CarExpert's
+    listings (4149 x 1735 x 1444, 2518, 1513 / 1487) and the E 250 CDI from thecarspec's and cars-data's (4879 x 1854 x
+    1474, 2874, 1598 / 1604; thecarspec has 1614 behind).
+
+    | | 205 GTi 1.9 | Delta Evoluzione | Golf R32 | E 250 CDI |
+    |---|---|---|---|---|
+    | wheelbase, m | 2.47 → 2.42 | 2.54 → 2.48 | 2.58 → 2.518 | 2.636 → 2.874 |
+    | track, m (one for both axles: the published mean) | 1.46 → 1.36 | 1.46 → 1.50 | 1.53 → 1.50 | 1.542 → 1.60 |
+    | reference point to the front / rear axle, m | 0.95 / 1.52 → 0.931 / 1.489 | 0.95 / 1.59 → 0.928 / 1.552 | 0.98 / 1.60 → 0.956 / 1.562 | 1.028 / 1.608 → 1.121 / 1.753 |
+    | centre of mass ahead of it, m; weight on the front axle | 0.03 (kept); 62.8 % | -0.05 → -0.048; 60.6 % | -0.03 (kept); 60.9 → 60.8 % | -0.211 → -0.23; 53.0 % |
+    | inertia roll / yaw / pitch, kg m^2 | 335 / 1300 / 1250 → 315 / 1250 / 1200 | 450 / 1835 / 1785 → 455 / 1750 / 1700 | 490 / 2095 / 2040 → 480 / 2000 / 1945 | 680 / 3100 / 3030 → 710 / 3685 / 3600 |
+    | footprint: nose / tail from the reference point, half width, m | 1.664 / 2.109, 0.83 → 1.587 / 2.118, 0.786 | 1.825 / 2.204, 0.875 → 1.719 / 2.181, 0.885 | 1.92 / 2.395, 0.884 → 1.811 / 2.338, 0.868 | 1.921 / 2.611, 0.896 → 1.984 / 2.895, 0.927 |
+    | model scale; drawn length, against the real car's | 1.8463 → 1.8089; 3.69 → 3.62 m, 3.705 | 1.0253 → 1.0011; 4.03 → 3.93, 3.90 | 0.0113 → 0.0110; 4.29 → 4.18, 4.149 | 0.9201 → 1.0032; 4.48 → 4.89, 4.879 |
+    | understeer, roll (40 m circle), deg/g | 1.44 → 1.50, 2.81 → 3.24 | 2.04 → 2.02, 3.07 → 2.91 | 1.86 → 1.89, 2.51 → 2.61 | 1.97 → 1.88, 3.54 → 3.29 |
+    | 0-100 km/h; 100-0 km/h dry | 8.36 s; 46.6 → 46.4 m | 6.27 s; 39.2 → 39.0 m | 6.62 s; 36.5 → 36.3 m | 7.87 → 7.92 s; 37.7 → 37.8 m |
+
+    What moved with the axles, and why. The simulation has one track for both axles, so each car has the mean of its
+    published front and rear tracks: the 205's differ most, its front 3 % wider than its rear, the others' by 2 % or
+    less; a track per axle would change every car's split of the roll stiffness and is left for when it is needed. The
+    centre of mass keeps each spec's share on the front axle (the published or estimated one of items 19 and 20; no axle
+    loads were found for the Delta, the R32 or the diesel saloon), so it moved with the axles. Its height and the ride
+    height are unchanged: the hub plane, the springs' travel and their sag are the same, so the reference point stands
+    0.62-0.67 m over the road as before and the drones stand where they did. The yaw and pitch inertias keep their ratio
+    to the mass times the axles' distances from the centre of mass (the dynamic index, 0.85-1.0 here), so they go with
+    the square of the wheelbase; the roll inertia keeps its ratio to the mass times the published width and height
+    squared. The footprint the knocks use is the published length, split between the overhangs as the drawn model has
+    them, and the published width without the mirrors: what is hit is the car's size.
+
+    Kept: the masses, the springs and their sag, the bars, the brakes, the tyres, the engines and the gearing, and every
+    published-figure range in the tests. The figures moved only as the geometry makes them move. The bars are wheel
+    rates, so an axle's roll stiffness goes with its track squared: the 205's narrower track rolls it 15 % more (3.24
+    deg/g, within its 2.2-3.4), the Delta's and the E-Class's wider ones less. The longer wheelbase moves less weight
+    under braking and on a launch (h / L): the E-Class's front axle carries 75 % at 1.1 g against 77, its driven rear
+    tyres less in first, so it takes 7.92 s to 100 km/h against 7.87 (within 6.9-8.5; Mercedes's 7.7); its split-grip
+    and bend-exit runs with ETS reach 6.87 against 5.00 m/s (1.37 times; the bound 1.25) and 3.37 against 3.27 (the bound
+    2.5 %). Every car still laps both routes dry and wet without a crash and makes the loop (2.76-4.22 m/s^2 at 50 mph,
+    unchanged); the scripted laps moved by hundredths of a second. The other four cars are unchanged bit for bit: a hash
+    of the whole state over both routes dry and wet, the 40 m pad, a sprint, a stop and a bend exit matches the branch
+    point's. The flat-twelve (2.55 m, the Testarossa's), the saloon (2.49, the Sahin's; the drawn VAZ-2106, 2.424 m
+    between its own axles, is set to the Sahin's), the estate (2.441, the Renault 12's) and the V8 (2.65 against the
+    570S's 2.67, 0.75 % short) were within a hundredth already and were left alone.
+
+    The drawn models at the real wheelbase: the E-Class is 4.89 m long against 4.879, the Delta 3.93 against 3.90 and
+    the R32 4.18 against 4.149 (the prepared models' vertices in the car's frame, which is what is drawn); the 205's
+    model is 3.62 m against 3.705, 2.4 % short: its height (1.36 m) and its wheelbase are the 205's, the model's own
+    overhangs are short. The Delta's model is 3 % narrower than the car (1.71 m), its tracks with it (1.40 m). Side
+    shots show the tyres on the road, the wheels in their arches (scaled to the simulation's tyres by 0.983-1.060 now,
+    0.960-1.077 before; the 205's model has small tyres of its own) and the hubs where the simulation has them, to a few pixels. One fix in the preparation came with
+    it: the eyes are set 13 cm under whatever is over them, and at the 205's real size the top of its driver's seat, a
+    mesh named "defaultMaterial" like every other of the model, came 4 cm over them and had the eyes lowered 10 cm; a
+    mesh shaped as a seat (no wider than 0.7 m nor deeper than 0.9, rising from 0.4 m under the eyes) is passed over now,
+    and the four unchanged models prepare to the same bytes. The lofted bodies, drawn without the models (`--lofted`, or
+    a checkout without them), are keyed round the axles they were drawn for: they are fitted to the spec's
+    (`BodyStyle.FittedTo`: the overhangs move with their axles, the stations between are stretched), so their arches
+    stay over the wheels; the other four lofts are the same objects as before.
+
+    Tests: `Every_car_has_the_size_of_the_car_it_follows` pins each car's wheelbase within a hundredth of the published
+    one and the four respecified cars' tracks within a hundredth of the published mean;
+    `The_model_preparations_have_the_simulations_geometry` reads both preparations' SPECS (`tools/car_models.py`,
+    `unreal/Scripts/prepare_car_model.py`) and asks for the simulation's axles, track, hub height, travel, mass, rate and
+    tyre radius, as a spec changed without them draws the car at its old size and the game only logs it.
 
 Kept, as earlier decisions: the fixed 240 Hz step with semi-implicit Euler for the body, the raycast wheels, the
 grass's grip and rolling resistance (0.9), the weather's grip figures (0.12), the speed-sensitive steering lock,

@@ -31,8 +31,10 @@ public sealed record VehicleSpec
     public float RearAxle { get; init; } = 1.28f;            // m, CG to rear hubs
     public float HubHeight { get; init; } = -0.12f;          // m, hub plane below the CG
     /// <summary>
-    /// The body's footprint for knocks against obstacles: centre of gravity to the front and the rear bumper and half
-    /// the widest width (m), as the view draws the body (its nose and tail keys and widest half width).
+    /// The body's footprint for knocks against obstacles: the reference point to the front and the rear bumper and half
+    /// the widest width without the mirrors (m). On the cars that follow a real one since dims6 (the three hatchbacks and
+    /// the fleet saloon) the published length, split between the overhangs as the drawn model has them, and the published
+    /// width; on the others as the view draws the lofted body (its nose and tail keys and widest half width).
     /// </summary>
     public float BodyFront { get; init; } = 2.355f;
     public float BodyRear { get; init; } = 2.13f;
@@ -241,10 +243,16 @@ public sealed record VehicleSpec
     /// about 63/37. Peugeot's figures: 0-100 km/h in 7.8 s and 205 km/h.
     /// </summary>
     /// <remarks>
-    /// The wheelbase, the track, the ride height and the body's footprint stay those the drawn model is prepared to
-    /// (tools/car_models.py scales the model to them: 2.47 m between the axles where the 205 has 2.42), and the springs
-    /// follow the mass so the car sits at the same height on them; the mass, its place, the tyres, the gearing, the engine,
-    /// the brakes and the bars are the 205's.
+    /// Its size is the 205 GTi 1.9's since dims6, from auto motor und sport's data of its test car: 3705 x 1572 x 1355 mm,
+    /// 2420 mm between the axles, tracks of 1382 mm in front and 1339 behind. The simulation has one track for both axles:
+    /// the mean, 1.36 m (the front is 3 % wider). Until dims6 the wheelbase, the track and the footprint were the ones the
+    /// drawn model had been prepared to (2.47 m, 1.46 m; tools/car_models.py scales the model to the simulation's
+    /// wheelbase), which drew the car 2 % too big. The centre of mass keeps its share on the front axle (62.8 %), so it
+    /// moved with the axles; the yaw and pitch inertias keep their ratio to the mass times the axles' distances from it
+    /// (they fall with the square of the wheelbase), the roll inertia its ratio to the mass times the width and the height
+    /// squared. The narrower track rolls the car more on the same bars (3.24 deg/g on the skid pad against 2.81), as the
+    /// roll stiffness of a bar or a spring goes with the track squared. The springs follow the mass, so the car sits at the
+    /// same height on them; the mass, its place, the tyres, the gearing, the engine, the brakes and the bars are the 205's.
     /// </remarks>
     public static VehicleSpec HotHatch => new()
     {
@@ -263,17 +271,17 @@ public sealed record VehicleSpec
         SpeedoMaxMph = 140f,
         // 910 kg with a driver and a tank.
         MassKg = 985f,
-        InertiaRoll = 335f,
-        InertiaYaw = 1300f,
-        InertiaPitch = 1250f,
-        HalfTrack = 0.73f,
-        FrontAxle = 0.95f,
-        RearAxle = 1.52f,
-        BodyFront = 1.664f,
-        BodyRear = 2.109f,
-        BodyHalfWidth = 0.83f,
+        InertiaRoll = 315f,
+        InertiaYaw = 1250f,
+        InertiaPitch = 1200f,
+        HalfTrack = 0.68f,
+        FrontAxle = 0.931f,
+        RearAxle = 1.489f,
+        BodyFront = 1.587f,
+        BodyRear = 2.118f,
+        BodyHalfWidth = 0.786f,
         HubHeight = -0.20f,
-        // Cd 0.35 (auto-data.net); 1.57 m wide and 1.37 m tall.
+        // Cd 0.35 (auto-data.net); 1.57 m wide and 1.36 m tall (auto motor und sport).
         DragCoefficient = 0.35f,
         FrontalArea = 1.75f,
         FrontLiftArea = 0.10f,
@@ -307,7 +315,13 @@ public sealed record VehicleSpec
     /// street Evoluzione I). 1340 kg at the kerb (1300 DIN, ultimatespecs.com). Lancia's figures: 0-100 km/h in 5.7 s,
     /// 220 km/h.
     /// </summary>
-    /// <remarks>As the hot hatch's: the axles, the track and the ride height are the drawn model's (2.54 m where the Delta has 2.48).</remarks>
+    /// <remarks>
+    /// Its size is the Evoluzione's since dims6 (supercars.net's specification of the 1991 car, which auto-data.net's
+    /// agrees with): 3900 x 1770 x 1365 mm, 2480 mm between the axles, tracks of 1502 mm in front and 1500 behind
+    /// (1506 / 1504 for the Evoluzione II of 1993). Until dims6 it had the drawn model's 2.54 m and 1.46 m; the centre of
+    /// mass, the inertias and the footprint follow as the hot hatch's remarks say. The wider track rolls it less (2.91
+    /// deg/g against 3.07).
+    /// </remarks>
     public static VehicleSpec FiveHatch => new()
     {
         Name = "RALLY HATCH 2.0 TURBO 4WD '92",
@@ -318,7 +332,7 @@ public sealed record VehicleSpec
         RearAntiRoll = 10500f,
         // About 60/40: no measured axle loads were found; the transverse engine hangs ahead of the front axle, the
         // propshaft and the rear differential sit behind, so a little less in front than the front-wheel-drive hatches.
-        CentreOfMassOffset = new(0f, -0.09f, -0.05f),
+        CentreOfMassOffset = new(0f, -0.09f, -0.048f),
         AntiLockBrakes = true,
         FourWheelDrive = new FourWheelDrive
         {
@@ -334,17 +348,17 @@ public sealed record VehicleSpec
         SpeedoMaxMph = 160f,
         // 1300 kg DIN with a driver.
         MassKg = 1375f,
-        InertiaRoll = 450f,
-        InertiaYaw = 1835f,
-        InertiaPitch = 1785f,
-        HalfTrack = 0.73f,
-        FrontAxle = 0.95f,
-        RearAxle = 1.59f,
-        BodyFront = 1.825f,
-        BodyRear = 2.204f,
-        BodyHalfWidth = 0.875f,
+        InertiaRoll = 455f,
+        InertiaYaw = 1750f,
+        InertiaPitch = 1700f,
+        HalfTrack = 0.75f,
+        FrontAxle = 0.928f,
+        RearAxle = 1.552f,
+        BodyFront = 1.719f,
+        BodyRear = 2.181f,
+        BodyHalfWidth = 0.885f,
         HubHeight = -0.20f,
-        // No published drag figure was found: the square body of 1979 with its flared arches, 1.77 m by 1.37.
+        // No published drag figure was found: the square body of 1979 with its flared arches, 1.77 m by 1.365.
         DragCoefficient = 0.38f,
         FrontalArea = 1.95f,
         FrontLiftArea = 0.08f,
@@ -378,7 +392,12 @@ public sealed record VehicleSpec
     /// 1477 kg as VW quoted it (3409 lb, 1546 kg, at the kerb for the US car of 2004, Edmunds). VW's figures: 0-100
     /// km/h in 6.6 s, 247 km/h.
     /// </summary>
-    /// <remarks>As the hot hatch's: the axles, the track and the ride height are the drawn model's (2.58 m where the Golf has 2.51).</remarks>
+    /// <remarks>
+    /// Its size is the R32's since dims6 (auto-data.net's and CarExpert's listings of the 2003 car, Ultimatecarpage's
+    /// alike): 4149 x 1735 x 1444 mm, 2518 mm between the axles, tracks of 1513 mm in front and 1487 behind, one mean
+    /// track of 1.50 m here. Until dims6 it had the drawn model's 2.58 m and 1.53 m; the centre of mass, the inertias and
+    /// the footprint follow as the hot hatch's remarks say.
+    /// </remarks>
     public static VehicleSpec TurboHatch => new()
     {
         Name = "V6 HATCH 3.2 4WD '03",
@@ -418,15 +437,15 @@ public sealed record VehicleSpec
         SpeedoMaxMph = 160f,
         // With a driver and a tank: between VW's 1477 kg and the US car's 1546.
         MassKg = 1550f,
-        InertiaRoll = 490f,
-        InertiaYaw = 2095f,
-        InertiaPitch = 2040f,
-        HalfTrack = 0.765f,
-        FrontAxle = 0.98f,
-        RearAxle = 1.60f,
-        BodyFront = 1.92f,
-        BodyRear = 2.395f,
-        BodyHalfWidth = 0.884f,
+        InertiaRoll = 480f,
+        InertiaYaw = 2000f,
+        InertiaPitch = 1945f,
+        HalfTrack = 0.75f,
+        FrontAxle = 0.956f,
+        RearAxle = 1.562f,
+        BodyFront = 1.811f,
+        BodyRear = 2.338f,
+        BodyHalfWidth = 0.868f,
         HubHeight = -0.20f,
         // Cd 0.32 on 2.22 m^2 for the R32 of 2005 (kfz-tech.de); the Mk4's body is a little lower.
         DragCoefficient = 0.32f,
@@ -578,11 +597,15 @@ public sealed record VehicleSpec
     /// <remarks>
     /// The seven-speed 7G-TRONIC PLUS was the option most of these cars were bought with (0-100 km/h in 7.5 s, 242 km/h);
     /// the game's driveline is a clutch and a gearbox on every car, its automatic mode shifting them for the driver, and
-    /// a torque converter is not modelled, so the car has the manual it was listed with. As the hatchbacks': the axles,
-    /// the track, the ride height and the body's footprint are those the drawn model is prepared to (tools/car_models.py
-    /// scales it to them: 2.64 m between the axles where the W212 has 2.87), and the springs follow the mass so the car
-    /// sits at the same height on them; the mass, its place, the tyres, the gearing, the engine, the brakes and the bars
-    /// are the E 250 CDI's.
+    /// a torque converter is not modelled, so the car has the manual it was listed with. Its size is the W212 saloon's
+    /// since dims6 (thecarspec's and cars-data's listings of the facelift E 250 CDI): 4879 x 1854 x 1474 mm, 2874 mm
+    /// between the axles, tracks of 1598 mm in front and 1604 behind (cars-data; 1614 at thecarspec), one track of 1.60 m
+    /// here. Until dims6 the wheelbase, the track and the footprint were the Egea's it followed before (2.636 m, 1.542 m),
+    /// to which the drawn model had been prepared, so the E-Class was drawn at 92 % of its size; the centre of mass, the
+    /// inertias and the footprint follow as the hot hatch's remarks say. The longer wheelbase moves less weight in a stop
+    /// and a launch (75 % on the front wheels at 1.1 g, 77 before; 7.92 s to 100 km/h against 7.87) and the wider track
+    /// rolls it less (3.29 deg/g against 3.54). The springs follow the mass so the car sits at the same height on them;
+    /// the mass, its place, the tyres, the gearing, the engine, the brakes and the bars are the E 250 CDI's.
     /// </remarks>
     public static VehicleSpec Fleet => new()
     {
@@ -597,7 +620,7 @@ public sealed record VehicleSpec
         RearAntiRoll = 7000f,
         // About 53/47: auto motor und sport weighed the E 250 CGI Coupe of the same platform at 53.4/46.6 (its test of
         // 03/2010); no axle loads were found for the diesel saloon.
-        CentreOfMassOffset = new(0f, -0.10f, -0.211f),
+        CentreOfMassOffset = new(0f, -0.10f, -0.23f),
         // ESP brings anti-lock brakes and traction control with it.
         AntiLockBrakes = true,
         LimitedSlipLocking = 0f,
@@ -617,15 +640,15 @@ public sealed record VehicleSpec
         // EU's 75 kg for the driver and luggage, the tank 90 % full; rounded up to 1,770. cars-data lists 1,665-1,675 kg
         // without a driver for other trims.
         MassKg = 1770f,
-        InertiaRoll = 680f,
-        InertiaYaw = 3100f,
-        InertiaPitch = 3030f,
-        HalfTrack = 0.771f,
-        FrontAxle = 1.028f,
-        RearAxle = 1.608f,
-        BodyFront = 1.921f,
-        BodyRear = 2.611f,
-        BodyHalfWidth = 0.896f,
+        InertiaRoll = 710f,
+        InertiaYaw = 3685f,
+        InertiaPitch = 3600f,
+        HalfTrack = 0.80f,
+        FrontAxle = 1.121f,
+        RearAxle = 1.753f,
+        BodyFront = 1.984f,
+        BodyRear = 2.895f,
+        BodyHalfWidth = 0.927f,
         HubHeight = -0.20f,
         // The W212 saloon is given as Cd 0.25 in its most economical trims (auto-data's facelift E 200 CDI; the saloon's
         // launch figure of 2009); no figure was found for the E 250 CDI, set a hundredth higher (a game figure). 1.85 m wide

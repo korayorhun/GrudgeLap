@@ -115,7 +115,7 @@ internal sealed partial class CarView : Node3D
             _finish = paint ?? new CarPaint(DefaultPaint),
             _paintChoice = paint,
             _wheelRadius = spec.WheelRadius,
-            _style = spec.Style switch
+            _style = (spec.Style switch
             {
                 CarStyle.V8 => BodyStyle.V8,
                 CarStyle.HotHatch => BodyStyle.HotHatch,
@@ -125,7 +125,7 @@ internal sealed partial class CarView : Node3D
                 CarStyle.Estate => BodyStyle.Estate,
                 CarStyle.Fleet => BodyStyle.Fleet,
                 _ => BodyStyle.FlatTwelve,
-            },
+            }).FittedTo(spec),
         };
         var sag = spec.MassKg * MathUtil.Gravity / 4f / spec.SuspensionStiffness;
         view._cgHeight = spec.SuspensionRest + spec.WheelRadius - sag - spec.HubHeight;
@@ -360,6 +360,56 @@ internal sealed partial class CarView : Node3D
         public Color LeatherTint = Colors.White;                  // multiplies the brown leather photo: seats, door trim, wheel rim
         public Color CarpetTint = new(0.29f, 0.23f, 0.22f);       // multiplies the beige carpet photo
         public Color HeadlinerTint = new(0.66f, 0.62f, 0.56f);    // multiplies the grey fabric photo of the roof lining
+        /// <summary>
+        /// The axles the keys were drawn round (metres from the reference point, as <see cref="VehicleSpec.FrontAxle"/>),
+        /// where the car's spec has since moved them; NaN where the keys are drawn round the spec's own (dims6: the
+        /// hatchbacks and the fleet saloon were given their real cars' wheelbases, and their lofts are fitted to them).
+        /// </summary>
+        public float KeyedFrontAxle = float.NaN;
+        public float KeyedRearAxle = float.NaN;
+
+        /// <summary>
+        /// This style fitted to the spec's axles (<see cref="KeyedFrontAxle"/>): the nose and the tail keep their
+        /// overhangs and move with their axles, and everything between the axles is stretched evenly, so the arches
+        /// (cut and the wheels hung at the spec's axles) keep their place on the body. The style itself when nothing moved.
+        /// </summary>
+        public BodyStyle FittedTo(VehicleSpec spec)
+        {
+            var front = float.IsNaN(KeyedFrontAxle) ? spec.FrontAxle : KeyedFrontAxle;
+            var rear = float.IsNaN(KeyedRearAxle) ? spec.RearAxle : KeyedRearAxle;
+            if (front == spec.FrontAxle && rear == spec.RearAxle) return this;
+            var stretch = (spec.FrontAxle + spec.RearAxle) / (front + rear);
+            // NaN (an unused station) stays NaN, and the glass deck's +-99 "none" stays out of reach.
+            float Z(float z) => z <= -front ? z + front - spec.FrontAxle : z >= rear ? z - rear + spec.RearAxle : -spec.FrontAxle + (z + front) * stretch;
+            float[] Zs(float[] zs) => [.. zs.Select(Z)];
+            var fitted = (BodyStyle)MemberwiseClone();
+            fitted.Keys = Zs(Keys);
+            fitted.CowlZ = Z(CowlZ);
+            fitted.CabinFrom = Z(CabinFrom);
+            fitted.CabinTo = Z(CabinTo);
+            fitted.ScreenFrom = Z(ScreenFrom);
+            fitted.ScreenTo = Z(ScreenTo);
+            fitted.RearGlassFrom = Z(RearGlassFrom);
+            fitted.RearGlassTo = Z(RearGlassTo);
+            fitted.IntakeFrom = Z(IntakeFrom);
+            fitted.IntakeTo = Z(IntakeTo);
+            fitted.StrakesFrom = Z(StrakesFrom);
+            fitted.LouvreFrom = Z(LouvreFrom);
+            fitted.LouvreTo = Z(LouvreTo);
+            fitted.GlassDeckFrom = Z(GlassDeckFrom);
+            fitted.GlassDeckTo = Z(GlassDeckTo);
+            fitted.TopSeams = Zs(TopSeams);
+            fitted.FlankSeams = Zs(FlankSeams);
+            fitted.RearBulkheadZ = Z(RearBulkheadZ);
+            fitted.EyeZ = Z(EyeZ);
+            fitted.RearSeatZ = Z(RearSeatZ);
+            fitted.PillarsZ = Zs(PillarsZ);
+            fitted.HandleZ = Z(HandleZ);
+            fitted.MirrorZ = Z(MirrorZ);
+            fitted.KeyedFrontAxle = spec.FrontAxle;
+            fitted.KeyedRearAxle = spec.RearAxle;
+            return fitted;
+        }
 
         /// <summary>
         /// The 1984 flat-twelve: a long low wedge, 1.57 m wide just behind the nose and 1.82 m at the doors, flaring

@@ -204,6 +204,68 @@ public sealed class VehicleTests
         Assert.True(top.OnRoad);
     }
 
+    /// <summary>
+    /// Every car is the size of the car it follows (dims6): its wheelbase within a hundredth of the published one, and on
+    /// the four respecified to the cars the game draws (the 205 GTi 1.9, the Delta Integrale Evoluzione, the Golf R32 and
+    /// the E 250 CDI) its one track within a hundredth of the published front and rear tracks' mean. Until dims6 those
+    /// four kept the wheelbase and track of the cars they had followed before, and the drawn models, scaled to the
+    /// simulation's wheelbase, came out 2-9 % off: the E-Class at 92 % of its size.
+    /// </summary>
+    [Theory]
+    [InlineData(0, 2.550f, 0f)]           // Testarossa: 2550 mm (getoutlines.com's drawing, as BodyStyle.FlatTwelve's keys); tracks 1520 / 1677 not modelled apart
+    [InlineData(1, 2.670f, 0f)]           // McLaren 570S: 2670 mm
+    [InlineData(2, 2.420f, 1.3605f)]      // 205 GTi 1.9: 2420 mm, tracks 1382 / 1339 (auto motor und sport)
+    [InlineData(3, 2.480f, 1.501f)]       // Delta Integrale Evoluzione: 2480 mm, tracks 1502 / 1500 (supercars.net)
+    [InlineData(4, 2.518f, 1.500f)]       // Golf R32 (2003): 2518 mm, tracks 1513 / 1487 (auto-data.net, CarExpert)
+    [InlineData(5, 2.490f, 0f)]           // Tofas Sahin (the Fiat 131 body): 2490 mm
+    [InlineData(6, 2.441f, 0f)]           // Renault 12: 2441 mm
+    [InlineData(7, 2.874f, 1.601f)]       // E 250 CDI (W212 facelift): 2874 mm, tracks 1598 / 1604 (cars-data; 1614 behind at thecarspec)
+    public void Every_car_has_the_size_of_the_car_it_follows(int car, float wheelbase, float meanTrack)
+    {
+        var spec = VehicleSpec.Catalogue[car];
+        var simulated = spec.FrontAxle + spec.RearAxle;
+        _out.WriteLine($"{spec.Name}: wheelbase {simulated:F3} m against {wheelbase:F3}, track {2f * spec.HalfTrack:F3} m");
+        Assert.InRange(simulated / wheelbase, 0.99f, 1.01f);
+        if (meanTrack > 0f) Assert.InRange(2f * spec.HalfTrack / meanTrack, 0.99f, 1.01f);
+    }
+
+    /// <summary>
+    /// The two model preparations, tools/car_models.py for the game and unreal/Scripts/prepare_car_model.py for the Unreal
+    /// level, scale each drawn model to the simulation's wheelbase and set its hubs at the rest hub height from their own
+    /// copy of the geometry (SPECS): a spec changed without them draws the car at the size it had before, which is how the
+    /// respecified cars came to be drawn off their size until dims6. The game only logs a model whose hubs are off.
+    /// </summary>
+    [Theory]
+    [InlineData("tools/car_models.py")]
+    [InlineData("unreal/Scripts/prepare_car_model.py")]
+    public void The_model_preparations_have_the_simulations_geometry(string file)
+    {
+        var text = File.ReadAllText(Path.Combine(TrackTests.FindRepoRoot(), file));
+        var keys = new Dictionary<CarStyle, string>
+        {
+            [CarStyle.FlatTwelve] = "flat12", [CarStyle.V8] = "v8", [CarStyle.HotHatch] = "hothatch", [CarStyle.FiveHatch] = "five",
+            [CarStyle.TurboHatch] = "turbohatch", [CarStyle.Saloon] = "saloon", [CarStyle.Estate] = "estate", [CarStyle.Fleet] = "fleet",
+        };
+        foreach (var spec in VehicleSpec.Catalogue)
+        {
+            var key = keys[spec.Style];
+            var match = System.Text.RegularExpressions.Regex.Match(text, $@"""{key}"": dict\(([^)]*)\)");
+            Assert.True(match.Success, $"{file} has no SPECS entry for {key}");
+            var values = match.Groups[1].Value.Split(',').Select(p => p.Split('='))
+                .ToDictionary(p => p[0].Trim(), p => float.Parse(p[1], System.Globalization.CultureInfo.InvariantCulture));
+            void Same(string name, float expected, float tolerance) =>
+                Assert.True(MathF.Abs(values[name] - expected) <= tolerance, $"{file} {key}.{name} = {values[name]}, the simulation's {expected}");
+            Same("front", spec.FrontAxle, 0.0005f);
+            Same("rear", spec.RearAxle, 0.0005f);
+            Same("track", spec.HalfTrack, 0.0005f);
+            Same("hub", spec.HubHeight, 0.0005f);
+            Same("rest", spec.SuspensionRest, 0.0005f);
+            Same("mass", spec.MassKg, 0.5f);
+            Same("stiffness", spec.SuspensionStiffness, 0.5f);
+            Same("radius", spec.WheelRadius, 0.0005f);
+        }
+    }
+
     [Fact]
     public void Top_speed_lands_in_the_150_mph_class()
     {

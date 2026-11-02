@@ -614,6 +614,12 @@ def prepare(car, entry, inspect=False, config=None):
             if contains(name_of(i), GLASS_WORDS) or contains(name_of(i), ("seat", "sheat", "asiento", "sitz", "siege")):
                 continue
             lo_i, hi_i = boxes[i]
+            # A seat by its shape where its name does not say so (the 205's meshes are all "defaultMaterial"): no wider
+            # or deeper than a seat and rising from the floor, well below the eyes. Its backrest stands at head height
+            # just behind the eyes; at the 205's real size (dims6) its top came 4 cm over them and had the eyes lowered
+            # 10 cm, as if under a roof.
+            if hi_i[0] - lo_i[0] < 0.7 and hi_i[2] - lo_i[2] < 0.9 and lo_i[1] < eye[1] - 0.4:
+                continue
             if lo_i[0] - 0.15 < eye[0] < hi_i[0] + 0.15 and lo_i[2] - 0.15 < eye[2] < hi_i[2] + 0.15 and hi_i[1] > eye[1]:
                 pts = cm.mesh_points(model, blob, nodes[i]["mesh"], world[i])
                 near = pts[(np.abs(pts[:, 0] - eye[0]) < 0.10) & (np.abs(pts[:, 2] - eye[2]) < 0.10) & (pts[:, 1] > eye[1] + 0.03)]

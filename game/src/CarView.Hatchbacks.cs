@@ -82,6 +82,9 @@ internal sealed partial class CarView
             RearArchRadius = 0.37f,
             NoseTrimBelow = 0.33f,
             TailTrimBelow = 0.31f,
+            // Keyed round the axles of the spec it was drawn for; fitted to the real car's since dims6 (FittedTo).
+            KeyedFrontAxle = 0.95f,
+            KeyedRearAxle = 1.52f,
             FrontTrack = 0.73f,
             RearTrack = 0.715f,
             FrontTyreWidth = 0.205f,
@@ -152,6 +155,9 @@ internal sealed partial class CarView
             RearArchRadius = 0.36f,
             NoseTrimBelow = 0.30f,
             TailTrimBelow = 0.30f,
+            // Keyed round the axles of the spec it was drawn for; fitted to the real car's since dims6 (FittedTo).
+            KeyedFrontAxle = 0.95f,
+            KeyedRearAxle = 1.59f,
             FrontTrack = 0.727f,
             RearTrack = 0.713f,
             FrontTyreWidth = 0.195f,
@@ -224,6 +230,9 @@ internal sealed partial class CarView
             RearArchRadius = 0.39f,
             NoseTrimBelow = 0.28f,
             TailTrimBelow = 0.30f,
+            // Keyed round the axles of the spec it was drawn for; fitted to the real car's since dims6 (FittedTo).
+            KeyedFrontAxle = 0.98f,
+            KeyedRearAxle = 1.60f,
             FrontTrack = 0.767f,
             RearTrack = 0.753f,
             FrontTyreWidth = 0.225f,

@@ -216,6 +216,9 @@ internal sealed partial class CarView
             RearArchRadius = 0.38f,
             NoseTrimBelow = 0.30f,
             TailTrimBelow = 0.36f,
+            // Keyed round the axles of the spec it was drawn for; fitted to the real car's since dims6 (FittedTo).
+            KeyedFrontAxle = 1.028f,
+            KeyedRearAxle = 1.608f,
             FrontTrack = 0.771f,
             RearTrack = 0.772f,
             FrontTyreWidth = 0.195f,
