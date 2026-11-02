@@ -87,13 +87,17 @@ a Toyota Supra on a chassis dyno (#496171, CC0) pulls through its gears but its 
 in its cabin through an automatic's shifts, the firing buried under the body's boom; a BMW M3 (#343369, CC BY 3.0) is 20
 seconds of driving that does not run up past about 4,500 rpm; a Suzuki Vitara's V6 (#249720), a DeLorean's PRV V6
 (#623436) and a Porsche 911 (#772802) are revved standing, like the Jaguar. Wikimedia Commons (1,400 engine and exhaust
-recordings, most of them YouTube audio under CC BY 3.0) has no Volkswagen at all, and of its sixes a Lexus IS300 (the
-2JZ-GE straight six) is the one pulling through its gears, from 1,100 to 5,200 rpm, but clipped from 1,800 rpm on (its
-peaks decode past full scale, 79,000 samples in ten seconds); the others are a cold start (BMW Z4 M Coupé) and exhaust
-videos with talking (Nissan 350Z, 300ZX), and its "Audi A3" and "BMW 330i" are a 2.0 TDI and a four. The
-CC0 archive item's other sixes (the GT-R's V6, the Cayman S's flat six, the Ghibli's and the Giulia's V6), passed over for
-the Jaguar in cars3, show in their pitch tracks no run-up of one engine through the revs the Jaguar lacks that is clearly
-better. The Jaguar stays.
+recordings, most of them YouTube audio under CC BY 3.0) has at least eight Volkswagens ("Volkswagen ... - engine and
+exhaust sound (YouTube ...)"), which the search of 2 November missed; the nearest, a Touareg's 3.6 VR6 (the R32's engine
+family, CC BY 3.0), is revved standing and clipped (99 s with 270,894 samples at full scale, its peaks decoding 3.5 dB
+past it; banks review). Of Commons' other sixes a Lexus IS300 (the 2JZ-GE straight six) is the one pulling through its
+gears, from 1,100 to 5,200 rpm, but clipped from 1,800 rpm on (its peaks decode past full scale, 79,000 samples in ten
+seconds); the others are a cold start (BMW Z4 M Coupé) and exhaust videos with talking (Nissan 350Z, 300ZX), and its
+"Audi A3" and "BMW 330i" are a 2.0 TDI and a four. The CC0 archive item's other sixes, passed over for the Jaguar in
+cars3, show in their pitch tracks no run-up of one engine through the revs the Jaguar lacks: the GT-R's V6, the Cayman
+S's flat six and the Ghibli's V6, the "2 Toyota Supra 950" (9 s, its revs jumping between 3,000 and 8,300 rpm), and the
+"18 Porsche 911 GT3" and "19 Porsche 997 GT3 RS" (4 and 5 s of blips, fetched for the banks review). The "alfa romeo
+giulia" track does not say which Giulia it is, a six or a four. The Jaguar stays.
 
 The rally hatch's run-up leaves out 22.2-23.1 s of the Pulsar track: a compressor's flutter, a band at 1.3 kHz beating
 ten times a second with bursts of hiss, whose pulses were up to 30 dB brighter than their neighbours at 3,300-3,500
@@ -124,8 +128,14 @@ or the tool had not warned of, and moved:
 
 The tool now also fills the pulses it lost: where two expected pulses moved onto the same peak, one was dropped and the
 grains on either side spanned two periods (12 % of the fleet saloon's run-up, 17 % of the flat-twelve's spanned over 1.3
-periods), which laid at the revs played quieter than the rest. No bank now has a grain more than 9.6 dB under its
-neighbours or a crackle by the tool's measure (`EngineVoiceTests.Every_bank_is_cut_without_drop_outs_or_crackles`).
+periods), which laid at the revs played quieter than the rest. It fills only a gap of 1.75 periods or more, with pulses
+three quarters of a period or more from either side, and of two peaks closer than 0.6 of a period it keeps the stronger
+(banks review): filling from 1.5 periods with half a period either side, and keeping peaks half a period apart, left
+grains reaching half a period on a side, and laid under their recorded revs two such sides left gaps (the hot hatch's
+idle, 6 ms of silence at 900 rpm). Every bank was re-cut with it from the segments above (the recordings and the
+segments' samples are unchanged, only the marks moved). No bank now has a grain more than 9.8 dB under its neighbours,
+a crackle by the tool's measure or a grain reaching under 0.6 of its period on a side
+(`EngineVoiceTests.Every_bank_is_cut_without_drop_outs_or_crackles`, `Every_grain_reaches_most_of_a_period_either_side`).
 
 The five-cylinder hatch of 0.9-0.19 (a Volvo five at idle, credit cmusounddesign, CC BY 4.0, and the S2000 track
 laid at a five's firing frequency, `GranularEngine.FivePattern`) left the game with the car it voiced; its banks are
