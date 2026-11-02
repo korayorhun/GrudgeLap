@@ -595,7 +595,7 @@ Item 21 came with dims6, when the cars respecified to the real cars the game dra
     (3705 x 1572 x 1355 mm, wheelbase 2420, tracks 1382 / 1339), the Delta Integrale Evoluzione from supercars.net's
     specification of the 1991 car (3900 x 1770 x 1365, 2480, 1502 / 1500), the R32 from auto-data.net's and CarExpert's
     listings (4149 x 1735 x 1444, 2518, 1513 / 1487) and the E 250 CDI from thecarspec's and cars-data's (4879 x 1854 x
-    1474, 2874, 1598 / 1604; thecarspec has 1614 behind).
+    1474, 2874, 1598 / 1614, as auto-data.net and cararac have it too; cars-data has 1604 behind).
 
     | | 205 GTi 1.9 | Delta Evoluzione | Golf R32 | E 250 CDI |
     |---|---|---|---|---|
@@ -604,7 +604,7 @@ Item 21 came with dims6, when the cars respecified to the real cars the game dra
     | reference point to the front / rear axle, m | 0.95 / 1.52 → 0.931 / 1.489 | 0.95 / 1.59 → 0.928 / 1.552 | 0.98 / 1.60 → 0.956 / 1.562 | 1.028 / 1.608 → 1.121 / 1.753 |
     | centre of mass ahead of it, m; weight on the front axle | 0.03 (kept); 62.8 % | -0.05 → -0.048; 60.6 % | -0.03 (kept); 60.9 → 60.8 % | -0.211 → -0.23; 53.0 % |
     | inertia roll / yaw / pitch, kg m^2 | 335 / 1300 / 1250 → 315 / 1250 / 1200 | 450 / 1835 / 1785 → 455 / 1750 / 1700 | 490 / 2095 / 2040 → 480 / 2000 / 1945 | 680 / 3100 / 3030 → 710 / 3685 / 3600 |
-    | footprint: nose / tail from the reference point, half width, m | 1.664 / 2.109, 0.83 → 1.587 / 2.118, 0.786 | 1.825 / 2.204, 0.875 → 1.719 / 2.181, 0.885 | 1.92 / 2.395, 0.884 → 1.811 / 2.338, 0.868 | 1.921 / 2.611, 0.896 → 1.984 / 2.895, 0.927 |
+    | footprint: nose / tail from the reference point, half width, m | 1.664 / 2.109, 0.83 → 1.587 / 2.118, 0.82 | 1.825 / 2.204, 0.875 → 1.719 / 2.181, 0.885 | 1.92 / 2.395, 0.884 → 1.811 / 2.338, 0.868 | 1.921 / 2.611, 0.896 → 1.984 / 2.895, 0.945 |
     | model scale; drawn length, against the real car's | 1.8463 → 1.8089; 3.69 → 3.62 m, 3.705 | 1.0253 → 1.0011; 4.03 → 3.93, 3.90 | 0.0113 → 0.0110; 4.29 → 4.18, 4.149 | 0.9201 → 1.0032; 4.48 → 4.89, 4.879 |
     | understeer, roll (40 m circle), deg/g | 1.44 → 1.50, 2.81 → 3.24 | 2.04 → 2.02, 3.07 → 2.91 | 1.86 → 1.89, 2.51 → 2.61 | 1.97 → 1.88, 3.54 → 3.29 |
     | 0-100 km/h; 100-0 km/h dry | 8.36 s; 46.6 → 46.4 m | 6.27 s; 39.2 → 39.0 m | 6.62 s; 36.5 → 36.3 m | 7.87 → 7.92 s; 37.7 → 37.8 m |
@@ -619,7 +619,11 @@ Item 21 came with dims6, when the cars respecified to the real cars the game dra
     to the mass times the axles' distances from the centre of mass (the dynamic index, 0.85-1.0 here), so they go with
     the square of the wheelbase; the roll inertia keeps its ratio to the mass times the published width and height
     squared. The footprint the knocks use is the published length, split between the overhangs as the drawn model has
-    them, and the published width without the mirrors: what is hit is the car's size.
+    them, and the published width without the mirrors, or the drawn body's where the model is wider than the car: the
+    205's model is 1.64 m across under its mirrors against the car's 1.572, the E-Class's 1.89 against 1.854, so their
+    half widths are 0.82 and 0.945 (0.786 and 0.927 by the figures), and a wall is met when the drawn side meets it, not
+    2-3 cm into it (the 205's rear tyres still reach 3.5 cm past its body). Where the model is smaller (the 205's, 9 cm
+    short; the Delta's and the R32's narrower) the car's own size stays.
 
     Kept: the masses, the springs and their sag, the bars, the brakes, the tyres, the engines and the gearing, and every
     published-figure range in the tests. The figures moved only as the geometry makes them move. The bars are wheel
@@ -639,9 +643,10 @@ Item 21 came with dims6, when the cars respecified to the real cars the game dra
     the R32 4.18 against 4.149 (the prepared models' vertices in the car's frame, which is what is drawn); the 205's
     model is 3.62 m against 3.705, 2.4 % short: its height (1.36 m) and its wheelbase are the 205's, the model's own
     overhangs are short. The Delta's model is 3 % narrower than the car (1.71 m), its tracks with it (1.40 m). Side
-    shots show the tyres on the road, the wheels in their arches (scaled to the simulation's tyres by 0.983-1.060 now,
-    0.960-1.077 before; the 205's model has small tyres of its own) and the hubs where the simulation has them, to a few pixels. One fix in the preparation came with
-    it: the eyes are set 13 cm under whatever is over them, and at the 205's real size the top of its driver's seat, a
+    shots show the wheels in their arches (scaled to the simulation's tyres by 0.983-1.060 now, 0.960-1.077 before;
+    the 205's model has small tyres of its own) and the hubs where the simulation has them, to a few pixels; the tyres
+    stand on the road, the 205's and the E-Class's to the millimetre and the Delta's 1 mm over it, but not the R32's,
+    2.2 cm over it as before dims6 (see the review follow-ups below). One fix in the preparation came with it: the eyes are set 13 cm under whatever is over them, and at the 205's real size the top of its driver's seat, a
     mesh named "defaultMaterial" like every other of the model, came 4 cm over them and had the eyes lowered 10 cm; a
     mesh shaped as a seat (no wider than 0.7 m nor deeper than 0.9, rising from 0.4 m under the eyes) is passed over now,
     and the four unchanged models prepare to the same bytes. The lofted bodies, drawn without the models (`--lofted`, or
@@ -654,6 +659,35 @@ Item 21 came with dims6, when the cars respecified to the real cars the game dra
     `The_model_preparations_have_the_simulations_geometry` reads both preparations' SPECS (`tools/car_models.py`,
     `unreal/Scripts/prepare_car_model.py`) and asks for the simulation's axles, track, hub height, travel, mass, rate and
     tyre radius, as a spec changed without them draws the car at its old size and the game only logs it.
+
+    Review follow-ups (dims6):
+    - The E-Class's rear-view mirror glass hung 7.5 cm under its housing in the cockpit view, cut by the screen's edge.
+      The glass is placed on a box found by hand in the car's frame (`mirror_box` in `tools/car_models.json`), read at
+      the Egea's wheelbase, and the model is now scaled 1.0903 times about its front hubs, moved from 1.028 m to 1.121
+      ahead of the reference point. The Delta's eyes (`eye_at`, read at its old 2.54 m) were 2 cm high on its model by
+      the same slip. Points given by hand in the car frame now name the geometry they were read in (`frame`: the front
+      and rear axles and the rest hub height), and the preparation carries them to the present one as the model moves
+      (`in_present_frame`): the glass is at (-0.026, +0.564, +0.135), 0.240 x 0.071 m, in its housing again; the Delta's
+      eyes at (-0.351, +0.500, +0.292), 15.8 cm under the roof (16.2 at the old scale, 13.8 with the slip); the estate's
+      frame is its present geometry, so it prepares to the same bytes, and the other five models too. Test
+      `Hand_given_car_frame_points_name_the_geometry_they_were_read_in`.
+    - The drones' knock box (`Traffic.HalfLength`, 2.15 m both ways) is centred on the traffic's position, while each
+      drawn car hung from its own reference point, nearer the nose than the tail: the E-Class's tail stood 0.75 m out of
+      the box behind (0.51 at the Egea's size), and the player's car sank that far into it before a knock.
+      `CarView.SetTrafficPose` moves each drawn car forward by half its overhangs' difference (`BodyRear - BodyFront`),
+      its middle on the box's: the E-Class now overhangs it by 0.29 m at either end, the saloon, the estate and the R32
+      sit within 3 cm of it, the 205 0.34 m inside. A box per drawn car would take the car each drone is drawn as into
+      the traffic, which is the view's choice (and the Unreal level's another), so it is left.
+    - The footprints of the 205 and the E-Class take their drawn bodies' widths where the models are wider than the
+      cars (above). The W212's rear track is 1614 mm at auto-data.net, thecarspec and cararac and 1604 only at
+      cars-data: the test's mean is 1.606 m, the simulation's 1.60 within 0.4 %. The Testarossa's tracks are usually
+      published as 1520 / 1660 mm (the drawing the flat-twelve's keys come from has 1677 behind), only a comment.
+    - Left: the R32's tyres stand 2.2 cm over the road, as they did before dims6. Its model's tyres are drawn loaded,
+      flattened at the bottom with the sidewalls bulging beside the flat, and the preparation takes a wheel's pivot at
+      its tyre's box centre and the radius at its farthest vertex: the front pivots sit 1.1 cm over the tread's true
+      centre (the tyres turn off-centre) and the bulge is taken for the radius, so the round tread is drawn 0.307 m
+      against the simulation's 0.319. Fitting the tread's circle away from the flat would cure both, but it changes
+      `car_models.rig`, which both preparations share, for every model, and wants its own pass.
 
 Kept, as earlier decisions: the fixed 240 Hz step with semi-implicit Euler for the body, the raycast wheels, the
 grass's grip and rolling resistance (0.9), the weather's grip figures (0.12), the speed-sensitive steering lock,
@@ -950,7 +984,9 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
   height (dyn5, `CarView.SetTrafficPose`): the traffic carries every drone 0.61 m over the road (`Traffic.RideHeight`,
   about the sports car's), and drawn there the five cars sat into it by the difference, the 205 0.9 cm, the saloon
   2.0, the estate 2.3, the Golf 3.4 and the Mercedes 5.1; they are lifted by it along their own up, the traffic's
-  positions, gaps and knocks unchanged (shots at `--look=drone:<n>:3.5:90:0.25`, before and after).
+  positions, gaps and knocks unchanged (shots at `--look=drone:<n>:3.5:90:0.25`, before and after). Since dims6 each
+  is also moved forward by half its overhangs' difference, centred on the traffic's knock box (dynamics audit item 21's
+  follow-ups).
 - Real car models (0.16, `tools/prepare_car_models.py`, `CarView.Model.cs`). The lofted bodies and the boxes of
   their cabins read as toys, from the seat most of all, so the catalogue's cars are drawn as CC BY models of real
   cars with cabins of their own (THIRD_PARTY.md): the flat-twelve a Lotus Esprit Turbo 1983 (right-hand drive,

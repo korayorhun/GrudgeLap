@@ -97,6 +97,7 @@ internal sealed partial class CarView : Node3D
     private CarPaint _finish = new(DefaultPaint);   // the lofted body's paint: its finish (a model's: _paintChoice)
     private CarPaint? _paintChoice;         // the paint chosen for it; null keeps a model's own (CarView.Model.cs)
     private float _cgHeight;
+    private float _trafficShift;   // reference point to the body's middle, forward (m): SetTrafficPose
     private float _wheelRadius;
     private float _wheelAngle;
     private Node3D? _steeringSpin;
@@ -129,6 +130,7 @@ internal sealed partial class CarView : Node3D
         };
         var sag = spec.MassKg * MathUtil.Gravity / 4f / spec.SuspensionStiffness;
         view._cgHeight = spec.SuspensionRest + spec.WheelRadius - sag - spec.HubHeight;
+        view._trafficShift = 0.5f * (spec.BodyRear - spec.BodyFront);
         if (!view.TryBuildModel(spec))
         {
             view.BuildBody(spec);
@@ -1752,11 +1754,18 @@ internal sealed partial class CarView : Node3D
     /// (<see cref="GrudgeLap.Physics.Race.Traffic.RideHeight"/>, 0.61 m), while the car drawn stands at its own: its
     /// reference point is the simulation's, at the car's static ride height (0.62-0.66 m for the five cars of the
     /// traffic), and its body and wheels hang below it from there. So the drawn car is lifted by the difference along its
-    /// own up; posed at the traffic's height they sat 1-5 cm into the road, the Mercedes 5 cm. Only the drawing moves: the
-    /// traffic's positions, gaps and knocks stay its own.
+    /// own up; posed at the traffic's height they sat 1-5 cm into the road, the Mercedes 5 cm. And the drone's knock box
+    /// (<see cref="GrudgeLap.Physics.Race.Traffic.HalfLength"/>) is centred on the traffic's position, while a car's
+    /// reference point is nearer its nose than its tail (the footprint's BodyFront and BodyRear): drawn from it, the
+    /// E-Class's tail stood 0.75 m out of the box behind and the player's car sank that far into it before a knock. So
+    /// the drawn car is also moved forward by half the difference, its middle on the box's; the E-Class, 4.88 m long in
+    /// a box of 4.3, now overhangs it by 0.29 m at either end. Only the drawing moves: the traffic's positions, gaps and
+    /// knocks stay its own.
     /// </summary>
     public void SetTrafficPose(SN.Vector3 position, SN.Quaternion orientation) =>
-        SetPose(position + SN.Vector3.Transform(SN.Vector3.UnitY, orientation) * (_cgHeight - GrudgeLap.Physics.Race.Traffic.RideHeight), orientation);
+        SetPose(position
+            + SN.Vector3.Transform(SN.Vector3.UnitY, orientation) * (_cgHeight - GrudgeLap.Physics.Race.Traffic.RideHeight)
+            + SN.Vector3.Transform(SN.Vector3.UnitZ, orientation) * _trafficShift, orientation);
 
     public void SetWheels(WheelState[] wheels, float steerAngle, VehicleSpec spec)
     {

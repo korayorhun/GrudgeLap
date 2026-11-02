@@ -212,14 +212,14 @@ public sealed class VehicleTests
     /// simulation's wheelbase, came out 2-9 % off: the E-Class at 92 % of its size.
     /// </summary>
     [Theory]
-    [InlineData(0, 2.550f, 0f)]           // Testarossa: 2550 mm (getoutlines.com's drawing, as BodyStyle.FlatTwelve's keys); tracks 1520 / 1677 not modelled apart
+    [InlineData(0, 2.550f, 0f)]           // Testarossa: 2550 mm (getoutlines.com's drawing, as BodyStyle.FlatTwelve's keys); tracks 1520 / 1660 as usually published (the drawing's 1677 behind), not modelled apart
     [InlineData(1, 2.670f, 0f)]           // McLaren 570S: 2670 mm
     [InlineData(2, 2.420f, 1.3605f)]      // 205 GTi 1.9: 2420 mm, tracks 1382 / 1339 (auto motor und sport)
     [InlineData(3, 2.480f, 1.501f)]       // Delta Integrale Evoluzione: 2480 mm, tracks 1502 / 1500 (supercars.net)
     [InlineData(4, 2.518f, 1.500f)]       // Golf R32 (2003): 2518 mm, tracks 1513 / 1487 (auto-data.net, CarExpert)
     [InlineData(5, 2.490f, 0f)]           // Tofas Sahin (the Fiat 131 body): 2490 mm
     [InlineData(6, 2.441f, 0f)]           // Renault 12: 2441 mm
-    [InlineData(7, 2.874f, 1.601f)]       // E 250 CDI (W212 facelift): 2874 mm, tracks 1598 / 1604 (cars-data; 1614 behind at thecarspec)
+    [InlineData(7, 2.874f, 1.606f)]       // E 250 CDI (W212 facelift): 2874 mm, tracks 1598 / 1614 (auto-data.net, thecarspec, cararac; 1604 behind at cars-data)
     public void Every_car_has_the_size_of_the_car_it_follows(int car, float wheelbase, float meanTrack)
     {
         var spec = VehicleSpec.Catalogue[car];
@@ -264,6 +264,39 @@ public sealed class VehicleTests
             Same("stiffness", spec.SuspensionStiffness, 0.5f);
             Same("radius", spec.WheelRadius, 0.0005f);
         }
+    }
+
+    /// <summary>
+    /// Points given by hand in the car frame in tools/car_models.json (the eyes, eye_at, and a mirror glass found by hand,
+    /// mirror_box) were read off a model as it was prepared at the geometry of the time, and the preparation scales a
+    /// model to its spec's wheelbase about the front hubs and the hub plane: kept as bare numbers they land elsewhere on
+    /// the model when the spec changes. dims6 lengthened the E-Class and its mirror box, read at the Egea's wheelbase,
+    /// hung the live glass 7.5 cm under the housing. So each entry with such points names the geometry they were read in
+    /// (frame: front, rear, hub_y), from which tools/prepare_car_models.py (in_present_frame) carries them to the present
+    /// one.
+    /// </summary>
+    [Fact]
+    public void Hand_given_car_frame_points_name_the_geometry_they_were_read_in()
+    {
+        var root = TrackTests.FindRepoRoot();
+        using var config = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "tools/car_models.json")));
+        var given = 0;
+        foreach (var car in config.RootElement.EnumerateObject())
+        {
+            if (car.Value.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+            if (!car.Value.TryGetProperty("eye_at", out _) && !car.Value.TryGetProperty("mirror_box", out _)) continue;
+            given++;
+            Assert.True(car.Value.TryGetProperty("frame", out var frame), $"{car.Name} gives car-frame points without the geometry they were read in");
+            var front = frame.GetProperty("front").GetSingle();
+            var rear = frame.GetProperty("rear").GetSingle();
+            var hub = frame.GetProperty("hub_y").GetSingle();
+            _out.WriteLine($"{car.Name}: read at front {front:F3}, rear {rear:F3}, hub {hub:F4} m");
+            // A wheelbase and a rest hub height in the range of the catalogue's, not a slip of the pen.
+            Assert.InRange(front + rear, 2.2f, 3.0f);
+            Assert.InRange(hub, -0.45f, -0.25f);
+        }
+        Assert.True(given >= 3, "the estate, the Delta and the E-Class give car-frame points");
+        Assert.Contains("in_present_frame(entry, spec)", File.ReadAllText(Path.Combine(root, "tools/prepare_car_models.py")));
     }
 
     [Fact]

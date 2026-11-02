@@ -492,6 +492,38 @@ def borrow_cabin(model, blob, r, world, boxes, car, spec, donor_entry, cabin):
     print(f"  cabin from {donor_entry['file']}: {len(added)} part(s) {added[:12]}")
 
 
+def in_present_frame(entry, spec):
+    """The entry with its hand-given car-frame points (eye_at, mirror_box) carried from the geometry they were read in
+    (the entry's frame) to the spec's present one.
+
+    car_models.rig places a model by its front hubs (at -front), its hub plane (at the rest hub height) and the centre
+    between its wheels (x 0), and scales it to the wheelbase about them; a point read off the prepared model stays on the
+    same spot of it only if it moves with them. Read at one geometry and kept as numbers, it lands elsewhere on the model
+    when a spec changes: dims6 lengthened the E-Class from the Egea's wheelbase to the W212's (scale 1.0903) and its
+    mirror box, read at the old one, hung the glass 7.5 cm under its housing. An entry without a frame, or one at the
+    present geometry, is taken as it is (the same bytes as before frames were given).
+    """
+    frame = entry.get("frame")
+    if not frame:
+        return entry
+    sag = spec["mass"] * cm.GRAVITY / 4.0 / spec["stiffness"]
+    then = np.array([0.0, frame["hub_y"], -frame["front"]])
+    now = np.array([0.0, spec["hub"] - (spec["rest"] - sag), -spec["front"]])
+    grow = (spec["front"] + spec["rear"]) / (frame["front"] + frame["rear"])
+    if abs(grow - 1.0) < 1e-4 and np.allclose(then, now, atol=5e-4):
+        return entry
+    moved = dict(entry)
+    if "eye_at" in entry:
+        moved["eye_at"] = [float(v) for v in (np.array(entry["eye_at"], dtype=float) - then) * grow + now]
+        print(f"  eyes given at {entry['eye_at']} carried to ({moved['eye_at'][0]:+.3f} {moved['eye_at'][1]:+.3f} {moved['eye_at'][2]:+.3f}), scale {grow:.4f}")
+    if "mirror_box" in entry:
+        box = entry["mirror_box"]
+        centre = (np.array(box["centre"], dtype=float) - then) * grow + now
+        moved["mirror_box"] = dict(box, centre=[float(v) for v in centre], size=[float(s) * grow for s in box["size"]])
+        print(f"  mirror box given at {box['centre']} carried to ({centre[0]:+.3f} {centre[1]:+.3f} {centre[2]:+.3f}), scale {grow:.4f}")
+    return moved
+
+
 def prepare(car, entry, inspect=False, config=None):
     spec = cm.SPECS[car]
     source = os.path.join(SOURCE, entry["file"])
@@ -504,6 +536,7 @@ def prepare(car, entry, inspect=False, config=None):
     if cm.strip_unlit(model):
         print("  unlit materials made lit")
     r = cm.rig(model, entry, spec, car)
+    entry = in_present_frame(entry, spec)
     nodes = model["nodes"]
     name_of = r["name_of"]
     to_car = r["to_car"]

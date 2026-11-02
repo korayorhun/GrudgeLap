@@ -34,7 +34,9 @@ public sealed record VehicleSpec
     /// The body's footprint for knocks against obstacles: the reference point to the front and the rear bumper and half
     /// the widest width without the mirrors (m). On the cars that follow a real one since dims6 (the three hatchbacks and
     /// the fleet saloon) the published length, split between the overhangs as the drawn model has them, and the published
-    /// width; on the others as the view draws the lofted body (its nose and tail keys and widest half width).
+    /// width, or the drawn body's where the model is wider than the car (the 205's and the E-Class's: a knock comes when
+    /// the drawn side meets the wall, not 2-3 cm into it); on the others as the view draws the lofted body (its nose and
+    /// tail keys and widest half width).
     /// </summary>
     public float BodyFront { get; init; } = 2.355f;
     public float BodyRear { get; init; } = 2.13f;
@@ -279,7 +281,9 @@ public sealed record VehicleSpec
         RearAxle = 1.489f,
         BodyFront = 1.587f,
         BodyRear = 2.118f,
-        BodyHalfWidth = 0.786f,
+        // The 205's 1572 mm would be 0.786; its drawn model is 1.64 m across the body under the mirrors (its rear tyres
+        // reach 0.855 out).
+        BodyHalfWidth = 0.82f,
         HubHeight = -0.20f,
         // Cd 0.35 (auto-data.net); 1.57 m wide and 1.36 m tall (auto motor und sport).
         DragCoefficient = 0.35f,
@@ -595,17 +599,18 @@ public sealed record VehicleSpec
     /// drive the C and the automatic E share is assumed for it.
     /// </summary>
     /// <remarks>
-    /// The seven-speed 7G-TRONIC PLUS was the option most of these cars were bought with (0-100 km/h in 7.5 s, 242 km/h);
-    /// the game's driveline is a clutch and a gearbox on every car, its automatic mode shifting them for the driver, and
-    /// a torque converter is not modelled, so the car has the manual it was listed with. Its size is the W212 saloon's
-    /// since dims6 (thecarspec's and cars-data's listings of the facelift E 250 CDI): 4879 x 1854 x 1474 mm, 2874 mm
-    /// between the axles, tracks of 1598 mm in front and 1604 behind (cars-data; 1614 at thecarspec), one track of 1.60 m
-    /// here. Until dims6 the wheelbase, the track and the footprint were the Egea's it followed before (2.636 m, 1.542 m),
-    /// to which the drawn model had been prepared, so the E-Class was drawn at 92 % of its size; the centre of mass, the
-    /// inertias and the footprint follow as the hot hatch's remarks say. The longer wheelbase moves less weight in a stop
-    /// and a launch (75 % on the front wheels at 1.1 g, 77 before; 7.92 s to 100 km/h against 7.87) and the wider track
-    /// rolls it less (3.29 deg/g against 3.54). The springs follow the mass so the car sits at the same height on them;
-    /// the mass, its place, the tyres, the gearing, the engine, the brakes and the bars are the E 250 CDI's.
+    /// The seven-speed 7G-TRONIC PLUS was the option most of these cars were bought with (0-100 km/h in 7.5 s, 242
+    /// km/h); the game's driveline is a clutch and a gearbox on every car, its automatic mode shifting them for the
+    /// driver, and a torque converter is not modelled, so the car has the manual it was listed with. Its size is the
+    /// W212 saloon's since dims6 (thecarspec's and cars-data's listings of the facelift E 250 CDI): 4879 x 1854 x 1474
+    /// mm, 2874 mm between the axles, tracks of 1598 mm in front and 1614 behind (auto-data.net, thecarspec and
+    /// cararac; 1604 at cars-data), one track of 1.60 m here (the mean, 1.606, within 0.4 %). Until dims6 the
+    /// wheelbase, the track and the footprint were the Egea's it followed before (2.636 m, 1.542 m), to which the drawn
+    /// model had been prepared, so the E-Class was drawn at 92 % of its size; the centre of mass, the inertias and the
+    /// footprint follow as the hot hatch's remarks say. The longer wheelbase moves less weight in a stop and a launch
+    /// (75 % on the front wheels at 1.1 g, 77 before; 7.92 s to 100 km/h against 7.87) and the wider track rolls it
+    /// less (3.29 deg/g against 3.54). The springs follow the mass so the car sits at the same height on them; the
+    /// mass, its place, the tyres, the gearing, the engine, the brakes and the bars are the E 250 CDI's.
     /// </remarks>
     public static VehicleSpec Fleet => new()
     {
@@ -648,7 +653,8 @@ public sealed record VehicleSpec
         RearAxle = 1.753f,
         BodyFront = 1.984f,
         BodyRear = 2.895f,
-        BodyHalfWidth = 0.927f,
+        // The W212's 1854 mm would be 0.927; its drawn model is 1.89 m across the body under the mirrors.
+        BodyHalfWidth = 0.945f,
         HubHeight = -0.20f,
         // The W212 saloon is given as Cd 0.25 in its most economical trims (auto-data's facelift E 200 CDI; the saloon's
         // launch figure of 2009); no figure was found for the E 250 CDI, set a hundredth higher (a game figure). 1.85 m wide
