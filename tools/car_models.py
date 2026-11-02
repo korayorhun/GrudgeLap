@@ -29,7 +29,7 @@ SPECS = {
     "turbohatch": dict(front=0.98, rear=1.60, track=0.765, hub=-0.20, rest=0.22, mass=1550.0, stiffness=39800.0, radius=0.319),
     "saloon": dict(front=1.17, rear=1.32, track=0.678, hub=-0.20, rest=0.25, mass=1050.0, stiffness=24000.0, radius=0.2875),
     "estate": dict(front=1.00, rear=1.441, track=0.656, hub=-0.20, rest=0.26, mass=1045.0, stiffness=22000.0, radius=0.289),
-    "fleet": dict(front=1.028, rear=1.608, track=0.771, hub=-0.20, rest=0.24, mass=1170.0, stiffness=30000.0, radius=0.317),
+    "fleet": dict(front=1.028, rear=1.608, track=0.771, hub=-0.20, rest=0.24, mass=1770.0, stiffness=45385.0, radius=0.326),
 }
 
 

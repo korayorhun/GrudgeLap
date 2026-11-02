@@ -4,9 +4,10 @@ namespace GrudgeLap.Game;
 
 /// <summary>
 /// The everyday cars of Turkey's roads (0.9.1): the 1.6 saloon of the 1990s on the lines of the Tofas Sahin, the 1.4
-/// estate on the lines of the Renault 12 Toros, and the 1.4 fleet saloon of today on the lines of the Fiat Egea. They
-/// are built like the hatchbacks (CarView.Hatchbacks.cs): a loft keyed on the profile, with the lamps, the grilles,
-/// the strips and the plates laid on the skin; a saloon's boot is the tailgate's place.
+/// estate on the lines of the Renault 12 Toros, and the fleet saloon on the lines of the Fiat Egea it followed until the
+/// fleet respec (it is now the E-Class W212 its model draws; this loft is drawn only where the models are not, with
+/// --lofted). They are built like the hatchbacks (CarView.Hatchbacks.cs): a loft keyed on the profile, with the lamps,
+/// the grilles, the strips and the plates laid on the skin; a saloon's boot is the tailgate's place.
 /// </summary>
 internal sealed partial class CarView
 {
@@ -178,7 +179,7 @@ internal sealed partial class CarView
         };
 
         /// <summary>
-        /// The 1.4 fleet saloon of 2017, on the lines of the Fiat Egea (the Tipo saloon of Bursa, 2015-): 4.53 m long
+        /// The fleet saloon's loft, on the lines of the Fiat Egea (the Tipo saloon of Bursa, 2015-): 4.53 m long
         /// and 1.79 m wide, a cab-forward saloon with a short bonnet, slim swept lamps either side of a trapezoid
         /// black grille, fog lamps in the bumper's corners, a raked screen, a high beltline under a roof that runs on
         /// into a fastback-like pillar, a short boot with its lip, and tail lamps wrapped from the wings onto the lid.

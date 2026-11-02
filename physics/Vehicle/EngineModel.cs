@@ -258,11 +258,16 @@ public sealed record EngineSpec
         (3500f, 100f), (4000f, 96f), (4500f, 90f), (5000f, 85f), (5250f, 82f), (5600f, 74f), (6000f, 60f),
     ];
 
-    /// <summary>The 1.4 sixteen-valve Fire of the fleet saloon: 127 N m at 4500, 95 PS at 6000.</summary>
-    private static readonly (float Rpm, float Torque)[] FleetCurve =
+    /// <summary>
+    /// The fleet saloon's 2.1-litre common-rail diesel four with its two-stage turbocharger (Mercedes-Benz OM 651, the
+    /// E 250 CDI's tune of 2013): 500 N m from 1600 to 1800, 204 PS at 3800 (377 N m there; Mercedes-Benz's data sheet of
+    /// the E-Class saloon, 11/2012), with full boost. The curve falls away past the rated speed as the injection is cut
+    /// back towards the governor; Mercedes publishes no figure above it.
+    /// </summary>
+    private static readonly (float Rpm, float Torque)[] DieselCurve =
     [
-        (0f, 0f), (600f, 68f), (1000f, 90f), (1500f, 100f), (2000f, 108f), (2500f, 114f), (3000f, 119f),
-        (3500f, 123f), (4000f, 126f), (4500f, 127f), (5000f, 124f), (5500f, 119f), (6000f, 111.4f), (6500f, 98f), (7000f, 76f),
+        (0f, 0f), (600f, 200f), (800f, 280f), (1000f, 360f), (1200f, 430f), (1400f, 480f), (1600f, 500f), (1800f, 500f),
+        (2000f, 490f), (2500f, 465f), (3000f, 432f), (3500f, 400f), (3800f, 377f), (4200f, 330f), (4500f, 280f), (4800f, 200f),
     ];
 
     public static EngineSpec FlatTwelve => new();
@@ -347,15 +352,30 @@ public sealed record EngineSpec
         SoundFolder = "estate",
     };
 
-    public static EngineSpec FleetFour => new()
+    /// <summary>
+    /// The fleet saloon's diesel. Its two-stage turbocharger makes three fifths of the curve's torque: breathing on its
+    /// own a diesel of its size makes about two fifths of what this one does on the boost of the 150 kW tune, just under
+    /// 3 bar absolute (Mercedes-Benz's description of the OM 651, as motor-car.net gives it). The small high-pressure
+    /// stage, which takes all the exhaust at low revs, has it on full boost by 1400 rpm and spools in about half a second
+    /// (game figures: none is published). Its voice is still the fleet bank's petrol four: the banks are being cut again
+    /// elsewhere (see docs/design.md, the dynamics audit's item 20).
+    /// </summary>
+    public static EngineSpec DieselFour => new()
     {
-        IdleRpm = 800f,
-        RedlineRpm = 6500f,
-        StallRpm = 380f,
-        BrakingTorque = 11f,
-        BrakingPerRpm = 0.0032f,
-        FullThrottleCurve = FleetCurve,
+        IdleRpm = 750f,
+        // The governor's cut: Mercedes publishes the rated speed (3800) and not the governor's; a diesel of the kind runs
+        // out of fuel delivery a thousand rpm or so past its rated speed (a game figure).
+        RedlineRpm = 4800f,
+        StallRpm = 400f,
+        // A diesel has no throttle plate to pump against, but its compression and its injection pump's drive cost more
+        // friction than a petrol four's: about the same engine braking as the two-litre petrol hatches.
+        BrakingTorque = 14f,
+        BrakingPerRpm = 0.004f,
+        FullThrottleCurve = DieselCurve,
         Cylinders = 4,
         SoundFolder = "fleet",
+        BoostShare = 0.6f,
+        BoostSeconds = 0.5f,
+        BoostThresholdRpm = 800f,
     };
 }

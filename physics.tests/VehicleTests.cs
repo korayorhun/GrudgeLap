@@ -183,7 +183,7 @@ public sealed class VehicleTests
     [Theory]
     [InlineData(5, false, 11.8f, 15.5f, 94f, 104f)]   // 1.6 saloon: 13.9 s to 62 mph, 160 km/h
     [InlineData(6, true, 13.5f, 18.0f, 87f, 97f)]     // 1.4 estate: about 16 s to 62 mph, about 150 km/h
-    [InlineData(7, true, 9.6f, 12.6f, 110f, 120f)]    // 1.4 fleet saloon: 11.5 s to 62 mph, 185 km/h
+    [InlineData(7, false, 6.6f, 8.1f, 144f, 154f)]    // 2.1 diesel fleet saloon: 7.7 s to 62 mph, 240 km/h (149 mph)
     public void Everyday_cars_match_their_published_figures(int car, bool frontWheelDrive, float zeroToSixtyMin, float zeroToSixtyMax, float topMin, float topMax)
     {
         var spec = VehicleSpec.Catalogue[car];

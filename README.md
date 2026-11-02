@@ -4,7 +4,8 @@
 seven-speed V8 of 2012 with a sports exhaust, three hatchbacks of 1988-2003 (a front-wheel-drive eight-valve
 1.9, a four-wheel-drive two-litre turbo with a viscous-coupled centre differential and a four-wheel-drive 3.2 V6 with
 an on-demand coupling) and three everyday cars of Turkey's roads (a 1.6
-rear-wheel-drive saloon of the 1990s, a 1.4 estate of the same years and a 1.4 fleet saloon of today, with their
+rear-wheel-drive saloon of the 1990s, a 1.4 estate of the same years and a 2.1 rear-wheel-drive diesel fleet saloon of
+the 2010s, with their
 published weights, gearing and power), all with real engine recordings — a fork between a long
 *speed* route and a short *stunt* route with an open drawbridge, a vertical loop and a banked 180, dips,
 traffic in both directions that keeps its distance, checkpoints against the clock, knocks that dent the car and bounce
@@ -24,8 +25,8 @@ windowed or full screen. Free, open source, no assets copied from anywhere.
 
 **TR** · 1989'un arcade sürüş simülatörlerine saygı duruşu. Beş araba (1984 flat-12, 4 vites; 2012 V8, 7
 vites, spor egzoz; 1988-2003'ten üç hatchback: önden çekişli 1.9 8V, dört çeker 2.0 turbo ve dört çeker 3.2 V6; Türkiye
-yollarının üç gündelik arabası: 1990'ların 1.6 arkadan itişli sedanı, aynı yılların 1.4 station'ı ve bugünün 1.4
-filo sedanı, yayımlanmış ağırlık, vites ve güç değerleriyle; hepsinde gerçek motor kayıtları), uzun *speed* ve kısa *stunt* (açık köprü, dikey loop, eğimli
+yollarının üç gündelik arabası: 1990'ların 1.6 arkadan itişli sedanı, aynı yılların 1.4 station'ı ve 2010'ların 2.1
+arkadan itişli dizel filo sedanı, yayımlanmış ağırlık, vites ve güç değerleriyle; hepsinde gerçek motor kayıtları), uzun *speed* ve kısa *stunt* (açık köprü, dikey loop, eğimli
 180°) rotaları, çukurlar, iki yönlü trafik, süreye karşı kontrol noktaları, her kazadan sonra arabanın çarptığı
 yerden ezildiği ve parçalarının uçuştuğu anlık tekrar,
 gizli skid pad, "1989 modu" ve *grudge match*: en iyi turunuzun hayaleti sonraki her turda sizinle yarışır.

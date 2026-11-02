@@ -449,6 +449,104 @@ Items 18 and 19 came with cars3, when the three hatchbacks were made to drive li
     models' preparation. Where no figure was found the spec says so: the Delta's and the R32's axle loads, the Delta's
     drag, the couplings' rates and the Haldex's lead are game figures.
 
+Item 20 came with fleet, when the fleet saloon was made to drive like the car the game draws:
+
+20. **The fleet saloon follows the E-Class it is drawn as** (fixed in fleet). The model drawn since 0.16 is a
+    Mercedes-Benz E-Class W212 of the 2013 facelift (its one-piece headlamps); the spec was a 2017 Fiat Egea 1.4 16V,
+    front-wheel drive. It is now the E 250 CDI of 2013-15, from Mercedes-Benz's data sheet of the E-Class saloon
+    (11/2012) and the Mercedes-Benz Classic archive's sheet of the E 250 CDI (2013-2015), which agree: the OM 651
+    2.1-litre diesel four with its two-stage turbocharger, 204 PS at 3800 and 500 N m from 1600 to 1800, rear-wheel
+    drive, the six-speed manual listed as its standard gearbox (5.10 / 2.78 / 1.75 / 1.25 / 1.00 / 0.81, reverse 4.62,
+    final drive 2.47), 205/60 R16 tyres, Cd 0.26, 1,765 kg (EU: a 68 kg driver, 7 kg of luggage, the tank 90 % full),
+    0-100 km/h in 7.7 s and 240 km/h.
+
+    Why this one: the W212s of the taxi ranks and company fleets of Europe and Turkey were the OM 651 diesels (the
+    E 200 CDI, E 220 CDI and E 250 CDI share the engine in three tunes, the 2.1 the name gives); the game follows the
+    strongest of the three, the E 250 CDI, which Mercedes sold in Turkey as in Europe. The gearbox: most were bought
+    with the 7G-TRONIC PLUS (0-100 km/h in 7.5 s, 242 km/h), but the game's driveline is a clutch and a gearbox on every
+    car (its automatic mode shifts them for the driver through the same clutch) and a torque converter is not modelled,
+    so the car has the manual Mercedes listed as standard: a real gearbox of the real car rather than the automatic's
+    ratios behind a clutch it never had. A converter (its multiplication at stall, the lock-up clutch, the automatic's
+    quick shifts under load) would be its own piece of work, for this car alone. The tyres: 205/60 R16 is what both
+    sheets give the E 250 CDI of 2013 (the 225/55 R16 of 2009 gave way to them in 07/2011; 245/45 R17 are the 4MATIC's),
+    and all three have the same radius to a millimetre. Traction: ESP with ETS, which the W212's handbook describes as
+    braking "the drive wheels individually if they spin ... for example if the road surface is slippery on one side. In
+    addition, more drive torque is transferred to the wheel or wheels with traction", on even with ESP switched off
+    (Mercedes-Benz USA's operator's manual of the 2016 E-Class saloon and estate, p. 81): the brake function the Egea's
+    BLD was (item 14), now on the rear axle. Mercedes gives no threshold: the lead is a game figure, 0.8 m/s (at the
+    BLD's 1.0 the brake held the inside rear out of a tight bend to 1.16 m/s ahead against the 1.36 the traction control
+    alone allows, hardly the drive handed across that the handbook describes). The weight: no axle loads were found for
+    the diesel saloon; auto motor und sport weighed the E 250 CGI Coupe of the same platform at 53.4/46.6 (03/2010), and
+    the car is set at 53/47. The engine: the curve is the published one at full boost (500 N m from 1600 to 1800, 377 N m
+    at 3800), falling past the rated speed to a governor at 4800 (Mercedes publishes the rated speed, not the
+    governor's: a game figure); off boost it makes two fifths of it (a two-litre diesel breathing on its own; the 150 kW
+    OM 651 runs just under 3 bar absolute), the small high-pressure stage on full boost by 1400 rpm in about half a
+    second (game figures). Idle 750 rpm.
+
+    | | before | after |
+    |---|---|---|
+    | follows | 2017 Fiat Egea 1.4 16V | 2014 Mercedes-Benz E 250 CDI (W212 facelift) |
+    | name | SALOON 1.4 16V '17 | SALOON 2.1 DIESEL '14 |
+    | engine | 95 PS at 6000, 127 N m at 4500, petrol four | 204 PS at 3800, 500 N m at 1600-1800, two-stage turbodiesel four |
+    | mass (with driver) | 1170 kg | 1770 kg |
+    | weight on the front axle | 61.0 % | 53.0 % |
+    | gearbox | 6 speeds, 3.545-0.766, 4.071 | 6 speeds, 5.10-0.81, 2.47 |
+    | tyres | 195/65 R15 | 205/60 R16 |
+    | driven wheels | front | rear |
+    | brake function, lead | BLD, 1.0 m/s | ETS, 0.8 m/s |
+    | 0-100 km/h, published | 11.5 s | 7.7 s |
+    | 0-100 km/h, here (revved on the brake; floored from idle) | 12.27 s | 7.87 s (7.97) |
+    | 100-0 km/h dry, here (ABS; rain) | 39.7 m (56.1) | 37.7 m (53.1) |
+    | top speed, published | 185 km/h | 240 km/h |
+    | top speed, here | 185 km/h (115 mph) in 5th | 245 km/h (152 mph) in 6th at 4040 rpm |
+    | understeer, roll (40 m circle) | 2.04 deg/g, 3.80 deg/g | 1.97, 3.54 |
+    | loop run-up (needs 1.35 m/s^2) | 2.09 | 2.76 |
+    | scripted laps, stunt and speed route, dry (rain) | 102.0 (a crash), 112.7 (123.8) s | 94.9 (105.1), 106.9 (115.8) s |
+
+    The sprint is traction-limited in first (0.62-0.65 g on the rear tyres of a 53/47 car, the launch held at 1875 rpm
+    with the driven tyres at 61 % of their peak slip) and 0.17 s slower than Mercedes's figure; the stop is 37.7 m against
+    auto motor und sport's 36.4 m for the Coupe on wider 17 in tyres, at a grip of 1.04 (the Egea's economy tyres had
+    0.94, the R32's sports tyres 1.08); 0-60 mph from idle takes 7.83 s; the top speed is 2 % over Mercedes's, held by the
+    drag a little past the rated speed. The ranges in `Sprints_and_stops_within_the_real_cars_ranges` are a tenth of the
+    published sprint and of the Coupe's stop either side (6.9-8.5 s, 33-40 m); in
+    `Everyday_cars_match_their_published_figures` 6.6-8.1 s to 60 mph (a tenth either side of the 7.3 s that 7.7 s to
+    100 km/h makes) and 144-154 mph; the skid-pad ranges were narrowed round the car within its class (1.4-2.6 deg/g,
+    3.0-4.2 deg/g: no figure is published), and the static weight check now covers it (51-55 %). The launch tests take it
+    too: it holds its launch revs with the tyres short of their peak, and floored from idle it is 0.10 s behind the
+    road-test start, its turbo spooling on the clutch. It laps both routes dry and wet without a crash (the Egea's
+    scripted stunt lap in the rain ended in one) and makes the loop, from rest at the last return point too (64 mph at
+    its foot). The brake-function tests changed with the driven axle. On split grip it reaches 6.74 m/s after 2.5 s
+    against 5.19 with its differential open (the Egea 6.31 against 4.16): a rear-driven car's wheel on the grass carries
+    more of the load as the car squats, so the open differential does better and the brake adds less, and the bound is
+    now 1.2 times (it was the Egea's 1.3). Out of a 22 m bend it holds the inside rear to 0.93 m/s ahead (1.36 with the
+    traction control alone) and gains 3.38 m/s against 3.23, 5 % where the front-driven Egea gained 14 %: like the V8's,
+    its outside rear tyre carries the bend as well as the drive the brake hands it (the test asks 2 %). On split grip the
+    braked wheel reverses on alternate steps 18 times in 2.5 s (the Egea's none), fewer than with its differential open
+    (50, as the Egea's 49): the clutch's lock/slip machine of item 14's last paragraph.
+
+    The axles, the track, the ride height and the body's footprint stay those `tools/car_models.py` prepares the model to
+    (2.636 m between the axles, the Egea's, where the W212 has 2.874: the model is drawn at 92 % of the car's size), and
+    the springs were scaled with the mass (45,385 N/m) so it sits at the same height; the model rig's mass, rate and wheel
+    radius were changed with them (`tools/car_models.py`, `unreal/Scripts/prepare_car_model.py`). Moving the geometry to
+    the real car is one change with the model's preparation, as for the hatchbacks. Its tyres are 0.9 cm larger in
+    radius, so the drawn car, and the drones drawn as it (`CarView.SetTrafficPose` lifts each by its own static ride
+    height), stand that much higher. The traffic's own motion does not read the spec (the drones are scripted on
+    `Traffic`), and its tests pass unchanged. `--car=fleet` (and 7) still picks it; its alias is now `w212`, not `egea`.
+
+    The other seven cars are unchanged bit for bit: a hash of their whole state over both routes dry and wet, the 40 m
+    pad, a sprint, a stop and a bend exit matches the branch point's (after dyn5's review) line for line. The native ABI
+    is unchanged.
+
+    The sound: the fleet bank (the Punto's and the Bravo's petrol fours) stays and plays this engine's revs, now
+    750-4800; the turbo's whine and vent are synthesised for it, as for any engine with boost (`EngineSpec.BoostShare`
+    0.6; `Cylinders` stays 4 and `SoundFolder` "fleet"); the audio tests pass with it. A diesel four should sound
+    otherwise, and the banks are being cut again on night/banks: a diesel recording (an OM 651 or a like four) for the
+    fleet bank, its firing at 25-160 Hz over 750-4800 rpm with the combustion's knock (the hard, broadband rattle of a
+    compression-ignition pressure rise, loudest at idle and light load), the turbo's whistle under it and no petrol rasp
+    at the top; and no blow-off vent, which a diesel does not need (no throttle shuts on its boost: the overrun cuts the
+    fuel and the boost runs down through the engine), so the sound's `BlowOffValve` would want a third state, neither
+    vent nor surge. Both are left with the banks.
+
 Kept, as earlier decisions: the fixed 240 Hz step with semi-implicit Euler for the body, the raycast wheels, the
 grass's grip and rolling resistance (0.9), the weather's grip figures (0.12), the speed-sensitive steering lock,
 the clutch's lock/slip machine, and the low-speed fades of the slip angle (no jitter at rest).
@@ -799,7 +897,7 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
   building the world. `--invisible` runs neither take nor check the lock.
 - Command-line switches for automation: `--attract`, `--chase`, `--speed-route`,
   `--car=flat12|v8|hothatch|five|turbohatch` (or the car's index, or the name of the car it follows: `peugeot205`,
-  `delta`, `r32`, `sahin`, `toros`, `egea`), `--ram=tree|building|traffic|test` (the
+  `delta`, `r32`, `sahin`, `toros`, `w212`), `--ram=tree|building|traffic|test` (the
   scripted driver runs the course until a thing of that kind is near and drives into it, or into a tree planted
   on the start straight: the crash replay on film),
   `--no-traffic`, `--weather=dry|overcast|wet|rain` (the credit's weather; otherwise every credit draws one),

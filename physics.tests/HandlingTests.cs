@@ -50,7 +50,10 @@ public sealed class HandlingTests(ITestOutputHelper output)
     [InlineData(4, 5.9f, 7.3f, 34f, 42f)]
     [InlineData(5, 12.8f, 15.0f, 46f, 58f)]  // 1.6 saloon: 13.9 s (FIA form 5608's car); discs and drums, no ABS
     [InlineData(6, 15.5f, 18.5f, 48f, 62f)]  // 1.4 estate: about 16-17 s; no ABS
-    [InlineData(7, 10.9f, 12.8f, 35f, 43f)]  // fleet saloon: 11.5 s quoted (Fiat's handbook); ABS with its ESC
+    // Fleet saloon: Mercedes-Benz quotes 7.7 s for the E 250 CDI with its six-speed manual (about 7.9 here: a rear-drive
+    // saloon of 53/47 is traction-limited in first). ESP with ABS; auto motor und sport stopped the E 250 CGI Coupe of the
+    // same platform from 100 km/h in 36.4 m (03/2010), on wider 17 in tyres: a tenth either side of that.
+    [InlineData(7, 6.9f, 8.5f, 33f, 40f)]
     public void Sprints_and_stops_within_the_real_cars_ranges(int car, float sprintMin, float sprintMax, float stopMin, float stopMax)
     {
         var spec = VehicleSpec.Catalogue[car];
@@ -86,6 +89,7 @@ public sealed class HandlingTests(ITestOutputHelper output)
     [InlineData(2)]
     [InlineData(4)]
     [InlineData(6)]
+    [InlineData(7)]
     public void Standing_starts_hold_the_launch_revs_and_the_tyres_short_of_their_peak(int car)
     {
         var spec = VehicleSpec.Catalogue[car];
@@ -140,6 +144,7 @@ public sealed class HandlingTests(ITestOutputHelper output)
     [InlineData(0)]
     [InlineData(2)]
     [InlineData(5)]
+    [InlineData(7)]
     public void Flooring_it_from_rest_launches_without_a_bog(int car)
     {
         var spec = VehicleSpec.Catalogue[car];
@@ -263,8 +268,9 @@ public sealed class HandlingTests(ITestOutputHelper output)
     /// <summary>
     /// At rest each axle carries the share of the weight the real car does: 40/60 for the flat-twelve (the Testarossa
     /// was quoted at 40/60), 42/58 for the V8 (McLaren quotes 42:58 for the 570S), about 63 % in front for the 205,
-    /// about 60 % for the two four-wheel-drive hatchbacks (their propshafts and rear differentials behind) and 53 % for
-    /// the rear-wheel-drive saloon.
+    /// about 60 % for the two four-wheel-drive hatchbacks (their propshafts and rear differentials behind), 53 % for
+    /// the rear-wheel-drive saloon and about 53 % for the fleet saloon (auto motor und sport weighed the E 250 CGI Coupe
+    /// of its platform at 53.4/46.6).
     /// </summary>
     [Theory]
     [InlineData(0, 0.38f, 0.42f)]
@@ -273,6 +279,7 @@ public sealed class HandlingTests(ITestOutputHelper output)
     [InlineData(3, 0.59f, 0.62f)]
     [InlineData(4, 0.59f, 0.62f)]
     [InlineData(5, 0.51f, 0.55f)]
+    [InlineData(7, 0.51f, 0.55f)]
     public void Static_weight_distribution_matches_the_car(int car, float min, float max)
     {
         var spec = VehicleSpec.Catalogue[car];
@@ -295,7 +302,8 @@ public sealed class HandlingTests(ITestOutputHelper output)
     /// gives under the tyres' aligning torque (<see cref="VehicleSpec.SteeringCompliance"/>), which adds the half a degree
     /// per g or so that steering compliance gives real cars: the hot hatch, at 0.8 deg/g before, below its class, now
     /// understeers as front-heavy hatchbacks do (1.4). No understeer gradient or roll rate is published for the three
-    /// hatchbacks: their ranges are the class's (1-4 deg/g for front-heavy cars, Gillespie ch. 6) narrowed round each.
+    /// hatchbacks or the fleet saloon: their ranges are the class's (1-4 deg/g for front-heavy cars, Gillespie ch. 6; a
+    /// comfortable rear-drive saloon of the 2010s understeers mildly and rolls 3-4 deg/g) narrowed round each.
     /// </summary>
     [Theory]
     [InlineData(0, 0.3f, 1.5f, 1.2f, 2.8f)]
@@ -305,7 +313,7 @@ public sealed class HandlingTests(ITestOutputHelper output)
     [InlineData(4, 1.2f, 2.6f, 2.0f, 3.0f)]
     [InlineData(5, 0.8f, 3.0f, 3.8f, 6.5f)]
     [InlineData(6, 1.5f, 5.0f, 4.5f, 7.5f)]
-    [InlineData(7, 1.0f, 4.0f, 2.8f, 4.8f)]
+    [InlineData(7, 1.4f, 2.6f, 3.0f, 4.2f)]
     public void Understeer_and_roll_on_the_skid_pad(int car, float gradientMin, float gradientMax, float rollMin, float rollMax)
     {
         var spec = VehicleSpec.Catalogue[car];

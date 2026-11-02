@@ -7,7 +7,7 @@ using Xunit.Abstractions;
 namespace GrudgeLap.Physics.Tests;
 
 /// <summary>
-/// The brake-based differentials (dyn5): the V8's brake steer, the V6 hatch's EDS and the fleet saloon's BLD, each a
+/// The brake-based differentials (dyn5): the V8's brake steer, the V6 hatch's EDS and the fleet saloon's ETS, each a
 /// stability system's brake holding a driven wheel that spins ahead of its partner on an open differential; and that the
 /// cars that had nothing of the kind still have nothing.
 /// </summary>
@@ -21,7 +21,7 @@ public sealed class ElectronicDifferentialTests(ITestOutputHelper output)
 
     /// <summary>
     /// Only the three cars whose makers fitted one carry a brake-based differential: McLaren's brake steer on the 570S,
-    /// EDS on the Golf R32 (with its ESP), BLD on the Egea's ESC. The 205 GTi had no such system, the Delta Integrale its
+    /// EDS on the Golf R32 (with its ESP), ETS on the E-Class's ESP. The 205 GTi had no such system, the Delta Integrale its
     /// viscous centre and Torsen rear, the flat-twelve its limited-slip unit, and the 1990s saloon and estate nothing.
     /// </summary>
     [Fact]
@@ -38,12 +38,14 @@ public sealed class ElectronicDifferentialTests(ITestOutputHelper output)
     /// within its lead, the wheel on the asphalt takes its share and the car pulls away. Both the brake's torque and the
     /// held wheel run smooth at the step rate: the brake never hunts up and down on alternate steps, and the wheel does
     /// so no more than without the function (the R32's Haldex makes its front wheels do it on split grip either way: see
-    /// design.md, the dynamics audit's item 14).
+    /// design.md, the dynamics audit's item 14). The fleet saloon, front-driven while it was the Egea, gained half as much
+    /// again; as the rear-driven E-Class (fleet) its wheel on the grass carries more of the load as the car squats, so the
+    /// open differential already pulls away harder (5.2 m/s after 2.5 s, the Egea 4.2) and the brake adds less to it.
     /// </summary>
     [Theory]
     [InlineData(1, 2f)]
     [InlineData(4, 1.05f)]
-    [InlineData(7, 1.3f)]
+    [InlineData(7, 1.2f)]
     public void A_wheel_spinning_on_split_grip_is_braked_and_the_car_pulls_away(int car, float gainAtLeast)
     {
         var spec = VehicleSpec.Catalogue[car];
@@ -105,14 +107,16 @@ public sealed class ElectronicDifferentialTests(ITestOutputHelper output)
     /// Out of a tight bend on full throttle (22 m, from 9 m/s, as <c>Limited_slip_differential_holds_the_inside_wheel</c>
     /// drives the flat-twelve), the inside driven wheel, unloaded by the roll, spins ahead of the outside one; the brake
     /// holds it within its lead, with the traction control the car has. The fleet saloon gains speed by it, its engine no
-    /// longer cut for one wheel's spin. The V8 does not: at 0.9 g round a 22 m circle its outside rear tyre is already
-    /// near the edge of its friction circle sideways, so the drive the brake hands it costs grip across (the tail steps
-    /// out a little and the circle driver gives back lock), as with the flat-twelve's limited-slip unit.
+    /// longer cut for one wheel's spin: a few per cent as the rear-driven E-Class (fleet), whose outside rear tyre carries
+    /// the bend as well as the drive the brake hands it (the front-driven Egea gained 14 %, its rear tyres free of the
+    /// drive). The V8 does not gain at all: at 0.9 g round a 22 m circle its outside rear tyre is already near the edge of
+    /// its friction circle sideways, so the drive the brake hands it costs grip across (the tail steps out a little and
+    /// the circle driver gives back lock), as with the flat-twelve's limited-slip unit. A gain of 0 is not checked.
     /// </summary>
     [Theory]
-    [InlineData(1, false)]
-    [InlineData(7, true)]
-    public void The_inside_wheel_out_of_a_tight_bend_is_held(int car, bool gains)
+    [InlineData(1, 0f)]
+    [InlineData(7, 1.02f)]
+    public void The_inside_wheel_out_of_a_tight_bend_is_held(int car, float gainAtLeast)
     {
         var spec = VehicleSpec.Catalogue[car];
         var braked = BendExit(spec);
@@ -122,7 +126,7 @@ public sealed class ElectronicDifferentialTests(ITestOutputHelper output)
         Assert.True(braked.Lead < open.Lead * 0.85f, $"the brake should hold the inside wheel back ({braked.Lead:F2} against {open.Lead:F2} m/s)");
         Assert.Equal(0, braked.BrakeZigZag);
         Assert.True(braked.WheelZigZag <= open.WheelZigZag);
-        if (gains) Assert.True(braked.Gained > open.Gained * 1.05f, $"the car should gain more speed ({braked.Gained:F2} against {open.Gained:F2} m/s)");
+        if (gainAtLeast > 0f) Assert.True(braked.Gained > open.Gained * gainAtLeast, $"the car should gain more speed ({braked.Gained:F2} against {open.Gained:F2} m/s)");
     }
 
     /// <summary>

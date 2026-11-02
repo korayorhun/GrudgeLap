@@ -6,9 +6,10 @@ namespace GrudgeLap.Physics.Vehicle;
 /// hatchbacks follow the cars the game draws for them: the front-wheel-drive 205 GTi 1.9 of 1988 (<see cref="HotHatch"/>),
 /// the four-wheel-drive Delta HF Integrale Evoluzione of 1992 (<see cref="FiveHatch"/>) and Golf R32 of 2003
 /// (<see cref="TurboHatch"/>); and three everyday cars of Turkey's roads (0.9.1): the 1.6 rear-wheel-drive saloon of the
-/// 1990s (<see cref="Saloon"/>), the 1.4 estate of the same years (<see cref="Estate"/>) and the 1.4 fleet saloon of
-/// today (<see cref="Fleet"/>). The numbers are game numbers, tuned for feel from the published figures of the cars
-/// they follow (power, torque, mass, wheelbase, track, tyres, gearing), not a manufacturer datasheet.
+/// 1990s (<see cref="Saloon"/>), the 1.4 estate of the same years (<see cref="Estate"/>) and the 2.1 diesel fleet
+/// saloon of the 2010s (<see cref="Fleet"/>, the E-Class the game draws). The numbers are game numbers, tuned for feel
+/// from the published figures of the cars they follow (power, torque, mass, wheelbase, track, tyres, gearing), not a
+/// manufacturer datasheet.
 /// </summary>
 public sealed record VehicleSpec
 {
@@ -77,9 +78,9 @@ public sealed record VehicleSpec
     /// <summary>
     /// A brake-based differential function (dyn5): the stability system's brakes hold a driven wheel that spins ahead of
     /// its partner on the same axle, so that the open differential's torque goes on driving the wheel that grips. McLaren's
-    /// brake steer on the V8, Volkswagen's EDS on the V6 hatch and Fiat's BLD on the fleet saloon; null on a car that had
-    /// none (the 205 GTi, the Delta Integrale with its viscous centre and Torsen, the flat-twelve with its clutch-type
-    /// limited-slip unit, the two saloons and the estate of the 1990s).
+    /// brake steer on the V8, Volkswagen's EDS on the V6 hatch and Mercedes-Benz's ETS on the fleet saloon; null on a car
+    /// that had none (the 205 GTi, the Delta Integrale with its viscous centre and Torsen, the flat-twelve with its
+    /// clutch-type limited-slip unit, the saloon and the estate of the 1990s).
     /// </summary>
     public ElectronicDifferential? ElectronicDifferential { get; init; }
     /// <summary>Whether the engine drives the wheels of the front axle (<paramref name="front"/>) or of the rear one.</summary>
@@ -562,37 +563,57 @@ public sealed record VehicleSpec
     };
 
     /// <summary>
-    /// The 1.4 fleet saloon of 2017, after the Fiat Egea (the Tipo saloon built in Bursa): the sixteen-valve 1,368 cc
-    /// Fire, 95 PS at 6000 and 127 N m at 4500 (Fiat's handbook), 1,150 kg, six gears (3.545 / 2.158 / 1.480 / 1.121 /
-    /// 0.921 / 0.766, final drive 4.071), 195/65 R15 tyres on steel wheels, ESC. Slippery (Cd 0.29): 185 km/h, 0-100
-    /// in 11.5 s.
+    /// The fleet saloon of 2014, after the Mercedes-Benz E-Class W212 the game draws, as one of the OM 651 diesels of the
+    /// taxi ranks and company fleets of Europe and Turkey: the E 250 CDI of the facelift (2013-15), the 2.1-litre diesel
+    /// four with a two-stage turbocharger, 204 PS at 3800 and 500 N m from 1600 to 1800, rear-wheel drive through the
+    /// six-speed manual that was its standard gearbox (5.10 / 2.78 / 1.75 / 1.25 / 1.00 / 0.81, reverse 4.62, final drive
+    /// 2.47), 205/60 R16 tyres, ESP with anti-lock brakes and ETS, Cd 0.26, 1,765 kg (EU: a 68 kg driver, 7 kg of
+    /// luggage, the tank 90 % full). Mercedes-Benz's figures: 0-100 km/h in 7.7 s, 240 km/h (its data sheet of the
+    /// E-Class saloon, 11/2012; the Mercedes-Benz Classic archive's E 250 CDI of 2013-15 agrees).
     /// </summary>
+    /// <remarks>
+    /// The seven-speed 7G-TRONIC PLUS was the option most of these cars were bought with (0-100 km/h in 7.5 s, 242 km/h);
+    /// the game's driveline is a clutch and a gearbox on every car, its automatic mode shifting them for the driver, and
+    /// a torque converter is not modelled, so the car has the manual it was listed with. As the hatchbacks': the axles,
+    /// the track, the ride height and the body's footprint are those the drawn model is prepared to (tools/car_models.py
+    /// scales it to them: 2.64 m between the axles where the W212 has 2.87), and the springs follow the mass so the car
+    /// sits at the same height on them; the mass, its place, the tyres, the gearing, the engine, the brakes and the bars
+    /// are the E 250 CDI's.
+    /// </remarks>
     public static VehicleSpec Fleet => new()
     {
-        Name = "SALOON 1.4 16V '17",
+        Name = "SALOON 2.1 DIESEL '14",
         Style = CarStyle.Fleet,
-        FrontTire = new(195f, 65f, 15f),
-        RearTire = new(195f, 65f, 15f),
-        FrontAntiRoll = 7800f,
-        RearAntiRoll = 3000f,
-        CentreOfMassOffset = new(0f, -0.10f, 0f),
-        // ESC brings anti-lock brakes with it.
+        // 205/60 R16 on the E 250 CDI of 2013 (the 225/55 R16 of 2009 gave way to them in 2011).
+        FrontTire = new(205f, 60f, 16f),
+        RearTire = new(205f, 60f, 16f),
+        // Torsion-bar stabilisers on both multi-link axles; the balance set towards the front, as on a comfortable saloon
+        // that understeers at the limit.
+        FrontAntiRoll = 15000f,
+        RearAntiRoll = 7000f,
+        // About 53/47: auto motor und sport weighed the E 250 CGI Coupe of the same platform at 53.4/46.6 (its test of
+        // 03/2010); no axle loads were found for the diesel saloon.
+        CentreOfMassOffset = new(0f, -0.10f, -0.211f),
+        // ESP brings anti-lock brakes and traction control with it.
         AntiLockBrakes = true,
         LimitedSlipLocking = 0f,
         LimitedSlipPreload = 0f,
-        // Its ESC's BLD (Brake Limited Differential): "if the slipping only involves one of the drive wheels, the BLD
-        // function is activated, automatically braking the wheel which is slipping", and it stays on with the systems
-        // switched off (the Tipo saloon's handbook of 2016). Fiat gives no threshold or speed limit: a front wheel is let
-        // slip a metre a second more than the other before the brake holds it (a game figure, between the V8's brake
-        // steer and the R32's EDS), at any speed.
-        ElectronicDifferential = new ElectronicDifferential { SlipLead = 1.0f },
-        Engine = EngineSpec.FleetFour,
-        SpeedoMaxMph = 143f,
-        // The 1,150 kg is the EU kerb weight, which counts a 75 kg driver and most of a tank already.
-        MassKg = 1170f,
-        InertiaRoll = 450f,
-        InertiaYaw = 2050f,
-        InertiaPitch = 2000f,
+        // ETS, the traction control within ESP: it "brakes the drive wheels individually if they spin ... for example if
+        // the road surface is slippery on one side. In addition, more drive torque is transferred to the wheel or wheels
+        // with traction", and it stays on with ESP switched off (the W212's operator's manual, Mercedes-Benz USA's of the
+        // 2016 E-Class saloon and estate, p. 81). It is the brake function the Egea's BLD was. Mercedes gives no threshold
+        // or speed limit: a rear wheel is let slip 0.8 m/s more than the other before the brake holds it, at any speed (a
+        // game figure; at the BLD's 1.0 the brake held the inside rear out of a tight bend to 1.16 m/s ahead, barely
+        // under the 1.36 the traction control alone allows, where the handbook has it hand the drive across).
+        ElectronicDifferential = new ElectronicDifferential { SlipLead = 0.8f },
+        Engine = EngineSpec.DieselFour,
+        // Its speedometer reads to 260 km/h.
+        SpeedoMaxMph = 162f,
+        // Mercedes's 1,765 kg with the tank full.
+        MassKg = 1770f,
+        InertiaRoll = 680f,
+        InertiaYaw = 3100f,
+        InertiaPitch = 3030f,
         HalfTrack = 0.771f,
         FrontAxle = 1.028f,
         RearAxle = 1.608f,
@@ -600,27 +621,32 @@ public sealed record VehicleSpec
         BodyRear = 2.611f,
         BodyHalfWidth = 0.896f,
         HubHeight = -0.20f,
-        DragCoefficient = 0.30f,
-        FrontalArea = 2.20f,
-        FrontLiftArea = 0.08f,
-        RearLiftArea = 0.05f,
-        TireGrip = 0.94f,
+        // Cd 0.26 (Mercedes-Benz); 1.85 m wide and 1.47 m tall.
+        DragCoefficient = 0.26f,
+        FrontalArea = 2.30f,
+        FrontLiftArea = 0.06f,
+        RearLiftArea = 0.04f,
+        // Touring tyres of the 2010s: a little more grip than the Egea's economy tyres had (0.94) and less than the R32's
+        // 18 in sports tyres (1.08); it stops from 100 km/h in 37.7 m (see HandlingTests).
+        TireGrip = 1.04f,
         TractionControl = true,
-        WheelRadius = 0.317f,
+        WheelRadius = 0.326f,
         SuspensionRest = 0.24f,
-        SuspensionStiffness = 30000f,
-        SuspensionDamping = 2900f,
+        // 1170 kg rode on 30,000 N/m before: the same sag (see the remarks).
+        SuspensionStiffness = 45385f,
+        SuspensionDamping = 4400f,
         MaxCompression = 0.14f,
         MaxSteerLowSpeedDeg = 34f,
         MaxSteerHighSpeedDeg = 7f,
-        FrontBrakeTorque = 2100f,
-        RearBrakeTorque = 400f,
-        GearRatios = [-3.818f, 0f, 3.545f, 2.158f, 1.480f, 1.121f, 0.921f, 0.766f],
-        FinalDrive = 4.071f,
-        ClutchMaxTorque = 260f,
-        EngineInertia = 0.11f,
-        WheelInertia = 0.9f,
-        FrontWheelDrive = true,
+        // Ventilated discs in front, solid discs behind.
+        FrontBrakeTorque = 3000f,
+        RearBrakeTorque = 850f,
+        GearRatios = [-4.62f, 0f, 5.10f, 2.78f, 1.75f, 1.25f, 1.00f, 0.81f],
+        FinalDrive = 2.47f,
+        ClutchMaxTorque = 800f,
+        // The OM 651's dual-mass flywheel.
+        EngineInertia = 0.17f,
+        WheelInertia = 1.1f,
     };
 
     /// <summary>The cars the player can choose from, in menu order.</summary>
@@ -718,6 +744,9 @@ public enum CarStyle
     Saloon,
     /// <summary>The 1.4 front-wheel-drive estate of the 1990s (after the Renault 12 Toros).</summary>
     Estate,
-    /// <summary>The 1.4 front-wheel-drive fleet saloon of today (after the Fiat Egea).</summary>
+    /// <summary>
+    /// The 2.1 diesel rear-wheel-drive fleet saloon of the 2010s (after the Mercedes-Benz E 250 CDI, W212, the model the
+    /// game draws; a front-wheel-drive 1.4 after the Fiat Egea before).
+    /// </summary>
     Fleet,
 }
