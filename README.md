@@ -77,9 +77,22 @@ One copy runs per computer: starting it again brings the running game to the fro
 ## Play
 
 Press **Enter** (or Space, or click) on the title screen and you are off. Before that, **left / right**
-picks the car (the screen shows its power, weight, driven wheels and gears) and **1 / 2 / 3** the gearbox
-(automatic at first; your last choice is remembered). A crash
-shows a replay and puts you back at the last return point; Enter turns the key again.
+picks the car (the screen shows its power, weight, driven wheels and gears), **down** (or a click on the car's
+name) opens the **showroom**, and **1 / 2 / 3** the gearbox (automatic at first; your last choice is
+remembered). A crash shows a replay and puts you back at the last return point; Enter turns the key again.
+
+**Showroom.** Every car on a turntable, turning slowly through a full circle in its real model, with its year,
+layout, power, torque, weight (with a driver and fuel) and tyres under it, as the simulation has them. Open it from
+the title screen or from the menu's CAR line (Esc).
+
+| Key / mouse | Action |
+|---|---|
+| Left / right, A / D, the arrows on screen | the previous / next car |
+| Up / down, W / S, a click on a swatch | the paint: the car's own colour, red, white, silver, black, dark blue, green, yellow, or your own |
+| C (pad: Y), or a click on the last swatch | mix your own colour: hue, saturation, lightness and a finish (solid, metallic, pearl); up / down choose, left / right change, or click and drag; Enter keeps it, Esc puts the paint back |
+| Drag the car / mouse wheel | turn the turntable / come closer or step back |
+| Enter (pad: A); Space when opened from the title screen | take this car and the paints you chose (each car keeps its own colour) |
+| Esc (pad: B or Back); Space when opened from the menu, as in the menu | back, nothing changed |
 
 | Key | Action |
 |---|---|
@@ -99,7 +112,7 @@ shows a replay and puts you back at the last return point; Enter turns the key a
 | F7 | graphics preset: high, medium, low (remembered) |
 | F6 | frame-rate counter |
 | F5 | new game |
-| Esc | the menu: carry on, new game, paint (the car's own colour or red, white, silver, black, dark blue, green, yellow; remembered), camera, graphics, weather, 1989 mode, units, full screen, replay music, **quit** (the race stands still while it is open) |
+| Esc | the menu: carry on, new game, car (the showroom), paint (the car's own colour, red, white, silver, black, dark blue, green, yellow or the colour you mixed for it; each car its own, remembered), camera, graphics, weather, 1989 mode, units, full screen, replay music, **quit** (the race stands still while it is open) |
 
 A gamepad works too: the left stick steers, the right trigger is the throttle and the left the brake, RB / LB
 shift (on the title screen they step through the gearboxes), X is the clutch, A starts, B skips, Y switches
@@ -188,8 +201,9 @@ best lap's ghost out of the picture.
   models of a Ferrari Testarossa (with a Lotus Esprit's cabin), a McLaren 570S, a Peugeot 205 GTi, a Lancia Delta
   Integrale, a Volkswagen Golf R32 (with a SAAB 9-5's cabin), a VAZ-2106, a Renault 12 and a Mercedes-Benz E-Class, set to
   the simulation's wheelbase, their wheels and steering wheel turning, the live dials in their binnacles, the
-  rear-view mirror on their own; `tools/prepare_car_models.py`; in their own colours or the one the menu picks, a
-  paint drawn from a texture recoloured with its shading, lettering and trim kept), traffic of five everyday cars in
+  rear-view mirror on their own; `tools/prepare_car_models.py`; in their own colours or one the player picks or
+  mixes for each car, a paint drawn from a texture recoloured with its shading, lettering and trim kept), a showroom
+  where the cars turn on a turntable in a studio of their own, traffic of five everyday cars in
   twelve road colours, no two drones alike, and where a car has none, lofted car bodies
   with rounded character lines, panel seams, the hatchbacks' lamps, grilles and tail lamps laid on the skin,
   and a lined cabin behind tinted glass (leather dashboard, binnacle with live dials, a centre stack with its
