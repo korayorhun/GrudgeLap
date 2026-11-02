@@ -5,7 +5,7 @@
 | Godot Engine 4.7 (.NET edition) | game engine, shipped with the game | MIT — https://godotengine.org/license/ |
 | .NET 8 runtime | shipped next to the exe (`data_GrudgeLap_windows_x86_64`) | MIT |
 | Godot.NET.Sdk | build integration | MIT |
-| "Car Engine Sounds" (Internet Archive item `car-engines`) | the engines' run-up grain banks, cut from the `3 Ferrari 458`, `15 Lamborghini Countach`, `honda civic type r`, `25 Nissan Pulsar` and `Jaguar f-type s` tracks (the last also the V6 hatch's idle and overrun, `v6/engine_*`) (see `game/assets/audio/SOURCES.md`) | CC0 1.0 Universal, as declared by the uploader — https://archive.org/details/car-engines |
+| "Car Engine Sounds" (Internet Archive item `car-engines`) | the engines' run-up grain banks, cut from the `3 Ferrari 458` (the V8's and the 458's, `v8/`, `v8flat/`), `15 Lamborghini Countach`, `honda civic type r`, `25 Nissan Pulsar`, `Jaguar f-type s` (also the V6 hatch's idle and overrun, `v6/engine_*`), `honda s2000` (the HGT's five, `five/engine_drive`, `engine_overrun`) and `mazda MX 5` (the Bravo 1.6 16V's three banks, `four16v/`) tracks (see `game/assets/audio/SOURCES.md`) | CC0 1.0 Universal, as declared by the uploader — https://archive.org/details/car-engines |
 | Freesound #585215 "Car Engine: Maserati GranTurismo Switch to Sport Mode and Launch" by myeclecticself | the V8's idle grain bank (`v8/engine_idle`) | CC0 1.0 — https://freesound.org/s/585215/ |
 | Freesound #112075 "Lambo idle and rev.mp3" by cheesepuff | the twelve's idle grain bank (`flat12/engine_idle`) | CC0 1.0 — https://freesound.org/s/112075/ |
 | getoutlines.com blueprints of a 1984 coupe, the 2000 Clio, the 1995 Bravo, the 2007 Leon, the 1980 Fiat 131 Mirafiori saloon and the 1969 Dacia 1300 Break | the measurements the car lofts are keyed on (`CarView.BodyStyle`); no drawing is shipped | CC BY 4.0 — https://getoutlines.com |
@@ -15,6 +15,11 @@
 | Freesound #255122 and #255126, Lada 1500 Combi recordings by YleArkisto | the 1.6 saloon's run-up and overrun (`saloon/engine_drive`, `engine_overrun`) | CC BY 4.0 — https://freesound.org/s/255122/ (credit: YleArkisto) |
 | Freesound #141245 "Reault 19 driving 2" and #141240 "Renault 19 underhood acceleration" by lovretta | the 1.4 estate's banks (`estate/engine_*`) | CC0 1.0 — https://freesound.org/s/141245/ |
 | Freesound #243773 "Diesel-drive2.wav" and #243783 "Diesel-drive.wav" by fastson (a TDI's engine bay) | the fleet saloon's diesel banks (`diesel4/engine_*`), cleaned of the recorder's hiss and, for the idle, of a steady 161-163 Hz auxiliary tone (`tools/clean-recording.py`) | CC0 1.0 — https://freesound.org/s/243773/ |
+| Freesound #241083 "Ferrari 360 Spider - engine sound" by PritzProductions | the 458's idle (`v8flat/engine_idle`) | CC0 1.0 — https://freesound.org/s/241083/ |
+| Freesound #95838 "RG Volvo Engine.wav" by cmusounddesign | the Bravo HGT's five's idle (`five/engine_idle`), low-passed at 1.5 kHz (`tools/clean-recording.py`) | CC BY 4.0 — https://freesound.org/s/95838/ (credit: cmusounddesign) |
+| Freesound #268622 "VW Golf R (Zoom H1, OST Lav).wav" by EverydaySounds | the Leon Cupra's 2.0 TSI banks (`tsi4/engine_*`) | CC0 1.0 — https://freesound.org/s/268622/ |
+| Freesound #183654 "DynoJet Scion FR-S" by dezoris | the BRZ's run-up and overrun (`boxer4/engine_drive`, levelled by `tools/level-recording.py`, and `engine_overrun`) | CC0 1.0 — https://freesound.org/s/183654/ |
+| Freesound #191194 "FR-S BRZ GT-86 Vortech Supercharged Dyno Run" by dezoris | the BRZ's idle (`boxer4/engine_idle`) | CC BY 4.0 — https://freesound.org/s/191194/ (credit: dezoris) |
 | ambientCG Ground110 (1K) | the gravel shoulders (`shoulder_*.jpg`) | CC0 1.0 — https://ambientcg.com/view?id=Ground110 |
 | Freesound #383476 "Car interior driving 02.wav" by Daphne_in_Wonderland | the tyres' rolling roar on the road (`tyres/road.wav`) | CC0 1.0 — https://freesound.org/s/383476/ |
 | Freesound #850041 "tire-squeal" by JeffPearson | the cornering squeal loop (`tyres/squeal.wav`) | CC0 1.0 — https://freesound.org/s/850041/ |
