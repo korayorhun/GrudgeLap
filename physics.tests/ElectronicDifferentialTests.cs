@@ -60,6 +60,48 @@ public sealed class ElectronicDifferentialTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// A standing start with all four wheels on the road at the proving ground's start (asphalt, its crown loading the two
+    /// sides a little differently), dry and wet, the V8's launch control and the throttle floored: on even grip there is nothing for the brake to hold, and the launch is
+    /// the one the car makes without the function, figure for figure, with no brake on either rear wheel. Counting the
+    /// brake in the launch assist on even grip once let a one-step blip of slip on one rear wheel run away to 3 m/s and be
+    /// braked at 600 N m, 0.2 m/s down after 2 s.
+    /// </summary>
+    [Theory]
+    [InlineData(Weather.Dry)]
+    [InlineData(Weather.Rain)]
+    public void On_even_grip_the_launch_is_the_one_without_the_brake(Weather weather)
+    {
+        var spec = VehicleSpec.V8Evo;
+        var braked = EvenGripStart(spec, weather);
+        var open = EvenGripStart(spec with { ElectronicDifferential = null }, weather);
+        output.WriteLine($"{spec.Name}, {weather}, even grip from rest: {braked.Speed:F3} m/s after 2 s, the rear wheels apart by up to {braked.MaxLead:F2} m/s, brake up to {braked.MostBrake:F0} N m; without the function {open.Speed:F3} m/s, {open.MaxLead:F2} m/s apart");
+        Assert.True(braked.MostBrake < 1f, $"nothing should be braked on even grip ({braked.MostBrake:F0} N m)");
+        Assert.True(braked.MaxLead < 0.5f, $"neither rear wheel should run ahead of the other ({braked.MaxLead:F2} m/s)");
+        Assert.True(MathF.Abs(braked.Speed - open.Speed) < 0.005f * open.Speed, $"the launch should be the one without the function ({braked.Speed:F3} against {open.Speed:F3} m/s)");
+    }
+
+    /// <summary>The even-grip start: the car at the proving ground's start, held on the brake for 1 s, then 2 s with the throttle floored, straight on.</summary>
+    private static Run EvenGripStart(VehicleSpec spec, Weather weather)
+    {
+        var sim = new VehicleSim(spec, HandlingRig.Proving()) { Weather = weather };
+        sim.Drivetrain.Mode = TransmissionMode.ManualAutoClutch;
+        sim.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Ignition = true, Clutch = 1f }, Step);
+        sim.Step(new DriverInputs { Gear = 1, Clutch = 1f, Brake = 1f }, Step);
+        for (var t = 0f; t < 1f; t += Step) sim.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Brake = 1f }, Step);
+        var (left, right) = (sim.Wheels[2], sim.Wheels[3]);
+        var most = 0f;
+        var apart = 0f;
+        for (var t = 0f; t < 2f; t += Step)
+        {
+            sim.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Throttle = 1f }, Step);
+            Assert.Equal(left.Surface, right.Surface);
+            most = MathF.Max(most, MathF.Max(left.DifferentialBrake, right.DifferentialBrake));
+            apart = MathF.Max(apart, MathF.Abs(Lead(left, right, spec.WheelRadius)));
+        }
+        return new Run(sim.Speed, 0f, apart, most, 0, 0);
+    }
+
+    /// <summary>
     /// Out of a tight bend on full throttle (22 m, from 9 m/s, as <c>Limited_slip_differential_holds_the_inside_wheel</c>
     /// drives the flat-twelve), the inside driven wheel, unloaded by the roll, spins ahead of the outside one; the brake
     /// holds it within its lead, with the traction control the car has. The fleet saloon gains speed by it, its engine no

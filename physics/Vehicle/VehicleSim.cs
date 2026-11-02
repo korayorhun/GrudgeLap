@@ -561,11 +561,13 @@ public sealed class VehicleSim
         // While the clutch slips the wheels get the clutch's torque whatever the engine makes, so a cut would only drag
         // the revs down (into a bog at the launch) without easing the wheelspin.
         var excess = 0f;
-        if (Drivetrain.ClutchLocked && float.IsFinite(differentialLead))
+        if (Drivetrain.ClutchLocked && float.IsFinite(differentialLead) && _differentialEngaged)
         {
             // With a brake-based differential at work the two systems share the job as the real ones do: the brake holds a
             // wheel that spins on its own, up to the lead it allows over its partner, and the engine is cut when both
-            // wheels of an axle spin (the lesser of their excesses) or when one spins past what the brake holds.
+            // wheels of an axle spin (the lesser of their excesses) or when one spins past what the brake holds. Only once
+            // the function has engaged (from the last step): until then nothing brakes the wheel, and leaving its spin to
+            // a brake that is not on cost the V8's launch control 0.03 s to 60 mph on the drag strip.
             excess = float.NegativeInfinity;
             for (var axle = 0; axle < 4; axle += 2)
             {
@@ -678,15 +680,19 @@ public sealed class VehicleSim
     /// <remarks>
     /// The better tyre then carries the axle alone, so it is asked for no more than a driver's foot asks of a tyre: at the
     /// launch control's 99.5 % the V8's rear tyre on the asphalt went over its peak every few steps and the assist cut the
-    /// clutch back each time. On even grip the sum at the launch control's aim is the larger and is what counts, so a
-    /// launch with both tyres on the road is the launch control's, as before; and where the brake cannot hold the
-    /// difference (the R32's rear brake, 420 N m), twice the lesser tyre's force and the brake's is the bound, under the
-    /// sum.
+    /// clutch back each time. Where the brake cannot hold the difference (the R32's rear brake, 420 N m), twice the lesser
+    /// tyre's force and the brake's is the bound, under the sum.
+    /// On even grip (both tyres on the ground, their surfaces' grip within 5 %) the brake is not counted at all and the sum
+    /// is the bound, as on a car without the function: counting it there, a one-step blip of slip on one rear wheel at the
+    /// V8's asphalt launch (a third of a second in) had the assist ask for twice the better tyre's force, before any brake
+    /// was on, and the wheel ran away to 3 m/s of slip and was braked at 600 N m, where without the function it recovers on
+    /// the next step.
     /// </remarks>
     private float AxleLaunchForce(WheelState a, WheelState b, float aim, float differentialLead)
     {
         var sum = LaunchShare(a, aim) + LaunchShare(b, aim);
         if (!float.IsFinite(differentialLead)) return sum;
+        if (a.InContact == b.InContact && MathF.Abs(a.Friction - b.Friction) < 0.05f * MathF.Max(a.Friction, b.Friction)) return sum;
         var brake = (a.IsFront ? _spec.FrontBrakeTorque : _spec.RearBrakeTorque) / _spec.WheelRadius;
         var held = MathF.Min(aim, DriverLaunchAim);
         return MathF.Max(Braked(held), MathF.Min(sum, Braked(aim)));
@@ -991,7 +997,7 @@ public sealed class VehicleSim
             // of the differential's torque. Once the partner too spins past its tyre's peak the brake's reach fades to
             // nothing over half the peak slip again, and the traction control's engine cut does the work, as the systems
             // divide it ("if the slipping only involves one of the drive wheels", Fiat's handbook).
-            _differentialReach[i] += (PartnerGrips(Wheels[i ^ 1], direction) - _differentialReach[i]) * follow;
+            _differentialReach[i] += (PartnerGrips(Wheels[i ^ 1], _contacts[i ^ 1].WasInContact, direction) - _differentialReach[i]) * follow;
             if (_differentialEngaged && float.IsFinite(lead))
             {
                 var cap = (w.IsFront ? _spec.FrontBrakeTorque : _spec.RearBrakeTorque) * _differentialReach[i];
@@ -1016,10 +1022,11 @@ public sealed class VehicleSim
             if (!spinning) _differentialEngaged = false;
         }
 
-        // 1 while the wheel grips short of its tyre's peak slip, falling to 0 by one and a half times the peak; 0 in the air.
-        static float PartnerGrips(WheelState partner, float direction)
+        // 1 while the wheel grips short of its tyre's peak slip, falling to 0 by one and a half times the peak; 0 in the air
+        // on the last step (whose slip it reads).
+        static float PartnerGrips(WheelState partner, bool grounded, float direction)
         {
-            if (!partner.InContact) return 0f;
+            if (!grounded) return 0f;
             var over = direction * partner.SlipRatio / MathF.Max(TireModel.PeakSlipRatio(partner.Friction), 0.02f);
             return MathUtil.Clamp01((1.5f - over) / 0.5f);
         }
@@ -1027,14 +1034,18 @@ public sealed class VehicleSim
         // How far wheel i spins ahead of its partner on the axle (0 and 1 in front, 2 and 3 behind), m/s: its slip speed
         // (its tyre's speed over the road less the road's under it) less its partner's, each counted only while it drives
         // (a wheel held back by the engine on the overrun is not spinning, and its partner rolling freely is not ahead of
-        // it); NaN with both wheels in the air. A wheel in the air is reckoned over its partner's road.
+        // it); NaN with both wheels in the air. A wheel in the air is reckoned over its partner's road. Contact is the last
+        // step's, as the wheel speeds and road speeds are: InContact is already this step's by now, and a wheel's road
+        // speed is kept from its last step on the ground, so on the step it lands its road speed would be the take-off's.
         float Lead(int i)
         {
             var w = Wheels[i];
             var partner = Wheels[i ^ 1];
-            if (!w.InContact && !partner.InContact) return float.NaN;
-            var ground = w.InContact ? w.GroundSpeed : partner.GroundSpeed;
-            var partnerGround = partner.InContact ? partner.GroundSpeed : w.GroundSpeed;
+            var grounded = _contacts[i].WasInContact;
+            var partnerGrounded = _contacts[i ^ 1].WasInContact;
+            if (!grounded && !partnerGrounded) return float.NaN;
+            var ground = grounded ? w.GroundSpeed : partner.GroundSpeed;
+            var partnerGround = partnerGrounded ? partner.GroundSpeed : w.GroundSpeed;
             var slip = direction * (w.AngularVelocity * radius - ground);
             var partnerSlip = direction * (partner.AngularVelocity * radius - partnerGround);
             return MathF.Max(slip, 0f) - MathF.Max(partnerSlip, 0f);

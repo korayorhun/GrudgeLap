@@ -291,23 +291,38 @@ Items 12, 13 and 16 were taken up in 0.19, 15 was decided against, 14 was taken 
     to the wheel's brake torque at full pedal, only while the partner grips (its reach fades as the partner passes its
     own peak: then the engine has to be cut, not a wheel braked), and never with the driver's foot on the brake. Leads:
     3.3 m/s on the R32 (100 rpm), 0.5 m/s on the V8 and 1.0 m/s on the fleet saloon (game figures: neither maker
-    publishes one). The traction control shares the work as the systems do: a single spinning wheel is left to the brake,
-    up to its lead, and the engine is cut when both wheels of an axle spin or one runs past what the brake holds. The
-    launch assist counts on the brake on split grip (twice the better tyre's force, no more than the lesser one's plus
-    the brake's, at a driver's 92 % of the peak; counted as the sum, the clutch pulsed at 30 Hz as the brake caught the
-    spinning wheel and let it go); on even grip the sum, and the V8's launch control, are as before.
+    publishes one). The traction control shares the work as the systems do: once the function has engaged, a single
+    spinning wheel is left to the brake, up to its lead, and the engine is cut when both wheels of an axle spin or one
+    runs past what the brake holds. The launch assist counts on the brake on split grip (twice the better tyre's force,
+    no more than the lesser one's plus the brake's, at a driver's 92 % of the peak; counted as the sum, the clutch
+    pulsed at 30 Hz as the brake caught the spinning wheel and let it go). On even grip (both tyres on the ground, their
+    surfaces' grip within 5 %) it counts the sum, as without the function. The review of dyn5 found the first version
+    counting the brake there too, and the traction control leaving a lone spinning wheel to a brake that was not yet
+    on: at the V8's asphalt launch a one-step blip of slip on one rear wheel had the assist ask for twice the better
+    tyre's force before any brake was on, the wheel ran 3.0 m/s ahead of its partner and was braked at 619 N m (15.47
+    m/s after 2 s against 15.69 without the function; in the rain 9.81 against 9.86, 412 N m), 0-60 mph took 3.48 s
+    (3.47), and the R32 in the rain was credited for torque EDS never gave (its laps 0.06 and 0.07 s slower). Both are
+    fixed: the even-grip launch is the one without the function to the thousandth, dry and wet, with no brake on either
+    wheel (`On_even_grip_the_launch_is_the_one_without_the_brake`), and the V8's 0-60 is 3.467 s with or without it. The
+    loop reads each wheel's lead with the last step's contact, as it reads the wheel and road speeds, so a wheel's
+    first step back on the ground is not reckoned at its take-off's road speed.
 
     `ElectronicDifferentialTests`: from rest with the left wheels on the grass beside the pad, after 2.5 s the V8 is at
-    12.01 m/s against 3.12 with its differential open (the grass wheel 0.46 m/s ahead of its partner on average against
+    12.02 m/s against 3.12 with its differential open (the grass wheel 0.44 m/s ahead of its partner on average against
     9.92), the R32 at 13.42 against 12.23 (its Haldex already moves most of the drive) and the fleet saloon at 6.31
     against 4.16. Out of a 22 m bend on full throttle the V8's inside rear is held to 0.67 m/s ahead of the outside one
     (1.41 under its traction control alone) and the fleet's inside front to 1.08 (1.46), the fleet gaining 3.15 m/s in
-    1.2 s against 2.76; the V8 gains 5.45 against 5.57, its outside rear tyre at 0.9 g having no grip to spare sideways
-    for the drive the brake hands it, as with the flat-twelve's limited-slip unit. The R32's EDS brakes a front wheel
-    held 5 m/s ahead at 30 km/h (161 N m) and not at 45, and from rest last brakes at 18 km/h; no function brakes under
+    1.2 s against 2.76; the V8 gains 5.44 against 5.57, its outside rear tyre at 0.9 g having no grip to spare sideways
+    for the drive the brake hands it, as with the flat-twelve's limited-slip unit. (Reading the partner's grip as its
+    combined slip, sideways as well as along, was tried after the review: the brake then lets go in the bend, the inside
+    wheel runs 1.4 to 2.1 m/s ahead, as far as without the function, and the 5.65 to 5.69 m/s the car gains comes from
+    the traction control no longer cutting the engine for the spinning wheel, not from the brake; it was left as it is.
+    McLaren's own brake steer works mostly on the way into a bend, braking the inside rear to turn the car in, which
+    the model leaves out.) The R32's EDS brakes a front wheel held 5 m/s ahead at 30 km/h (156 N m) and not at 45, and from rest last brakes at 18 km/h; no function brakes under
     the driver's foot. Stepped at 240 Hz, the brake never moves up and down on alternate steps and the held wheel does
-    so no more than with the differential open. Laps: the V8 86.0 and 101.1 s (86.2 and 101.1), the R32 92.8 and
-    104.8 s (unchanged to the hundredth: once the clutch is in, its traction control acts before EDS's 100 rpm), the
+    so no more than with the differential open. Laps: the V8 86.1 and 101.1 s (86.2 and 101.1), the R32 92.8 and
+    104.8 s (unchanged to the hundredth, dry and wet, with and without traffic: once the clutch is in, its traction
+    control acts before EDS's 100 rpm), the
     fleet 102.0 and 112.7 s (101.9 and 112.7: on the stunt route it brakes a front wheel spinning in the air); every car
     laps both routes and the loop verdicts stand. The V8's lift-off test runs at 25.0 m/s (24.5) and the fleet's
     steering goes light at 0.95 g (0.91).
