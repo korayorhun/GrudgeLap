@@ -229,7 +229,7 @@ and standing sprints).
     (`DamperReboundRatio`, the mean unchanged), as road dampers do: a bump is let through softly and the spring's
     return is checked, so a car settles after a crest instead of bouncing.
 
-Items 12, 13 and 16 were taken up in 0.19, 15 was decided against, 14 stays open:
+Items 12, 13 and 16 were taken up in 0.19, 15 was decided against, 14 was taken up in dyn5:
 
 12. **Launches** (fixed in 0.19). The assisted clutch bit from about 2,000 rpm whatever the car: the revs collapsed
     into a bog, the tyres spun up to a slip of 1.5 and the driver had to feather the throttle back to a fifth (V8
@@ -276,8 +276,55 @@ Items 12, 13 and 16 were taken up in 0.19, 15 was decided against, 14 stays open
     tyres and lighter body give the same 0.5 deg/g from the tyres alone). Should the drawn car stay a 205, the spec
     and `car_models.py` can follow it together in one change. (cars3: the spec followed it, item 19; the geometry
     `car_models.py` scales the model to stayed.)
-14. **The 570S's brake steer** (it brakes a spinning inside wheel instead of locking the axle) and the hatchbacks'
-    electronic equivalents are not modelled; their differentials are open. Still open.
+14. **Brake-based differentials** (fixed in dyn5). The 570S has an open rear differential and its stability system
+    brakes a spinning inside rear wheel instead (McLaren's brake steer, chosen over a limited-slip unit for its weight);
+    the Golf R32's ESP brings EDS, which brakes a driven wheel turning about 100 rpm faster than the other of its axle,
+    coming in below 40 km/h and, on a four-wheel-drive car, acting on all four wheels and letting go at 80 (the Golf IV's
+    handbook, the Audi A4 B5's EDL description, SSP 206); the Egea's ESC has BLD, which brakes a drive wheel that slips
+    on its own (the Tipo saloon's handbook of 2016). None was modelled: their differentials were plainly open. The 205,
+    the Delta (viscous centre, Torsen rear), the flat-twelve (clutch-type limited-slip unit), the two 1990s saloons and
+    the estate had nothing of the kind and have nothing. `VehicleSpec.ElectronicDifferential` now gives the three cars a
+    closed loop on each driven axle (`VehicleSim.UpdateElectronicDifferential`): a wheel whose slip speed (its speed
+    over the road less the road's, so a bend's longer outside path is not taken for spin) runs more than the car's lead
+    ahead of its partner's is braked. The loop is proportional-integral with gains scaled by the inertia the wheel turns
+    with (critically damped at 25 rad/s behind a 0.02 s pressure lag, reading the lead averaged over two steps), holds up
+    to the wheel's brake torque at full pedal, only while the partner grips (its reach fades as the partner passes its
+    own peak: then the engine has to be cut, not a wheel braked), and never with the driver's foot on the brake. Leads:
+    3.3 m/s on the R32 (100 rpm), 0.5 m/s on the V8 and 1.0 m/s on the fleet saloon (game figures: neither maker
+    publishes one). The traction control shares the work as the systems do: a single spinning wheel is left to the brake,
+    up to its lead, and the engine is cut when both wheels of an axle spin or one runs past what the brake holds. The
+    launch assist counts on the brake on split grip (twice the better tyre's force, no more than the lesser one's plus
+    the brake's, at a driver's 92 % of the peak; counted as the sum, the clutch pulsed at 30 Hz as the brake caught the
+    spinning wheel and let it go); on even grip the sum, and the V8's launch control, are as before.
+
+    `ElectronicDifferentialTests`: from rest with the left wheels on the grass beside the pad, after 2.5 s the V8 is at
+    12.01 m/s against 3.12 with its differential open (the grass wheel 0.46 m/s ahead of its partner on average against
+    9.92), the R32 at 13.42 against 12.23 (its Haldex already moves most of the drive) and the fleet saloon at 6.31
+    against 4.16. Out of a 22 m bend on full throttle the V8's inside rear is held to 0.67 m/s ahead of the outside one
+    (1.41 under its traction control alone) and the fleet's inside front to 1.08 (1.46), the fleet gaining 3.15 m/s in
+    1.2 s against 2.76; the V8 gains 5.45 against 5.57, its outside rear tyre at 0.9 g having no grip to spare sideways
+    for the drive the brake hands it, as with the flat-twelve's limited-slip unit. The R32's EDS brakes a front wheel
+    held 5 m/s ahead at 30 km/h (161 N m) and not at 45, and from rest last brakes at 18 km/h; no function brakes under
+    the driver's foot. Stepped at 240 Hz, the brake never moves up and down on alternate steps and the held wheel does
+    so no more than with the differential open. Laps: the V8 86.0 and 101.1 s (86.2 and 101.1), the R32 92.8 and
+    104.8 s (unchanged to the hundredth: once the clutch is in, its traction control acts before EDS's 100 rpm), the
+    fleet 102.0 and 112.7 s (101.9 and 112.7: on the stunt route it brakes a front wheel spinning in the air); every car
+    laps both routes and the loop verdicts stand. The V8's lift-off test runs at 25.0 m/s (24.5) and the fleet's
+    steering goes light at 0.95 g (0.91).
+    The five other cars are unchanged bit for bit: every figure the tests print, and a hash of their whole state over
+    both routes dry and wet, the 40 m pad, a sprint, a stop and a bend exit, match 0.22.0's. The native ABI is unchanged
+    (the spec record and `WheelState.DifferentialBrake` are managed only).
+
+    Left as they are: brake steer's other half, the inside rear braked on the way into a bend to cut understeer (a yaw
+    control, not a differential); the disc temperature at which EDS stands down. Found on the way, not fixed: on split
+    grip at a standing start the assisted clutch locks and slips on alternate steps, and the wheel on the grass hunts with
+    it at the step rate (the fleet saloon with its differential open: 49 reversals in 2.5 s; the R32 93, 88 with EDS;
+    the V8 and the fleet with the brake: none). It is the clutch's lock/slip machine, shared by every car, and changing
+    it moves every car's figures. And the open differential gives each wheel half the engine's inertia, so the speed
+    difference between the two wheels carries half the engine where a real differential's carries none; the two wheels'
+    common speed is right, and through it the brake gains what the real ones do (the engine kept off its limiter, the
+    traction control's cut, the launch).
+
 15. **Camber and tyre temperature** (decided against in 0.19). The raycast wheel has no suspension geometry, so camber
     from roll and bump would need a camber gain per car that no source gives for these cars, and its effect on the
     balance would trade one for one against the roll-stiffness split that `Understeer_and_roll_on_the_skid_pad`
@@ -337,8 +384,8 @@ Items 18 and 19 came with cars3, when the three hatchbacks were made to drive li
     the Haldex passes nothing. The two-wheel-drive cars go through the same arithmetic as before: every figure the tests
     print for them (sprints, stops, skid pad, launches, laps) was compared line by line with 0.19's and is unchanged
     (`Two_wheel_drive_cars_drive_one_axle` pins where their torque goes). The native ABI is unchanged: the new spec
-    fields are managed only. Not modelled: the R32's electronic differential lock (EDS, braking a spinning wheel) and
-    the 570S's brake steer (item 14); a viscous coupling's hump; the Haldex's own temperature and pump lag.
+    fields are managed only. Not modelled then: the R32's electronic differential lock (EDS, braking a spinning wheel) and
+    the 570S's brake steer (both since dyn5, item 14); a viscous coupling's hump; the Haldex's own temperature and pump lag.
 
     Review follow-ups (cars3): the first fronts-on-grass test let the clutch in at the limiter, which spun the rears on
     the pad as hard as the fronts on the grass (41 rad/s at 2-8 rad/s of ground speed), so it showed the coupling

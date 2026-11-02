@@ -24,6 +24,16 @@ public sealed class VehicleSim
     /// <summary>What the driveline gives each wheel this step: its drive torque (N m) and the inertia it turns with (kg m^2, the engine's share included while the clutch is locked).</summary>
     private readonly float[] _driveTorque = new float[4];
     private readonly float[] _driveInertia = new float[4];
+    /// <summary>The integral share of each wheel's electronic-differential brake (N m), see <see cref="UpdateElectronicDifferential"/>.</summary>
+    private readonly float[] _differentialBrakeHeld = new float[4];
+    /// <summary>Each wheel's lead over its partner at the last step (m/s), for the electronic differential's two-step average.</summary>
+    private readonly float[] _differentialLastLead = new float[4];
+    /// <summary>The inertia (kg m^2) each wheel's electronic-differential loop scales its gains by, smoothed over the modulator's lag.</summary>
+    private readonly float[] _differentialInertia = new float[4];
+    /// <summary>The share of each wheel's brake torque its electronic-differential loop may use (its partner's grip), smoothed over the modulator's lag.</summary>
+    private readonly float[] _differentialReach = new float[4];
+    /// <summary>Whether the electronic differential has come in (within its speed window) and not yet let go.</summary>
+    private bool _differentialEngaged;
     private Vector3 _centreOfMass;
     private Vector3 _massVelocity;
     private float _accumulator;
@@ -156,6 +166,11 @@ public sealed class VehicleSim
         FrontDriveTorque = 0f;
         RearDriveTorque = 0f;
         CouplingTorque = 0f;
+        Array.Clear(_differentialBrakeHeld);
+        Array.Clear(_differentialLastLead);
+        Array.Clear(_differentialInertia);
+        Array.Clear(_differentialReach);
+        _differentialEngaged = false;
         _accumulator = 0f;
         Drivetrain.Reset();
         foreach (var w in Wheels) w.Reset();
@@ -246,18 +261,19 @@ public sealed class VehicleSim
         // Drivetrain first: it needs the driven axle's speed from the previous step (the rear wheels, 2 and 3, or on a
         // front-wheel-drive car the front ones, 0 and 1). Traction control, where the car has it, eases the throttle as
         // the driven wheels spin up (slip ratio from the previous step).
-        UpdateTractionControl(input, dt);
+        var differentialLead = ElectronicDifferentialLead(input);
+        UpdateTractionControl(input, differentialLead, dt);
         float axleSpeed, axleInertia, axleLoad;
         if (_spec.FourWheelDrive is { } awd)
         {
             (axleSpeed, axleInertia, axleLoad) = CentreDifferentialInput(awd, dt);
-            Drivetrain.TractionTorque = LaunchTraction(awd);
+            Drivetrain.TractionTorque = LaunchTraction(awd, differentialLead);
         }
         else
         {
             var (driven0, driven1) = _spec.FrontWheelDrive ? (Wheels[0], Wheels[1]) : (Wheels[2], Wheels[3]);
             axleSpeed = 0.5f * (driven0.AngularVelocity + driven1.AngularVelocity);
-            Drivetrain.TractionTorque = LaunchTraction(driven0, driven1);
+            Drivetrain.TractionTorque = LaunchTraction(driven0, driven1, differentialLead);
             // The inertia the clutch sees over one step: the driven wheels and, through their tyres' stiffness, what the
             // road holds them to (the terms of SpinGroundedWheel's balance); and the torque the road holds them back with.
             axleInertia = AxleInertia(driven0, driven1, dt);
@@ -347,6 +363,7 @@ public sealed class VehicleSim
         }
         FrontDriveTorque = _driveTorque[0] + _driveTorque[1];
         RearDriveTorque = _driveTorque[2] + _driveTorque[3];
+        if (_spec.ElectronicDifferential is { } electronicDifferential) UpdateElectronicDifferential(electronicDifferential, pedal, speed, dt);
 
         for (var i = 0; i < Wheels.Length; i++)
         {
@@ -360,6 +377,8 @@ public sealed class VehicleSim
             var wheelInertia = _driveInertia[i];
             UpdateAntiLock(w, pedal, dt);
             var brakeMax = (w.IsFront ? _spec.FrontBrakeTorque : _spec.RearBrakeTorque) * pedal * w.BrakePressure;
+            // The electronic differential's brake works only while the driver's foot is off the pedal, so the two never add.
+            if (_spec.ElectronicDifferential is not null) brakeMax += w.DifferentialBrake;
 
             if (!w.InContact)
             {
@@ -532,7 +551,7 @@ public sealed class VehicleSim
     /// 0.17 it eased the pedal itself, by the slip ratio, which near standstill opened the assisted clutch on every cut.
     /// On a four-wheel-drive car it watches all four wheels.
     /// </summary>
-    private void UpdateTractionControl(in DriverInputs input, float dt)
+    private void UpdateTractionControl(in DriverInputs input, float differentialLead, float dt)
     {
         if (!_spec.TractionControl || Drivetrain.Gear <= 0 || input.Throttle <= 0f)
         {
@@ -542,7 +561,21 @@ public sealed class VehicleSim
         // While the clutch slips the wheels get the clutch's torque whatever the engine makes, so a cut would only drag
         // the revs down (into a bog at the launch) without easing the wheelspin.
         var excess = 0f;
-        if (Drivetrain.ClutchLocked)
+        if (Drivetrain.ClutchLocked && float.IsFinite(differentialLead))
+        {
+            // With a brake-based differential at work the two systems share the job as the real ones do: the brake holds a
+            // wheel that spins on its own, up to the lead it allows over its partner, and the engine is cut when both
+            // wheels of an axle spin (the lesser of their excesses) or when one spins past what the brake holds.
+            excess = float.NegativeInfinity;
+            for (var axle = 0; axle < 4; axle += 2)
+            {
+                if (!_spec.Drives(Wheels[axle].IsFront)) continue;
+                var a = SpinExcess(Wheels[axle]);
+                var b = SpinExcess(Wheels[axle + 1]);
+                excess = MathF.Max(excess, MathF.Max(MathF.Min(a, b), MathF.Max(a, b) - differentialLead));
+            }
+        }
+        else if (Drivetrain.ClutchLocked)
         {
             excess = float.NegativeInfinity;
             foreach (var w in Wheels)
@@ -563,6 +596,19 @@ public sealed class VehicleSim
     }
 
     /// <summary>
+    /// The lead (m/s) the electronic differential lets a driven wheel's slip speed run over its partner's at this speed,
+    /// while it can act (the driver off the brake, within its speed window); NaN on a car without one or when it cannot.
+    /// </summary>
+    private float ElectronicDifferentialLead(in DriverInputs input)
+    {
+        if (_spec.ElectronicDifferential is not { } ed || input.Brake > 0f) return float.NaN;
+        var speed = MathF.Abs(Vector3.Dot(_massVelocity, Forward));
+        var kmh = speed * MathUtil.KmhPerMps;
+        if (kmh > ed.CutOutKmh || (kmh > ed.EngageBelowKmh && !_differentialEngaged)) return float.NaN;
+        return ed.SlipLead;
+    }
+
+    /// <summary>
     /// The axle torque (N m) the driven tyres can put down now, for the launch assist (0.19): each grounded driven tyre's
     /// peak force at its load from the last step, times the share the launch aims at (all but a few per cent of the peak
     /// with launch control, which reads the wheel speeds a hundred times a second; nine tenths for a driver's foot, which
@@ -570,14 +616,14 @@ public sealed class VehicleSim
     /// A tyre asked for its whole peak has no margin: the wheel's own inertia then carries it over the top and it spins
     /// away, which is the bogged, smoking start the assisted clutch made up to 0.18.
     /// </summary>
-    private float LaunchTraction(WheelState a, WheelState b)
+    private float LaunchTraction(WheelState a, WheelState b, float differentialLead)
     {
         if (!a.InContact && !b.InContact) return float.PositiveInfinity;
         var aim = LaunchAim;
         // The wheels themselves take a little torque to speed up with the car (two wheels' inertia at the car's
         // acceleration): what reaches the road is the rest.
         var spinUp = 2f * _spec.WheelInertia * MathF.Max(LongitudinalAcceleration, 0f) / _spec.WheelRadius;
-        return (LaunchShare(a, aim) + LaunchShare(b, aim)) * _spec.WheelRadius + spinUp;
+        return AxleLaunchForce(a, b, aim, differentialLead) * _spec.WheelRadius + spinUp;
     }
 
     /// <summary>
@@ -596,13 +642,13 @@ public sealed class VehicleSim
     /// launch, and the V6 hatch with its fronts on grass pulled away at a front-wheel-drive car's 0.3 g. So the assist
     /// counts on the clutch pack's whole capacity and the fronts run ahead to close it, as a first Haldex's did.
     /// </remarks>
-    private float LaunchTraction(FourWheelDrive awd)
+    private float LaunchTraction(FourWheelDrive awd, float differentialLead)
     {
         if (!(Wheels[0].InContact || Wheels[1].InContact) || !(Wheels[2].InContact || Wheels[3].InContact)) return float.PositiveInfinity;
         var aim = LaunchAim;
         var spinUp = 4f * _spec.WheelInertia * MathF.Max(LongitudinalAcceleration, 0f) / _spec.WheelRadius;
-        var front = (LaunchShare(Wheels[0], aim) + LaunchShare(Wheels[1], aim)) * _spec.WheelRadius;
-        var rear = (LaunchShare(Wheels[2], aim) + LaunchShare(Wheels[3], aim)) * _spec.WheelRadius;
+        var front = AxleLaunchForce(Wheels[0], Wheels[1], aim, differentialLead) * _spec.WheelRadius;
+        var rear = AxleLaunchForce(Wheels[2], Wheels[3], aim, differentialLead) * _spec.WheelRadius;
         var s = awd.FrontShare;
         var passes = awd.CouplingCapacity;
         if (awd.Coupling == CentreCoupling.Viscous)
@@ -618,7 +664,41 @@ public sealed class VehicleSim
         return total + spinUp;
     }
 
-    private float LaunchAim => _spec.LaunchControl ? 0.995f : 0.92f;
+    private float LaunchAim => _spec.LaunchControl ? 0.995f : DriverLaunchAim;
+    private const float DriverLaunchAim = 0.92f;
+
+    /// <summary>
+    /// The force (N) an axle's two tyres can put down at the launch through its open differential: the sum of the two,
+    /// or, where an electronic differential can hold the wheel with less grip by its brake (<paramref name="differentialLead"/>
+    /// finite), up to twice the better tyre's, no more than the other's plus what its brake holds. The differential sends
+    /// both wheels the same torque, and the brake takes up what the lesser tyre cannot: the split-grip start the systems
+    /// were made for. Counted as the sum, the assist let the spinning wheel's share swing past its peak and back each time
+    /// the brake caught it, and the clutch pulsed with it at 30 Hz.
+    /// </summary>
+    /// <remarks>
+    /// The better tyre then carries the axle alone, so it is asked for no more than a driver's foot asks of a tyre: at the
+    /// launch control's 99.5 % the V8's rear tyre on the asphalt went over its peak every few steps and the assist cut the
+    /// clutch back each time. On even grip the sum at the launch control's aim is the larger and is what counts, so a
+    /// launch with both tyres on the road is the launch control's, as before; and where the brake cannot hold the
+    /// difference (the R32's rear brake, 420 N m), twice the lesser tyre's force and the brake's is the bound, under the
+    /// sum.
+    /// </remarks>
+    private float AxleLaunchForce(WheelState a, WheelState b, float aim, float differentialLead)
+    {
+        var sum = LaunchShare(a, aim) + LaunchShare(b, aim);
+        if (!float.IsFinite(differentialLead)) return sum;
+        var brake = (a.IsFront ? _spec.FrontBrakeTorque : _spec.RearBrakeTorque) / _spec.WheelRadius;
+        var held = MathF.Min(aim, DriverLaunchAim);
+        return MathF.Max(Braked(held), MathF.Min(sum, Braked(aim)));
+
+        // Twice the better tyre's force, no more than the lesser one's plus the brake's.
+        float Braked(float share)
+        {
+            var forceA = LaunchShare(a, share);
+            var forceB = LaunchShare(b, share);
+            return 2f * MathF.Min(MathF.Max(forceA, forceB), MathF.Min(forceA, forceB) + brake);
+        }
+    }
 
     /// <summary>The force (N) a driven tyre can put down at the launch: its peak at its load, times the aim, cut back while it spins past its peak.</summary>
     private float LaunchShare(WheelState w, float aim)
@@ -848,6 +928,119 @@ public sealed class VehicleSim
         w.BrakePressure = MathUtil.Clamp(w.BrakePressure, 0.1f, 1f);
     }
 
+    /// <summary>Closed-loop bandwidth of the electronic differential's brake, rad/s: it brings a spinning wheel back in a few hundredths of a second.</summary>
+    private const float DifferentialBandwidth = 25f;
+    /// <summary>Lag of the modulator's pressure behind its command, s: the pump's build and the calliper's fill.</summary>
+    private const float DifferentialPressureLag = 0.02f;
+
+    /// <summary>
+    /// The electronic differential (dyn5): McLaren's brake steer, Volkswagen's EDS, Fiat's BLD. On each driven axle, a
+    /// wheel whose slip speed runs more than <see cref="ElectronicDifferential.SlipLead"/> ahead of its partner's is braked
+    /// (<see cref="WheelState.DifferentialBrake"/>, applied with the driver's brake in the wheel's spin), so the open
+    /// differential's equal torque is held by the brake instead of spinning the wheel, the engine and the driveline up
+    /// towards the limiter and the traction control's cut, and the other wheel goes on driving.
+    /// </summary>
+    /// <remarks>
+    /// The brake is a proportional-integral loop on the lead, both gains scaled by the inertia the wheel turns with this
+    /// step (its own and its share of the engine's through a locked clutch), so it closes at the same pace in first gear
+    /// as in sixth: the inertia times 2 w (proportional) and w^2 (integral) place the loop's two poles together at
+    /// w = 25 rad/s, critically damped, and the modulator's lag of 0.02 s stays well inside them. At 15 rad/s the V8's
+    /// rear wheel on grass at a split-grip launch ran 9 m/s ahead of its partner before the brake caught it (6 m/s now).
+    /// Proportional alone would leave the wheel spinning tens of radians a second over its lead to hold a first gear's
+    /// torque; the integral share holds that torque with the wheel at its lead, and is what the loop lets go of as the
+    /// wheel slows below it. Each wheel's command is capped at its brake torque at full pedal (the pressure of a hard
+    /// stop), and dumped as soon as the driver brakes or the car passes the function's cut-out speed. The real systems'
+    /// cut-out for a hot disc (the Audi A4's EDL reckons the disc's temperature) is left out, as the model keeps no brake
+    /// temperature anywhere.
+    /// </remarks>
+    private void UpdateElectronicDifferential(ElectronicDifferential ed, float pedal, float speed, float dt)
+    {
+        var kmh = MathF.Abs(speed) * MathUtil.KmhPerMps;
+        var radius = _spec.WheelRadius;
+        // Leads are taken along the direction the gearbox drives the wheels: a reversing car spins its wheels backwards.
+        var direction = Drivetrain.Gear < 0 ? -1f : 1f;
+        var allowed = ed.SlipLead;
+        // The driver's brake and the cut-out speed dump the pressure at once, as a modulator's outlet valves do.
+        var dump = pedal > 0f || kmh > ed.CutOutKmh;
+        if (dump) _differentialEngaged = false;
+        else if (!_differentialEngaged && kmh <= ed.EngageBelowKmh)
+        {
+            for (var i = 0; i < 4 && !_differentialEngaged; i++)
+            {
+                if (_spec.Drives(Wheels[i].IsFront) && Lead(i) > allowed) _differentialEngaged = true;
+            }
+        }
+        var anyHeld = false;
+        for (var i = 0; i < 4; i++)
+        {
+            var w = Wheels[i];
+            var command = 0f;
+            var lead = _spec.Drives(w.IsFront) ? Lead(i) : float.NaN;
+            // The loop reads the lead averaged over the last two steps, as a controller reads its wheel-speed sensors
+            // through a filter: a jitter at the step rate from elsewhere in the driveline (the R32's Haldex on split grip
+            // sets its front wheels alternating) cancels out instead of reaching the brake through the proportional term.
+            var reading = 0.5f * (lead + _differentialLastLead[i]);
+            _differentialLastLead[i] = float.IsFinite(lead) ? lead : 0f;
+            // The gains follow the wheel's inertia, and the brake's reach the partner's grip, both smoothed over the
+            // modulator's lag: a clutch that locks and slips on alternate steps (it does on split grip at a standing start)
+            // would otherwise swing the gains fifteenfold in first gear from one step to the next, and a partner wheel
+            // flicking past its peak and back the reach, and the brake with them.
+            var follow = MathUtil.Clamp01(dt / DifferentialPressureLag);
+            _differentialInertia[i] += (_driveInertia[i] - _differentialInertia[i]) * follow;
+            // Only a wheel spinning on its own is braked: the brake is worth something only while the partner can take more
+            // of the differential's torque. Once the partner too spins past its tyre's peak the brake's reach fades to
+            // nothing over half the peak slip again, and the traction control's engine cut does the work, as the systems
+            // divide it ("if the slipping only involves one of the drive wheels", Fiat's handbook).
+            _differentialReach[i] += (PartnerGrips(Wheels[i ^ 1], direction) - _differentialReach[i]) * follow;
+            if (_differentialEngaged && float.IsFinite(lead))
+            {
+                var cap = (w.IsFront ? _spec.FrontBrakeTorque : _spec.RearBrakeTorque) * _differentialReach[i];
+                var excess = (reading - allowed) / radius;
+                var inertia = _differentialInertia[i];
+                _differentialBrakeHeld[i] = MathUtil.Clamp(_differentialBrakeHeld[i] + inertia * DifferentialBandwidth * DifferentialBandwidth * excess * dt, 0f, cap);
+                command = MathUtil.Clamp(_differentialBrakeHeld[i] + inertia * 2f * DifferentialBandwidth * excess, 0f, cap);
+            }
+            else
+            {
+                _differentialBrakeHeld[i] = 0f;
+            }
+            w.DifferentialBrake = dump ? 0f : w.DifferentialBrake + (command - w.DifferentialBrake) * follow;
+            anyHeld |= _differentialBrakeHeld[i] > 0f;
+        }
+        // Once every driven wheel is back within its lead and the loop has let go, the function stands down until a wheel
+        // spins again (and, on a car with a speed window, only below the speed it comes in at).
+        if (_differentialEngaged && !anyHeld)
+        {
+            var spinning = false;
+            for (var i = 0; i < 4; i++) spinning |= _spec.Drives(Wheels[i].IsFront) && Lead(i) > allowed;
+            if (!spinning) _differentialEngaged = false;
+        }
+
+        // 1 while the wheel grips short of its tyre's peak slip, falling to 0 by one and a half times the peak; 0 in the air.
+        static float PartnerGrips(WheelState partner, float direction)
+        {
+            if (!partner.InContact) return 0f;
+            var over = direction * partner.SlipRatio / MathF.Max(TireModel.PeakSlipRatio(partner.Friction), 0.02f);
+            return MathUtil.Clamp01((1.5f - over) / 0.5f);
+        }
+
+        // How far wheel i spins ahead of its partner on the axle (0 and 1 in front, 2 and 3 behind), m/s: its slip speed
+        // (its tyre's speed over the road less the road's under it) less its partner's, each counted only while it drives
+        // (a wheel held back by the engine on the overrun is not spinning, and its partner rolling freely is not ahead of
+        // it); NaN with both wheels in the air. A wheel in the air is reckoned over its partner's road.
+        float Lead(int i)
+        {
+            var w = Wheels[i];
+            var partner = Wheels[i ^ 1];
+            if (!w.InContact && !partner.InContact) return float.NaN;
+            var ground = w.InContact ? w.GroundSpeed : partner.GroundSpeed;
+            var partnerGround = partner.InContact ? partner.GroundSpeed : w.GroundSpeed;
+            var slip = direction * (w.AngularVelocity * radius - ground);
+            var partnerSlip = direction * (partner.AngularVelocity * radius - partnerGround);
+            return MathF.Max(slip, 0f) - MathF.Max(partnerSlip, 0f);
+        }
+    }
+
     /// <summary>What the first pass of a step learns about one wheel, for the second.</summary>
     private struct WheelContact
     {
@@ -890,6 +1083,8 @@ public sealed class WheelState
     public float LateralSpeed;
     /// <summary>Share of the driver's brake pressure the anti-lock modulator lets through, 1 without ABS.</summary>
     public float BrakePressure = 1f;
+    /// <summary>Brake torque (N m) the electronic differential holds this wheel with, besides the driver's brake; zero on a car without one.</summary>
+    public float DifferentialBrake;
     /// <summary>Growth of the tyre's drag torque on the wheel with the wheel's speed this step, N m s/rad (never negative).</summary>
     public float SpinStiffness;
     /// <summary>The wheel's own steering angle, rad, positive to the right: Ackermann and compliance included; zero at the rear.</summary>
@@ -913,6 +1108,7 @@ public sealed class WheelState
         GroundSpeed = 0f;
         LateralSpeed = 0f;
         BrakePressure = 1f;
+        DifferentialBrake = 0f;
         SpinStiffness = 0f;
         SteerAngle = 0f;
         Compliance = 0f;

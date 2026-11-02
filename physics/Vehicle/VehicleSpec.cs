@@ -74,6 +74,14 @@ public sealed record VehicleSpec
     /// <see cref="LimitedSlipPreload"/> then do not apply: each axle has its own.
     /// </summary>
     public FourWheelDrive? FourWheelDrive { get; init; }
+    /// <summary>
+    /// A brake-based differential function (dyn5): the stability system's brakes hold a driven wheel that spins ahead of
+    /// its partner on the same axle, so that the open differential's torque goes on driving the wheel that grips. McLaren's
+    /// brake steer on the V8, Volkswagen's EDS on the V6 hatch and Fiat's BLD on the fleet saloon; null on a car that had
+    /// none (the 205 GTi, the Delta Integrale with its viscous centre and Torsen, the flat-twelve with its clutch-type
+    /// limited-slip unit, the two saloons and the estate of the 1990s).
+    /// </summary>
+    public ElectronicDifferential? ElectronicDifferential { get; init; }
     /// <summary>Whether the engine drives the wheels of the front axle (<paramref name="front"/>) or of the rear one.</summary>
     public bool Drives(bool front) => FourWheelDrive is not null || front == FrontWheelDrive;
     /// <summary>Tyre sizes as published, front and rear: they set each axle's nominal load and cornering stiffness (<see cref="TireSize"/>).</summary>
@@ -180,7 +188,7 @@ public sealed record VehicleSpec
         LaunchControl = true,
         FrontLiftArea = -0.06f,
         RearLiftArea = -0.12f,
-        // 225/35 R19 front, 285/35 R20 rear; an open differential (the real car brakes a spinning inside wheel instead).
+        // 225/35 R19 front, 285/35 R20 rear; an open differential with brake steer in place of a limited-slip unit.
         FrontTire = new(225f, 35f, 19f),
         RearTire = new(285f, 35f, 20f),
         FrontAntiRoll = 33300f,
@@ -189,6 +197,13 @@ public sealed record VehicleSpec
         AntiLockBrakes = true,
         LimitedSlipLocking = 0f,
         LimitedSlipPreload = 0f,
+        // McLaren's brake steer: the Sports Series has an open rear differential, and the stability system brakes the
+        // inside rear wheel as it spins up out of a bend, so the outside one, carrying the load, takes the drive; McLaren
+        // chose it over a limited-slip unit for its weight (Jalopnik, "What Is Brake Steer", 2017; McLaren's Ian Howshall
+        // on the 720S, automobilefanatics.com). Its working figures are not published: the inside wheel is let slip half
+        // a metre a second more than the outside one before the brake holds it (a game figure, under the 1.3 m/s the
+        // flat-twelve's 40 % limited-slip unit lets through), at any speed.
+        ElectronicDifferential = new ElectronicDifferential { SlipLead = 0.5f },
         Engine = EngineSpec.V8,
         SpeedoMaxMph = 220f,
         MassKg = 1485f,
@@ -391,6 +406,13 @@ public sealed record VehicleSpec
         },
         LimitedSlipLocking = 0f,
         LimitedSlipPreload = 0f,
+        // EDS (EDL), the electronic differential lock of the Bosch ABS/ESP of the time: a driven wheel turning about
+        // 100 rpm faster than the other of its axle is braked, at road speeds up to 40 km/h (the Golf IV's handbook, as
+        // vwmanual.ru gives it; the Audi A6 C5's handbook says the same); on a four-wheel-drive car it acts on all four
+        // wheels and, once in, lets go only at 80 km/h (the Audi A4 B5's workshop description of its EDL; a Golf with
+        // 4MOTION has the same ABS control unit "with EDL/TCS/ESP", Volkswagen's SSP 206). 100 rpm on the 0.319 m tyre
+        // is 3.3 m/s.
+        ElectronicDifferential = new ElectronicDifferential { SlipLead = 3.3f, EngageBelowKmh = 40f, CutOutKmh = 80f },
         Engine = EngineSpec.VrSix,
         SpeedoMaxMph = 160f,
         // With a driver and a tank: between VW's 1477 kg and the US car's 1546.
@@ -558,6 +580,12 @@ public sealed record VehicleSpec
         AntiLockBrakes = true,
         LimitedSlipLocking = 0f,
         LimitedSlipPreload = 0f,
+        // Its ESC's BLD (Brake Limited Differential): "if the slipping only involves one of the drive wheels, the BLD
+        // function is activated, automatically braking the wheel which is slipping", and it stays on with the systems
+        // switched off (the Tipo saloon's handbook of 2016). Fiat gives no threshold or speed limit: a front wheel is let
+        // slip a metre a second more than the other before the brake holds it (a game figure, between the V8's brake
+        // steer and the R32's EDS), at any speed.
+        ElectronicDifferential = new ElectronicDifferential { SlipLead = 1.0f },
         Engine = EngineSpec.FleetFour,
         SpeedoMaxMph = 143f,
         // The 1,150 kg is the EU kerb weight, which counts a 75 kg driver and most of a tank already.
@@ -638,6 +666,30 @@ public sealed record FourWheelDrive
     /// <summary>The rear axle's differential, as the front's.</summary>
     public float RearLocking { get; init; }
     public float RearPreload { get; init; }
+}
+
+/// <summary>
+/// A brake-based differential function: the stability system's modulator brakes a driven wheel that spins ahead of its
+/// partner on the same axle. An open differential sends both wheels the same torque, so one that spins away on less grip
+/// takes the engine to its limiter (or its traction control to a cut) and leaves the other with little; held by its brake,
+/// it gives the differential something to push against and the wheel that grips keeps its share. It acts on every
+/// driven axle and stands aside while the driver brakes.
+/// </summary>
+/// <remarks>
+/// The brake is a closed loop on the difference between the two wheels' slip speeds (each tyre's speed over the road
+/// less the road's under it, so a bend's longer outside path is not taken for spin), as a system with wheel-speed and
+/// yaw-rate sensors reckons it: the brake builds while one wheel leads by more than <see cref="SlipLead"/> and holds it
+/// there, up to that wheel's brake torque at full pedal, as long as the other wheel grips: once both spin, cutting the
+/// engine is the traction control's job.
+/// </remarks>
+public sealed record ElectronicDifferential
+{
+    /// <summary>How far a driven wheel's slip speed may run ahead of its partner's before the brake holds it, m/s.</summary>
+    public float SlipLead { get; init; }
+    /// <summary>Road speed (km/h) up to which the function comes in; infinite where it works at any speed.</summary>
+    public float EngageBelowKmh { get; init; } = float.PositiveInfinity;
+    /// <summary>Road speed (km/h) at which a function that came in lets go.</summary>
+    public float CutOutKmh { get; init; } = float.PositiveInfinity;
 }
 
 public enum CentreCoupling
