@@ -24,12 +24,23 @@ internal sealed partial class Updater : Node
     private const string SettingsFile = "user://settings.cfg";
     /// <summary>Starts within this many seconds of the last check share it: a crash loop must not hammer the API (60 calls an hour unauthenticated).</summary>
     private static readonly TimeSpan CheckInterval = TimeSpan.FromMinutes(2);
+    /// <summary>
+    /// A package download that delivers no byte for this many seconds is given up. The package download has no
+    /// overall time limit: Godot's HttpRequest.Timeout covers the whole request, body included, and with the 60 s
+    /// the API call keeps, every package over about 200 MB (0.17 on) was cut at about 195 MB (3 MB/s, measured on
+    /// 0.25.0's 300 MB installer), so the copy never got past 0.16. A dead connection is caught here instead.
+    /// </summary>
+    private const double PackageStallLimit = 30;
+    /// <summary>The package is read in 1 MB pieces instead of Godot's 64 KB: 4.1 against 3.1 MB/s on the same download.</summary>
+    private const int PackageChunkSize = 1 << 20;
 
     private HttpRequest? _request;
     private string _downloadPath = "";
     private string _shaPath = "";
     private UpdateStage _stage = UpdateStage.Idle;
     private bool _installedCopy;
+    private long _lastBytes;
+    private double _stalledFor;
 
     public sealed record UpdateInfo(Version Version, string Tag, string PageUrl, string? SetupUrl, string? SetupShaUrl, string? ZipUrl, string? ZipShaUrl, string Notes);
 
@@ -159,7 +170,7 @@ internal sealed partial class Updater : Node
         }
         var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "GrudgeLap-Update");
         System.IO.Directory.CreateDirectory(dir);
-        // Packages of updates that never got applied (the game closed first) stayed in the folder, 80 MB each.
+        // Packages of updates that never got applied (the game closed first) stayed in the folder, 200-400 MB each.
         foreach (var stale in System.IO.Directory.EnumerateFiles(dir))
         {
             try
@@ -175,8 +186,10 @@ internal sealed partial class Updater : Node
         _shaPath = _downloadPath + ".sha256";
         _stage = UpdateStage.DownloadingPackage;
         Status = "downloading update 0%";
+        _lastBytes = 0;
+        _stalledFor = 0;
 
-        var request = NewRequest();
+        var request = NewRequest(timeout: 0, chunkSize: PackageChunkSize);
         request.DownloadFile = _downloadPath;
         request.RequestCompleted += (result, code, _, _) =>
         {
@@ -338,9 +351,10 @@ internal sealed partial class Updater : Node
         GD.Print("update failed: " + message);
     }
 
-    private HttpRequest NewRequest()
+    /// <param name="timeout">Seconds for the whole request, body included; 0 for none (the package, watched by <see cref="_Process"/>).</param>
+    private HttpRequest NewRequest(double timeout = 60, int chunkSize = 65536)
     {
-        _request = new HttpRequest { UseThreads = true, Timeout = 60 };
+        _request = new HttpRequest { UseThreads = true, Timeout = timeout, DownloadChunkSize = chunkSize };
         AddChild(_request);
         return _request;
     }
@@ -350,6 +364,20 @@ internal sealed partial class Updater : Node
         if (_stage != UpdateStage.DownloadingPackage || _request is null) return;
         var total = _request.GetBodySize();
         var done = _request.GetDownloadedBytes();
+        if (done > _lastBytes)
+        {
+            _lastBytes = done;
+            _stalledFor = 0;
+        }
+        else if ((_stalledFor += delta) > PackageStallLimit)
+        {
+            // Cancelling does not emit RequestCompleted, so the request is freed and the failure reported here.
+            _request.CancelRequest();
+            _request.QueueFree();
+            _request = null;
+            Fail($"download stalled at {done / 1048576} MB");
+            return;
+        }
         Status = total > 0 ? $"downloading update {done * 100 / total}%" : $"downloading update {done / 1048576} MB";
     }
 
