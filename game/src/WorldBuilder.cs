@@ -507,6 +507,35 @@ internal static class WorldBuilder
         CullMode = BaseMaterial3D.CullModeEnum.Disabled,
     };
 
+    /// <summary>The keys of the prop materials made so far, for <see cref="ReleaseUnusedPropMaterials"/>.</summary>
+    public static HashSet<string> PropMaterialKeys() => new(_propMaterials.Keys);
+
+    /// <summary>
+    /// Lets go of the prop materials made since <paramref name="before"/> was taken that nothing draws any more, so their
+    /// photo textures go with them at the next collection. Returns how many went.
+    /// </summary>
+    /// <remarks>
+    /// The showroom (cars13 review): the first lofted car it shows makes the cabin's leather, fabric and carpet
+    /// materials, and the cache kept them, and their textures, for the rest of the session (33 MB of video memory and 7
+    /// resources over the level before it, after the showroom closed). Called once its cars have been freed and collected:
+    /// a material only this cache still holds has one reference, its .NET wrapper's; one a car in the scene still draws
+    /// (the player's lofted car built while the showroom was open) has more and is kept, and so is every material made
+    /// before the showroom opened, which the world's props and the player's car draw. The retro switch's list of
+    /// textured materials lets go of them too.
+    /// </remarks>
+    public static int ReleaseUnusedPropMaterials(IReadOnlySet<string> before)
+    {
+        var released = 0;
+        foreach (var (key, material) in _propMaterials.ToList())
+        {
+            if (before.Contains(key) || material.GetReferenceCount() > 1) continue;
+            _propMaterials.Remove(key);
+            _textured.RemoveAll(t => t.Material == material);
+            released++;
+        }
+        return released;
+    }
+
     public static StandardMaterial3D PropMaterial(string texture, Color tint, float uvScale, bool triplanar = true, bool matte = false)
     {
         var key = $"{texture}|{tint}|{uvScale}|{triplanar}|{matte}";

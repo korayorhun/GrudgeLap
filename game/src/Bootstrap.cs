@@ -79,6 +79,7 @@ public sealed partial class Bootstrap : Node3D
     private bool _showroomTake;         // the showroom's TAKE IT button was clicked
     private bool _showroomBack;         // and its BACK button
     private bool _collectAfterShowroom; // the showroom was closed last frame: its cars' resources are let go now (CloseShowroom)
+    private HashSet<string>? _propMaterialsBeforeShowroom; // the prop materials made before it opened: those made since go with it
     private bool _titleCarClicked;      // the car's name on the title screen was clicked: the showroom
     private string? _showroomArg;       // automation: the showroom open from the start, on this car (--showroom[=car])
     private bool _showroomFromMenu;     // automation: reached through the Esc menu's CAR line (--showroom-entry=menu)
@@ -652,17 +653,26 @@ public sealed partial class Bootstrap : Node3D
             _collectAfterShowroom = false;
             var watch = System.Diagnostics.Stopwatch.StartNew();
             var collections = 0;
-            var objects = Performance.GetMonitor(Performance.Monitor.ObjectCount);
-            while (collections < 6)
+            void Collect()
             {
-                System.GC.Collect();
-                System.GC.WaitForPendingFinalizers();
-                collections++;
-                var left = Performance.GetMonitor(Performance.Monitor.ObjectCount);
-                if (left >= objects) break;
-                objects = left;
+                var objects = Performance.GetMonitor(Performance.Monitor.ObjectCount);
+                for (var round = 0; round < 6; round++)
+                {
+                    System.GC.Collect();
+                    System.GC.WaitForPendingFinalizers();
+                    collections++;
+                    var left = Performance.GetMonitor(Performance.Monitor.ObjectCount);
+                    if (left >= objects) break;
+                    objects = left;
+                }
             }
-            if (_perfLog) GD.Print($"showroom closed: its cars let go in {watch.Elapsed.TotalMilliseconds:0.0} ms, {collections} collections");
+            Collect();
+            // The cabin materials the showroom's lofted cars made (WorldBuilder.ReleaseUnusedPropMaterials): only once
+            // the cars' meshes are collected does nothing but the cache hold them, and their textures need another round.
+            var released = _propMaterialsBeforeShowroom is { } before ? WorldBuilder.ReleaseUnusedPropMaterials(before) : 0;
+            _propMaterialsBeforeShowroom = null;
+            if (released > 0) Collect();
+            if (_perfLog) GD.Print($"showroom closed: its cars let go in {watch.Elapsed.TotalMilliseconds:0.0} ms, {collections} collections, {released} cabin material(s)");
         }
         if (_showroom is not null)
         {
@@ -1346,6 +1356,7 @@ public sealed partial class Bootstrap : Node3D
     private void OpenShowroom(int carIndex)
     {
         if (_showroom is not null) return;
+        _propMaterialsBeforeShowroom ??= WorldBuilder.PropMaterialKeys();
         _showroom = Showroom.Create(carIndex, _paints, float.IsNaN(_turn) ? Showroom.StartYawDegrees : _turn, fromMenu: _menu.Open, held: !float.IsNaN(_turn));
         _showroom.ScreenSize = GetViewport().GetVisibleRect().Size;
         AddChild(_showroom);

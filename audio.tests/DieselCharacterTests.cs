@@ -151,6 +151,12 @@ public class DieselCharacterTests(ITestOutputHelper output)
     private const double InaudibleUnderDiesel = 30.0;
 
     /// <summary>
+    /// The one petrol run-up left out on its marks: the Bravo 1.6's ("four16v", an MX-5 with an aftermarket header and
+    /// exhaust, whose full-load rasp swings 0.70 at every firing; see the test's remarks). Every other run-up is compared.
+    /// </summary>
+    private const string FreeExhaustRunUp = "four16v";
+
+    /// <summary>
     /// The diesel's knock (diesel6): idling at its governor's throttle and at 1,500 rpm on a light throttle (0.3), where a
     /// diesel's rattle is plainest, the fleet saloon's 1-3 kHz carries a larger share of its sound than any petrol four's
     /// at the same throttle (the hot hatch, the rally hatch, the saloon and the estate, each at its own idle), by 6 dB idling
@@ -170,13 +176,14 @@ public class DieselCharacterTests(ITestOutputHelper output)
     /// petrol fours' idles 0.16 (the Bravo 1.6's and the BRZ's) to 0.41 (the hot hatch's).
     /// </para>
     /// <para>
-    /// The run-ups are not compared on their marks since cars13 audio2. A knock is the combustion's, plainest at an idle
-    /// and a light throttle and drowned by the exhaust at full load, where the diesel's run-up swings 0.24; a petrol's
-    /// exhaust at full load rasps at every firing too, and the freer the exhaust the more: the Bravo 1.6's run-up, an
-    /// MX-5's behind a Fujitsubo header and a custom exhaust, swings 0.70 on its marks, its band -8.4 dB of its sound
-    /// against the diesel's -9.8, where the other petrol fours' run-ups swing 0.04 to 0.22 (the Cupra's). What a player
-    /// hears of it is held above: at 1,500 rpm on a light throttle that voice's band is 4.6 dB under the diesel's (3.5
-    /// needed). The petrol run-ups' figures are printed.
+    /// One run-up is not compared on its marks since cars13 audio2 (<see cref="FreeExhaustRunUp"/>). A knock is the
+    /// combustion's, plainest at an idle and a light throttle and drowned by the exhaust at full load, where the diesel's
+    /// run-up swings 0.24; a petrol's exhaust at full load rasps at every firing too, and the freer the exhaust the more:
+    /// the Bravo 1.6's run-up, an MX-5's behind a Fujitsubo header and a custom exhaust, swings 0.70 on its marks, its
+    /// band -8.4 dB of its sound against the diesel's -9.8, where the other petrol fours' run-ups swing 0.04 to 0.22 (the
+    /// Cupra's) and are still held under the diesel's, as before audio2 (the review of the cars13 merge: leaving every
+    /// run-up out had dropped the check for the 0.25.0 cars too). What a player hears of the 1.6's is held above: at
+    /// 1,500 rpm on a light throttle that voice's band is 4.6 dB under the diesel's (3.5 needed). Its figure is printed.
     /// </para>
     /// <para>
     /// Every petrol four is compared, the three fours of cars13 on their own banks (cars13 stage 2) among them: the Bravo
@@ -229,10 +236,10 @@ public class DieselCharacterTests(ITestOutputHelper output)
             {
                 if (Bank(petrol.Engine.SoundFolder, name) is not { } other) continue;
                 var (theirs, theirShare) = KnockOnMarks(other);
-                if (name == "engine_drive")
+                if (name == "engine_drive" && petrol.Engine.SoundFolder == FreeExhaustRunUp)
                 {
-                    // A run-up at full throttle is not compared on its marks (see the remarks: a free exhaust rasps at every firing).
-                    output.WriteLine($"  {petrol.Engine.SoundFolder}/{name}: {theirs:0.00}, its 1-3 kHz {theirShare:0.0} dB (a run-up at full throttle: not compared)");
+                    // The one run-up not compared on its marks (see the remarks: a free exhaust rasps at every firing).
+                    output.WriteLine($"  {petrol.Engine.SoundFolder}/{name}: {theirs:0.00}, its 1-3 kHz {theirShare:0.0} dB (an aftermarket exhaust's run-up: not compared)");
                     continue;
                 }
                 if (theirShare <= share - InaudibleUnderDiesel)

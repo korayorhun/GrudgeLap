@@ -4,10 +4,10 @@ using GrudgeLap.Physics.Vehicle;
 namespace GrudgeLap.Game;
 
 /// <summary>
-/// The lofted bodies of the cars13 cars that no credible model of exists (cars13 bodies): the first Fiat Bravo
+/// The lofted bodies of the cars13 cars that no CC-licensed model of was found (cars13 bodies): the first Fiat Bravo
 /// (type 182, the three-door of 1995-2001) as the HGT and the 1.6 16V, and the third SEAT Leon (5F) in its 2017
 /// facelift as the five-door Cupra. They are built like the hatchbacks (CarView.Hatchbacks.cs) from their published
-/// dimensions and dimensioned drawings, with what tells each from the hatch it stood in for until now: the shape of
+/// dimensions and CC BY dimensioned drawings, with what tells each from the hatch it stood in for until now: the shape of
 /// its side glass (laid over the loft's glass strip as painted or black covers), its lamps, intakes, diffuser and
 /// wheels, and inside the Leon's high centre screen, flat-bottomed wheel and bucket seats.
 /// </summary>
@@ -69,8 +69,9 @@ internal sealed partial class CarView
         /// <remarks>
         /// Keyed on the 1995 three-door's dimensioned drawing (getoutlines.com, CC BY 4.0; the same as the five-cylinder
         /// hatch's) on the axles that hatch was drawn round, and fitted to the Bravo's (FittedTo). Published: 4025 mm long,
-        /// 1755 wide, 1410 (HGT) and 1420 (1.6) high, wheelbase 2540, tracks 1471 / 1430 (HGT) and 1461 / 1463 (1.6), 205/50
-        /// R15 and 185/60 R14 (auto-data.net). Against the five-cylinder hatch: the belt rises from 0.915 m at the door's
+        /// 1755 wide, 1410 (HGT) and 1420 (1.6) high, wheelbase 2540, tracks 1471 / 1430 and 205/50 R15 on the HGT
+        /// (auto-data.net), 1439 / 1441 and 185/65 R14 on the 1.6 (cars-data, as VehicleSpec.HatchSixteen: auto-data.net's
+        /// 1461 / 1463 drew its wheels 2 cm wider than the simulation's, the cars13 review). Against the five-cylinder hatch: the belt rises from 0.915 m at the door's
         /// front to 1.025 m at the C-pillar (the drawing's door and quarter window; 0.895 to 0.985 before), the lamps are
         /// the drawing's (slim headlamps from the grille to the wing's corner, oval tail lamps at 0.66-0.92 m), and the
         /// side glass takes the drawing's shape: a black sail ahead of the door glass, a black B-pillar, the quarter
@@ -107,8 +108,8 @@ internal sealed partial class CarView
             TailTrimBelow = 0.30f,
             KeyedFrontAxle = 0.95f,
             KeyedRearAxle = 1.59f,
-            FrontTrack = hgt ? 0.7355f : 0.7305f,
-            RearTrack = hgt ? 0.715f : 0.7315f,
+            FrontTrack = hgt ? 0.7355f : 0.7195f,
+            RearTrack = hgt ? 0.715f : 0.7205f,
             FrontTyreWidth = hgt ? 0.205f : 0.185f,
             RearTyreWidth = hgt ? 0.205f : 0.185f,
             // 15 in alloys on the HGT, 14 in steel wheels under covers on the 1.6 (the SX had the alloys as an option).
@@ -176,39 +177,44 @@ internal sealed partial class CarView
         /// tailgate's shoulders, a diffuser with twin round tailpipes at each side and 19-inch wheels.
         /// </summary>
         /// <remarks>
-        /// Keyed on a dimensioned drawing of the 2015 Leon Cupra five-door (getoutlines.com's preview; the facelift kept the
-        /// shell), its side view measured every 4.5 cm for the roofline, the window's edges and the sills, its front and
-        /// rear views every 3 cm for the widths, on the published 4271 x 1816 x 1435 mm, wheelbase 2631, overhangs 855 /
-        /// 785, tracks 1535 / 1510, 235/35 R19 (auto-data.net); the drawing's heights are 1.4 % short of the published
-        /// height and were scaled up by that. Keyed on the car's own axles: the nose at z = -1.907.
+        /// The side is keyed on getoutlines.com's free side view of the 2013 Leon five-door (blueprint 28850, CC BY 4.0;
+        /// the 2017 facelift kept the shell), on the car's own axles (its wheel centres 2631 mm apart, the published
+        /// wheelbase): the roofline, the beltline and the window's edges, the shoulder crease, the sills, the arches and
+        /// the overhangs read every 5 cm (the drawing gives 4278 mm against the published 4271), and the whole body
+        /// lowered 24 mm from the drawing's 1459 mm to the Cupra's published 1435 (its sport suspension; the wheels stay).
+        /// Nothing comes from a drawing that is not free (the cars13 review: the loft of cars/bodies was traced from the
+        /// preview of a paid one). The widths, the lamps, the grille and the intakes are estimates against the published
+        /// 1816 mm and tracks of 1535 / 1510 (auto-data.net) from Wikimedia Commons photographs of 2017-20 Cupras, looked
+        /// at for proportions only (a head-on view of a 2019 Cupra 290 by MrWalkr, CC BY-SA 4.0), at the heights the
+        /// side view gives; 235/35 R19. The nose is at z = -1.907.
         /// </remarks>
         public static readonly BodyStyle LeonCupra = new()
         {
             //         nose       -        -        -    f.axle   cowl   screen  header    roof      -     r.end   spoiler g.base  tailgate   -     bumper   tail
-            Keys = [-1.907f, -1.875f, -1.79f, -1.40f, -1.052f, -0.72f, -0.34f, 0.06f, 0.42f, 1.00f, 1.45f, 1.85f, 2.19f, 2.24f, 2.28f, 2.32f, 2.364f],
-            FloorH = [0.24f, 0.22f, 0.20f, 0.18f, 0.18f, 0.18f, 0.18f, 0.18f, 0.18f, 0.18f, 0.18f, 0.19f, 0.21f, 0.22f, 0.22f, 0.22f, 0.23f],
-            HalfWidth = [0.60f, 0.72f, 0.84f, 0.893f, 0.905f, 0.908f, 0.908f, 0.908f, 0.908f, 0.908f, 0.905f, 0.90f, 0.893f, 0.885f, 0.875f, 0.865f, 0.84f],
-            WaistH = [0.42f, 0.48f, 0.56f, 0.64f, 0.66f, 0.67f, 0.67f, 0.67f, 0.67f, 0.67f, 0.68f, 0.70f, 0.70f, 0.68f, 0.60f, 0.50f, 0.45f],
-            ShoulderH = [0.55f, 0.64f, 0.745f, 0.815f, 0.84f, 0.845f, 0.85f, 0.855f, 0.865f, 0.88f, 0.895f, 0.90f, 0.885f, 0.86f, 0.75f, 0.60f, 0.53f],
-            ShoulderW = [0.56f, 0.68f, 0.81f, 0.872f, 0.885f, 0.885f, 0.885f, 0.885f, 0.885f, 0.885f, 0.88f, 0.865f, 0.85f, 0.84f, 0.83f, 0.82f, 0.79f],
-            EdgeW = [0.52f, 0.63f, 0.74f, 0.795f, 0.81f, 0.80f, 0.79f, 0.785f, 0.785f, 0.78f, 0.77f, 0.745f, 0.73f, 0.73f, 0.73f, 0.73f, 0.70f],
-            EdgeH = [0.59f, 0.685f, 0.765f, 0.86f, 0.94f, 0.99f, 1.0f, 1.0f, 1.02f, 1.055f, 1.075f, 1.07f, 0.955f, 0.89f, 0.77f, 0.615f, 0.54f],
-            CrestW = [0.42f, 0.53f, 0.63f, 0.69f, 0.73f, 0.76f, 0.68f, 0.60f, 0.59f, 0.59f, 0.58f, 0.60f, 0.63f, 0.66f, 0.68f, 0.69f, 0.66f],
-            CrestH = [0.60f, 0.70f, 0.785f, 0.885f, 0.955f, 1.012f, 1.19f, 1.30f, 1.31f, 1.31f, 1.29f, 1.26f, 0.96f, 0.90f, 0.78f, 0.625f, 0.545f],
-            CentreH = [0.62f, 0.72f, 0.80f, 0.90f, 0.968f, 1.027f, 1.225f, 1.376f, 1.435f, 1.435f, 1.379f, 1.336f, 0.975f, 0.92f, 0.79f, 0.63f, 0.55f],
-            CowlZ = -0.72f,
-            CabinFrom = 0.055f,
-            CabinTo = 1.47f,
-            ScreenFrom = -0.72f,
-            ScreenTo = 0.06f,
-            RearGlassFrom = 1.85f,
-            RearGlassTo = 2.19f,
-            FrontArchTop = 0.67f,
-            RearArchTop = 0.67f,
-            FrontArchRadius = 0.40f,
+            Keys = [-1.907f, -1.875f, -1.80f, -1.50f, -1.052f, -0.76f, -0.40f, 0.02f, 0.45f, 1.00f, 1.45f, 1.80f, 2.15f, 2.24f, 2.29f, 2.33f, 2.368f],
+            FloorH = [0.239f, 0.209f, 0.195f, 0.18f, 0.177f, 0.177f, 0.177f, 0.177f, 0.177f, 0.177f, 0.18f, 0.19f, 0.233f, 0.24f, 0.26f, 0.30f, 0.36f],
+            HalfWidth = [0.60f, 0.73f, 0.83f, 0.893f, 0.905f, 0.908f, 0.908f, 0.908f, 0.908f, 0.908f, 0.906f, 0.90f, 0.89f, 0.88f, 0.87f, 0.855f, 0.81f],
+            WaistH = [0.45f, 0.48f, 0.52f, 0.60f, 0.64f, 0.65f, 0.66f, 0.66f, 0.66f, 0.66f, 0.67f, 0.67f, 0.65f, 0.62f, 0.56f, 0.50f, 0.46f],
+            ShoulderH = [0.536f, 0.576f, 0.636f, 0.757f, 0.813f, 0.828f, 0.831f, 0.832f, 0.828f, 0.856f, 0.907f, 0.924f, 0.922f, 0.88f, 0.76f, 0.62f, 0.526f],
+            ShoulderW = [0.57f, 0.69f, 0.80f, 0.87f, 0.885f, 0.885f, 0.885f, 0.885f, 0.885f, 0.885f, 0.88f, 0.865f, 0.85f, 0.84f, 0.83f, 0.815f, 0.78f],
+            EdgeW = [0.52f, 0.63f, 0.74f, 0.79f, 0.80f, 0.79f, 0.785f, 0.78f, 0.78f, 0.775f, 0.765f, 0.745f, 0.73f, 0.725f, 0.72f, 0.71f, 0.69f],
+            EdgeH = [0.545f, 0.59f, 0.705f, 0.784f, 0.881f, 0.908f, 0.926f, 0.945f, 0.967f, 0.99f, 1.016f, 1.046f, 0.976f, 0.906f, 0.78f, 0.64f, 0.545f],
+            CrestW = [0.42f, 0.53f, 0.62f, 0.69f, 0.72f, 0.74f, 0.69f, 0.62f, 0.61f, 0.61f, 0.60f, 0.60f, 0.63f, 0.65f, 0.67f, 0.68f, 0.66f],
+            CrestH = [0.552f, 0.60f, 0.725f, 0.83f, 0.925f, 0.955f, 1.123f, 1.266f, 1.345f, 1.327f, 1.273f, 1.266f, 1.02f, 0.93f, 0.82f, 0.67f, 0.556f],
+            CentreH = [0.556f, 0.606f, 0.74f, 0.867f, 0.947f, 0.976f, 1.174f, 1.356f, 1.426f, 1.426f, 1.386f, 1.345f, 1.046f, 0.968f, 0.863f, 0.716f, 0.576f],
+            CowlZ = -0.76f,
+            CabinFrom = 0.015f,
+            CabinTo = 1.60f,
+            ScreenFrom = -0.76f,
+            ScreenTo = 0.02f,
+            RearGlassFrom = 1.82f,
+            RearGlassTo = 2.17f,
+            FrontArchTop = 0.673f,
+            RearArchTop = 0.658f,
+            FrontArchRadius = 0.39f,
             RearArchRadius = 0.40f,
             NoseTrimBelow = 0.24f,
-            TailTrimBelow = 0.27f,
+            TailTrimBelow = 0.28f,
             FrontTrack = 0.7675f,
             RearTrack = 0.755f,
             FrontTyreWidth = 0.235f,
@@ -219,9 +225,9 @@ internal sealed partial class CarView
             TwinSpokes = true,
             AlloyTint = new(0.20f, 0.20f, 0.22f),
             ShoulderFillet = 0.008f,
-            TopSeams = [-0.745f, 1.835f],
-            FlankSeams = [-0.59f, 0.49f, 1.40f],
-            RearBulkheadZ = 2.19f,
+            TopSeams = [-0.775f, 1.84f],
+            FlankSeams = [-0.60f, 0.48f, 1.33f],
+            RearBulkheadZ = 2.17f,
             EyeZ = 0.42f,
             EyeH = 1.15f,
             LeatherTint = BlackLeather,
@@ -232,45 +238,46 @@ internal sealed partial class CarView
             Hatchback = true,
             RunStep = 0.10f,
             RearSeatZ = 1.15f,
-            // The full-LED lamp: a point low by the grille's top corner, swept back and up to the wing, its LED light
-            // along its lower edge.
-            Headlamp = [new(0.36f, 0.685f), new(0.45f, 0.668f), new(0.60f, 0.682f), new(0.74f, 0.70f), new(0.84f, 0.73f), new(0.875f, 0.768f), new(0.86f, 0.80f), new(0.78f, 0.808f), new(0.62f, 0.782f), new(0.48f, 0.745f), new(0.38f, 0.712f)],
-            HeadlampLed = [new(0.44f, 0.676f), new(0.60f, 0.690f), new(0.74f, 0.709f), new(0.845f, 0.742f), new(0.85f, 0.756f), new(0.74f, 0.723f), new(0.60f, 0.704f), new(0.44f, 0.690f)],
+            // The full-LED lamp: a point low by the grille's top corner, swept out and up to the wing, its LED light
+            // along its lower edge (the side view's 0.59-0.76 m, the head-on photograph's 0.37-0.83 m out).
+            Headlamp = [new(0.37f, 0.635f), new(0.46f, 0.622f), new(0.60f, 0.637f), new(0.72f, 0.667f), new(0.80f, 0.705f), new(0.83f, 0.745f), new(0.80f, 0.768f), new(0.70f, 0.765f), new(0.58f, 0.742f), new(0.46f, 0.705f), new(0.385f, 0.668f)],
+            HeadlampLed = [new(0.44f, 0.630f), new(0.60f, 0.645f), new(0.71f, 0.672f), new(0.79f, 0.708f), new(0.795f, 0.722f), new(0.71f, 0.688f), new(0.60f, 0.660f), new(0.44f, 0.645f)],
             HeadlampBulbs = 2,
             HeadlampBulbRadius = 0.026f,
             TailLampGlow = 0.25f,
-            // The hexagonal grille, wide at the top, and under the plate the Cupra's lower intake, narrow at its top and
-            // spreading to the bumper's foot; the big intakes at the bumper's corners.
-            Grille = [new(-0.20f, 0.592f), new(0f, 0.588f), new(0.20f, 0.592f), new(0.335f, 0.725f), new(0f, 0.732f), new(-0.335f, 0.725f)],
-            LowerIntake = [new(0f, 0.245f), new(0.585f, 0.245f), new(0.47f, 0.37f), new(0.34f, 0.505f), new(0.27f, 0.525f), new(0f, 0.525f)],
-            CornerIntake = [new(0.62f, 0.30f), new(0.84f, 0.31f), new(0.865f, 0.44f), new(0.80f, 0.462f), new(0.67f, 0.445f)],
-            // The tail lamps across the tailgate's shoulders, pointed at their inner ends; the diffuser under the bumper
-            // with the tailpipes at its ends.
-            TailLamp = [new(0.39f, 0.815f), new(0.48f, 0.785f), new(0.58f, 0.765f), new(0.70f, 0.755f), new(0.80f, 0.76f), new(0.835f, 0.79f), new(0.835f, 0.84f), new(0.80f, 0.868f), new(0.66f, 0.868f), new(0.50f, 0.855f), new(0.42f, 0.835f)],
-            RearDiffuser = [new(0f, 0.27f), new(0.82f, 0.27f), new(0.82f, 0.315f), new(0.66f, 0.355f), new(0.52f, 0.455f), new(0.40f, 0.515f), new(0f, 0.515f)],
-            FrontPlateY = 0.49f,
-            RearPlateY = 0.445f,
+            // The grille, wide at the top under the bonnet's edge, the plate under it, and under the plate the Cupra's
+            // wide lower intake; the intakes at the bumper's corners under the running lights.
+            Grille = [new(-0.26f, 0.540f), new(0f, 0.535f), new(0.26f, 0.540f), new(0.35f, 0.675f), new(0f, 0.682f), new(-0.35f, 0.675f)],
+            LowerIntake = [new(0f, 0.245f), new(0.47f, 0.245f), new(0.50f, 0.29f), new(0.45f, 0.385f), new(0.30f, 0.39f), new(0f, 0.39f)],
+            CornerIntake = [new(0.56f, 0.27f), new(0.80f, 0.285f), new(0.83f, 0.38f), new(0.75f, 0.40f), new(0.60f, 0.39f)],
+            // The tail lamps across the body's corners and onto the tailgate, pointed at their inner ends; the diffuser
+            // under the bumper with the tailpipes, two at each side.
+            TailLamp = [new(0.38f, 0.84f), new(0.48f, 0.815f), new(0.60f, 0.80f), new(0.72f, 0.795f), new(0.81f, 0.80f), new(0.84f, 0.83f), new(0.83f, 0.88f), new(0.78f, 0.905f), new(0.64f, 0.905f), new(0.50f, 0.89f), new(0.41f, 0.865f)],
+            RearDiffuser = [new(0f, 0.26f), new(0.80f, 0.26f), new(0.80f, 0.30f), new(0.66f, 0.33f), new(0.50f, 0.40f), new(0.38f, 0.44f), new(0f, 0.44f)],
+            FrontPlateY = 0.445f,
+            RearPlateY = 0.48f,
             ExhaustX = [-0.66f, -0.555f, 0.555f, 0.66f],
             ExhaustY = 0.30f,
-            SpoilerLength = 0.18f,
-            PillarsZ = [0.51f, 1.29f],
-            HandleZ = 0.37f,
-            HandleY = 0.81f,
-            RearHandleZ = 1.28f,
-            MirrorZ = -0.22f,
+            SpoilerLength = 0.22f,
+            PillarsZ = [0.53f, 1.30f],
+            HandleZ = 0.35f,
+            HandleY = 0.784f,
+            RearHandleZ = 1.24f,
+            MirrorZ = -0.31f,
             PaintedMirrors = true,
             SatinStrip = true,
             SportSeats = true,
             CentreScreen = true,
             FlatBottomWheel = true,
             Airbag = true,
-            // The black sail ahead of the front door glass; the window line kicking up into the C-pillar under the small
-            // quarter window, and the C-pillar over its falling top.
-            BlackCovers = [[new(-0.73f, 0.90f), new(-0.73f, 1.30f), new(-0.36f, 1.30f), new(-0.36f, 0.90f)]],
+            // The black sail ahead of the front door glass (the side view's triangle from the windscreen's foot to the door
+            // frame); the window line kicking up into the C-pillar and the window's top falling to meet it, as the side
+            // view draws them (its heights lowered with the body).
+            BlackCovers = [[new(-0.76f, 0.88f), new(-0.76f, 1.10f), new(-0.54f, 1.056f), new(-0.47f, 0.926f), new(-0.47f, 0.88f)]],
             PaintedCovers =
             [
-                [new(1.15f, 0.95f), new(1.15f, 1.06f), new(1.24f, 1.075f), new(1.32f, 1.125f), new(1.40f, 1.168f), new(1.48f, 1.205f), new(1.48f, 0.95f)],
-                [new(1.30f, 1.40f), new(1.30f, 1.288f), new(1.38f, 1.252f), new(1.48f, 1.215f), new(1.48f, 1.40f)],
+                [new(1.20f, 0.93f), new(1.20f, 1.003f), new(1.25f, 1.010f), new(1.30f, 1.025f), new(1.35f, 1.047f), new(1.40f, 1.071f), new(1.45f, 1.106f), new(1.50f, 1.140f), new(1.55f, 1.178f), new(1.60f, 1.216f), new(1.62f, 1.24f), new(1.62f, 0.93f)],
+                [new(1.40f, 1.45f), new(1.40f, 1.281f), new(1.50f, 1.264f), new(1.55f, 1.253f), new(1.60f, 1.24f), new(1.62f, 1.24f), new(1.62f, 1.45f)],
             ],
         };
     }

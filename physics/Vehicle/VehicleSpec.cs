@@ -713,8 +713,9 @@ public sealed record VehicleSpec
     /// <remarks>
     /// Its size is the 458's: 4527 x 1937 x 1213 mm, 2650 mm between the axles, tracks of 1672 mm in front and 1606
     /// behind (Ferrari's technical sheet), one track of 1.64 m here (the mean, as on every car). The overhangs are split
-    /// as the real car's are (about 1030 mm in front, 847 behind); the V8's loft, fitted to these axles, draws the car
-    /// until its model lands (CarStyle.FlatPlaneV8). The E-Diff: a multi-plate clutch across the rear differential pressed
+    /// as the real car's are (about 1030 mm in front, 847 behind). The car is drawn by its own model with the 570S's
+    /// cabin since cars13 stage 2; a build without the models draws the V8's loft, fitted to these axles
+    /// (CarStyle.FlatPlaneV8). The E-Diff: a multi-plate clutch across the rear differential pressed
     /// by a hydraulic actuator the ECU commands from open to locked, with the traction control (F1-Trac) in the same ECU
     /// deciding both from the car's state (Ferrari's description of the 458's E-Diff 3; the semi-active differential
     /// Ferrari, Magna Steyr and the Politecnico di Milano developed for the F430, IFAC World Congress 2005). The game's
@@ -808,8 +809,9 @@ public sealed record VehicleSpec
     /// <remarks>
     /// Its size is the Bravo's: 4025 x 1755 x 1410 mm, 2540 mm between the axles, tracks of 1471 mm in front and 1430
     /// behind (auto-data.net, cars-data.com), one track of 1.45 m here (the mean). The overhangs are the ones the
-    /// three-door Bravo's loft was keyed on (875 / 614 mm, CarView.Hatchbacks.cs), and that loft, fitted to these axles,
-    /// draws the car until its model lands (CarStyle.HgtFive). About 62/38: no measured axle loads were found, and a
+    /// three-door Bravo's loft was keyed on (875 / 614 mm, CarView.Hatchbacks.cs); since cars/bodies the car is drawn
+    /// by a loft of its own on the Bravo's lines (CarView.Cars13.cs, CarStyle.HgtFive), no CC-licensed model of it having
+    /// been found. About 62/38: no measured axle loads were found, and a
     /// transverse five with its gearbox hangs ahead of the front axle as the 205's four does (62.8 %). Cd: no figure was
     /// found, 0.32 for the smooth three-door body of 1995 (a game figure). The springs give the hot hatch's sag at this
     /// mass (see HotHatch's remarks), the bars sit between the 205's and the R32's; reverse is not published.
@@ -985,8 +987,9 @@ public sealed record VehicleSpec
     /// <remarks>
     /// Its size is the five-door's: 4281 x 1816 x 1443 mm, 2631 mm between the axles, tracks of 1536 / 1510 mm on the
     /// 19 in wheels (SEAT's sheet: 1534 / 1511 on 18 in), one track of 1.523 m here; the overhangs about 880 / 770 mm
-    /// (the SC's 4246 and 2596 give the same 1650 together). The R32's loft (keyed on the 2007 Leon), fitted to these
-    /// axles, draws the car until its model lands (CarStyle.CupraTsi). The VAQ (Vorderachsquersperre): a multi-plate
+    /// (the SC's 4246 and 2596 give the same 1650 together). Since cars/bodies the car is drawn by a loft of its own on
+    /// the 2017-20 five-door's lines (CarView.Cars13.cs, CarStyle.CupraTsi), no CC-licensed model of it having been
+    /// found. The VAQ (Vorderachsquersperre): a multi-plate
     /// clutch across the front differential pressed by an electro-hydraulic actuator built on Haldex's fifth-generation
     /// coupling, locking up to 1600 N m as the ESC's controller reads the steering angle, the wheel speeds and the yaw
     /// rate (Volkswagen's description of the Golf GTI Performance's unit; PistonHeads, "VW's VAQ diff explained"; a VAG
@@ -1088,9 +1091,11 @@ public sealed record VehicleSpec
     /// (FourWheelDrive.RearLocking), with no preload. The law passes that share of the drive torque from the faster
     /// wheel whatever the slower one can take, so with a wheel in the air it still sends a fifth of the axle's torque to
     /// the grounded one, where a real Torsen, biasing torque against the other wheel's, sends almost none: the Delta's
-    /// rear works the same way, and a law with the bias's own limit is left to a pass on both. The V8's loft, fitted to
-    /// these axles, stands in for it until its model lands (CarStyle.Boxer): the nearest in height and proportion,
-    /// though its glass engine deck belongs to a mid-engined car. The inertias follow the sports cars' (the dynamic index
+    /// rear works the same way, and a law with the bias's own limit is left to a pass on both. Since cars/bodies the car
+    /// is drawn by a model of its twin, a first-generation Toyota 86 (the 2017 facelift's nose) with the W212's cabin
+    /// (tools/car_models.json "brz"); a build without the models draws the V8's loft, fitted to these axles
+    /// (CarStyle.Boxer), the nearest in height and proportion though its glass engine deck belongs to a mid-engined car.
+    /// The inertias follow the sports cars' (the dynamic index
     /// about 0.9); the springs and bars a sports coupe's of 1315 kg (game figures, none published).
     /// <para>
     /// The facelift of 2017-20, compared (cars/phys2): the drawn model is a facelifted first-generation twin (a Toyota
@@ -1286,24 +1291,25 @@ public enum CarStyle
     FlatPlaneV8,
     /// <summary>
     /// The front-wheel-drive five-cylinder hatch of 2001 (after the Fiat Bravo HGT 2.0 20V; cars13). Model key
-    /// "bravohgt", sound folder "inline5"; drawn with the five-cylinder hatch's loft (keyed on the 1995 Bravo) until a
-    /// model of it is found.
+    /// "bravohgt", sound folder "inline5"; drawn by a loft of its own on the 1995 three-door Bravo's lines
+    /// (CarView.Cars13.cs) since cars/bodies, as no CC-licensed model of it was found.
     /// </summary>
     HgtFive,
     /// <summary>
     /// The front-wheel-drive 1.6 hatch of 2001 (after the Fiat Bravo 1.6 16V; cars13). Model key "bravo16", sound
-    /// folder "four16v"; drawn with the same Bravo loft until a model of it is found.
+    /// folder "four16v"; drawn by the same Bravo loft, on its own wheels and trim.
     /// </summary>
     HatchSixteen,
     /// <summary>
     /// The front-wheel-drive turbo hot hatch of 2018 (after the SEAT Leon Cupra, with its platform's 245 PS tune since
     /// cars/phys2; cars13). Model key "leoncupra",
-    /// sound folder "tsi4"; drawn with the V6 hatch's loft (keyed on the 2007 Leon) until a model of it is found.
+    /// sound folder "tsi4"; drawn by a loft of its own on the 2017-20 five-door's lines (CarView.Cars13.cs) since
+    /// cars/bodies, as no CC-licensed model of it was found.
     /// </summary>
     CupraTsi,
     /// <summary>
     /// The rear-wheel-drive boxer coupe of 2013 (after the Subaru BRZ; cars13). Model key "brz", sound folder "boxer4";
-    /// drawn with the V8's loft until a model of it is found.
+    /// drawn by a model of its twin, a first-generation Toyota 86, since cars/bodies (the V8's loft without the models).
     /// </summary>
     Boxer,
 }

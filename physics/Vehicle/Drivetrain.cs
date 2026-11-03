@@ -102,11 +102,13 @@ public sealed class Drivetrain
         var throttle = input.Throttle * MathUtil.Clamp01(TorqueCut);
         if (float.IsFinite(_spec.SpeedLimiterKmh))
         {
-            // The speed limiter (cars13): the engine management takes the throttle back over the last 3 km/h under the
-            // limit and holds the car there, the smooth hold of the real limiters rather than the rev limiter's cut (the
-            // sound reads the throttle and hears a lift, not a stutter). A car without one never enters here.
+            // The speed limiter (cars13): the engine management takes the throttle back over the 3 km/h past the limit
+            // and holds the car there, the smooth hold of the real limiters rather than the rev limiter's cut (the sound
+            // reads the throttle and hears a lift, not a stutter). The ramp starts at the limit: ending at it, the hold
+            // settled where the throttle it left matched the drag, 247.1 km/h for the Cupra's 250 at 0.95 (the cars13
+            // review); now it settles about 0.1 km/h over. A car without one never enters here.
             var kmh = MathF.Abs(groundSpeed) * MathUtil.KmhPerMps;
-            throttle = MathF.Min(throttle, MathUtil.Clamp01((_spec.SpeedLimiterKmh - kmh) / 3f));
+            throttle = MathF.Min(throttle, MathUtil.Clamp01((_spec.SpeedLimiterKmh + 3f - kmh) / 3f));
         }
         if (Mode != TransmissionMode.ManualClutch && _shiftTimer > 0f) throttle = 0f; // lift fully during assisted shifts
         if (Launching || PreRevving) throttle = MathF.Min(throttle, LaunchGovernor(input.Throttle));

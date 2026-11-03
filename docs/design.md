@@ -110,8 +110,10 @@ force-feedback wheel later (the FFB loop of the 1989 cabinet ran at 4 ms, the ca
   everyday cars of 0.9.1 (the 1.6 saloon, the 1.4 estate and the fleet saloon, since fleet the E 250 CDI) and, since
   cars13 (audit item 23), five more: the flat-plane V8 of 2010 after the Ferrari 458 Italia (1560 kg, 570 CV at 9000,
   seven-speed dual clutch, the E-Diff, launch control), the Fiat Bravo HGT 2.0 20V five and the Bravo 1.6 16V of 2001
-  (1240 and 1135 kg, front-wheel drive, five speeds, ABS), the SEAT Leon Cupra 300 of 2018 (1395 kg, a 300 PS turbo
-  four, six speeds, the VAQ front differential, a 250 km/h limiter; which Cupra waits on the user, audit item 23) and
+  (1240 and 1135 kg, front-wheel drive, five speeds, ABS), the SEAT Leon Cupra of 2018 (1395 kg, since phys2 the
+  245 PS turbo four its platform carried in the Golf GTI Performance and the Octavia RS 245, six speeds, the VAQ front
+  differential, a 250 km/h limiter; the 300 PS car kept as a commented alternative the user can switch back to, audit
+  item 23) and
   the Subaru BRZ of 2013 (1315 kg, a 200 PS boxer four, six speeds, a Torsen);
   `VehicleTests.The_cars_of_cars13_match_their_published_figures` holds their 0-60, launched as a road test, and top
   speed. Each
@@ -1598,10 +1600,10 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
     4025 x 1755 x 1410 / 1420 mm, wheelbase 2540, tracks 1471 / 1430 for the HGT and 1461 / 1463 for the 1.6,
     205/50 R15 and 185/60 R14; the Leon Cupra five-door 4271 x 1816 x 1435, wheelbase 2631, overhangs 855 / 785, tracks
     1535 / 1510, 235/35 R19) and on drawings: the 1995 Bravo three-door's (getoutlines, CC BY 4.0, the one the
-    five-cylinder hatch was keyed on; the 1999 drawing beside it in the logs is the five-door Brava) and the 2015 Leon
-    Cupra five-door's preview (getoutlines; its side view read every 4.5 cm for the roofline, the window's edges and
-    the sills, its end views every 3 cm for the widths, its heights 1.4 % short of the published and scaled up). Only
-    the measurements come from them; no drawing or photograph is shipped (THIRD_PARTY.md), and the reference photos
+    five-cylinder hatch was keyed on; the 1999 drawing beside it in the logs is the five-door Brava) and, until the
+    cars13 review found it is a paid drawing ("Download for $24", a Basic License, not CC BY), the 2015 Leon Cupra
+    five-door's preview (getoutlines); the Leon is keyed since on the free side view of the 2013 five-door (below,
+    "cars13 review fixes"). Only the measurements come from them; no drawing or photograph is shipped (THIRD_PARTY.md), and the reference photos
     (Wikimedia Commons, for comparison) stay in the logs.
   - The Bravo (three-door 182): the five-cylinder hatch's keys with the belt raised into the wedge the drawing has
     (0.915 m at the door's front, 1.025 m at the C-pillar; 0.895 to 0.985 before), the screen's foot 5.5 cm further
@@ -1633,6 +1635,46 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
     the wheels' height, the road beyond shows through the front arch; the plate recess has no plate; the Unreal level
     keeps the BRZ's lofted stand-in (its preparation rigs the model, but would keep the V8 loft's cabin, whose door
     linings stand about 4 cm outside the 86's doors: a cabin for it there is another step).
+- cars13 review fixes (cars/stage2 after the merge of bodies, audio2 and phys2):
+  - The Leon Cupra's loft re-keyed: the review found its drawing, getoutlines' 2015 Leon Cupra (vector-drawings/9730),
+    sold for $24 under a Basic License, which the licence rule does not allow. The side is now keyed on getoutlines'
+    free side view of the 2013 five-door (blueprints/28850, CC BY 4.0, the facelift kept the shell), read every 5 cm on
+    the car's own axles (its wheel centres 2631 mm apart): roofline, beltline, the window's top and its kick into the
+    C-pillar, the shoulder crease, sills, arches and overhangs (4278 mm against the published 4271); the body lowered
+    24 mm from the drawing's 1459 mm to the Cupra's 1435. The widths, the lamps, the grille and the intakes are
+    estimates against the published 1816 mm and tracks, from Commons photographs of 2017-20 Cupras looked at for
+    proportions only (a head-on 2019 Cupra 290 by MrWalkr, CC BY-SA 4.0), at the side view's heights. No end view is
+    free, so the ends are the least certain part; the rear reads bulkier than the car's.
+  - The lofted wheels' rim lip was an octagon: Godot's `TorusMesh.Rings` is the count round the ring and
+    `RingSegments` the tube's sides, and the lip had them the wrong way round (8 and 32; now 48 and 8). The round
+    tail lamps' trim ring had the same fault (6 sides; now 24). It showed only with `--lofted` before cars13, and on the
+    Bravos and the Leon by default since; with it every lofted body changes, as `VertexColorIsSrgb` changed their
+    colours in cars/bodies: cars 0-7 are unchanged where their models draw them.
+  - The showroom lets go of the cabin materials its lofted cars made (`WorldBuilder.ReleaseUnusedPropMaterials`, after
+    the collection that frees its cars: a material only the cache still holds has one reference). Visiting all 13
+    cars and closing now ends at the baseline's 1383 resources and 1390 MB of textures (before: 1390 and 1415, 33 MB
+    over in all); the total video memory ends 8-9 MB over (1729 against 1720-1721), the pipelines compiled for the
+    lofted bodies' shaders, which stay compiled for the session by design and do not grow with more visits. The check's
+    target is therefore: resources and texture memory back to the baseline, the total within 10 MB. Closing while a car
+    still loads, and a lofted player's car (the HGT, whose own materials are kept), end the same way.
+  - The 458's mirror hangs under the windscreen's header (`mirror_offset` 4 cm down and 5 cm forward: the glass at
+    0.395 m, 0.559 m ahead of the reference, 6 cm under the glass's top), where the eye correction had left it 8 cm
+    over the eyes under the roof. Its left A-pillar is wide from the seat because the model's pillar is: from the
+    windscreen's edge to the door glass's front edge its skin is 13-14 cm along the car at mid-height (11.5 degrees of
+    view from the eyes at 400 of 900 rows, the 570S's 6.3), with nothing behind it (a ray from the eyes leaves the
+    car after it), so a `crop` would open a hole in the body; turning the band's rear faces into glass left saw-teeth
+    along the model's 3-5 cm faces (a prototype in the logs). Left for a step that reshapes the pillar.
+  - The Cupra's limiter holds 250 km/h: its throttle ramp ends 3 km/h past the limit instead of at it, and settled
+    where the drag met the throttle it left (247.1 km/h at 0.95, the review's probe).
+  - The knock test compares every petrol run-up on its marks again but the Bravo 1.6's (the MX-5 with its
+    aftermarket exhaust), so the 0.25.0 fours are held as before audio2.
+  - Credits: Freesound #191194 (the BRZ's idle) with its licence link and changes; the MX-5's recording listed CC BY
+    3.0 as its Commons page tags it, with the video's CC BY 4.0 beside it. Docs and comments: the Cupra's 245 PS in the
+    overview, each cars13 car's stand-in body named in VehicleSpec, the Toyota 86 in the README's model list and its
+    car paragraph, the recordings named as stand-ins, the Bravo 1.6's drawn tracks set to the spec's 1439 / 1441 mm.
+  - Before this merges to main the BRZ model's release asset must exist: `models-2026-11` with
+    `toyota-86-ethanchew.glb` (SHA-256 d7ff3342...), created with `--latest=false`, because the game's updater reads
+    `releases/latest` and would fail to parse a `models-` tag as a version.
 - Real car models (0.16, `tools/prepare_car_models.py`, `CarView.Model.cs`). The lofted bodies and the boxes of
   their cabins read as toys, from the seat most of all, so the catalogue's cars are drawn as CC BY models of real
   cars with cabins of their own (THIRD_PARTY.md): the flat-twelve a Lotus Esprit Turbo 1983 (right-hand drive,

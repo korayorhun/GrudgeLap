@@ -1268,7 +1268,7 @@ internal sealed partial class CarView : Node3D
                 outside.AddChild(round);
                 var ring = new MeshInstance3D
                 {
-                    Mesh = new TorusMesh { InnerRadius = 0.11f, OuterRadius = 0.135f, Material = trim, RingSegments = 24, Rings = 6 },
+                    Mesh = new TorusMesh { InnerRadius = 0.11f, OuterRadius = 0.135f, Material = trim, RingSegments = 6, Rings = 24 },
                     Position = new Vector3(side * 0.62f, style.Sample(style.ShoulderH, tailZ) - 0.08f, tailZ + 0.01f),
                     RotationDegrees = new Vector3(90f, 0f, 0f),
                 };
@@ -1713,7 +1713,7 @@ internal sealed partial class CarView : Node3D
             });
             spinner.AddChild(new MeshInstance3D
             {
-                Mesh = new TorusMesh { InnerRadius = rim - 0.023f, OuterRadius = rim, Material = alloy, RingSegments = 32, Rings = 8 },
+                Mesh = new TorusMesh { InnerRadius = rim - 0.023f, OuterRadius = rim, Material = alloy, RingSegments = 8, Rings = 48 },
                 Position = new Vector3(side * 0.12f * inset, 0f, 0f),
                 RotationDegrees = new Vector3(0f, 0f, 90f),
             });

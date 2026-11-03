@@ -8,9 +8,11 @@ rear-wheel-drive saloon of the 1990s, a 1.4 estate of the same years and a 2.1 r
 the 2010s) and five more of cars13 (a 4.5 flat-plane V8 of 2010 with a seven-speed dual-clutch gearbox and an
 electronically controlled differential, a five-cylinder and a 1.6 sixteen-valve hatchback of 2001, a 245 PS turbo
 hot hatch of 2018 with a clutch-pack front differential and a 250 km/h limiter, and a 2.0 boxer coupe of 2013 with a
-Torsen; the 458 and the BRZ drawn by real car models, the two Bravos and the Leon by lofted bodies of their own,
-keyed on their published dimensions and dimensioned drawings, since no credible model of either exists; each of the
-five with engine recordings of its own), all with their
+Torsen; the 458 drawn by a real model of it and the BRZ by a model of its twin, a Toyota 86 with the 2017 facelift's
+nose and a Mercedes cabin, the two Bravos and the Leon by lofted bodies of their own, keyed on their published
+dimensions and CC BY dimensioned drawings, since no CC-licensed model of either was found; each of the five with its
+own engine sound, recorded from the nearest freely licensed engine where the real one's was not: an F430's flat-plane
+V8 for the 458, an Audi five for the HGT, an MX-5's and a Golf's 1.6 for the Bravo 1.6), all with their
 published weights, gearing and power and real engine recordings — a fork between a long
 *speed* route and a short *stunt* route with an open drawbridge, a vertical loop and a banked 180, dips,
 traffic in both directions that keeps its distance, checkpoints against the clock, knocks that dent the car and bounce
@@ -34,8 +36,10 @@ yollarının üç gündelik arabası: 1990'ların 1.6 arkadan itişli sedanı, a
 arkadan itişli dizel filo sedanı; cars13'ün beş arabası: 7 vites çift kavramalı şanzımanlı ve elektronik kontrollü
 diferansiyelli 2010 4.5 düz krank (flat-plane) V8, 2001'den beş silindirli 2.0 ve 1.6 16V iki hatchback, lamelli ön
 diferansiyelli ve 250 km/sa sınırlayıcılı 2018 245 PS turbo hot hatch ve Torsen diferansiyelli 2013 2.0 boxer coupe;
-458 ve BRZ gerçek araba modelleriyle, iki Bravo ve Leon ise güvenilir bir modelleri bulunmadığından yayımlanmış
-ölçüleri ve ölçülü çizimleri üzerine kurulmuş kendi gövdeleriyle çizilir; beşinin de kendi motor kayıtları var;
+458 kendi gerçek modeliyle, BRZ ise ikizi Toyota 86'nın modeliyle (2017 makyajının burnu ve bir Mercedes kabiniyle),
+iki Bravo ve Leon CC lisanslı bir modelleri bulunamadığından yayımlanmış ölçüleri ve CC BY ölçülü çizimleri üzerine
+kurulmuş kendi gövdeleriyle çizilir; beşinin de kendi motor sesi var (gerçek motorun özgür lisanslı kaydı olmayanlarda
+en yakın motorunki: 458'de bir F430'un V8'i, HGT'de bir Audi beşlisi, Bravo 1.6'da bir MX-5'in ve bir Golf'ün 1.6'sı);
 hepsi yayımlanmış ağırlık, vites ve güç değerleriyle, hepsinde gerçek motor kayıtları), uzun *speed* ve kısa *stunt* (açık köprü, dikey loop, eğimli
 180°) rotaları, çukurlar, iki yönlü trafik, süreye karşı kontrol noktaları, her kazadan sonra arabanın çarptığı
 yerden ezildiği ve parçalarının uçuştuğu anlık tekrar,
@@ -212,7 +216,7 @@ best lap's ghost out of the picture.
   a wood beyond the fields, fields, textured buildings, the green fork gantry with its traffic light, the
   red checkpoint banner, signs, the train on its railway), real car models with their own cabins (0.16: CC BY
   models of a Ferrari Testarossa (with a Lotus Esprit's cabin), a McLaren 570S, a Ferrari 458 Italia (with the 570S's
-  cabin), a Peugeot 205 GTi, a Lancia Delta
+  cabin), a Toyota 86 standing for its twin, the Subaru BRZ (with the E-Class's cabin), a Peugeot 205 GTi, a Lancia Delta
   Integrale, a Volkswagen Golf R32 (with a SAAB 9-5's cabin), a VAZ-2106, a Renault 12 and a Mercedes-Benz E-Class, set to
   the simulation's wheelbase, their wheels and steering wheel turning, the live dials in their binnacles, the
   rear-view mirror on their own; `tools/prepare_car_models.py`; in their own colours or one the player picks or

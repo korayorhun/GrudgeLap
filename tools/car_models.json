@@ -394,6 +394,11 @@
       0.05,
       0.03
     ],
+    "mirror_offset": [
+      0.0,
+      -0.0405,
+      -0.048
+    ],
     "materials": {
       "plastic.black": {
         "roughness": 0.88
