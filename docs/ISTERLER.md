@@ -1,6 +1,7 @@
 # GrudgeLap: isterler
 
-Proje sahibinin bu oyun için istediği her şeyin tek listesi. Yeni bir thread işe başlamadan önce bu dosyayı okur.
+Proje sahibinin bu oyun için istediği her şeyin tek listesi. Yeni bir thread işe başlamadan önce bu dosyayı okur;
+nasıl başlayacağı [DEVAM.md](DEVAM.md)'de yazar.
 Yeni bir istek gelince buraya satır olarak eklenir. Bir sürüm bir isteği karşılayınca o satırın durumu ve sürümü güncellenir.
 
 - **Kaynak:** sahibin 22 Ekim - 3 Kasım 2026 arasındaki iki geliştirme thread'inde yazdıkları. Kısa alıntılar sahibin kendi sözleri, tarihleri yanında.
