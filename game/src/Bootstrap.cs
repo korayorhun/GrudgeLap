@@ -185,6 +185,14 @@ public sealed partial class Bootstrap : Node3D
             var spot = _track.Common.FrameAt(80f);
             _track.Props.Add(new TrackProp(PropKind.Tree, spot.Origin, 0f, new SN.Vector3(1.0f, 7f, 1.0f), "crash-test"));
         }
+        // The cows before the world (U3, 0.31.0): their bodies take a few milliseconds each here, and their hides then
+        // paint on the thread pool while the world is built; they join the tree with the other props, in order.
+        var cowsAhead = new Dictionary<int, Node3D>();
+        for (var i = 0; i < _track.Props.Count; i++)
+        {
+            if (_track.Props[i].Kind == PropKind.Cow) cowsAhead[i] = PropBuilder.Build(_track.Props[i], _track.Terrain);
+        }
+        if (_perfLog) StartMark("the cows' bodies");
         WorldBuilder.PerfLog = _perfLog;
         WorldBuilder.Build(this, _track);
         if (_perfLog) StartMark("world (terrain, roads, foliage, buildings)");
@@ -196,7 +204,8 @@ public sealed partial class Bootstrap : Node3D
         for (var i = 0; i < _track.Props.Count; i++)
         {
             var propWatch = propTimes is null ? null : System.Diagnostics.Stopwatch.StartNew();
-            var node = PropBuilder.Build(_track.Props[i], _track.Terrain);
+            var node = cowsAhead.TryGetValue(i, out var cow) ? cow : PropBuilder.Build(_track.Props[i], _track.Terrain);
+            if (node is CowRig rig) CowBuilder.FinishHide(rig);
             _propNodes[i] = node;
             AddChild(node);
             if (_track.Props[i].Kind == PropKind.Cow) _world.AttachCow(node, i);

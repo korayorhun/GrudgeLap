@@ -930,6 +930,7 @@ internal static class WorldBuilder
         {
             for (var i = 0; i < nx; i++) heights[j * nx + i] = terrain.Height(minX + i * TerrainCell, minZ + j * TerrainCell, out roadWeights[j * nx + i]);
         });
+        Stage("  terrain: the coarse grid sampled");
 
         // A cell is refined when the field pulls any of its corners toward a road (or a skid pad): the earthwork
         // reaches at least 9 m past the shoulder, so every cell a road crosses has such a corner.
@@ -949,11 +950,27 @@ internal static class WorldBuilder
         bool IsFine(int i, int j) => i >= 0 && j >= 0 && i < cellsX && j < cellsZ && fine[j * cellsX + i];
 
         // Vertices on a lattice of 2 m steps; the coarse corners are every split-th point of it.
-        var lookup = new Dictionary<long, int>();
-        var points = new List<(int I, int J)>();
-        var indices = new List<int>();
+        // Sized for the circuit (a quarter of a million points, half a million triangles), and the coarse corners, a
+        // regular grid and 178,000 of the points, indexed by an array: the dictionary holds only the fine points of
+        // the refined cells (U3, 0.31.0: one dictionary for every point, grown by doubling, took 150 ms).
+        var lookup = new Dictionary<long, int>(1 << 17);
+        var coarseIndex = new int[nx * nz];
+        Array.Fill(coarseIndex, -1);
+        var points = new List<(int I, int J)>(1 << 18);
+        var indices = new List<int>(1 << 21);
+        bool Coarse(int pi, int pj) => pi % split == 0 && pj % split == 0;
         int Point(int pi, int pj)
         {
+            if (Coarse(pi, pj))
+            {
+                ref var slot = ref coarseIndex[(pj / split) * nx + pi / split];
+                if (slot < 0)
+                {
+                    slot = points.Count;
+                    points.Add((pi, pj));
+                }
+                return slot;
+            }
             var key = ((long)pi << 32) | (uint)pj;
             if (!lookup.TryGetValue(key, out var v))
             {
@@ -995,6 +1012,7 @@ internal static class WorldBuilder
             }
         }
 
+        Stage("  terrain: the cells and their points");
         // Heights and normals: the coarse corners keep their grid values; the finer points sample the field, except
         // on an edge shared with a coarse cell, where they lie on that edge's straight line so the two cells meet
         // without a crack.
@@ -1002,12 +1020,51 @@ internal static class WorldBuilder
         var vertexHeight = new float[count];
         var vertexWeight = new float[count];
         var vertexNormal = new SN.Vector3[count];
+        // The field's raw height at every fine point, sampled once (U3, 0.31.0): a fine point's normal is the central
+        // difference over its four lattice neighbours, which are mostly fine points themselves (or coarse corners,
+        // already in the grid); until 0.30 each point sampled the field five times, 380,000 calls for 76,000 points.
+        // The neighbours outside every refined cell (the ring round a refined patch) are sampled into a side table.
+        var raw = new float[count];
         Parallel.For(0, count, v =>
         {
             var (pi, pj) = points[v];
-            var x = minX + pi * step;
-            var z = minZ + pj * step;
-            if (pi % split == 0 && pj % split == 0)
+            if (Coarse(pi, pj)) return;
+            raw[v] = terrain.Height(minX + pi * step, minZ + pj * step, out vertexWeight[v]);
+        });
+        var ring = new Dictionary<long, float>();
+        var ringKeys = new List<long>();
+        for (var v = 0; v < count; v++)
+        {
+            var (pi, pj) = points[v];
+            if (Coarse(pi, pj)) continue;
+            Ring(pi + 1, pj); Ring(pi - 1, pj); Ring(pi, pj + 1); Ring(pi, pj - 1);
+        }
+        void Ring(int ni, int nj)
+        {
+            if (Coarse(ni, nj)) return;
+            var key = ((long)ni << 32) | (uint)nj;
+            if (lookup.ContainsKey(key) || ring.ContainsKey(key)) return;
+            ring[key] = 0f;
+            ringKeys.Add(key);
+        }
+        var ringHeights = new float[ringKeys.Count];
+        Parallel.For(0, ringKeys.Count, r =>
+        {
+            var ni = (int)(ringKeys[r] >> 32);
+            var nj = (int)(uint)ringKeys[r];
+            ringHeights[r] = terrain.Height(minX + ni * step, minZ + nj * step);
+        });
+        for (var r = 0; r < ringKeys.Count; r++) ring[ringKeys[r]] = ringHeights[r];
+        float RawAt(int pi, int pj)
+        {
+            if (Coarse(pi, pj)) return heights[(pj / split) * nx + pi / split];
+            var key = ((long)pi << 32) | (uint)pj;
+            return lookup.TryGetValue(key, out var v) ? raw[v] : ring[key];
+        }
+        Parallel.For(0, count, v =>
+        {
+            var (pi, pj) = points[v];
+            if (Coarse(pi, pj))
             {
                 var i = pi / split;
                 var j = pj / split;
@@ -1020,9 +1077,9 @@ internal static class WorldBuilder
                 vertexNormal[v] = SN.Vector3.Normalize(new SN.Vector3(-(hx1 - hx0) / (2f * TerrainCell), 1f, -(hz1 - hz0) / (2f * TerrainCell)));
                 return;
             }
-            vertexHeight[v] = terrain.Height(x, z, out vertexWeight[v]);
-            var dx = terrain.Height(x + step, z) - terrain.Height(x - step, z);
-            var dz = terrain.Height(x, z + step) - terrain.Height(x, z - step);
+            vertexHeight[v] = raw[v];
+            var dx = RawAt(pi + 1, pj) - RawAt(pi - 1, pj);
+            var dz = RawAt(pi, pj + 1) - RawAt(pi, pj - 1);
             vertexNormal[v] = SN.Vector3.Normalize(new SN.Vector3(-dx / (2f * step), 1f, -dz / (2f * step)));
             // Under a road the ground sits a few centimetres below the asphalt rather than on it: flat triangles 2 m
             // across still bulge through a road that curves between them.
@@ -1041,6 +1098,7 @@ internal static class WorldBuilder
             }
         });
 
+        Stage("  terrain: the vertices' heights and normals");
         var variation = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth, Frequency = 1f / 140f, FractalOctaves = 2, Seed = 77 };
         var st = new MeshBuilder();
         var vertexEarth = new float[count];
@@ -1050,15 +1108,18 @@ internal static class WorldBuilder
         // of trees under the mountains, as in the 1989 game, without a tree being placed there.
         var roadMinX = minX + TerrainMargin; var roadMaxX = maxX - TerrainMargin;
         var roadMinZ = minZ + TerrainMargin; var roadMaxZ = maxZ - TerrainMargin;
+        // The relief the roads cut into the plain: the height over the undisturbed rolling ground (0.13; until then the
+        // plain was flat enough for the height itself to serve, now its own swells would read as earthworks). Read
+        // side by side (U3, 0.31.0); the noise object and the builder are used from this thread only.
+        var vertexRelief = new float[count];
+        Parallel.For(0, count, v => vertexRelief[v] = vertexHeight[v] - terrain.Base(minX + points[v].I * step, minZ + points[v].J * step));
         for (var v = 0; v < count; v++)
         {
             var x = minX + points[v].I * step;
             var z = minZ + points[v].J * step;
             var h = vertexHeight[v];
             var normal = vertexNormal[v];
-            // The relief the roads cut into the plain: the height over the undisturbed rolling ground (0.13; until then the
-            // plain was flat enough for the height itself to serve, now its own swells would read as earthworks).
-            var relief = h - terrain.Base(x, z);
+            var relief = vertexRelief[v];
             var shade = 0.80f + 0.20f * normal.Y - 0.012f * MathF.Max(-relief, 0f);
             vertexShade[v] = shade;
             var n = variation.GetNoise2D(x, z);                      // -1..1
@@ -1096,6 +1157,7 @@ internal static class WorldBuilder
             st.SetUV2(new Vector2(x / MacroTile, z / MacroTile));
             st.AddVertex(Convert.ToGodot(new SN.Vector3(x, h, z)));
         }
+        Stage("  terrain: the vertices' colours, into the builder");
         // Grass or bare earth, split along the earthworks' contour (vertexEarth = 0.5, ground about 2.1 m off the
         // plain): a triangle the contour crosses is cut where it crosses, one piece to each mesh. Sorted whole by its
         // corners, the triangles left a saw-tooth of 2 m spikes along every cutting and round the hill.
@@ -1181,7 +1243,9 @@ internal static class WorldBuilder
             }
         }
         GD.Print($"terrain: {count} vertices, {indices.Count / 3} triangles, {refined} of {cellsX * cellsZ} cells refined along the roads, {earthTriangles} of earthworks, {crossings.Count} contour points");
+        Stage("  terrain: the triangles sorted by the contour");
         var ground = new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = Grass, Name = "Terrain" };
+        Stage("  terrain: the mesh committed");
         if (earthTriangles > 0) ground.AddChild(new MeshInstance3D { Mesh = es.Commit(), MaterialOverride = Earth, Name = "TerrainEarth" });
         return ground;
     }
@@ -1253,7 +1317,51 @@ internal static class WorldBuilder
         var loopTint = new Color(1f, 0.62f, 0.55f);   // the loop is a painted steel structure in the original: a dark red deck
         var vertices = 0;
 
-        int Row(in RoadFrame f)
+        // The rows first: a frame every half metre along each run, joined to the row before unless a gap or a run's
+        // start parts them. Listed before they are built so the wear under every station (five field reads a station,
+        // 136,000 stations round the circuit) is read side by side (U3, 0.31.0); the noise objects and the builder
+        // are used from this thread only.
+        var rows = new List<(RoadFrame Frame, bool Joins)>();
+        var open = false;
+        for (var i = 0; i < frames.Count - 1; i++)
+        {
+            var a = frames[i];
+            var b = frames[i + 1];
+            if (a.Surface == SurfaceType.Chasm || b.Surface == SurfaceType.Chasm)
+            {
+                open = false;
+                continue;
+            }
+            var steps = Math.Max(1, (int)MathF.Round((b.Distance - a.Distance) / RoadStep));
+            for (var s = 0; s < steps; s++)
+            {
+                rows.Add((s == 0 ? a : RoadFrame.Lerp(a, b, (float)s / steps), open));
+                open = true;
+            }
+            // The run's last frame closes it: at the end of the path or before a gap.
+            if (i == frames.Count - 2 || frames[i + 2].Surface == SurfaceType.Chasm)
+            {
+                rows.Add((b, true));
+                open = false;
+            }
+        }
+        const int perRow = RoadStations + 1;
+        var wear = new (float Depth, float Along, float Across, float Patch)[rows.Count * perRow];
+        Parallel.For(0, rows.Count, r =>
+        {
+            var f = rows[r].Frame;
+            for (var k = 0; k <= RoadStations; k++)
+            {
+                var lateral = (-1f + 2f * k / RoadStations) * f.HalfWidth;
+                wear[r * perRow + k] = (
+                    RoadWear.Depth(path.Kind, f.Kind, f.Distance, lateral, f.HalfWidth),
+                    (RoadWear.Depth(path.Kind, f.Kind, f.Distance + 0.25f, lateral, f.HalfWidth) - RoadWear.Depth(path.Kind, f.Kind, f.Distance - 0.25f, lateral, f.HalfWidth)) / 0.5f,
+                    (RoadWear.Depth(path.Kind, f.Kind, f.Distance, lateral + 0.1f, f.HalfWidth) - RoadWear.Depth(path.Kind, f.Kind, f.Distance, lateral - 0.1f, f.HalfWidth)) / 0.2f,
+                    RoadWear.PatchTone(path.Kind, f.Kind, f.Distance, lateral, f.HalfWidth));
+            }
+        });
+
+        int Row(in RoadFrame f, int r)
         {
             var first = vertices;
             var shared = sink > 0f && SiblingSide(track, path, f) != 0;
@@ -1268,13 +1376,11 @@ internal static class WorldBuilder
             {
                 var fraction = -1f + 2f * k / RoadStations;
                 var lateral = fraction * f.HalfWidth;
-                var depth = RoadWear.Depth(path.Kind, f.Kind, f.Distance, lateral, f.HalfWidth);
-                var alongSlope = (RoadWear.Depth(path.Kind, f.Kind, f.Distance + 0.25f, lateral, f.HalfWidth) - RoadWear.Depth(path.Kind, f.Kind, f.Distance - 0.25f, lateral, f.HalfWidth)) / 0.5f;
-                var acrossSlope = (RoadWear.Depth(path.Kind, f.Kind, f.Distance, lateral + 0.1f, f.HalfWidth) - RoadWear.Depth(path.Kind, f.Kind, f.Distance, lateral - 0.1f, f.HalfWidth)) / 0.2f;
+                var (depth, alongSlope, acrossSlope, patch) = wear[r * perRow + k];
                 var normal = SN.Vector3.Normalize(f.Normal + f.Tangent * alongSlope + f.Lateral * acrossSlope);
                 var position = f.Origin + f.Lateral * lateral - f.Normal * (depth + (shared ? sink : 0f));
                 var tone = slabShade * TrackShade(fraction)
-                    * RoadWear.PatchTone(path.Kind, f.Kind, f.Distance, lateral, f.HalfWidth)
+                    * patch
                     * MathF.Max(1f - 9f * MathF.Max(depth - 0.004f, 0f), 0.6f)
                     * (1f + 0.05f * grain.GetNoise2D(f.Distance * 3.7f, lateral * 2.1f));
                 var colour = tint * tone;
@@ -1300,29 +1406,11 @@ internal static class WorldBuilder
         }
 
         var previousRow = -1;
-        for (var i = 0; i < frames.Count - 1; i++)
+        for (var r = 0; r < rows.Count; r++)
         {
-            var a = frames[i];
-            var b = frames[i + 1];
-            if (a.Surface == SurfaceType.Chasm || b.Surface == SurfaceType.Chasm)
-            {
-                previousRow = -1;
-                continue;
-            }
-            var steps = Math.Max(1, (int)MathF.Round((b.Distance - a.Distance) / RoadStep));
-            for (var s = 0; s < steps; s++)
-            {
-                var row = Row(s == 0 ? a : RoadFrame.Lerp(a, b, (float)s / steps));
-                if (previousRow >= 0) Join(previousRow, row);
-                previousRow = row;
-            }
-            // The run's last frame closes it: at the end of the path or before a gap.
-            if (i == frames.Count - 2 || frames[i + 2].Surface == SurfaceType.Chasm)
-            {
-                var row = Row(b);
-                Join(previousRow, row);
-                previousRow = -1;
-            }
+            var row = Row(rows[r].Frame, r);
+            if (rows[r].Joins) Join(previousRow, row);
+            previousRow = row;
         }
         return new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = Asphalt, Name = $"Road-{path.Kind}" };
     }

@@ -37,6 +37,8 @@ public sealed class TerrainField
     private const byte ClampBehind = 2;   // the run starts with this frame
 
     private readonly Dictionary<(int, int), List<int>> _cells = new();
+    /// <summary>Every cell within the two-cell reach of a cell that holds a frame: Height looks no further from any other.</summary>
+    private readonly HashSet<(int, int)> _near = new();
     private readonly List<RoadFrame> _frames = new();
     private readonly List<int> _pathOfFrame = new();
     private readonly List<byte> _clampOfFrame = new();
@@ -76,6 +78,13 @@ public sealed class TerrainField
                 var key = CellOf(f.Origin.X, f.Origin.Z);
                 if (!_cells.TryGetValue(key, out var list)) _cells[key] = list = new List<int>();
                 list.Add(index);
+            }
+        }
+        foreach (var (kx, kz) in _cells.Keys)
+        {
+            for (var dz = -2; dz <= 2; dz++)
+            {
+                for (var dx = -2; dx <= 2; dx++) _near.Add((kx + dx, kz + dz));
             }
         }
         _centre = count > 0 ? sum / count : Vector3.Zero;
@@ -119,7 +128,10 @@ public sealed class TerrainField
             bestFrame[p] = -1;
         }
         var (cx, cz) = CellOf(x, z);
-        for (var dz = -2; dz <= 2; dz++)
+        // Most of the ground lies far from every road (the terrain mesh samples 180,000 points of it at the start):
+        // one lookup tells that all 25 cells here are empty, instead of 25 (U3, 0.31.0).
+        var near = _near.Contains((cx, cz));
+        for (var dz = -2; near && dz <= 2; dz++)
         {
             for (var dx = -2; dx <= 2; dx++)
             {

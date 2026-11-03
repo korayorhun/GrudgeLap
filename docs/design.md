@@ -2572,6 +2572,35 @@ Both dials and the gear readout are in the opening on all four now (shots six se
 straight); the Delta's odometer line is under the dashboard's lip. The record `tools/car_cockpits.json` moved with
 them; the other cars' models are untouched.
 
+### Start-up time, the world and the cows (U3, 0.31.0)
+
+The shipped 0.30.0 build, hidden, to its first frame: 4.4 s, of which the world 2.1 s (the terrain 1.3 s), the props
+0.8 s (the seven cows 0.5 s). Measured on the Release export: the editor's Debug assemblies are unoptimised and put
+the terrain's cost in the wrong places. Stage marks inside `BuildTerrain` (`--perf-log`) showed the coarse grid's
+sampling 316 ms, the point index 152 ms, the vertices' heights and normals 162 ms, the colours 56 ms.
+
+- `TerrainField.Height` looked in 25 cells round every point; the 180,000 coarse points lie mostly far from every
+  road, where all 25 are empty. A set of the cells within reach of a frame is asked first: 316 ms to 30 ms, the
+  same heights.
+- A fine vertex's normal sampled the field four more times at its lattice neighbours, which are mostly fine vertices
+  themselves or coarse corners already in the grid: the raw heights are sampled once per point and shared, the ring
+  of neighbours outside every refined cell sampled into a side table (380,000 field reads to about 100,000). The
+  normals differ from before only by float rounding of the neighbours' coordinates.
+- The point index was one dictionary for every point, grown by doubling; the coarse corners are a regular grid and
+  are indexed by an array now, the dictionary holds the 76,000 fine points: 152 ms to 45 ms.
+- The colour pass's field reads (`Base`) run in parallel; the noise object and the mesh builder stay on the main
+  thread.
+- The cows are built before the world (their bodies 20 ms each) and their hides paint on the thread pool while the
+  world is built; `CowBuilder.FinishHide` makes the texture when the cow joins the tree, in the props' order. The
+  random draws keep their order, so every cow is as it was: the cows 501 ms to 148 ms on the main thread.
+- The road rows are listed first and the wear under every station (five field reads a station, 136,000 stations)
+  is read side by side before the builder is fed: the three roads 193 ms to 151 ms.
+
+The terrain 1289 ms to about 320 ms; the first frame 4.4 s to 3.0 s (three runs: 3.05, 2.98, 3.05 s). A seat-view
+frame of the 570S differs from the 0.30.0 build's by no more than two runs of 0.30.0 differ from each other. Left:
+the engine's own start before `_Ready` (1.1 s), the sky, far ground and mountains (240 ms), the roads' remaining
+serial part, the shoulders (80 ms), the grass and the forest (170 ms), and the first start's shader compilation.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

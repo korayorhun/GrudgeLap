@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using Godot;
 using GrudgeLap.Physics.Race;
 
@@ -163,7 +164,14 @@ internal static class CowBuilder
         }).ToArray();
         tubes.Add(AddTube(tail, tailRings, new Rect2(576f, 160f, 192f, 32f), Part.Tail, tailPivot, hide, capStart: true, capEnd: true, "TailMesh"));
 
-        hide.AlbedoTexture = Paint(tubes, random);
+        // The hide's pixels on the thread pool (U3, 0.31.0): Bootstrap builds the cows before the world, so the hides
+        // paint while the world is built on the main thread, and FinishHide makes the texture when the cow joins the
+        // tree. The random draws keep their order (the shift, the threshold, the phase), so every cow is as it was.
+        var shift = new Vector3((float)random.NextDouble() * 50f, (float)random.NextDouble() * 50f, (float)random.NextDouble() * 50f);
+        // Some cows are mostly white, some mostly black.
+        var threshold = 0.46f + 0.14f * (float)random.NextDouble();
+        rig.HideMaterial = hide;
+        rig.HidePainting = Task.Run(() => PaintData(tubes, shift, threshold));
         rig.Phase = (float)random.NextDouble() * 20f;
         return rig;
     }
@@ -266,12 +274,9 @@ internal static class CowBuilder
     /// on across the parts), white on the legs below the knees and the switch of the tail, a white blaze down a
     /// black face, and the white a little grubby low down.
     /// </summary>
-    private static ImageTexture Paint(List<Tube> tubes, Random random)
+    private static byte[] PaintData(List<Tube> tubes, Vector3 shift, float threshold)
     {
         var data = new byte[AtlasWidth * AtlasHeight * 3];
-        var shift = new Vector3((float)random.NextDouble() * 50f, (float)random.NextDouble() * 50f, (float)random.NextDouble() * 50f);
-        // Some cows are mostly white, some mostly black.
-        var threshold = 0.46f + 0.14f * (float)random.NextDouble();
         foreach (var tube in tubes)
         {
             var x0 = (int)tube.Uv.Position.X;
@@ -301,9 +306,17 @@ internal static class CowBuilder
                 }
             });
         }
-        var image = Image.CreateFromData(AtlasWidth, AtlasHeight, false, Image.Format.Rgb8, data);
+        return data;
+    }
+
+    /// <summary>The hide's texture from its painted pixels, waiting for them if the painting is still on; main thread.</summary>
+    public static void FinishHide(CowRig rig)
+    {
+        if (rig.HidePainting is null) return;
+        var image = Image.CreateFromData(AtlasWidth, AtlasHeight, false, Image.Format.Rgb8, rig.HidePainting.Result);
         image.GenerateMipmaps();
-        return ImageTexture.CreateFromImage(image);
+        rig.HideMaterial.AlbedoTexture = ImageTexture.CreateFromImage(image);
+        rig.HidePainting = null;
     }
 
     private static Color HideAt(Part part, Vector3 p, Vector3 local, in Ring ring, Vector3 shift, float threshold)
@@ -403,6 +416,10 @@ internal sealed partial class CowRig : Node3D
     public Node3D Head = null!;
     public Node3D[] Legs = [];
     public Node3D Tail = null!;
+    /// <summary>The hide's material; its texture comes from <see cref="HidePainting"/> (CowBuilder.FinishHide).</summary>
+    public StandardMaterial3D HideMaterial = null!;
+    /// <summary>The hide's pixels, painting on the thread pool; null once the texture is made.</summary>
+    public Task<byte[]>? HidePainting;
     /// <summary>A cow's own offset in the grazing cycle and the tail's swish, so the herd does not move as one.</summary>
     public float Phase;
     private float _gait;
