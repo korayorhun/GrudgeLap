@@ -511,9 +511,15 @@ internal sealed partial class CarView
             Roughness = 0.03f,
         };
         var bulb = new StandardMaterial3D { AlbedoColor = new Color(1f, 1f, 0.96f), EmissionEnabled = true, Emission = new Color(0.92f, 0.94f, 1f), EmissionEnergyMultiplier = 0.7f };
-        var red = new StandardMaterial3D { AlbedoColor = new Color(0.55f, 0.03f, 0.03f), Metallic = 0.3f, Roughness = 0.08f, EmissionEnabled = true, Emission = new Color(0.85f, 0.05f, 0.03f), EmissionEnergyMultiplier = 0.8f };
-        var brake = new StandardMaterial3D { AlbedoColor = new Color(0.75f, 0.06f, 0.04f), Roughness = 0.1f, EmissionEnabled = true, Emission = new Color(1f, 0.08f, 0.04f), EmissionEnergyMultiplier = 1.5f };
+        var red = new StandardMaterial3D { AlbedoColor = new Color(0.28f, 0.02f, 0.02f).Lerp(new Color(0.55f, 0.03f, 0.03f), style.TailLampGlow), Metallic = 0.3f, Roughness = 0.08f, EmissionEnabled = true, Emission = new Color(0.85f, 0.05f, 0.03f), EmissionEnergyMultiplier = 0.8f * style.TailLampGlow };
+        var brake = new StandardMaterial3D { AlbedoColor = new Color(0.75f, 0.06f, 0.04f), Roughness = 0.1f, EmissionEnabled = true, Emission = new Color(1f, 0.08f, 0.04f), EmissionEnergyMultiplier = 1.5f * style.TailLampGlow };
         var gloss = new StandardMaterial3D { AlbedoColor = new Color(0.025f, 0.025f, 0.03f), Metallic = 0.2f, Roughness = 0.18f };
+        if (style.TailLampGlow < 1f)
+        {
+            // Unlit by day, the brake lamps light when the driver brakes, as a model's do (CarView.Braking).
+            brake.EmissionEnergyMultiplier = 0f;
+            _brakeLamps.Add(brake);
+        }
         var plate = new StandardMaterial3D { AlbedoColor = new Color(0.92f, 0.92f, 0.9f), Roughness = 0.5f };
 
         void Add(Node3D parent, ArrayMesh mesh, Material material, string name) =>
@@ -644,6 +650,9 @@ internal sealed partial class CarView
             var x = SkinX(spec, style.HandleZ, style.HandleY);
             Box(outside, new Vector3(0.03f, 0.032f, 0.15f), new Vector3(side * (x + 0.008f), style.HandleY, style.HandleZ), trim);
         }
+        // The side glass's own shape, and the details of the cars13 lofts (CarView.Cars13.cs).
+        BuildGlassCovers(outside, body, spec, paint, gloss, WorldBuilder.PropMaterial("leather", style.LeatherTint, 4f));
+        BuildCars13Details(outside, spec, paint, trim, chrome, gloss);
 
         // Door mirrors at the front corner of the side glass: a black foot on the door's top, a rounded housing (black
         // plastic on the older cars, paint on the turbo hatch) and the glass on its rear face, towards the driver.

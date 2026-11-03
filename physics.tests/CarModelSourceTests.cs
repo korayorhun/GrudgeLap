@@ -9,7 +9,8 @@ namespace GrudgeLap.Physics.Tests;
 /// The real car models are named in four places that nothing else ties together: unreal/Scripts/fetch_models.py fetches
 /// them, tools/car_models.json (the game) and unreal/Import/Models/models.json (the Unreal level) draw them, a LICENSE.txt
 /// beside each and THIRD_PARTY.md credit them. models13 credited two models no entry drew, and every fresh build fetched
-/// their 52 MB (its review).
+/// their 52 MB (its review). A model the mirror does not hold is fetched from the project's own copy and checked against
+/// the SHA-256 its LICENSE.txt gives (cars13 bodies: the BRZ's Toyota 86).
 /// </summary>
 public sealed class CarModelSourceTests
 {
@@ -22,10 +23,21 @@ public sealed class CarModelSourceTests
     {
         var root = TrackTests.FindRepoRoot();
         var models = Path.Combine(root, "unreal/Import/Models");
-        // "name.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-011/<Sketchfab uid>.glb"
-        var fetched = Regex.Matches(File.ReadAllText(Path.Combine(root, "unreal/Scripts/fetch_models.py")),
-                @"""([\w.-]+\.glb)"":\s*""https://[^""]+/([0-9a-f]{32})\.glb""")
+        // "name.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-011/<Sketchfab uid>.glb", and
+        // the models the mirror does not hold (RELEASED, cars13 bodies): "name.glb": {"url": ..., "sha256": ...,
+        // "sketchfab": "<uid>"}, whose LICENSE.txt must describe the very file (its SHA-256).
+        var script = File.ReadAllText(Path.Combine(root, "unreal/Scripts/fetch_models.py"));
+        var fetched = Regex.Matches(script, @"""([\w.-]+\.glb)"":\s*""https://[^""]+/([0-9a-f]{32})\.glb""")
             .ToDictionary(m => m.Groups[1].Value, m => m.Groups[2].Value);
+        var released = Regex.Matches(script, @"""([\w.-]+\.glb)"":\s*\{[^}]*""sha256"":\s*""([0-9a-f]{64})""[^}]*""sketchfab"":\s*""([0-9a-f]{32})""");
+        Assert.NotEmpty(released);
+        foreach (Match entry in released)
+        {
+            fetched.Add(entry.Groups[1].Value, entry.Groups[3].Value);
+            var licence = Path.Combine(models, Path.GetFileNameWithoutExtension(entry.Groups[1].Value) + ".LICENSE.txt");
+            Assert.True(File.Exists(licence) && File.ReadAllText(licence).Contains(entry.Groups[2].Value, StringComparison.Ordinal),
+                $"{entry.Groups[1].Value}'s LICENSE.txt does not name the SHA-256 fetch_models.py checks it against");
+        }
         var game = DrawnFiles(Path.Combine(root, "tools/car_models.json"));
         var unreal = DrawnFiles(Path.Combine(models, "models.json"));
         var credits = File.ReadAllText(Path.Combine(root, "THIRD_PARTY.md"));
@@ -74,6 +86,28 @@ public sealed class CarModelSourceTests
         Assert.Contains("name = \"Seat_\" + name", prepare, StringComparison.Ordinal);
         Assert.Contains("cm.rig(model, entry, spec, car, blob)", prepare, StringComparison.Ordinal);
         Assert.Contains("def rig(model, entry, spec, car, blob=None):", File.ReadAllText(Path.Combine(root, "tools/car_models.py")), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The BRZ's model (cars13 bodies, Ethan's Toyota 86) is the author's work but for its two seats, which its page says
+    /// are not his: they are outside the CC BY grant and must stay out, with the Toyota badges and the caps' logos (the
+    /// design's owner's marks). Its paint is "material", a part of "black_car_material" (named exactly), and it has no
+    /// cabin of its own, so it borrows the W212's.
+    /// </summary>
+    [Fact]
+    public void The_BRZ_leaves_out_what_its_licence_does_not_cover()
+    {
+        var root = TrackTests.FindRepoRoot();
+        using var config = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "tools/car_models.json")));
+        var entry = config.RootElement.GetProperty("brz");
+        Assert.Equal("toyota-86-ethanchew.glb", entry.GetProperty("file").GetString());
+        var dropped = entry.GetProperty("drop").EnumerateArray().Select(e => e.GetString()).ToHashSet();
+        foreach (var part in new[] { "=Object_17", "=Object_18", "=Object_13", "=Object_26", "=Object_32", "=Object_38", "=Object_44" })
+            Assert.Contains(part, dropped);
+        Assert.Equal("==material", entry.GetProperty("paint")[0].GetString());
+        Assert.Equal("fleet", entry.GetProperty("cabin_from").GetProperty("car").GetString());
+        var licence = Regex.Replace(File.ReadAllText(Path.Combine(root, "unreal/Import/Models/toyota-86-ethanchew.LICENSE.txt")), @"\s+", " ");
+        Assert.Contains("Seat model is not mine", licence, StringComparison.Ordinal);
     }
 
     /// <summary>The source files a model config's entries draw (every entry's "file", the cabin donors' too).</summary>

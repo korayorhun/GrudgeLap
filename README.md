@@ -8,8 +8,9 @@ rear-wheel-drive saloon of the 1990s, a 1.4 estate of the same years and a 2.1 r
 the 2010s) and five more of cars13 (a 4.5 flat-plane V8 of 2010 with a seven-speed dual-clutch gearbox and an
 electronically controlled differential, a five-cylinder and a 1.6 sixteen-valve hatchback of 2001, a 300 PS turbo
 hot hatch of 2018 with a clutch-pack front differential and a 250 km/h limiter, and a 2.0 boxer coupe of 2013 with a
-Torsen; the 458 drawn by its own model and the two Bravos, the Leon and the BRZ by stand-in bodies for now, each
-of the five with engine recordings of its own), all with their
+Torsen; the 458 and the BRZ drawn by real car models, the two Bravos and the Leon by lofted bodies of their own,
+keyed on their published dimensions and dimensioned drawings, since no credible model of either exists; each of the
+five with engine recordings of its own), all with their
 published weights, gearing and power and real engine recordings — a fork between a long
 *speed* route and a short *stunt* route with an open drawbridge, a vertical loop and a banked 180, dips,
 traffic in both directions that keeps its distance, checkpoints against the clock, knocks that dent the car and bounce
@@ -33,8 +34,8 @@ yollarının üç gündelik arabası: 1990'ların 1.6 arkadan itişli sedanı, a
 arkadan itişli dizel filo sedanı; cars13'ün beş arabası: 7 vites çift kavramalı şanzımanlı ve elektronik kontrollü
 diferansiyelli 2010 4.5 düz krank (flat-plane) V8, 2001'den beş silindirli 2.0 ve 1.6 16V iki hatchback, lamelli ön
 diferansiyelli ve 250 km/sa sınırlayıcılı 2018 300 PS turbo hot hatch ve Torsen diferansiyelli 2013 2.0 boxer coupe;
-458 kendi modeliyle, iki Bravo, Leon ve BRZ şimdilik yedek gövdelerle çizilir; beşinin de kendi motor kayıtları
-var;
+458 ve BRZ gerçek araba modelleriyle, iki Bravo ve Leon ise güvenilir bir modelleri bulunmadığından yayımlanmış
+ölçüleri ve ölçülü çizimleri üzerine kurulmuş kendi gövdeleriyle çizilir; beşinin de kendi motor kayıtları var;
 hepsi yayımlanmış ağırlık, vites ve güç değerleriyle, hepsinde gerçek motor kayıtları), uzun *speed* ve kısa *stunt* (açık köprü, dikey loop, eğimli
 180°) rotaları, çukurlar, iki yönlü trafik, süreye karşı kontrol noktaları, her kazadan sonra arabanın çarptığı
 yerden ezildiği ve parçalarının uçuştuğu anlık tekrar,

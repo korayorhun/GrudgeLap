@@ -162,40 +162,104 @@ internal sealed partial class CarView
 
     /// <summary>
     /// A seat at <paramref name="x"/>: a cushion between two rolled bolsters, a backrest reclined 13 degrees with its
-    /// side wings, a headrest on two posts; on a base above the floor in the upright cars.
+    /// side wings, a headrest on two posts; on a base above the floor in the upright cars. A bucket seat
+    /// (<paramref name="sport"/>, the Leon Cupra's and the Bravo HGT's) has deeper bolsters and wings and a high back
+    /// with its headrest moulded in.
     /// </summary>
-    private void BuildSeat(Node3D body, float x, float seatY, float seatZ, Material cover, Material dark, bool raised)
+    private void BuildSeat(Node3D body, float x, float seatY, float seatZ, Material cover, Material dark, bool raised, bool sport = false)
     {
+        var bolster = sport ? 0.06f : 0.045f;
+        var wing = sport ? 0.075f : 0.055f;
         Box(body, new Vector3(0.44f, 0.11f, 0.50f), new Vector3(x, seatY - 0.01f, seatZ), cover);
         foreach (var s in new[] { -1f, 1f })
         {
             body.AddChild(new MeshInstance3D
             {
-                Mesh = new CapsuleMesh { Radius = 0.045f, Height = 0.48f, Material = cover, RadialSegments = 12, Rings = 4 },
-                Position = new Vector3(x + s * 0.215f, seatY + 0.035f, seatZ + 0.01f),
+                Mesh = new CapsuleMesh { Radius = bolster, Height = 0.48f, Material = cover, RadialSegments = 12, Rings = 4 },
+                Position = new Vector3(x + s * 0.215f, seatY + 0.035f + (sport ? 0.015f : 0f), seatZ + 0.01f),
                 RotationDegrees = new Vector3(90f, 0f, 0f),
             });
         }
         // A positive pitch tips the top towards +z, the tail: the backrest reclines from the cushion onto the headrest.
         var back = new Node3D { Position = new Vector3(x, seatY + 0.04f, seatZ + 0.25f), Rotation = new Vector3(0.22f, 0f, 0f) };
         body.AddChild(back);
-        Box(back, new Vector3(0.42f, 0.58f, 0.10f), new Vector3(0f, 0.29f, 0f), cover);
+        Box(back, new Vector3(0.42f, sport ? 0.74f : 0.58f, 0.10f), new Vector3(0f, sport ? 0.37f : 0.29f, 0f), cover);
         foreach (var s in new[] { -1f, 1f })
         {
             back.AddChild(new MeshInstance3D
             {
-                Mesh = new CapsuleMesh { Radius = 0.055f, Height = 0.54f, Material = cover, RadialSegments = 12, Rings = 4 },
-                Position = new Vector3(s * 0.205f, 0.29f, -0.03f),
+                Mesh = new CapsuleMesh { Radius = wing, Height = 0.54f, Material = cover, RadialSegments = 12, Rings = 4 },
+                Position = new Vector3(s * 0.205f, 0.29f, sport ? -0.045f : -0.03f),
             });
-            Box(back, new Vector3(0.012f, 0.08f, 0.012f), new Vector3(s * 0.07f, 0.62f, 0.0f), dark);
+            if (!sport) Box(back, new Vector3(0.012f, 0.08f, 0.012f), new Vector3(s * 0.07f, 0.62f, 0.0f), dark);
         }
-        back.AddChild(new MeshInstance3D
+        if (sport)
         {
-            Mesh = new CapsuleMesh { Radius = 0.065f, Height = 0.26f, Material = cover, RadialSegments = 12, Rings = 4 },
-            Position = new Vector3(0f, 0.70f, 0.0f),
-            RotationDegrees = new Vector3(0f, 0f, 90f),
-            Scale = new Vector3(1f, 1f, 0.75f),
-        });
+            // The moulded headrest: the back's top narrowed to a head-wide pad, the belt's slot either side of it.
+            back.AddChild(new MeshInstance3D
+            {
+                Mesh = new CapsuleMesh { Radius = 0.07f, Height = 0.28f, Material = cover, RadialSegments = 12, Rings = 4 },
+                Position = new Vector3(0f, 0.70f, -0.01f),
+                RotationDegrees = new Vector3(0f, 0f, 90f),
+                Scale = new Vector3(1f, 1f, 0.8f),
+            });
+            foreach (var s in new[] { -1f, 1f }) Box(back, new Vector3(0.05f, 0.08f, 0.104f), new Vector3(s * 0.15f, 0.64f, 0f), dark);
+        }
+        else
+        {
+            back.AddChild(new MeshInstance3D
+            {
+                Mesh = new CapsuleMesh { Radius = 0.065f, Height = 0.26f, Material = cover, RadialSegments = 12, Rings = 4 },
+                Position = new Vector3(0f, 0.70f, 0.0f),
+                RotationDegrees = new Vector3(0f, 0f, 90f),
+                Scale = new Vector3(1f, 1f, 0.75f),
+            });
+        }
         if (raised) Box(body, new Vector3(0.40f, seatY - 0.45f, 0.40f), new Vector3(x, (seatY + 0.31f) * 0.5f, seatZ), dark);
+    }
+
+    /// <summary>
+    /// The Cupra's steering wheel rim, flattened across the bottom: a tube along the rim's line (the column's frame, +Z
+    /// down), the bottom cut off level 0.145 m under the hub, in short straight pieces.
+    /// </summary>
+    private static void BuildFlatBottomRim(Node3D spin, Material material)
+    {
+        const int pieces = 40;
+        const float radius = 0.176f;
+        const float flat = 0.145f;
+        static Vector3 At(int i)
+        {
+            var a = Mathf.Tau * i / pieces;
+            return new Vector3(radius * MathF.Sin(a), 0f, MathF.Min(radius * MathF.Cos(a), flat));
+        }
+        for (var i = 0; i < pieces; i++)
+        {
+            var p = At(i);
+            var q = At(i + 1);
+            var along = q - p;
+            var length = along.Length();
+            if (length < 1e-4f) continue;
+            var up = along / length;
+            var across = up.Cross(Vector3.Up).Normalized();
+            var normal = across.Cross(up);
+            spin.AddChild(new MeshInstance3D
+            {
+                Mesh = new CylinderMesh { TopRadius = 0.018f, BottomRadius = 0.018f, Height = length + 0.004f, Material = material, RadialSegments = 10, Rings = 1 },
+                Transform = new Transform3D(new Basis(across, up, normal), (p + q) * 0.5f),
+            });
+        }
+    }
+
+    /// <summary>
+    /// The Leon's touch screen: standing on the dashboard over the centre stack, leaning back and turned a little to the
+    /// driver, in a gloss black frame; lit faintly, as the navigation's map is by day.
+    /// </summary>
+    private void BuildCentreScreen(Node3D body, float cowlH, float faceZ, Material frame)
+    {
+        var screen = new Node3D { Name = "CentreScreen", Position = new Vector3(0f, cowlH - 0.105f, faceZ + 0.035f), Rotation = new Vector3(-0.22f, 0.10f, 0f) };
+        body.AddChild(screen);
+        Box(screen, new Vector3(0.235f, 0.15f, 0.025f), Vector3.Zero, frame);
+        var glass = new StandardMaterial3D { AlbedoColor = new Color(0.04f, 0.06f, 0.08f), Metallic = 0.1f, Roughness = 0.3f, EmissionEnabled = true, Emission = new Color(0.20f, 0.32f, 0.40f), EmissionEnergyMultiplier = 0.25f };
+        Box(screen, new Vector3(0.205f, 0.12f, 0.004f), new Vector3(0f, 0f, 0.0135f), glass);
     }
 }

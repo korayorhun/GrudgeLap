@@ -1,8 +1,11 @@
 """Fetches the real car models the level dresses the catalogue cars with (Import/Models/models.json), from the
 Objaverse mirror on Hugging Face: CC BY 4.0 models from Sketchfab, each with its LICENSE.txt beside it in the
-repository (author, source, the credit line the licence asks for). Nothing is downloaded that is already there.
+repository (author, source, the credit line the licence asks for). A model uploaded after the mirror's 2022 snapshot
+(RELEASED) comes from the project's own copy, a release asset of the repository, and is checked against the SHA-256 of
+the file its LICENSE.txt describes. Nothing is downloaded that is already there.
 Usage: python fetch_models.py [Import/Models]
 """
+import hashlib
 import os
 import sys
 import urllib.request
@@ -24,25 +27,51 @@ MODELS = {
     "renault-12-boitaloran.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-074/f8c26a68a3dd45b492d6d9a33cda6fcd.glb",
     # models13: the flat-plane V8 as a Ferrari 458 Italia (Antonis_zks; a shell without a cabin, like the Testarossa, so
     # the game lends it the 570S's). No CC BY model of the first-generation Fiat Bravo or of the 2018 SEAT Leon Cupra
-    # exists in the mirror (a search of the whole Objaverse catalogue, Sketchfab's CC BY/CC0 listings, archive.org,
-    # Commons and OpenGameArt on 2026-11-02 found none that is not a game rip or behind a login), and the only BRZ, 86
-    # or FR-S of a credible origin, RoninVR's Scion FR-S 2015, has an unfinished tail the chase camera looks into (its
-    # LICENSE.txt; not fetched): those three keep the game's lofted bodies.
+    # exists (a search of the whole Objaverse catalogue, Sketchfab's CC BY/CC0 listings, archive.org, Commons and
+    # OpenGameArt on 2026-11-02 found none that is not a game rip or behind a login): those two keep lofted bodies of
+    # their own (game/src/CarView.Cars13.cs).
     "ferrari-458-italia-antonis.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-011/9fc3bebac5ee4ad1a7fb1d743e0db7d3.glb",
 }
 
+# Models the mirror does not hold: the project's copy of the file the LICENSE.txt describes, its SHA-256, and its
+# Sketchfab uid (the LICENSE.txt and THIRD_PARTY.md name the page by it).
+RELEASED = {
+    # cars13 bodies: the BRZ as Ethan's first-generation Toyota 86 (ZN6), the BRZ ZC6's twin (uploaded 2023-06-25).
+    "toyota-86-ethanchew.glb": {
+        "url": "https://github.com/korayorhun/GrudgeLap/releases/download/models-2026-11/toyota-86-ethanchew.glb",
+        "sha256": "d7ff3342739b1bdc322615a472c7c3e1da1bb47bf76b93f4125f218100649efe",
+        "sketchfab": "5b8ec05b53b345cda8ed582b59ff3950",
+    },
+}
+
+
+def sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 folder = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "Import", "Models")
 os.makedirs(folder, exist_ok=True)
-for name, url in MODELS.items():
+sources = {**MODELS, **{name: entry["url"] for name, entry in RELEASED.items()}}
+for name, url in sources.items():
     path = os.path.join(folder, name)
-    if os.path.exists(path) and os.path.getsize(path) > 100000:
+    expected = RELEASED.get(name, {}).get("sha256")
+    if os.path.exists(path) and os.path.getsize(path) > 100000 and (expected is None or sha256(path) == expected):
         print(f"{name}: present")
         continue
     print(f"{name}: downloading")
-    with urllib.request.urlopen(url, timeout=120) as response, open(path, "wb") as out:
+    part = path + ".part"
+    with urllib.request.urlopen(url, timeout=120) as response, open(part, "wb") as out:
         while True:
             chunk = response.read(1 << 20)
             if not chunk:
                 break
             out.write(chunk)
+    if expected is not None and sha256(part) != expected:
+        os.remove(part)
+        sys.exit(f"{name}: the download is not the file its LICENSE.txt describes (SHA-256 {expected})")
+    os.replace(part, path)
     print(f"{name}: {os.path.getsize(path) // 1024} KiB")

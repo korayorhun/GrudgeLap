@@ -1,0 +1,54 @@
+Title:        ToYoTa FR
+Kind:         2012-2020 front-engined rear-drive 2+2 coupe: a first-generation Toyota 86 (ZN6) in its 2016 facelift's styling,
+              the twin of the Subaru BRZ (ZC6), the same body shell from the same Gunma line - the catalogue's Boxer
+              ("COUPE 2.0 BOXER '13"; its figures are the 2013-16 BRZ's). Shell, lamps and wheels; the cabin is a plain
+              dashboard top and door cards.
+Licence:      Creative Commons Attribution 4.0 International (CC BY 4.0)
+Licence URL:  https://creativecommons.org/licenses/by/4.0/
+Author:       Ethan (Sketchfab user "ethanchew", https://sketchfab.com/ethanchew)
+Source URL:   https://sketchfab.com/3d-models/toyota-fr-5b8ec05b53b345cda8ed582b59ff3950  (original Sketchfab page, uid
+              5b8ec05b53b345cda8ed582b59ff3950; uploaded 2023-06-25 from Blender)
+Download URL: https://github.com/korayorhun/GrudgeLap/releases/download/models-2026-11/toyota-86-ethanchew.glb
+              (the project's copy of the file below: it was uploaded after the Objaverse mirror's 2022 snapshot, so
+              unreal/Scripts/fetch_models.py fetches it from the repository's release assets and checks its SHA-256)
+Downloaded:   2026-11-02, from Sketchfab's own download endpoint (the glTF archive's binary, model.glb)
+File:         toyota-86-ethanchew.glb (18,880,128 bytes, glTF 2.0 binary, Sketchfab-16.16.0 export;
+              SHA-256 d7ff3342739b1bdc322615a472c7c3e1da1bb47bf76b93f4125f218100649efe;
+              441,324 triangles, 27 mesh nodes, 15 untextured materials, no images, no animations;
+              KHR_materials_transmission, KHR_materials_specular, KHR_materials_emissive_strength)
+Licence evidence: live check 2026-11-02, api.sketchfab.com/v3/models/5b8ec05b53b345cda8ed582b59ff3950: licence slug "by"
+              (CC Attribution), downloadable; the file's own metadata (asset.extras) names the same author, licence
+              (CC-BY-4.0) and source page. The author's description: "Exterior shell of a Car model that i made. Seat model
+              is not mine. i only did the exterior and some interior." The seats (Object_17 "Cream", Object_18 "Black")
+              are therefore not covered and are left out. The author (Malaysia, joined 2022-10, 11 models; a 3D-art
+              student's portfolio of creatures, props, a character and a sci-fi vehicle) uploaded a Blender file of
+              218,610 hand-modelled quads under a Rigacar rig, with 15 hand-named materials and no textures: no game, mod,
+              level-of-detail or texture-pack names, no AI tags, and no other upload of the same face count among the
+              1,105 Sketchfab models of the BRZ, 86, GT86, FR-S and GR86 that were checked (cars13 stage 2 research).
+              The design is Toyota's and Subaru's; the Toyota badges (Object_13) are left out.
+Status:       USED: the game's BRZ (tools/car_models.json "brz"). It replaces the record of RoninVR's Scion FR-S 2015
+              (3a68c66a5e3a451cb78f90fef59becc7, CC BY 4.0), which models13 found unfinished at the tail the chase
+              camera looks into and never fetched.
+Geometry:     lies along z, nose at +z (glTF), Y up; wheelbase 3.2743 file units, so 1 unit = 0.7849 m at the BRZ's
+              2570 mm; then 4.24 m long (Subaru: 4240), 1.795 m wide over the body (1775) and 1.982 m over the mirrors,
+              1.263 m high (1285), both tracks 1.511 m (1520 / 1540), tyres 0.635 m
+              across (215/45 R17: 0.625), wheels 1.2 mm off the centre line. Tyres Object_28, 34, 40, 46 (front left,
+              front right, rear left, rear right; material "tyre"); rims Object_27, 33, 39, 45 roll with them (the
+              centre caps Object_26, 32, 38, 44 carry the Toyota logo and are left out); all four brake discs
+              (Object_19, "metal") and all four calipers (Object_20, "car.001") are one mesh each across the corners
+              and stay with the body (fixed).
+Materials:    paint "material" (Object_12, the mirror housings with it: "==material" exactly); "Glass" on the windows
+              (Object_22, a near-black tint at alpha 0.68, drawn as the game's glass) and on the headlamp lenses
+              (Object_8, drawn as clear lenses: the entry's "lens"); tail lamps "emission_red" (lit when braking),
+              indicators "emission_yellow", headlamps "emission_white.001" over the reflector "headlight_reflective_metal",
+              small white lamps "emission_white": all of them glow at strength 10, a night render's lamps, and are drawn
+              unlit by day, the headlamps faintly lit (the entry's "materials").
+Cabin:        none to speak of (no steering wheel, dials or pedals): the game borrows the Mercedes E-Class W212's
+              (tools/car_models.json cabin_from "fleet") and crops the parts a saloon's cabin shows through a coupe's
+              shell (the entry's "crop").
+
+Attribution text to show in the game credits (CC BY 4.0 requires attribution, a licence link and a note of changes):
+  "ToYoTa FR" by Ethan (https://sketchfab.com/3d-models/toyota-fr-5b8ec05b53b345cda8ed582b59ff3950) is licensed under
+  Creative Commons Attribution 4.0 International (CC BY 4.0) (https://creativecommons.org/licenses/by/4.0/).
+  Modified for use in GrudgeLap (seats, Toyota badges and cap logos removed, re-scaled, re-rigged, given a borrowed
+  cabin, materials corrected).
