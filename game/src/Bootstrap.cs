@@ -405,11 +405,11 @@ public sealed partial class Bootstrap : Node3D
     private static int CarIndex(string name, int current)
     {
         // In the catalogue's order (VehicleSpec.Catalogue); the five of cars13 by their model file keys.
-        string[] names = ["flat12", "v8", "hothatch", "five", "turbohatch", "saloon", "estate", "fleet", "458", "bravohgt", "bravo16", "leoncupra", "brz"];
+        string[] names = ["flat12", "v8", "hothatch", "five", "turbohatch", "saloon", "estate", "fleet", "458", "bravohgt", "bravo16", "leoncupra", "brz", "clio"];
         // The everyday cars and the hatchbacks answer to the names of the cars they follow too (the hatchbacks' keys
         // are those of the cars they once were, which the models' files still carry); the 458 and the Cupra to a short
         // name each.
-        string[] aliases = ["", "", "peugeot205", "delta", "r32", "sahin", "toros", "w212", "flatv8", "", "", "cupra", ""];
+        string[] aliases = ["", "", "peugeot205", "delta", "r32", "sahin", "toros", "w212", "flatv8", "", "", "cupra", "", "clio2"];
         var index = System.Array.IndexOf(names, name.ToLowerInvariant());
         if (index < 0) index = System.Array.IndexOf(aliases, name.ToLowerInvariant());
         if (index < 0 && int.TryParse(name, out var number)) index = number;
@@ -647,12 +647,13 @@ public sealed partial class Bootstrap : Node3D
             var back = PaintChoice.Mixed(Hsl.ToColour(hue, saturation, lightness), PaintFinish.Solid).Hex;
             Check(back == hex, $"{hex} through hue, saturation and lightness: {back}");
         }
-        // The five cars of cars13 have their own colours, each its real car's launch or press paint (cars13 stage 2),
-        // not the lofted bodies' red: the stand-ins' ORIGINAL is their style's LoftPaint, the 458's its model's paint.
-        var thirteen = VehicleSpec.Catalogue.Where(c => c.Style >= CarStyle.FlatPlaneV8).ToArray();
-        Check(thirteen.Length == 5 && thirteen.All(c => CarView.LoftPaint(c.Style).Colour != CarView.DefaultPaint)
-              && thirteen.Select(c => CarView.LoftPaint(c.Style).Colour).Distinct().Count() == 5,
-            $"the five cars of cars13 in their own colours ({string.Join(", ", thirteen.Select(c => CarView.LoftPaint(c.Style).Colour.ToHtml(false).ToUpperInvariant()))})");
+        // The cars after the eight of 0.24.0 (the five of cars13, the Clio of 0.33.0) have their own colours, each its real
+        // car's launch or press paint (cars13 stage 2), not the lofted bodies' red: the stand-ins' ORIGINAL is their
+        // style's LoftPaint, the 458's its model's paint.
+        var later = VehicleSpec.Catalogue.Where(c => c.Style >= CarStyle.FlatPlaneV8).ToArray();
+        Check(later.Length == VehicleSpec.Catalogue.Length - 8 && later.All(c => CarView.LoftPaint(c.Style).Colour != CarView.DefaultPaint)
+              && later.Select(c => CarView.LoftPaint(c.Style).Colour).Distinct().Count() == later.Length,
+            $"the later cars in their own colours ({string.Join(", ", later.Select(c => CarView.LoftPaint(c.Style).Colour.ToHtml(false).ToUpperInvariant()))})");
         DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(file));
         GD.Print($"paint book: {(failures == 0 ? "every check holds" : $"{failures} checks FAILED")}");
         return failures == 0;

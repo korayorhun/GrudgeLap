@@ -2616,6 +2616,34 @@ and never under 5 mm. The plate's centre was read off the prepared model's rear 
 its centre 10 cm over the centre of gravity, 2.076 m behind it, the plate 6 mm proud). Checked on hidden orbit shots
 from the side, the rear quarter and the front quarter. Left on the BRZ: the 86's nose and the W212's cabin.
 
+### The Clio (A1, 0.33.0)
+
+The owner's "renault clio" among the standard cars of Turkey (28 October 2026), open item 5. The catalogue's
+fourteenth car, `VehicleSpec.ClioSixteen` ("CLIO 1.6 16V '01", `--car=clio`): a Renault Clio II phase 2 five-door
+1.6 16V on auto-data.net's figures (107 PS at 5750, 148 N m at 3750, 1020 kg at the kerb for the three-door, 1045
+taken for the five-door, 185/55 R15, 2472 mm between the axles, tracks 1406 / 1385, 193 km/h, 0-100 km/h in 9.6 s),
+Renault's JB3 five-speed as a ClioSport forum's gearbox table gives the suffixes owners match to the 1.6 16V (3.364 /
+1.864 / 1.321 / 1.029 / 0.821 on 4.067, which puts 193 km/h at 5,850 rpm in fifth, by the power peak; no Renault
+table was found), discs and drums, ABS; the springs, bars and inertias scaled from the hot hatch's (game figures).
+Its engine's curve (`EngineSpec.ClioSixteen`) runs through the two published points; its voice is the Bravo 1.6's
+`four16v` banks, a sixteen-valve 1.6 four's, with that bank's idle, until a K4M recording is found (open item 4). The
+lofted stand-in without the models is the Bravo 1.6's.
+
+The model: Sketchfab was searched for the Clio on 2026-11-03 (33 queries, downloadable and not, 115 models; the
+earlier Objaverse sweep had no Clio). Rejected: the AI-generated ones (Hunyuan), the re-uploaders of paid and game
+models found in the cars13 hunts, mod packs, a photogrammetry shell, and azul88007's hand-made "Clio 2 Phase 2
+template", whose cabin, engine and dashboard carry BeamNG's vehicle material names (vivace, bolide) and so are that
+game's parts. Taken: "Clio 2" by Nardeol (CC BY 4.0, 337,228 triangles, 12 untextured materials, a Rennes hobbyist's
+Blender work among 24 small pieces with French names), a shell without a cabin; its LICENSE.txt records the
+evidence, the file is the project's copy on the `models-2026-11` release, checked by SHA-256 (`fetch_models.py`
+RELEASED, `CarModelSourceTests`). The entry (`tools/car_models.json` "clio"): the tyres, wheels and hubcaps are one
+mesh each across the corners, under named empties whose meshes are "Object_N" (the selectors are "#40", "#46", "#14";
+the split pieces "Object_40_FL" and so on), the paint "Tle_rouge", the lamp covers lenses, "Phare.001" the brake
+lamps, the SAAB 9-5's cabin as the Golf R32 has it (without the sun visors, 4 % smaller, 3 cm up and 8 cm back), its
+materials corrected (Rouge Vif #B41F2C, silver hubcaps, dark steel wheels). The preparation scales it to the
+wheelbase: 3.86 m long (Renault: 3773), tracks 1.366 m. Checked on hidden orbit shots from the front and rear
+quarters and the side, and from the seat (the dials in the wheel's opening, the dashboard against the shell).
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

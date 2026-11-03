@@ -1,0 +1,54 @@
+Title:        Clio 2
+Kind:         1998-2005 front-engined front-drive five-door hatchback: a Renault Clio II in its 2001 facelift's styling
+              (phase 2: the twin-lens headlamps, the bumpers and the grille of 2001-03), on steel wheels with hubcaps, a
+              roof aerial, the Renault lozenge and the badges "RENAULT" and "Clio" on the tailgate - the catalogue's
+              1.6 16V Clio ("CLIO 1.6 16V '01"). A shell: body, glass, lamps, bumpers, mirrors, handles, wipers,
+              plates, tyres, wheels and hubcaps, with a dark inner shell under the glass; no cabin.
+Licence:      Creative Commons Attribution 4.0 International (CC BY 4.0)
+Licence URL:  https://creativecommons.org/licenses/by/4.0/
+Author:       Nardeol (Sketchfab user "Nardeol", https://sketchfab.com/Nardeol; Rennes, Bretagne)
+Source URL:   https://sketchfab.com/3d-models/clio-2-2c4d2cb0cda14dc9b2ddcd7d2b3a1f95  (original Sketchfab page, uid
+              2c4d2cb0cda14dc9b2ddcd7d2b3a1f95; published 2023-05-11 from Blender, source file "Clio 2.blend1")
+Download URL: https://github.com/korayorhun/GrudgeLap/releases/download/models-2026-11/renault-clio-2-nardeol.glb
+              (the project's copy of the file below: it was published after the Objaverse mirror's 2022 snapshot, so
+              unreal/Scripts/fetch_models.py fetches it from the repository's release assets and checks its SHA-256)
+Downloaded:   2026-11-03, from Sketchfab's own download endpoint with the owner's account (the glTF binary, model.glb)
+File:         renault-clio-2-nardeol.glb (20,330,884 bytes, glTF 2.0 binary, Sketchfab-15.22.0 export;
+              SHA-256 5b10089bf086db5354d7e8165ba04a73135d234dc4c0bf1e29eec7dbc5f1494c;
+              337,228 triangles, 30 mesh nodes under 27 named parts, 12 untextured materials, no images, no animations,
+              no extensions)
+Licence evidence: live check 2026-11-03, api.sketchfab.com/v3/models/2c4d2cb0cda14dc9b2ddcd7d2b3a1f95: licence label
+              "CC Attribution", downloadable; the file's own metadata (asset.extras) names the same author, licence
+              (CC-BY-4.0) and source page. No description. The author (joined 2018-08, 24 models) uploads small
+              hand-made Blender pieces with French names (a lamp post, a chair, a broken axe, a gift, a tipi, abstract
+              art); this one's parts are named in French the same way (Carrosserie, Pare chocs, Essuis glace, Feux,
+              Poignees Portes, Retros, Enjoliveurs, Pneux, Roues, Plaques, Vitres) with hand-named materials, no
+              textures, and nothing that names a game, a mod kit, a level of detail, a paid model's store or an AI
+              generator; no other upload of the same face count was found among the 115 Sketchfab models the 2026-11-03
+              Clio search returned (33 queries, downloadable and not; C:\temp\log\grudgelap\cars13\hunt\clio). The
+              design is Renault's; the lozenge and the badges are left as the author modelled them (the model carries no
+              Renault trademark texture).
+Status:       USED: the game's Clio (tools/car_models.json "clio"). The other downloadable CC BY Clios were rejected: the
+              AI-generated ones (teenlin3, Hunyuan), the re-uploaders of paid and game models (niev, szymonpasterczyk,
+              DR1KING100K, tonielpro520, Car2022, tangwang920, zapkolenko07's mod packs, Rachel_Audrey's hyphenated
+              store files, Sxi.Sai's "gameasset"), a photogrammetry shell (no_lo_seXD) and azul88007's "Clio 2 Phase 2
+              template", a hand-made body whose cabin, engine and dashboard carry BeamNG's vehicle material names
+              (vivace, bolide) and so are that game's parts.
+Geometry:     lies along z, nose at +z (glTF), Y up; wheelbase 7.983 file units, so 1 unit = 0.3096 m at the Clio II's
+              2472 mm; then 3.86 m long (Renault: 3773), 1.726 m wide over the body (1639) and 1.95 m over the mirrors,
+              1.256 m high (1417 with the suspension loaded; the model's sill-to-roof), tracks 1.366 m (1406 / 1385),
+              tyres 0.606 m across (185/55 R15: 0.585) and 0.20 m wide. Tyres, wheels and hubcaps are one mesh each
+              across the four corners (Pneux_16, Roues_19, Enjolivers_3) and are split by corner in the preparation.
+Materials:    paint "Tle_rouge" (Tole rouge: the body, Carrosserie); "Vitres" on the windows (drawn as the game's glass)
+              and "Vitres.001" on the lamp covers (Feux avants, Feux arriere: drawn as clear lenses, the entry's "lens");
+              "Phare" the headlamp bulbs, "Phare.001" the tail lamp bulbs and the high brake lamp (lit when braking);
+              "Dchet" (Dechet) the dark inner shell and the black rear panel; "Plastique" the bumpers, trim, wipers,
+              handles and mirror housings; "Enjoliveurs" the hubcaps, the lozenge and the badges; "Plaque" the plates;
+              "Material.002" the tyres, "Material.001" the steel wheels; "material_0" the right mirror's glass.
+Cabin:        none: the game borrows the SAAB 9-5's (tools/car_models.json cabin_from "_saab", as the Golf R32 does).
+
+Attribution text to show in the game credits (CC BY 4.0 requires attribution, a licence link and a note of changes):
+  "Clio 2" by Nardeol (https://sketchfab.com/3d-models/clio-2-2c4d2cb0cda14dc9b2ddcd7d2b3a1f95) is licensed under
+  Creative Commons Attribution 4.0 International (CC BY 4.0) (https://creativecommons.org/licenses/by/4.0/).
+  Modified for use in GrudgeLap (re-scaled, re-rigged, wheels split by corner, given a borrowed cabin, materials
+  replaced by the game's paint, glass and lenses).

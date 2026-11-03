@@ -116,6 +116,7 @@ internal sealed partial class CarView
         CarStyle.HatchSixteen => "bravo16",
         CarStyle.CupraTsi => "leoncupra",
         CarStyle.Boxer => "brz",
+        CarStyle.ClioSixteen => "clio",
         _ => "flat12",
     };
 

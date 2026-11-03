@@ -424,6 +424,7 @@ public sealed class VehicleTests
             [CarStyle.TurboHatch] = "turbohatch", [CarStyle.Saloon] = "saloon", [CarStyle.Estate] = "estate", [CarStyle.Fleet] = "fleet",
             // cars13: the model file keys the parallel model track delivers (game/assets/models/<key>.glb).
             [CarStyle.FlatPlaneV8] = "458", [CarStyle.HgtFive] = "bravohgt", [CarStyle.HatchSixteen] = "bravo16", [CarStyle.CupraTsi] = "leoncupra", [CarStyle.Boxer] = "brz",
+            [CarStyle.ClioSixteen] = "clio",
         };
         foreach (var spec in VehicleSpec.Catalogue)
         {

@@ -42,6 +42,13 @@ RELEASED = {
         "sha256": "d7ff3342739b1bdc322615a472c7c3e1da1bb47bf76b93f4125f218100649efe",
         "sketchfab": "5b8ec05b53b345cda8ed582b59ff3950",
     },
+    # A1 (the owner's Clio, 0.33.0): Nardeol's Renault Clio II phase 2 five-door, a shell without a cabin (published
+    # 2023-05-11), the only credible CC BY Clio of the 115 Sketchfab models checked on 2026-11-03 (its LICENSE.txt).
+    "renault-clio-2-nardeol.glb": {
+        "url": "https://github.com/korayorhun/GrudgeLap/releases/download/models-2026-11/renault-clio-2-nardeol.glb",
+        "sha256": "5b10089bf086db5354d7e8165ba04a73135d234dc4c0bf1e29eec7dbc5f1494c",
+        "sketchfab": "2c4d2cb0cda14dc9b2ddcd7d2b3a1f95",
+    },
 }
 
 

@@ -64,6 +64,9 @@ internal sealed partial class CarView : Node3D
         // 2013 (code 02C, K7X from 2015); #1A4FD6 is PaintScratch's approximation of 02C. The loft draws a pearl as its
         // metallic base.
         CarStyle.Boxer => new(Color.FromHtml("#1A4FD6"), Metallic: 0.3f, Roughness: 0.32f, Pearl: 1f),
+        // Rouge Vif (Renault 727), the solid red the Clio II was sold in throughout (the model's author painted his red
+        // too). Shade estimated from photographs of the phase 2 in that colour.
+        CarStyle.ClioSixteen => new(Color.FromHtml("#B41F2C")),
         _ => new(DefaultPaint),
     };
 
@@ -206,6 +209,8 @@ internal sealed partial class CarView : Node3D
                 CarStyle.FlatPlaneV8 or CarStyle.Boxer => BodyStyle.V8,
                 CarStyle.HgtFive => BodyStyle.BravoHgt,
                 CarStyle.HatchSixteen => BodyStyle.BravoSixteen,
+                // A1: the Clio is drawn by its model; without the models the Bravo 1.6's loft, a 1990s five-door, stands in.
+                CarStyle.ClioSixteen => BodyStyle.BravoSixteen,
                 CarStyle.CupraTsi => BodyStyle.LeonCupra,
                 _ => BodyStyle.FlatTwelve,
             }).FittedTo(spec),

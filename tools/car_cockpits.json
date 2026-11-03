@@ -36,6 +36,24 @@
       "on": "hung by the game"
     }
   },
+  "clio": {
+    "eye": [-0.324, 0.534, 0.322],
+    "eye_over_road": 1.153,
+    "under_lining": 0.209,
+    "lowered": false,
+    "seats_passed_over": [],
+    "wheel_centre": [-0.324, 0.254, -0.198],
+    "eye_from_wheel": [0.0, 0.28, 0.52],
+    "dials": {
+      "centre": [-0.324, 0.321, -0.219],
+      "width": 0.26,
+      "gear_top": 120
+    },
+    "mirror": {
+      "glass": [0.0, 0.624, -0.124],
+      "on": "hung by the game"
+    }
+  },
   "estate": {
     "eye": [-0.37, 0.45, 0.3],
     "eye_over_road": 1.083,

@@ -8,7 +8,7 @@ Yeni bir istek gelince buraya satır olarak eklenir. Bir sürüm bir isteği kar
 - **Durum:** `Tamam` karşılandı, `Kısmen` bir kısmı karşılandı, `Açık` henüz yapılmadı, `Karar` yön belirlendi, `Ertelendi` bilerek sonraya bırakıldı.
 - **Ayrıntı:** teknik gerekçeler [design.md](design.md)'de, sürüm notları GitHub Releases'te.
 
-Son güncelleme: 3 Kasım 2026 (sürüm 0.32.0).
+Son güncelleme: 3 Kasım 2026 (sürüm 0.33.0).
 
 ## 1. Hedef
 
@@ -56,7 +56,7 @@ Son güncelleme: 3 Kasım 2026 (sürüm 0.32.0).
 
 | No | İster | Kaynak | Durum |
 |---|---|---|---|
-| A1 | Farklı araba seçenekleri olsun. Özellikle Türkiye'de kullanılan standart arabalar, gerçekçi modelleri, gerçek sesleri ve fizikleriyle. | 28 Eki: "mesela renault clio, eski fiat bravo, seat leon cupra"; 29 Eki: "türkiyede kullanılan standart arabaların" | Kısmen: Renault 12, Tofaş (VAZ), E-Class (0.10), Bravo ve Leon (0.26). **Renault Clio yok** |
+| A1 | Farklı araba seçenekleri olsun. Özellikle Türkiye'de kullanılan standart arabalar, gerçekçi modelleri, gerçek sesleri ve fizikleriyle. | 28 Eki: "mesela renault clio, eski fiat bravo, seat leon cupra"; 29 Eki: "türkiyede kullanılan standart arabaların" | Kısmen: Renault 12, Tofaş (VAZ), E-Class (0.10), Bravo ve Leon (0.26), Renault Clio II 1.6 16V beş kapı '01 (0.33.0: Nardeol'un CC BY modeli, SAAB kabini; sesi Bravo 1.6'nın 16 supaplı bankası, gerçek K4M kaydı bulununca değişir). Bravo ve Leon'un gerçek modeli hâlâ yok |
 | A2 | Ferrari 458, Fiat Bravo 2001 HGT, Fiat Bravo 2001 1.6, SEAT Leon Cupra 2018 240HP 2.0 TSI ve Subaru BRZ eklensin; en gerçekçi sürüş fiziği, görünüş ve sesle. | 2 Kas | Tamam (0.26.0). Varsayım ve eksikler aşağıda |
 | A3 | Leon Cupra: "2018, 240 HP, 2.0 TSI". 2018 Cupra resmen 300 PS'ti; aynı yılların 245 PS (241 HP) 2.0 TSI ayarı kullanıldı. | 2 Kas | Karar bekliyor: 300 PS'lik gerçek Cupra değerleri kodda hazır |
 | A4 | Arabayı görerek seçmek için bir menü; arabalar 360 derece dönsün. | 2 Kas: "araba seçtiğimiz bir menü olsa ve arabalar 360 derece rotate olsa" | Tamam (0.25.0 showroom) |
@@ -109,8 +109,8 @@ Son güncelleme: 3 Kasım 2026 (sürüm 0.32.0).
 1. **458:** sol ön direk sürücü koltuğundan kalın görünüyor; düzeltmesi modelin direğini yeniden biçimlendirmeyi gerektiriyor. İç mekânlı RainerS modeli A7'yi bekliyor.
 2. **BRZ:** Toyota 86 modeliyle çiziliyor. Burnu 86'nın, kabini Mercedes'ten. Çamurluk içi kaplamaları ve arka plaka 0.32.0'da eklendi (modelin kendisinde yoktu; hazırlık `liners`/`plate` girdileriyle yer bırakır, oyun çizer); yandan bakınca ön çamurluktan yol görünmüyor artık.
 3. **Bravo ve Leon:** gövdeler oyunun kendi gövdesi. Bravo'nun iç mekânı genel bir 90'lar düzeni; Leon'un arkası gerçeğinden iri.
-4. **Motor sesi yer tutucuları:** Testarossa'nın düz on ikisi bir Ferrari F12tdf V12'si, 205'in 1.9 8V'si bir Alfa Spider 2000 (blip'ler) + Volvo 240 (rölanti), Golf R32'nin VR6'sı bir Acura 3.2 V6'sı, Delta'nın turbosu bir Audi S1 + Fiat Coupé Turbo ile çalıyor; aynı motorun temiz CC0/CC BY kaydı bulunursa değiştirilir (0.27.0).
-5. **Renault Clio** (A1) eklenmedi.
+4. **Motor sesi yer tutucuları:** Testarossa'nın düz on ikisi bir Ferrari F12tdf V12'si, 205'in 1.9 8V'si bir Alfa Spider 2000 (blip'ler) + Volvo 240 (rölanti), Golf R32'nin VR6'sı bir Acura 3.2 V6'sı, Delta'nın turbosu bir Audi S1 + Fiat Coupé Turbo ile, Clio'nun 1.6 16V K4M'i Bravo 1.6'nın bankasıyla (MX-5 1.6 + Golf V 1.6 FSI) çalıyor; aynı motorun temiz CC0/CC BY kaydı bulunursa değiştirilir (0.27.0).
+5. **Renault Clio** (A1): Tamam (0.33.0), kataloğun 14. arabası "CLIO 1.6 16V '01" (`--car=clio`); gövde Nardeol'un Clio II faz 2 beş kapı modeli (Sketchfab, CC BY 4.0, 33 sorguda 115 modelden tek inandırıcı olan), kabini SAAB 9-5'ten (Golf gibi). Kalan: K4M motorunun kendi kaydı (madde 4).
 6. **BeamNG düzeyinde çarpışma** (F2) yok.
 7. **Instant replay müziği** (S2) için sahibin değerlendirmesi bekleniyor.
 8. **Leon Cupra gücü** (A3): 245 PS mi, 300 PS mi?

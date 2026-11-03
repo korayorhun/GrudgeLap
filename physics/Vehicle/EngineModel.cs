@@ -330,6 +330,17 @@ public sealed record EngineSpec
     ];
 
     /// <summary>
+    /// The Clio II 1.6 16V's K4M (A1, 0.33.0): 148 N m at 3750 and 107 PS (79 kW) at 5750, which is 131 N m there
+    /// (auto-data.net's listing of the 2001 phase II 1.6 16V); a sixteen-valve 1.6's gentle curve between them, the
+    /// points between the published ones game figures, taken back past the cut.
+    /// </summary>
+    private static readonly (float Rpm, float Torque)[] ClioSixteenCurve =
+    [
+        (0f, 0f), (600f, 72f), (1000f, 98f), (1500f, 115f), (2000f, 128f), (2500f, 137f), (3000f, 143f), (3500f, 147f),
+        (3750f, 148f), (4000f, 147f), (4500f, 143f), (5000f, 139f), (5500f, 134.5f), (5750f, 131.2f), (6000f, 125f), (6300f, 110f), (6600f, 78f),
+    ];
+
+    /// <summary>
     /// The Leon Cupra's 2.0 TSI in the 245 PS tune (cars/phys2; Volkswagen EA888 generation 3, 1,984 cc, 9.6:1) with full
     /// boost: 370 N m from 1600 to 4300 and 245 PS (180 kW) from 5000 to 6700, the tune the MQB cars carried in 2017-20
     /// (Skoda's technical data of the Octavia Combi RS 245, 5 June 2017, cdn.skoda-storyboard.com: 180 kW at 5000-6700,
@@ -533,6 +544,24 @@ public sealed record EngineSpec
         BrakingTorque = 11f,
         BrakingPerRpm = 0.0032f,
         FullThrottleCurve = HatchSixteenCurve,
+        Cylinders = 4,
+        SoundFolder = "four16v",
+    };
+
+    /// <summary>
+    /// The Clio II 1.6 16V's four (A1, 0.33.0): Renault's K4M, <see cref="ClioSixteenCurve"/>. Its voice is the Bravo 1.6's
+    /// "four16v" banks, a sixteen-valve 1.6 four's (an MX-5's and a Golf V 1.6 FSI's, game/assets/audio/SOURCES.md), with
+    /// that bank's idle, until a recording of the K4M is found; the cut at 6300, where Renault's rev counter's red band
+    /// starts (a game figure, as Renault publishes no cut).
+    /// </summary>
+    public static EngineSpec ClioSixteen => new()
+    {
+        IdleRpm = 850f,
+        RedlineRpm = 6300f,
+        StallRpm = 380f,
+        BrakingTorque = 11f,
+        BrakingPerRpm = 0.0032f,
+        FullThrottleCurve = ClioSixteenCurve,
         Cylinders = 4,
         SoundFolder = "four16v",
     };

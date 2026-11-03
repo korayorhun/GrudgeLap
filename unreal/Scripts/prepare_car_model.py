@@ -49,6 +49,7 @@ SPECS = {
     "bravo16": dict(front=0.975, rear=1.565, track=0.72, hub=-0.20, rest=0.22, mass=1135.0, stiffness=29870.0, radius=0.298),
     "leoncupra": dict(front=1.052, rear=1.579, track=0.7615, hub=-0.20, rest=0.22, mass=1395.0, stiffness=35830.0, radius=0.324),
     "brz": dict(front=1.21, rear=1.36, track=0.765, hub=-0.16, rest=0.24, mass=1315.0, stiffness=36000.0, radius=0.313),
+    "clio": dict(front=0.94, rear=1.532, track=0.70, hub=-0.20, rest=0.22, mass=1120.0, stiffness=29470.0, radius=0.292),
 }
 
 

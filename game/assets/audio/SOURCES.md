@@ -304,6 +304,9 @@ five's (below). Neither the Volvo nor the S2000 is shipped now, and the voice we
 
 ## The cars13 engines (`v8flat/`, `inline5/`, `four16v/`, `tsi4/`, `boxer4/`)
 
+Since 0.33.0 the Clio II 1.6 16V (catalogue 13, `--car=clio`) plays `four16v/` too, the Bravo 1.6's banks, a
+sixteen-valve 1.6 four's, until a recording of Renault's K4M is found (docs/ISTERLER.md item 10.4).
+
 Five banks for the five cars of cars13 (catalogue 8-12: the 458 Italia, the Bravo HGT 2.0 20V, the Bravo 1.6 16V, the
 2018 Leon Cupra and the first BRZ). They were cut a stage ahead of the catalogue entries that name them, and each
 engine's `EngineSpec.SoundFolder` names its folder since cars13 stage 2, so the catalogue's voice tests hold each of them

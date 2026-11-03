@@ -1182,10 +1182,83 @@ public sealed record VehicleSpec
     };
 
     /// <summary>
+    /// The everyday hatchback of 2001, after the Renault Clio II phase 2 five-door 1.6 16V (A1: the owner asked for "renault
+    /// clio" among the standard cars of Turkey, 28 October 2026; 0.33.0): Renault's K4M 1,598 cc sixteen-valve four, 107 PS
+    /// (79 kW) at 5750 and 148 N m at 3750 (auto-data.net's listing of the Clio II phase II 2001 1.6 16V, 107 hp:
+    /// 193 km/h, 0-100 km/h in 9.6 s, 1020 kg at the kerb for the three-door, 185/55 R15 on 6J x 15 rims, 3773 mm long,
+    /// 2472 mm between the axles, tracks 1406 / 1385 mm), front-wheel drive through Renault's JB3 five-speed (3.364 /
+    /// 1.864 / 1.321 / 1.029 / 0.821 on a 4.067 final drive, reverse 3.545: the JB3-953/958 suffixes as a ClioSport
+    /// forum's table of Renault gearboxes gives them, the box owners match to the 1.6 16V; no Renault table was found),
+    /// which puts 193 km/h at 5,850 rpm in fifth, by the power peak. Discs in front, drums behind, ABS (standard on the
+    /// 1.6 16V). 1045 kg at the kerb for the five-door, 1120 with a driver; about 62/38 as the hatchbacks; the springs,
+    /// bars, inertias and sag scaled from the hot hatch's to this mass (game figures). Drawn by Nardeol's model of the
+    /// phase 2 five-door with the SAAB 9-5's cabin (tools/car_models.json "clio"); a build without the models draws
+    /// the Bravo 1.6's loft, fitted to these axles. Its voice is the Bravo 1.6's "four16v" banks, a sixteen-valve 1.6
+    /// four's (an MX-5's and a Golf's), until a recording of the K4M is found (docs/ISTERLER.md item 10.4).
+    /// </summary>
+    public static VehicleSpec ClioSixteen => new()
+    {
+        Name = "CLIO 1.6 16V '01",
+        Style = CarStyle.ClioSixteen,
+        FrontTire = new(185f, 55f, 15f),
+        RearTire = new(185f, 55f, 15f),
+        // A family hatch's bars, the Bravo 1.6's a little softer for the lighter car.
+        FrontAntiRoll = 13000f,
+        RearAntiRoll = 6000f,
+        CentreOfMassOffset = new(0f, -0.09f, 0f),
+        AntiLockBrakes = true,
+        LimitedSlipLocking = 0f,
+        LimitedSlipPreload = 0f,
+        Engine = EngineSpec.ClioSixteen,
+        // Its speedometer reads to 220 km/h.
+        SpeedoMaxMph = 137f,
+        // 1045 kg at the kerb with a driver.
+        MassKg = 1120f,
+        InertiaRoll = 335f,
+        InertiaYaw = 1400f,
+        InertiaPitch = 1360f,
+        // Tracks 1406 / 1385 mm: one of 1.40 m here.
+        HalfTrack = 0.70f,
+        // 62/38 with the reference point 0.94 / 1.532 m from the axles.
+        FrontAxle = 0.94f,
+        RearAxle = 1.532f,
+        // The model's overhangs at the Clio's wheelbase (0.804 m ahead of the front axle, 0.582 m behind the rear).
+        BodyFront = 1.744f,
+        BodyRear = 2.114f,
+        BodyHalfWidth = 0.82f,
+        HubHeight = -0.20f,
+        DragCoefficient = 0.33f,
+        // 1.639 m wide and 1.417 m tall.
+        FrontalArea = 1.95f,
+        FrontLiftArea = 0.10f,
+        RearLiftArea = 0.06f,
+        // Economy tyres of the 2000s, as the Bravo 1.6's.
+        TireGrip = 0.94f,
+        // 185/55 R15.
+        WheelRadius = 0.292f,
+        SuspensionRest = 0.22f,
+        // The hot hatch's sag at 1120 kg.
+        SuspensionStiffness = 29470f,
+        SuspensionDamping = 2750f,
+        MaxCompression = 0.13f,
+        MaxSteerLowSpeedDeg = 34f,
+        MaxSteerHighSpeedDeg = 7f,
+        // Discs in front, drums behind.
+        FrontBrakeTorque = 1750f,
+        RearBrakeTorque = 350f,
+        GearRatios = [-3.545f, 0f, 3.364f, 1.864f, 1.321f, 1.029f, 0.821f],
+        FinalDrive = 4.067f,
+        ClutchMaxTorque = 250f,
+        EngineInertia = 0.12f,
+        WheelInertia = 0.75f,
+        FrontWheelDrive = true,
+    };
+
+    /// <summary>
     /// The cars the player can choose from, in menu order; the five of cars13 are appended after the eight of 0.24.0, so
     /// a saved choice (its index) still names the car it did.
     /// </summary>
-    public static VehicleSpec[] Catalogue => [FlatTwelve, V8Evo, HotHatch, FiveHatch, TurboHatch, Saloon, Estate, Fleet, FlatPlaneV8, HgtFive, HatchSixteen, CupraTsi, Boxer];
+    public static VehicleSpec[] Catalogue => [FlatTwelve, V8Evo, HotHatch, FiveHatch, TurboHatch, Saloon, Estate, Fleet, FlatPlaneV8, HgtFive, HatchSixteen, CupraTsi, Boxer, ClioSixteen];
 }
 
 /// <summary>
@@ -1312,4 +1385,10 @@ public enum CarStyle
     /// drawn by a model of its twin, a first-generation Toyota 86, since cars/bodies (the V8's loft without the models).
     /// </summary>
     Boxer,
+    /// <summary>
+    /// The front-wheel-drive 1.6 everyday hatchback of 2001 (after the Renault Clio II phase 2 five-door 1.6 16V; A1,
+    /// 0.33.0). Model key "clio", sound folder "four16v" (the Bravo 1.6's banks, until a K4M recording is found); drawn by
+    /// Nardeol's model with the SAAB 9-5's cabin (the Bravo 1.6's loft without the models).
+    /// </summary>
+    ClioSixteen,
 }

@@ -643,5 +643,74 @@
         0.11
       ]
     }
+  },
+  "clio": {
+    "file": "renault-clio-2-nardeol.glb",
+    "forward": "+z",
+    "split": [
+      "#40",
+      "#46",
+      "#14"
+    ],
+    "tyres": [
+      "Object_40_FL",
+      "Object_40_FR",
+      "Object_40_RL",
+      "Object_40_RR"
+    ],
+    "paint": [
+      "==tle_rouge"
+    ],
+    "lens": [
+      "#18",
+      "#20"
+    ],
+    "brake": [
+      "phare.001"
+    ],
+    "cabin_from": {
+      "car": "_saab",
+      "nodes": [
+        "inner_dashboard",
+        "wheel_steering",
+        "seat_front_m_interrior",
+        "inner_door_front",
+        "inner_down"
+      ],
+      "offset": [
+        0.0,
+        0.03,
+        -0.08
+      ],
+      "scale": [
+        0.96,
+        1.0,
+        0.96
+      ]
+    },
+    "steering": [
+      "wheel_steering"
+    ],
+    "materials": {
+      "Tle_rouge": {
+        "colour": "#B41F2C",
+        "metallic": 0,
+        "roughness": 0.35
+      },
+      "Enjoliveurs": {
+        "colour": "#C9CBCD",
+        "metallic": 0.2,
+        "roughness": 0.4
+      },
+      "Material.001": {
+        "colour": "#2A2A2C",
+        "roughness": 0.6
+      },
+      "Phare.001": {
+        "colour": "#8E0E0A",
+        "metallic": 0,
+        "roughness": 0.15
+      }
+    }
   }
 }
