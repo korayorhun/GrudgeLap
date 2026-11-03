@@ -1631,7 +1631,7 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
     have shown their own makers' wheels and stacks in a Fiat and a SEAT. The Leon: the Cupra's flat-bottomed wheel
     (`FlatBottomWheel`), the touch screen standing over the centre stack (`CentreScreen`), bucket seats with moulded
     headrests (`SportSeats`), a black headlining; the HGT bucket seats too; both Bravos a dark grey dashboard.
-  - Not done: the BRZ's arches are open behind the tyres in the model (no wheel-well liners), so from the side, at
+  - Not done then (liners and a plate since 0.32.0, see below): the BRZ's arches are open behind the tyres in the model (no wheel-well liners), so from the side, at
     the wheels' height, the road beyond shows through the front arch; the plate recess has no plate; the Unreal level
     keeps the BRZ's lofted stand-in (its preparation rigs the model, but would keep the V8 loft's cabin, whose door
     linings stand about 4 cm outside the 86's doors: a cabin for it there is another step).
@@ -2600,6 +2600,21 @@ The terrain 1289 ms to about 320 ms; the first frame 4.4 s to 3.0 s (three runs:
 frame of the 570S differs from the 0.30.0 build's by no more than two runs of 0.30.0 differ from each other. Left:
 the engine's own start before `_Ready` (1.1 s), the sky, far ground and mountains (240 ms), the roads' remaining
 serial part, the shoulders (80 ms), the grass and the forest (170 ms), and the first start's shader compilation.
+
+### The BRZ's wheel-arch liners and rear plate (open item 2, 0.32.0)
+
+The 86 model's arches are open behind the tyres and its plate recess is empty (cars13). Two more things the prepared
+scene can name, for any model that lacks them (`tools/car_models.json` "liners": true, "plate": {centre, size}):
+`Liner0..3` at the hubs, scaled to the liner's outboard reach, radius and inboard reach, and `Plate` at the plate's
+centre facing back, scaled to its size. `CarView.BuildModelLiners` builds a dark part-tube over each hub, from 20
+degrees behind it over the top to 20 degrees ahead (clear of the bumpers), from 5 mm past the tyre's outer face to
+10 cm past its inner one, with a sector closing the inboard end so the road no longer shows through the car at the
+wheels' height; `BuildModelPlate` a 52 x 11 cm plate. The liner's radius is measured in the preparation: 1.2 cm
+inside the wing's arch lip over that span (the 86's lips sit only 3.6 cm over the front tyres and 0.4 cm over the
+rear, so a liner 5 cm over the tyre, the first try, showed through the wings), never more than 5 cm over the tyre
+and never under 5 mm. The plate's centre was read off the prepared model's rear surface (the recess between the lamps,
+its centre 10 cm over the centre of gravity, 2.076 m behind it, the plate 6 mm proud). Checked on hidden orbit shots
+from the side, the rear quarter and the front quarter. Left on the BRZ: the 86's nose and the W212's cabin.
 
 ## Unreal Engine version (`unreal/`)
 

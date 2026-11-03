@@ -8,7 +8,7 @@ Yeni bir istek gelince buraya satır olarak eklenir. Bir sürüm bir isteği kar
 - **Durum:** `Tamam` karşılandı, `Kısmen` bir kısmı karşılandı, `Açık` henüz yapılmadı, `Karar` yön belirlendi, `Ertelendi` bilerek sonraya bırakıldı.
 - **Ayrıntı:** teknik gerekçeler [design.md](design.md)'de, sürüm notları GitHub Releases'te.
 
-Son güncelleme: 3 Kasım 2026 (sürüm 0.31.0).
+Son güncelleme: 3 Kasım 2026 (sürüm 0.32.0).
 
 ## 1. Hedef
 
@@ -107,7 +107,7 @@ Son güncelleme: 3 Kasım 2026 (sürüm 0.31.0).
 ## 10. Açık işler (0.26.0 sonrası)
 
 1. **458:** sol ön direk sürücü koltuğundan kalın görünüyor; düzeltmesi modelin direğini yeniden biçimlendirmeyi gerektiriyor. İç mekânlı RainerS modeli A7'yi bekliyor.
-2. **BRZ:** Toyota 86 modeliyle çiziliyor. Burnu 86'nın, kabini Mercedes'ten; çamurluk içi kaplaması ve arka plaka yok.
+2. **BRZ:** Toyota 86 modeliyle çiziliyor. Burnu 86'nın, kabini Mercedes'ten. Çamurluk içi kaplamaları ve arka plaka 0.32.0'da eklendi (modelin kendisinde yoktu; hazırlık `liners`/`plate` girdileriyle yer bırakır, oyun çizer); yandan bakınca ön çamurluktan yol görünmüyor artık.
 3. **Bravo ve Leon:** gövdeler oyunun kendi gövdesi. Bravo'nun iç mekânı genel bir 90'lar düzeni; Leon'un arkası gerçeğinden iri.
 4. **Motor sesi yer tutucuları:** Testarossa'nın düz on ikisi bir Ferrari F12tdf V12'si, 205'in 1.9 8V'si bir Alfa Spider 2000 (blip'ler) + Volvo 240 (rölanti), Golf R32'nin VR6'sı bir Acura 3.2 V6'sı, Delta'nın turbosu bir Audi S1 + Fiat Coupé Turbo ile çalıyor; aynı motorun temiz CC0/CC BY kaydı bulunursa değiştirilir (0.27.0).
 5. **Renault Clio** (A1) eklenmedi.

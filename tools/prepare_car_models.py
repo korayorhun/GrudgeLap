@@ -21,6 +21,9 @@ wheelbase, hubs at the rest height, origin at the centre of gravity), its scene:
                     (CarView puts the live InstrumentCluster there)
       Gear          (optional) where the gear readout's box starts on the panel (dials gear_top in the entry)
     Mirror          the rear-view mirror's glass: +Z towards the driver (CarView hangs RearMirror's glass there)
+    Liner0..3       (entry liners: true) at the hubs, scaled (outboard reach, radius, inboard reach): CarView builds
+                    a dark wheel-arch liner over each, for a model whose arches are open behind the tyres (the 86's)
+    Plate           (entry plate: {centre, size}) the rear number plate's centre, +Z facing back, scaled to its size
 
 A model without a cabin of its own ("interior": false) gets neither Steering, Eye, Dials nor Mirror: the game
 builds its own cabin inside the model's shell. --inspect prints the meshes around the driver's seat with their
@@ -689,6 +692,7 @@ def prepare(car, entry, inspect=False, config=None):
     # wheel scaled about its hub to the simulation's radius: the hubs sit at the simulation's rest height, so a
     # smaller tyre would float over the road and a larger one sink into it.
     hubs = [to_car @ np.array([*r["pivots"][w], 1.0]) for w in range(4)]
+    body_points = np.vstack([cm.mesh_points(model, blob, nodes[i]["mesh"], world[i]) for i in body]) if entry.get("liners") else None
     radii = []
     for w in range(4):
         pts = cm.mesh_points(model, blob, nodes[r["tyres"][w]]["mesh"], world[r["tyres"][w]])
@@ -701,6 +705,28 @@ def prepare(car, entry, inspect=False, config=None):
         recentre = matrix(scale=(grow, grow, grow)) @ matrix(translation=-pivot[:3])
         parts = [add(name_of(i)[:60], recentre @ world[i], nodes[i]["mesh"]) for i in r["assemblies"][w]]
         children.append(add(f"Wheel{w}", matrix(translation=pivot[:3]), children=parts))
+        if entry.get("liners"):
+            # A liner just inside the wing's arch lip (1.2 cm, measured round the hub over the liner's span of 20 to 160
+            # degrees on the wing's outer part), never more than 5 cm over the tyre; from 5 mm past the tyre's outer
+            # face to 10 cm past its inner one, open below (CarView.BuildModelLiners). The 86's arches sit 1 to 4 cm
+            # over its tyres, so a liner any higher showed through the wings.
+            tyre = cm.mesh_points(model, blob, nodes[r["tyres"][w]]["mesh"], world[r["tyres"][w]])
+            tyre_half = float(tyre[:, 0].max() - tyre[:, 0].min()) * grow * 0.5
+            side = -1.0 if pivot[0] < 0 else 1.0
+            skin = body_points[(body_points[:, 0] * side > abs(pivot[0]) + tyre_half - 0.02) & (np.abs(body_points[:, 2] - pivot[2]) < 0.5) & (body_points[:, 1] > pivot[1])]
+            lip_r = np.hypot(skin[:, 1] - pivot[1], skin[:, 2] - pivot[2])
+            lip_angle = np.degrees(np.arctan2(skin[:, 1] - pivot[1], skin[:, 2] - pivot[2]))
+            span = lip_r[(lip_angle >= 20) & (lip_angle <= 160)]
+            lip = float(span.min()) if len(span) else spec["radius"] + 0.06
+            liner_radius = max(min(lip - 0.012, spec["radius"] + 0.05), spec["radius"] + 0.005)
+            print(f"  liner {w}: the arch lip {lip:.3f} m from the hub, the liner {liner_radius:.3f} m (the tyre {spec['radius']:.3f})")
+            children.append(add(f"Liner{w}", matrix(translation=pivot[:3], scale=(tyre_half + 0.005, liner_radius, tyre_half + 0.10))))
+    if "plate" in entry:
+        # The rear plate where the entry puts it (read off the prepared model, car frame: the recess's centre, 6 mm proud).
+        plate = entry["plate"]
+        plate_size = plate.get("size", [0.52, 0.11])
+        children.append(add("Plate", matrix(basis_facing((0.0, 0.0, 1.0)), plate["centre"], (plate_size[0], plate_size[1], 1.0))))
+        print(f"  rear plate at ({plate['centre'][0]:+.3f} {plate['centre'][1]:+.3f} {plate['centre'][2]:+.3f})")
 
     if interior and not steering and entry.get("eye_at"):
         # A cabin whose steering wheel is part of a larger mesh (it cannot turn): the entry gives the eyes, and the

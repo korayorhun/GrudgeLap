@@ -163,6 +163,8 @@ internal sealed partial class CarView
             _modelMirrorHung = true;
         }
         if (model.GetNodeOrNull<Node3D>("Dials") is { } dials) MountModelDials(dials);
+        BuildModelLiners(model);
+        BuildModelPlate(model);
         DressModel(model);
         // Parts of a borrowed cabin that poke through the shell (car_models.json "inside_only") are drawn from the seat only.
         foreach (var inside in Descendants(model).OfType<Node3D>().Where(n => n.Name.ToString().StartsWith("Inside_", StringComparison.Ordinal)))
@@ -208,6 +210,76 @@ internal sealed partial class CarView
         var status = ResourceLoader.LoadThreadedGetStatus(path);
         if (status is ResourceLoader.ThreadLoadStatus.InProgress or ResourceLoader.ThreadLoadStatus.Loaded) return ResourceLoader.LoadThreadedGet(path) as PackedScene;
         return ResourceLoader.Load<PackedScene>(path);
+    }
+
+    private static StandardMaterial3D? _linerMaterial;
+    private static StandardMaterial3D? _plateMaterial;
+
+    /// <summary>
+    /// Wheel-arch liners where the prepared scene asks for them (Liner0..3, car_models.json "liners": the 86's arches
+    /// are open behind the tyres, so the road showed through the car at the wheels' height): a dark half-tube over each
+    /// hub from 20 to 160 degrees, open below and clear of the bumpers, with a wall on the inboard side. The node's scale
+    /// carries the liner's outboard reach, radius and inboard reach (the preparation sizes it to the arch's lip).
+    /// </summary>
+    private static void BuildModelLiners(Node3D model)
+    {
+        for (var i = 0; i < 4; i++)
+        {
+            if (model.GetNodeOrNull<Node3D>($"Liner{i}") is not { } liner) continue;
+            var outboard = liner.Scale.X;
+            var radius = liner.Scale.Y;
+            var inboard = liner.Scale.Z;
+            liner.Scale = Vector3.One;
+            _linerMaterial ??= new StandardMaterial3D { AlbedoColor = new Color(0.05f, 0.05f, 0.05f), Roughness = 0.95f, CullMode = BaseMaterial3D.CullModeEnum.Disabled };
+            liner.AddChild(new MeshInstance3D { Name = "Liner", Mesh = ArchLiner(outboard, inboard, radius, i % 2 == 0 ? 1f : -1f), MaterialOverride = _linerMaterial });
+        }
+    }
+
+    /// <summary>A part-tube about the x axis from 20 degrees behind the hub over the top to 20 degrees ahead, and a sector closing its inboard end.</summary>
+    private static ArrayMesh ArchLiner(float outboard, float inboard, float radius, float inboardSign)
+    {
+        const int segments = 24;
+        var x0 = -inboardSign * outboard;
+        var x1 = inboardSign * inboard;
+        var st = new MeshBuilder();
+        for (var s = 0; s <= segments; s++)
+        {
+            var angle = Mathf.DegToRad(20f + 140f * s / segments);
+            var y = MathF.Sin(angle);
+            var z = MathF.Cos(angle);
+            st.SetNormal(new Vector3(0f, -y, -z));
+            st.AddVertex(new Vector3(x0, radius * y, radius * z));
+            st.AddVertex(new Vector3(x1, radius * y, radius * z));
+        }
+        for (var s = 0; s < segments; s++)
+        {
+            var a = 2 * s;
+            st.AddIndex(a); st.AddIndex(a + 1); st.AddIndex(a + 2);
+            st.AddIndex(a + 1); st.AddIndex(a + 3); st.AddIndex(a + 2);
+        }
+        var centre = st.VertexCount;
+        st.SetNormal(new Vector3(-inboardSign, 0f, 0f));
+        st.AddVertex(new Vector3(x1, 0f, 0f));
+        for (var s = 0; s <= segments; s++)
+        {
+            var angle = Mathf.DegToRad(20f + 140f * s / segments);
+            st.AddVertex(new Vector3(x1, radius * MathF.Sin(angle), radius * MathF.Cos(angle)));
+        }
+        for (var s = 0; s < segments; s++)
+        {
+            st.AddIndex(centre); st.AddIndex(centre + 1 + s); st.AddIndex(centre + 2 + s);
+        }
+        return st.Commit();
+    }
+
+    /// <summary>The rear number plate where the prepared scene puts one (Plate, car_models.json "plate": a model without its own); the node's scale is its size.</summary>
+    private static void BuildModelPlate(Node3D model)
+    {
+        if (model.GetNodeOrNull<Node3D>("Plate") is not { } plate) return;
+        var size = plate.Scale;
+        plate.Scale = Vector3.One;
+        _plateMaterial ??= new StandardMaterial3D { AlbedoColor = new Color(0.92f, 0.92f, 0.9f), Roughness = 0.5f };
+        plate.AddChild(new MeshInstance3D { Name = "Plate", Mesh = new BoxMesh { Size = new Vector3(size.X, size.Y, 0.008f) }, MaterialOverride = _plateMaterial });
     }
 
     /// <summary>A node's transform in this node's frame, before it is in the tree (Node3D.GlobalTransform needs the tree).</summary>
