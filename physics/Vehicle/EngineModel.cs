@@ -468,9 +468,10 @@ public sealed record EngineSpec
     };
 
     /// <summary>
-    /// The 458 Italia's flat-plane V8 (cars13). Its voice is its own "v8flat" banks (cars13 stage 2): the 458's run-up
-    /// and overrun from the recording the V8's "v8" run-up has been cut from since 0.9, and a Ferrari 360's flat-plane V8
-    /// at idle (game/assets/audio/SOURCES.md), voiced mid-engined as the V8 is (SampledEngine.VoicingOf).
+    /// The 458 Italia's flat-plane V8 (cars13). Its voice is its own "v8flat" banks (cars13 stage 2): the run-up and
+    /// overrun of an F430 Scuderia's F136 flat-plane V8 on a dynamometer (cars13 audio2, FiExhaust's video, CC BY) and a
+    /// Ferrari 360's flat-plane V8 at idle (game/assets/audio/SOURCES.md), voiced mid-engined as the V8 is
+    /// (SampledEngine.VoicingOf).
     /// </summary>
     public static EngineSpec FlatPlaneV8 => new()
     {
@@ -485,9 +486,10 @@ public sealed record EngineSpec
     };
 
     /// <summary>
-    /// The Bravo HGT's five (cars13). Its voice is the five-cylinder banks of release 0.20.0, restored and re-cut
-    /// ("inline5": a Volvo five's idle, CC BY, and an S2000 run-up laid at a five's firing with the five's uneven exhaust
-    /// beat, GranularEngine.FivePattern). Cut as "five", the folder was renamed when the car took it (cars13 stage 2):
+    /// The Bravo HGT's five (cars13). Its voice is a real five's banks ("inline5", cars13 audio2): an Audi TT RS's 2.5
+    /// turbocharged five idling, pulling and lifting off, recorded behind the car (CC BY), its uneven beat its
+    /// recording's own; the banks of release 0.20.0 it played in stages 1 and 2 (a Volvo five's idle and an S2000's four
+    /// laid at a five's firing) are gone. Cut as "five", the folder was renamed when the car took it (cars13 stage 2):
     /// --car=five names the Delta, whose model files carry the key of the five-cylinder hatch it replaced.
     /// </summary>
     public static EngineSpec HgtFive => new()
@@ -505,7 +507,8 @@ public sealed record EngineSpec
 
     /// <summary>
     /// The Bravo 1.6 16V's four (cars13). Its voice is a sixteen-valve four's banks of its own ("four16v", cars13 stage 2):
-    /// an MX-5's four, as no recording of Fiat's 1.6 16V was found (game/assets/audio/SOURCES.md).
+    /// an MX-5's 1.6 idling and pulling through its gears and a Golf V 1.6 FSI's revs falling (cars13 audio2, CC BY), as
+    /// no recording of Fiat's 1.6 16V was found (game/assets/audio/SOURCES.md).
     /// </summary>
     public static EngineSpec HatchSixteen => new()
     {

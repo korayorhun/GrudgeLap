@@ -152,15 +152,6 @@ public sealed class GranularEngine
     private int _idlePulse = 1;
     private int _drivePulse = 1;
     private int _overrunPulse = 1;
-    private int _cylinder;
-
-    /// <summary>
-    /// The weight of each cylinder's pulse in an inline five. Its cylinders fire 144 degrees apart and their exhaust
-    /// pulses do not merge evenly, so the five sound a little differently and the cycle of five beats at half the
-    /// crank's frequency: the five's warble. Laid over pulses of a four-cylinder recording (no recording of a five
-    /// under load with a usable licence was found), the pattern gives that beat back.
-    /// </summary>
-    private static readonly float[] FivePattern = [1.00f, 0.82f, 0.94f, 0.78f, 0.90f];
     private bool _started;
     private float _rpm;
     private float _load;
@@ -322,8 +313,11 @@ public sealed class GranularEngine
     private void PlacePulse(float rpm, long centre)
     {
         var firing = MathF.Max(rpm, 300f) * _cylinders / 120f;
-        _cylinder = (_cylinder + 1) % _cylinders;
-        var beat = _cylinders == 5 ? FivePattern[_cylinder] : 1f;
+        // Every pulse plays as its recording made it, so an engine's uneven beat is its recording's sequence of pulses
+        // (cars13 audio2: the HGT's five, a TT RS's, beats in the voice as in its recording; EngineVoiceTests). A weight
+        // per cylinder laid on the shares (the five's FivePattern, 0.9 to cars13 stage 2) did nothing audible:
+        // GrainRing.Take divides the shares of overlapping grains back out, and the voice with it differed from the voice
+        // without by 27 to 32 dB under its level.
         var drive = _idle is null ? 1f : _idleOnly ? 0f : SmoothStep((rpm - _idleTopRpm) / (_driveBottomRpm - _idleTopRpm));
         // Off the throttle the overrun recording takes the run-up's place: no combustion pulses, the exhaust's rasp.
         var overrun = _overrun is null ? 0f : drive * SmoothStep((0.40f - _smoothLoad) / 0.30f);
@@ -338,8 +332,8 @@ public sealed class GranularEngine
         }
         var idleShare = 1f - drive;
         drive -= overrun;
-        if (drive > 0.002f) Add(_running, _drive, _driveLevel, Pick(_drive, ref _drivePulse, firing), centre, drive * beat, gain, firing);
-        if (overrun > 0.002f) Add(_running, _overrun!, _overrunLevel, Pick(_overrun!, ref _overrunPulse, firing), centre, overrun * beat, gain);
+        if (drive > 0.002f) Add(_running, _drive, _driveLevel, Pick(_drive, ref _drivePulse, firing), centre, drive, gain, firing);
+        if (overrun > 0.002f) Add(_running, _overrun!, _overrunLevel, Pick(_overrun!, ref _overrunPulse, firing), centre, overrun, gain);
         if (idleShare > 0.002f && _idle is not null)
         {
             var pulse = Pick(_idle, ref _idlePulse, firing);

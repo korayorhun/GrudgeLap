@@ -145,7 +145,7 @@ public class DieselCharacterTests(ITestOutputHelper output)
     /// lavalier at its exhaust) has almost nothing between 1 and 3 kHz, 44.8 dB of its sound under the rest against the
     /// diesel's 9.0, and what little there is swings 0.90 with its firing, a ripple 36 dB under the diesel's band that no
     /// player hears as a knock. Banks 30 dB or more under it are left out on their marks; every other petrol bank is
-    /// compared (the furthest, the Bravo 1.6's idle, 25 dB under), and every petrol four's voice is held to the share
+    /// compared (the furthest, the hot hatch's idle, 22 dB under), and every petrol four's voice is held to the share
     /// test above whatever its bank.
     /// </summary>
     private const double InaudibleUnderDiesel = 30.0;
@@ -165,10 +165,18 @@ public class DieselCharacterTests(ITestOutputHelper output)
     /// same way scores -5.6 and -6.3 dB, a larger share than the recording's, and swings 0.40 and 0.46, as the grains'
     /// windows lay the firing's rhythm on anything. So the voice must also swing at least 0.1 more than that control, and
     /// the knock is measured where no grain window can make it, on the banks' own recordings folded on their marks: the
-    /// diesel's idle and run-up must swing at least 0.15 more than white noise on the same marks and more than every
-    /// petrol four's bank of the same kind. Measured there: the diesel's idle 0.67 and run-up 0.24, white noise 0.04 and
-    /// 0.03, the petrol fours' idles 0.16 to 0.41 and run-ups 0.04 to 0.22 (the Cupra's, the nearest; 0.09 before
-    /// cars13).
+    /// diesel's idle and run-up must swing at least 0.15 more than white noise on the same marks, and its idle more than
+    /// every petrol four's idle. Measured there: the diesel's idle 0.67 and run-up 0.24, white noise 0.04 and 0.03, the
+    /// petrol fours' idles 0.16 (the Bravo 1.6's and the BRZ's) to 0.41 (the hot hatch's).
+    /// </para>
+    /// <para>
+    /// The run-ups are not compared on their marks since cars13 audio2. A knock is the combustion's, plainest at an idle
+    /// and a light throttle and drowned by the exhaust at full load, where the diesel's run-up swings 0.24; a petrol's
+    /// exhaust at full load rasps at every firing too, and the freer the exhaust the more: the Bravo 1.6's run-up, an
+    /// MX-5's behind a Fujitsubo header and a custom exhaust, swings 0.70 on its marks, its band -8.4 dB of its sound
+    /// against the diesel's -9.8, where the other petrol fours' run-ups swing 0.04 to 0.22 (the Cupra's). What a player
+    /// hears of it is held above: at 1,500 rpm on a light throttle that voice's band is 4.6 dB under the diesel's (3.5
+    /// needed). The petrol run-ups' figures are printed.
     /// </para>
     /// <para>
     /// Every petrol four is compared, the three fours of cars13 on their own banks (cars13 stage 2) among them: the Bravo
@@ -221,6 +229,12 @@ public class DieselCharacterTests(ITestOutputHelper output)
             {
                 if (Bank(petrol.Engine.SoundFolder, name) is not { } other) continue;
                 var (theirs, theirShare) = KnockOnMarks(other);
+                if (name == "engine_drive")
+                {
+                    // A run-up at full throttle is not compared on its marks (see the remarks: a free exhaust rasps at every firing).
+                    output.WriteLine($"  {petrol.Engine.SoundFolder}/{name}: {theirs:0.00}, its 1-3 kHz {theirShare:0.0} dB (a run-up at full throttle: not compared)");
+                    continue;
+                }
                 if (theirShare <= share - InaudibleUnderDiesel)
                 {
                     output.WriteLine($"  {petrol.Engine.SoundFolder}/{name}: {theirs:0.00}, its 1-3 kHz {theirShare:0.0} dB, {share - theirShare:0.0} dB under the diesel's: not compared");

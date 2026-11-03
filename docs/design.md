@@ -2151,7 +2151,95 @@ keeps selecting the Delta. Every car has a bank of its own again, so `glp_engine
   every petrol voice is held to the share test whatever its bank (the Cupra's -45.7 and -32.3 dB). The Cupra's run-up
   swings 0.22 on its marks against the diesel's 0.24, the nearest of the petrol run-ups.
 - The v8flat, inline5 and four16v banks are wired as they are; they are to be cut again from recordings whose recordists
-  describe them (stage 1's provenance notes).
+  describe them (stage 1's provenance notes; done in audio2, below).
+
+### Sound, cars13 audio2: three engines from described recordings
+
+The 458's run-up and overrun, the Bravo HGT's three banks and the Bravo 1.6's three were the Internet Archive item
+`car-engines`' (`3 Ferrari 458`, `honda s2000` laid at a five's firing, `mazda MX 5`), a likely compilation whose CC0 is
+only its uploader's word (stage 1's notes; `game/assets/audio/SOURCES.md`). They are cut again from recordings whose
+makers describe the car, the engine and the recording, so no bank of the five cars13 engines uses the item. Sources,
+licences, credits, segments, rebuild lines and the candidates passed over are in `SOURCES.md` and `THIRD_PARTY.md`.
+
+- **What each plays.** The 458: an F430 Scuderia's F136 4.3 flat-plane V8 (the 458's engine family) pulling through a
+  gear from 2,020 to 8,770 rpm on a chassis dynamometer and coasting down after it (FiExhaust's video, its soundtrack on
+  Wikimedia Commons, CC BY 3.0); the 360's idle (CC0) stays. The HGT: a real five, an Audi TT RS's 2.5 turbocharged five
+  recorded with a microphone on its rear number plate (Speedster Turbo Berlin, Commons, CC BY 3.0): its idle, two pulls (1,560
+  to 6,590 rpm) and three lift-offs. The 1.6: an MX-5's stock B6-ZE 1.6 sixteen-valve four with a Fujitsubo header and a
+  custom exhaust, its idle and four full-throttle pulls through three gears (Ride in Japan, Commons, CC BY 4.0: published
+  after YouTube's Creative Commons option became 4.0 on 1 August 2025, where Commons tags it 3.0), and a Golf V 1.6 FSI's
+  revs falling after five run-ups for its overrun (Soundholder's recording library on Freesound, CC BY 3.0; 1,460 to 5,990
+  rpm, where the MX-5's one lift-off spans 3,630 to 5,620). Every file was fetched from its page with a descriptive
+  User-Agent and matched the research's copy by SHA-256; the segments start from the research's plans (half-second
+  stretches searched about 5 to 7 % either side of the line).
+- **Firing lines confirmed** by the spacing of the lines around them and on the cut banks by their cycle's orders (each
+  segment resampled on its own labels, the firing at order k = cylinders; a four-stroke engine's sound repeats once a
+  cycle, so labels at twice the firing would put its lines on the half orders and at half the firing would empty the odd
+  orders): whole orders 12.4 (the 458's run-up), 15.5 (the HGT's) and 22.3 dB (the 1.6's) over the half orders, the
+  strongest at the firing and its harmonics, and the revs where an engine's are (8,770 rpm at the top of the F136 E's
+  pull, 6,590 under the TT RS's limiter, the MX-5 idling at 830 rpm and changing from second to third at the B6
+  gearbox's ratio).
+- **Levelled where the checks failed.** The F430's pull and the TT RS's two pulls rise within their half-second
+  stretches, and the voice's trend took 1.9 and 3 dB an octave (`GrainBank.LevelTrend`): full throttle at the idle revs
+  came out 0.5 LU under the governor's throttle on the 458 and 2.3 over on the HGT (2.5 asked), and the 458 stepped 1.2
+  LU at 2,100 rpm. Levelled over half-second windows (`tools/level-recording.py`, as the BRZ's run is over one second;
+  one-second windows barely moved half-second stretches), and the 458's run-up started at 2.5 s past the first half
+  second of the throttle opening (its darkest, 3.2 dB under the bank's trend of brightness after the largest tilt):
+  the slopes 0.2 and 0 dB an octave, full throttle at the idle revs 3.4 LU over the governor's on the 458 (3.9 on its
+  old banks) and 7.9 on the HGT (8.0), the 458 stepping 1.0 LU at most.
+- **The 1.6's idle cleaned.** Its 1-3 kHz is steady (it swings 0.12 on its marks, white noise 0.09) and 13 dB of its
+  sound under the rest; cut into grains a steady band is laid at every firing like a knock, and the diesel's test held
+  the 1.6's idle 4.8 dB under the diesel's band (6 asked). The file's floor taken out from 700 Hz up
+  (`tools/clean-recording.py` with its defaults, the idle's copy only): 21.9 dB under, and nearer its run-up in timbre.
+- **The diesel's knock test compares the run-ups no more on their marks.** The MX-5's run-up rasps at every firing
+  under full load (its 1-3 kHz swings 0.70 on its marks; the diesel's run-up 0.24, the other petrol fours' 0.04 to 0.22):
+  a free exhaust's rasp, which a knock is not; a knock is the combustion's, plainest at an idle and a light throttle,
+  where the test still holds every petrol four's voice under the diesel's (the 1.6's 21.9 dB idling and 4.6 at 1,500 rpm
+  on a light throttle) and every petrol idle's swing on its marks under the diesel's. The Golf's run-ups, the one
+  alternative, swing 0.05 but played 1.5 dB under the diesel at 1,500 rpm (3.5 asked).
+- **The HGT's idle is its own.** The TT RS's (71.5-76.0 s, settled at 1,090 rpm after a coast-down) against the Volvo's
+  of 0.9-stage 2: both pass, the TT RS's stepping and sagging less in the cabin (0.5 and 0.8 LU against 0.7 and 1.1), and
+  it is one engine with its run-up (its grains' third-octave spectrum 5.2 dB RMS from the run-up's lowest revs, the
+  Volvo's, low-passed at 1.5 kHz, 21.5). The Volvo is not shipped.
+- **FivePattern removed.** The five's weights per cylinder (`GranularEngine.FivePattern`, 1.00, 0.82, 0.94, 0.78 and
+  0.90, for the S2000's four laid at a five's firing) did nothing audible on the TT RS's banks: the ring divides the
+  shares of overlapping grains back out (`GrainRing.Take`), so they only tilted the crossfade between neighbours, and the
+  voice with them differed from the voice without by 27 to 32 dB under its level. The five's beat is the recording's:
+  held every 500 rpm from 2,500 to 6,000 the voice holds the cycle's orders that are not the firing's 6.2 dB over the
+  half orders, the recording 7.8 (`EngineVoiceTests.The_five_beats_as_its_recording_does`, within 2.5 dB). A
+  recording of another engine laid at a five's firing would need a gain per pulse outside the ring.
+- **Measured** (`EngineVoiceTests`, `DieselCharacterTests`): the three engines' banks hold no grain more than 6.3 dB
+  under its neighbours (the 458's overrun), none sharper than 2.1 times its segment's median, every side 0.60 of a period
+  or more, and the tool warns of no crackle; all fifteen banks of the five cars13 engines rebuild from `SOURCES.md`'s
+  lines to the byte. Held every 100 rpm at full throttle the level steps 1.0 LU at most (the 458's cabin at 1,100 rpm, as
+  before) and sags 1.5 at most (the 458's cabin at 6,900; 1.1 before; the 1.6's 1.2 outside at 1,700, 0.9 before); full
+  throttle at the idle revs 3.4 (the 458), 7.9 (the HGT) and 4.8 LU (the 1.6; 6.8 before) over the governor's, each step
+  0.4 LU or more; peaks -1.2 dBFS at worst (the 1.6 outside, 73 of 952,560 samples rounded off; the HGT 13 in its
+  cabin, the 458 none); pulling hard -14.0 and -13.7 LUFS (the 458 outside and in the cabin), -14.0 and -13.9 (the HGT),
+  -15.1 and -14.3 (the 1.6, its peaky run-up holding its trim down, within 1 LU of the cars' mean); the sweep and the
+  idles over five seeds without a click or a drop-out (steps at most 1.8 times the RMS around them, the deepest 10 ms
+  11.2 dB under); lifting off from the redline one tick at most in five seconds (the 1.6 outside 2 to 8 before); the
+  tone's share at least -3.5 dB (the 458 at its redline); the diesel's band 21.9 dB over the 1.6's idling and 4.6 at
+  1,500 rpm. In the game, hidden and silent 40 s movies
+  (`--write-movie`, 30 fps, the attract lap, cabin and chase) of the three cars against the same runs on cars/stage2,
+  measured with ffmpeg's ebur128 and scanned for clicks, drop-outs and ticks: -15.5 and -16.0 LUFS (the 458 in its
+  cabin and from behind; -16.1 and -15.5 before), -13.6 and -13.7 (the HGT; -13.7 and -13.6), -13.8 and -14.8 (the
+  1.6; -13.7 and -13.9); true peaks -1.3 dBFS at worst (the 1.6 from behind; -2.1 before); no click (no step 3 times
+  the RMS of the 5 ms around it: the sharpest 1.6 times, a step of 0.49 in the 458's launch from behind, its loudest
+  passage) and no drop-out (the deepest 10 ms 6.6 dB under the 210 ms around it); ticks 0 or 1 but the 1.6 from
+  behind, 7 in 38 s (none before: the MX-5's exhaust rasps at every firing; four at the launch, 2.5-2.8 s, and
+  three later),
+  where the HGT from behind ticked 51 times on stage 2's S2000 banks and does not now.
+- **Caveats.** The F430 track is held by a limiter (242 decoded samples past full scale, the coast-down within 3 dB of the
+  pull) and the car wears an aftermarket valved exhaust on a dynamometer: louder and rawer than a stock 458. The TT RS is
+  a 2.5 turbocharged five standing in for the HGT's 2.0 naturally aspirated five: the same firing, a deeper sound and a
+  turbo's hush; its idle, 4.5 s long, idles 22 % over the HGT's 850 rpm. The MX-5 stands in for Fiat's 1.6 16V, with a
+  sports header and exhaust and a processed soundtrack (its driving held within 2.4 dB); its overrun is another engine,
+  a Golf's. Commons' licence reviews of the three tracks are still pending (their YouTube licences were read on the
+  videos' pages, 2 November 2026). The shipped banks of the V8 (`v8`), the flat-twelve, the hot hatch, the rally hatch
+  and the V6 hatch still rely on the archive item; `SOURCES.md` lists the candidates for a later pass (a 540C, a 570S and
+  a 600LT for the V8, a Testarossa for the flat-twelve, an Integrale for the rally hatch; nothing for the hot hatch and
+  the V6 hatch).
 
 ## Unreal Engine version (`unreal/`)
 
