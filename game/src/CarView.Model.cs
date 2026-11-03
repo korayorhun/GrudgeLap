@@ -178,6 +178,13 @@ internal sealed partial class CarView
             // No cabin in the model: the lofted cabin (dashboard, binnacle, wheel, seats) inside its shell.
             BuildInterior(_body, new StandardMaterial3D { AlbedoColor = Trim, Roughness = 0.75f });
         }
+        else
+        {
+            // The model's own cabin: the same daylight the lofted cabin gets, placed from the model's eye (in the body's
+            // frame, which sits at the road's height). Without it the cabin was lit by the sky's ambient alone.
+            var modelEye = _modelEye.Value + new Vector3(0f, _cgHeight, 0f);
+            BuildCabinLight(_body, modelEye, modelEye.X);
+        }
         return true;
     }
 

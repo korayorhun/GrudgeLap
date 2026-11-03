@@ -27,15 +27,19 @@ internal sealed partial class CarView
     /// down or sideways black. Two soft lights without shadows stand in for the light that comes in through the glass
     /// and bounces off the seats and the dashboard: one low between the seats that lifts the headliner, the visors and
     /// the pillars, one over the passenger's footwell for the fascia and the door. Seen from the driver's seat only.
+    /// Placed from the eye point: the lofted cabin's (its style's) or a model's own (0.28.0: until then only the lofted
+    /// interior built them, and every car drawn with a model's cabin was lit by the sky's ambient alone under its roof,
+    /// the dark cockpits of 3 November 2026).
     /// </summary>
-    private void BuildCabinLight(Node3D body)
+    private void BuildCabinLight(Node3D body) => BuildCabinLight(body, new Vector3(DriverX, _style.EyeH, _style.EyeZ), DriverX);
+
+    private void BuildCabinLight(Node3D body, Vector3 eye, float driverX)
     {
-        var style = _style;
         var warm = new Color(1f, 0.97f, 0.92f);
         var bounce = new OmniLight3D
         {
             Name = "CabinBounce",
-            Position = new Vector3(0f, style.EyeH - 0.62f, style.EyeZ + 0.05f),
+            Position = new Vector3(0f, eye.Y - 0.62f, eye.Z + 0.05f),
             OmniRange = 1.6f,
             OmniAttenuation = 1.1f,
             LightEnergy = 0.9f,
@@ -46,7 +50,7 @@ internal sealed partial class CarView
         var fascia = new OmniLight3D
         {
             Name = "CabinFascia",
-            Position = new Vector3(-DriverX * 0.6f, style.EyeH - 0.30f, style.EyeZ - 0.15f),
+            Position = new Vector3(-driverX * 0.6f, eye.Y - 0.30f, eye.Z - 0.15f),
             OmniRange = 1.3f,
             OmniAttenuation = 1.3f,
             LightEnergy = 0.6f,

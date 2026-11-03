@@ -8,7 +8,7 @@ Yeni bir istek gelince buraya satır olarak eklenir. Bir sürüm bir isteği kar
 - **Durum:** `Tamam` karşılandı, `Kısmen` bir kısmı karşılandı, `Açık` henüz yapılmadı, `Karar` yön belirlendi, `Ertelendi` bilerek sonraya bırakıldı.
 - **Ayrıntı:** teknik gerekçeler [design.md](design.md)'de, sürüm notları GitHub Releases'te.
 
-Son güncelleme: 3 Kasım 2026 (sürüm 0.27.0).
+Son güncelleme: 3 Kasım 2026 (sürüm 0.28.0).
 
 ## 1. Hedef
 
@@ -50,7 +50,7 @@ Son güncelleme: 3 Kasım 2026 (sürüm 0.27.0).
 | G4 | Araç içi gerçek gibi olsun: göstergeler yarım görünmesin, direksiyon, tavan, konsol, gövde gerçekçi olsun. | 28 Eki: "göstergeler yarım gözüküyor"; 29 Eki; 1 Kas: "direksiyon arabanın içeriden tavanı falan.. konsol gövde" | Kısmen: gerçek kabinler (0.16, 0.17, 0.20), göstergeler tam (0.8.1). Eksikler bölüm 10'da |
 | G5 | Kokpitte sol ön direk ince olsun. | 22 Eki: "kokpitte sol A-direği çok kalın ve baskın" | Tamam (0.4.0). 458'de aynı sorun yeniden var, bölüm 10 |
 | G6 | McLaren'in kokpitinden yol görünsün. | 2 Kas: "mclaren ile kokpitte kullanırken yolu göremiyoruz" | Tamam (0.25.0) |
-| G7 | Bazı arabaların kokpitleri çok karanlık, hiçbir şey görünmüyor; hepsi kontrol edilsin. | 3 Kas: "bazı arabaların kokpitleri çok karanlık hiç görünmüyor.. hepsini kontrol et" | Açık: 0.27.0'dan sonra sıradaki iş (her arabanın kokpit görüntüsü alınıp karşılaştırılacak) |
+| G7 | Bazı arabaların kokpitleri çok karanlık, hiçbir şey görünmüyor; hepsi kontrol edilsin. | 3 Kas: "bazı arabaların kokpitleri çok karanlık hiç görünmüyor.. hepsini kontrol et" | Tamam (0.28.0): gerçek modelle çizilen kabinlerde (Esprit, 570S, 205, Delta, SAAB, VAZ, W212, R12, 458 ve BRZ'nin ödünç kabinleri) kabin gün ışığı hiç kurulmuyordu, yalnız gökyüzünün ortam ışığıyla tavanın altında kalıyordu; artık her kabin kendi göz noktasından aydınlatılıyor (karanlık piksel payı W212 %55→%13, R12 %51→%45, 205 %48→%22, Delta %43→%9, 458 %35→%11, BRZ %46→%18) |
 
 ## 5. Araba seçimi ve yeni arabalar
 
@@ -118,7 +118,6 @@ Son güncelleme: 3 Kasım 2026 (sürüm 0.27.0).
 10. **Bilinçli tasarım tercihleri, sahibe sorulacak:** Testarossa oyunun orijinalindeki gibi 4 vitesli (gerçeği 5); V8'in oyun içi adı "V8 GTB '12", çizilen araba ise 2015 McLaren 570S.
 11. **Unreal sürümü:** 458 ve BRZ orada geçici gövdeli; bu makinede derlenmedi.
 12. **Açılış süresi** (U3) ölçülmedi.
-13. **Karanlık kokpitler** (G7): her arabanın koltuk görünümü gizli koşuda görüntülenip aydınlatması/malzemesi karşılaştırılacak; karanlık olanlar düzeltilecek.
 
 ## 11. Çalışma kuralları
 

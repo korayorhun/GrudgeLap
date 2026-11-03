@@ -2517,6 +2517,19 @@ candidates passed over are in `game/assets/audio/SOURCES.md` and `THIRD_PARTY.md
   458 Speciale's beside a cross-plane 570S's pulls. Commons' licence reviews of the seven tracks are pending (their
   YouTube licences were read on 3 November 2026). The Unreal version's bank table is unchanged (the folders are).
 
+### Cabin daylight for the model cabins (0.28.0)
+
+The owner reported some cockpits too dark to see (3 November 2026). Measured on hidden screenshots of every car's seat
+view six seconds into the attract lap (the share of pixels under 16 of 255 in the lower 55 % of the frame): the lofted
+cabins (the two Bravos, the Leon) 11-15 %, every car drawn with a model's cabin 28-55 % (the W212 55, the R12 51, the
+205 48, the BRZ 46, the Delta 43, the VAZ 40, the 458 35, the SAAB 30, the 570S 28, the Esprit 21). The cause: the two
+soft lights that stand in for the daylight bouncing round the cabin (`BuildCabinLight`, 0.9.1) were built only by the
+lofted interior; a model with a cabin of its own (an Eye in the prepared scene) got none, and was lit by the sky's
+ambient alone under its roof, exactly what 0.9.1 had fixed for the lofted cabin. The lights are now placed from the
+eye point, the lofted style's or the model's (`CarView.Model.cs`, in the body's frame at the road's height), and every
+model cabin has them: 5-22 % after (the R12 45: its dashboard is the model's black plastic, lit now but dark by
+colour; the 458 11, its header still low over the screen, open item 1). The lofted cabins are unchanged (within 0.5 %).
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and
