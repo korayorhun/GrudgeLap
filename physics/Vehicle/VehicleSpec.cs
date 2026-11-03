@@ -959,11 +959,12 @@ public sealed record VehicleSpec
     /// <para>
     /// Why the manual. Skoda's sheet gives both gearboxes' ratios: the manual's above and the seven-speed DSG's (DQ381:
     /// 3.40 / 2.75 / 1.77 / 0.93 / 0.71 / 0.76 / 0.64, reverse 2.90, on 4.17 / 3.13). The one independent road test
-    /// found drove a manual: Auto Express timed a six-speed Octavia vRS 245 hatch at 6.8 s to 60 mph, 5.5 s from 30 to
-    /// 70 mph through the gears and 4.1 s from 30 to 50 in fourth ("Skoda Octavia vRS 245 vs Ford Focus ST", 16 August
-    /// 2017; the same figures for the vRS Challenge of 18 June 2019, 1,365 kg at the kerb). No magazine's timing of a
-    /// DSG car of the 245 PS tune was found, only the makers' figures, and the manual carries the 250 km/h both makers
-    /// publish (Volkswagen's DSG Golf 248). The Leon Cupra 300 of SEAT's sheet, whose body this is, was a manual too,
+    /// of the platform's 245 PS cars found drove a manual: Auto Express timed a six-speed Octavia vRS 245 hatch at 6.8 s
+    /// to 60 mph, 5.5 s from 30 to 70 mph through the gears and 4.1 s from 30 to 50 in fourth ("Skoda Octavia vRS 245 vs
+    /// Ford Focus ST", 16 August 2017; the same figures for the vRS Challenge of 18 June 2019, 1,365 kg at the kerb). No
+    /// magazine's timing of a DSG car of this generation was found, only the makers' figures (the DSG timed with the tune
+    /// is the next generation's Octavia RS of 2021, below), and the manual carries the 250 km/h both makers publish
+    /// (Volkswagen's DSG Golf 248). The Leon Cupra 300 of SEAT's sheet, whose body this is, was a manual too,
     /// on a box with the same ratios from second gear up and its own first gear and final drives (below).
     /// </para>
     /// <para>
@@ -974,7 +975,11 @@ public sealed record VehicleSpec
     /// 250 km/h, electronically limited (Skoda's sheet; its launch release). The Golf, the Leon's twin in size and
     /// mass, sets the targets (a tenth either side of 6.2 s; the tests' rows say how), a window the Octavia's 6.6 s
     /// falls in too; Auto Express's through-the-gears time checks the car (its 0-60 mph, slower than Skoda's own
-    /// 0-62 mph, is not taken as the launch's). No quarter-mile time was found for any car of the 245 PS tune.
+    /// 0-62 mph, is not taken as the launch's). The quarter mile: no time was found for the platform's 245 PS cars of
+    /// 2017-20; the one found for the tune is Wheels' for the next generation's Octavia RS of 2021, a larger car with the
+    /// same 180 kW and 370 N m on the seven-speed DSG, 14.47 s at 163.08 km/h (101.3 mph) with a DriftBox, 6.15 s to
+    /// 97 km/h and 6.41 s to 100 (Scott Newman, "2021 Skoda Octavia RS review: performance tested", whichcar.com.au,
+    /// 24 September 2021), which the tests hold the car to a tenth either side of, the trap speed too.
     /// </para>
     /// </summary>
     /// <remarks>

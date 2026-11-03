@@ -978,22 +978,31 @@ they drive like the real cars before their models and sounds land:
     45 %, and the 6,800 rpm limiter are the 300's), in `EngineSpec.TsiFour` and `TsiFourCurve`. The gearbox is the
     six-speed manual of the 245 PS cars (3.77 / 2.09 / 1.48 / 1.09 on a 3.45 final drive, 1.10 / 0.91 on 2.76, reverse
     4.55: Skoda's sheet), not the seven-speed DSG (DQ381: 3.40 / 2.75 / 1.77 / 0.93 / 0.71 / 0.76 / 0.64, reverse 2.90,
-    on 4.17 / 3.13, the same sheet). Both sets of ratios are published there; the one independent road test found drove
-    a manual (Auto Express's six-speed Octavia vRS 245 hatch, 16 August 2017: 6.8 s to 60 mph, 5.5 s from 30 to 70 mph
-    through the gears, 4.1 s from 30 to 50 in fourth; the same figures for the vRS Challenge of 18 June 2019), no
-    magazine's timing of a DSG car of the tune turned up, and the manual carries the 250 km/h both makers publish (the
-    DSG Golf's is 248). The showroom's facts line says 6-SPEED MANUAL and is right: the two final drives the spec
-    carried, which the stage-2 report took for a DSG's, were those SEAT's sheet gives the Cupra 300's manual (two output
-    shafts, as on the R32's 02M), and the 245 PS manual has two as well; only the order 1-4 on the first and 5-6 on the
-    second keeps its overall ratios falling. The mass stays the 300's (the same engine with a manual of the same family;
-    ADAC lists the 245 PS Golf five-door manual at 1387 kg with a driver). The targets: Volkswagen's 6.2 s to 100 km/h
-    for the Golf GTI Performance with either gearbox, the Leon's twin in size and mass, a tenth either side for the
-    sprint (5.6-6.8 s, `HandlingTests`) and, less a twentieth, for the 0-60 mph road-test launch (5.3-6.5 s,
+    on 4.17 / 3.13, the same sheet). Both sets of ratios are published there; the one independent road test of the
+    platform's 245 PS cars found drove a manual (Auto Express's six-speed Octavia vRS 245 hatch, 16 August 2017: 6.8 s
+    to 60 mph, 5.5 s from 30 to 70 mph through the gears, 4.1 s from 30 to 50 in fourth; the same figures for the vRS
+    Challenge of 18 June 2019), no magazine's timing of a DSG car of that generation turned up (the one DSG timed with
+    the tune is the next generation's Octavia RS of 2021, below), and the manual carries the 250 km/h both makers
+    publish (the DSG Golf's is 248). The showroom's facts line says 6-SPEED MANUAL and is right: the two final drives
+    the spec carried, which the stage-2 report took for a DSG's, were those SEAT's sheet gives the Cupra 300's manual
+    (two output shafts, as on the R32's 02M), and the 245 PS manual has two as well; only the order 1-4 on the first and
+    5-6 on the second keeps its overall ratios falling. The mass stays the 300's (the same engine with a manual of the
+    same family; ADAC lists the 245 PS Golf five-door manual at 1387 kg with a driver). The targets: Volkswagen's 6.2 s
+    to 100 km/h for the Golf GTI Performance with either gearbox, the Leon's twin in size and mass, a tenth either side
+    for the sprint (5.6-6.8 s, `HandlingTests`) and, less a twentieth, for the 0-60 mph road-test launch (5.3-6.5 s,
     `VehicleTests.The_cars_of_cars13_match_their_published_figures`), a window Skoda's 6.6 s for the heavier Octavia
     falls in too; 250 km/h, limited (150-158 mph); and Auto Express's 30-70 mph through the gears, a tenth either side
     (4.95-6.05 s, the new `VehicleTests.The_Leon_Cupra_runs_30_to_70_mph_through_the_gears_as_its_platforms_road_test`,
-    on `RoadTestTimes`, the marks of the 0-60 run). The magazine's 0-60 mph, 6.8 s, slower than Skoda's own 6.6 s to
-    62 mph for the car, is not taken as the launch's. No quarter-mile time was found for any car of the tune.
+    on `RoadTestTimes`, the marks of the 0-60 run). The magazine's 0-60 mph, 6.8 s, slower than Skoda's own 6.6 s to 62
+    mph for the car, is not taken as the launch's. The quarter mile (added in a second phys2 pass): no time was found
+    for the platform's 245 PS cars of 2017-20, and the one found for the tune is Wheels' for the next generation's
+    Octavia RS, a larger car with the same 180 kW and 370 N m on the seven-speed DSG: 14.47 s at 163.08 km/h (101.3 mph)
+    with a DriftBox, its best run, 6.15 s to 97 km/h and 6.41 s to 100 (Scott Newman, "2021 Skoda Octavia RS review:
+    performance tested", whichcar.com.au, 24 September 2021). It is held a tenth either side, the time and the trap
+    speed alike (13.0-15.9 s, 91.2-111.5 mph, the new
+    `VehicleTests.The_Leon_Cupra_runs_the_quarter_mile_as_its_tune_was_timed`, on `RoadTestQuarterMile`, the 0-60 run
+    carried on to 402.3 m): a check of the tune's pace and speed over the distance, not the Leon's own figure. The car
+    runs it in 14.38 s at 101.7 mph (163.6 km/h).
 
     | Leon Cupra | 300 PS (cars13 to stage 2) | 245 PS (phys2) | published, the 245 PS cars |
     |---|---|---|---|
@@ -1004,7 +1013,7 @@ they drive like the real cars before their models and sounds land:
     | 0-60 mph, road-test launch | 5.77 s | 5.83 | 6.8 (Auto Express, Octavia) |
     | 30-70 mph through the gears | 4.47 s | 5.05 | 5.5 (Auto Express, Octavia) |
     | 30-50 mph in fourth (a scratch rig, not a test) | 3.23 s | 3.80 | 4.1 (Auto Express, Octavia) |
-    | 0-100 mph; the quarter mile | 12.2 s; 14.0 s at 108.2 mph | 14.0; 14.4 at 101.7 | none found |
+    | 0-100 mph; the quarter mile | 12.2 s; 14.0 s at 108.2 mph | 14.0; 14.38 at 101.7 | none; 14.47 at 101.3 (Wheels, the 2021 Octavia RS, DSG) |
     | top speed | 247 km/h in 6th at 5,790 rpm, on the speed limiter | 247 in 5th at 6,240 rpm, on the speed limiter | 250 km/h, limited |
     | 100-0 km/h dry (rain) | 33.8 m (47.7) | 33.8 (47.7) | none |
     | understeer, roll (40 m circle) | 1.73, 2.31 deg/g | 1.72, 2.31 | none |
@@ -1016,10 +1025,11 @@ they drive like the real cars before their models and sounds land:
     back to 1200; in `VehicleSpec.CupraTsi` set `GearRatios = [-3.99f, 0f, 3.357f, 2.087f, 1.481f, 1.088f, 0.8587f,
     0.7138f]` and `FinalDrive = 3.944f` (the comment over them) and restore its summary's figures (SEAT's 5.8 s for the
     five-door, 250 km/h limited); in the tests put `HandlingTests`' sprint row for car 11 back to 5.2-6.4 s and
-    `VehicleTests`' cars13 row to 5.0-6.05 s (both rows' comments give them), and drop the 30-70 mph test, which holds
-    the 245 PS tune to its platform's road test (the 300 runs it in 4.47 s; no 300's figure was sourced for it); then
-    the docs (this item, the feel checklist's cars13 rows, both READMEs' "245 PS"). The 290 PS car of autumn 2018 would
-    be the 300's curve with its top taken down to 213 kW.
+    `VehicleTests`' cars13 row to 5.0-6.05 s (both rows' comments give them), and drop the 30-70 mph and quarter-mile
+    tests, which hold the 245 PS tune to the road tests of its platform and of its next generation (the 300 runs them in
+    4.47 s and in 13.98 s at 108.2 mph, the quarter mile inside the 245's window; no 300's figure was sourced for
+    either); then the docs (this item, the feel checklist's cars13 rows, both READMEs' "245 PS"). The 290 PS car of
+    autumn 2018 would be the 300's curve with its top taken down to 213 kW.
 
     The BRZ: it stays the 2013-16 car. The drawn model is a facelifted first-generation twin (a Toyota 86), still the
     ZC6. The facelift of 2017-20 compared: in Europe it kept the engine and every figure the spec follows (200 PS,

@@ -111,21 +111,64 @@ public sealed class VehicleTests
     private static float[] RoadTestTimes(VehicleSpec spec, float limit, params float[] mph)
     {
         var times = Enumerable.Repeat(float.PositiveInfinity, mph.Length).ToArray();
+        var car = RoadTestLaunch(spec);
+        var lastGear = car.Drivetrain.Gear;
+        var next = 0;
+        for (var t = 0f; t < limit && next < mph.Length; t += Dt)
+        {
+            RoadTestStep(car, ref lastGear);
+            while (next < mph.Length && car.SpeedMph >= mph[next]) times[next++] = t + Dt;
+        }
+        return times;
+    }
+
+    /// <summary>The standing quarter mile, the distance a road test's quarter-mile time is taken over.</summary>
+    private const float QuarterMileMetres = 402.336f;
+
+    /// <summary>
+    /// Seconds from the brake's release to the end of the standing quarter mile in the standing start of
+    /// <see cref="RoadTestZeroToSixty"/>, with the speed there (the trap speed a road test gives with it); infinite for a
+    /// quarter mile not run within <paramref name="limit"/> (cars/phys2). It is the same run as the 0-60 time's, step
+    /// for step, carried on past 60 mph.
+    /// </summary>
+    private static (float Seconds, float TrapMph) RoadTestQuarterMile(VehicleSpec spec, float limit = 30f)
+    {
+        var car = RoadTestLaunch(spec);
+        var start = car.Cursor.Distance;
+        var lastGear = car.Drivetrain.Gear;
+        for (var t = 0f; t < limit; t += Dt)
+        {
+            RoadTestStep(car, ref lastGear);
+            if (car.Cursor.Distance - start >= QuarterMileMetres) return (t + Dt, car.SpeedMph);
+        }
+        return (float.PositiveInfinity, car.SpeedMph);
+    }
+
+    /// <summary>
+    /// The car of a road test's standing start at the brake's release: the ignition on, first gear in with the clutch
+    /// down, then brake and throttle held for a second and a half so the revs wait at the launch speed with the clutch
+    /// open (<see cref="RoadTestZeroToSixty"/>).
+    /// </summary>
+    private static VehicleSim RoadTestLaunch(VehicleSpec spec)
+    {
         var car = new VehicleSim(spec, DragStrip());
         car.Drivetrain.Mode = TransmissionMode.ManualAutoClutch;
         car.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Ignition = true, Clutch = 1f }, Dt);
         car.Step(new DriverInputs { Gear = 1, Clutch = 1f, Brake = 1f }, Dt);
         for (var t = 0f; t < 1.5f; t += Dt) car.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Brake = 1f, Throttle = 1f }, Dt);
-        var lastGear = car.Drivetrain.Gear;
-        var next = 0;
-        for (var t = 0f; t < limit && next < mph.Length; t += Dt)
-        {
-            var shift = RoadTestShiftDue(car) && car.Drivetrain.ClutchLocked && car.Drivetrain.Gear == lastGear;
-            car.Step(new DriverInputs { Throttle = ScriptedDriver.FeatherThrottle(car, 1f), Steer = FollowRoad(car), Gear = DriverInputs.NoGearChange, ShiftUp = shift }, Dt);
-            if (shift) lastGear = car.Drivetrain.Gear;
-            while (next < mph.Length && car.SpeedMph >= mph[next]) times[next++] = t + Dt;
-        }
-        return times;
+        return car;
+    }
+
+    /// <summary>
+    /// One step of a road test's run after <see cref="RoadTestLaunch"/>: the throttle fed in against wheelspin and the
+    /// change up when <see cref="RoadTestShiftDue"/> says, pressed once the clutch has locked in the gear
+    /// <paramref name="lastGear"/> (the gear the last change landed in, kept by the caller from step to step).
+    /// </summary>
+    private static void RoadTestStep(VehicleSim car, ref int lastGear)
+    {
+        var shift = RoadTestShiftDue(car) && car.Drivetrain.ClutchLocked && car.Drivetrain.Gear == lastGear;
+        car.Step(new DriverInputs { Throttle = ScriptedDriver.FeatherThrottle(car, 1f), Steer = FollowRoad(car), Gear = DriverInputs.NoGearChange, ShiftUp = shift }, Dt);
+        if (shift) lastGear = car.Drivetrain.Gear;
     }
 
     /// <summary>
@@ -311,6 +354,26 @@ public sealed class VehicleTests
         var times = RoadTestTimes(spec, 20f, 30f, 60f, 70f);
         _out.WriteLine($"{spec.Name}: 30 mph at {times[0]:F2} s, 60 at {times[1]:F2} s, 70 at {times[2]:F2} s: 30-70 mph {times[2] - times[0]:F2} s");
         Assert.InRange(times[2] - times[0], 4.95f, 6.05f);
+    }
+
+    /// <summary>
+    /// The Leon Cupra's 245 PS tune over the standing quarter mile (cars/phys2, VehicleSpec.CupraTsi), launched as the
+    /// 0-60 mph run. The one quarter-mile time of the tune found is Wheels' (WhichCar): a 2021 Skoda Octavia RS, the
+    /// next generation of the platform with the same 180 kW and 370 N m and the seven-speed DSG, timed with a DriftBox at
+    /// 14.47 s and 163.08 km/h (101.3 mph), its best run, with 6.15 s to 97 km/h and 6.41 s to 100 (Scott Newman,
+    /// "2021 Skoda Octavia RS review: performance tested", whichcar.com.au, 24 September 2021). Held here to a tenth
+    /// either side, the time and the trap speed alike, as every cars13 figure is: a larger car on the other gearbox, so
+    /// the window checks the tune's pace and speed over the distance rather than the Leon's own figure (no quarter-mile
+    /// time was found for the Mk3 platform's 245 PS cars).
+    /// </summary>
+    [Fact]
+    public void The_Leon_Cupra_runs_the_quarter_mile_as_its_tune_was_timed()
+    {
+        var spec = VehicleSpec.Catalogue[11];
+        var (seconds, trapMph) = RoadTestQuarterMile(spec);
+        _out.WriteLine($"{spec.Name}: the quarter mile in {seconds:F2} s at {trapMph:F1} mph ({trapMph / MathUtil.MphPerMps * MathUtil.KmhPerMps:F1} km/h)");
+        Assert.InRange(seconds, 13.0f, 15.9f);
+        Assert.InRange(trapMph, 91.2f, 111.5f);
     }
 
     /// <summary>
