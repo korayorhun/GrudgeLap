@@ -236,7 +236,8 @@ best lap's ghost out of the picture.
   chime, starter and jingles (a fanfare for a record lap, a tune at the end of the credit; no music while
   driving, as in the arcade), keyboard and gamepad, graphics presets, the high-score table with its entry
   of initials, updater. Design notes in [docs/design.md](docs/design.md), the checklist in
-  [docs/feel-checklist.md](docs/feel-checklist.md), what the research found in
+  [docs/feel-checklist.md](docs/feel-checklist.md), the owner's requests and their status in
+  [docs/ISTERLER.md](docs/ISTERLER.md), what the research found in
   [docs/research-notes.md](docs/research-notes.md).
 - `unreal/` — the Unreal Engine 5 version: the same track and the first five cars (the everyday cars of 0.10.0 await their export), exported from the game, dressed
   with CC0 photoscans (Poly Haven) under Lumen, Nanite and a physical sky, and the whole game on the

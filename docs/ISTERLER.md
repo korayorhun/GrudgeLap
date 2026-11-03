@@ -1,0 +1,128 @@
+# GrudgeLap: isterler
+
+Proje sahibinin bu oyun için istediği her şeyin tek listesi. Yeni bir thread işe başlamadan önce bu dosyayı okur.
+Yeni bir istek gelince buraya satır olarak eklenir. Bir sürüm bir isteği karşılayınca o satırın durumu ve sürümü güncellenir.
+
+- **Kaynak:** sahibin 22 Ekim - 3 Kasım 2026 arasındaki iki geliştirme thread'inde yazdıkları. Kısa alıntılar sahibin kendi sözleri, tarihleri yanında.
+- **Durum:** `Tamam` karşılandı, `Kısmen` bir kısmı karşılandı, `Açık` henüz yapılmadı, `Karar` yön belirlendi, `Ertelendi` bilerek sonraya bırakıldı.
+- **Ayrıntı:** teknik gerekçeler [design.md](design.md)'de, sürüm notları GitHub Releases'te.
+
+Son güncelleme: 3 Kasım 2026 (sürüm 0.26.0).
+
+## 1. Hedef
+
+| No | İster | Kaynak | Durum |
+|---|---|---|---|
+| H1 | 1989 Hard Drivin' oyununa saygı duruşu. Lisansı temiz, olabildiğince fotogerçekçi, gerçek sesli bir oyun. | 22 Eki: "1989 Hard Drivin' saygı duruşu; lisans temiz, olabildiğince fotogerçekçi, gerçek sesli" | Sürekli hedef |
+| H2 | Hiper-gerçekçi görünüm: oyun gerçek hayat gibi görünsün. | 22 Eki: "hyperrealistic olmasını çok istiyorum"; 1 Kas: "gerçek hayat gibi görünmesini istiyorum" | Sürekli hedef (0.11-0.26 adım adım) |
+| H3 | Gerçek fizik kurallarıyla çalışan, gerçek otomobil dinamikleri olan bir oyun. Her turda daha gerçekçi. | 1 Kas (gece modu): "daha iyi otomobil dinamiklerinin olduğu gerçek fizik kuralları ile çalışan" | Sürekli hedef (0.18-0.24'te büyük adımlar) |
+| H4 | Gerekirse her şey baştan tasarlanabilir. Endüstrinin en iyi uygulamaları araştırılıp kullanılsın. | 1 Kas: "gerekiyorsa herşeyi baştan tasarlayabilirsin", "industry best practice'leri araştırıp uygulayabilirsin" | İlke |
+| H5 | Fotogerçekçilik için Unreal Engine sürümü de sürdürülsün. | 1 Kas, soru cevabı: "Unreal sürümü" | Kısmen: Unreal sürümü var, gerçek modeller ve hava eklendi; 458 ve BRZ orada hâlâ geçici gövdeli |
+
+## 2. Pist ve dünya
+
+| No | İster | Kaynak | Durum |
+|---|---|---|---|
+| P1 | Pist orijinal oyundaki (Hard Drivin' 1) gibi olsun: şekli ve hissi. Referans video: https://youtu.be/g6JC-HCNcio | 23 Eki: "pist oyundakine benzemiyor"; 1 Kas: "hard drivin 1 pisti gibi olsun"; soru cevabı: "hepsi aynı olsun lütfen, ama çok gerçekçi olsun", "videodaki hissi ver" | Kısmen: 0.8.0 orijinal plan, 0.13 arcade haritası. His konusunda sahibin onayı yok |
+| P2 | Pist yüzeyi gerçekteki gibi kusurlu olsun: yamalar, ufak çukurlar, her yeri farklı, tekrar çok az. | 27 Eki: "yamalar, ufak tefek çukurlar.. her yeri farklı"; 1 Kas: "imperfectionlar olsa ve tekrar çok az olsa" | Tamam (0.7.0; 0.14.0'da 160 m'de bir tekrar) |
+| P3 | Arazi gerçekçi olsun, biraz engebeli. | 23 Eki: "arazi kötü baya"; 1 Kas: "araziye biraz hareket verebilirsin" | Tamam (0.13.0, 0.15.0) |
+| P4 | Köprü ayakları yolun ortasında olmasın, yolun ortasından tren geçmesin, köprü ayaklarına çarpılabilsin. | 29 Eki | Tamam (0.9.0, 0.10.0) |
+| P5 | Çime çıkınca kontrol aşırı zorlaşmasın, araba çimin altına batmasın, tekerlekler havada durmasın. | 29 Eki | Tamam (0.9.0) |
+| P6 | Evler, inekler ve yollar gerçekçi olsun. İneğin içinden geçilmesin, ineğin sesi olsun. | 29 Eki | Kısmen: inekler katı ve sesli (0.10.0); evler ve yollar gerçekçilik hedefinde sürüyor |
+| P7 | Kuru asfalt ıslakmış gibi yansıtmasın; yansıma yalnız ıslakta olsun. | 1 Kas: "kuru asfalttan yansıyor sanki ıslak gibi" | Tamam (0.11.0) |
+| P8 | Pistin genel görünümü 0.10'daki kadar gerçekçi kalsın; o günden sonra kötüleştiği söylendi. | 1 Kas: "pistin gerçeklik hissi bugüne başlamadan önce daha iyiydi" | Tamam (0.15.0'da 0.10 görünümüne dönüldü) |
+
+## 3. Hava
+
+| No | İster | Kaynak | Durum |
+|---|---|---|---|
+| W1 | Rastgele hava olsun; hem görünüşü hem fiziği etkilesin (ıslakta tutuş azalsın). | 1 Kas, soru cevabı: "Görsel + fizik" | Tamam (0.12.0) |
+| W2 | Varsayılan hava açık olsun, kullanıcı menüden seçebilsin. | 1 Kas: "varsayılan olarak açık hava olsun, kullanıcı menülerle havayı ayarlayabilsin" | Tamam (0.15.0) |
+
+## 4. Arabaların görünüşü
+
+| No | İster | Kaynak | Durum |
+|---|---|---|---|
+| G1 | Arabalar kutu gibi değil, gerçek arabalar gibi görünsün. | 1 Kas: "otomoiller kutu gibi, gerçeğine benzemiyor" | Tamam: 0.16'dan beri gerçek, CC BY lisanslı modeller; 0.20'de malzemeler düzeltildi |
+| G2 | Ana araba Testarossa'ya benzesin; kaybolan Testarossa geri gelsin. | 23 Eki: "araba da testarossa'ya pek benzemiyor"; 1 Kas: "Testarossa kaybolmuş???" | Tamam (0.17.0) |
+| G3 | Birbirinin aynı görünen arabalar ayrışsın. | 1 Kas: "bazı arabalar birbirinin aynı" | Tamam (0.17.0) |
+| G4 | Araç içi gerçek gibi olsun: göstergeler yarım görünmesin, direksiyon, tavan, konsol, gövde gerçekçi olsun. | 28 Eki: "göstergeler yarım gözüküyor"; 29 Eki; 1 Kas: "direksiyon arabanın içeriden tavanı falan.. konsol gövde" | Kısmen: gerçek kabinler (0.16, 0.17, 0.20), göstergeler tam (0.8.1). Eksikler bölüm 10'da |
+| G5 | Kokpitte sol ön direk ince olsun. | 22 Eki: "kokpitte sol A-direği çok kalın ve baskın" | Tamam (0.4.0). 458'de aynı sorun yeniden var, bölüm 10 |
+| G6 | McLaren'in kokpitinden yol görünsün. | 2 Kas: "mclaren ile kokpitte kullanırken yolu göremiyoruz" | Tamam (0.25.0) |
+
+## 5. Araba seçimi ve yeni arabalar
+
+| No | İster | Kaynak | Durum |
+|---|---|---|---|
+| A1 | Farklı araba seçenekleri olsun. Özellikle Türkiye'de kullanılan standart arabalar, gerçekçi modelleri, gerçek sesleri ve fizikleriyle. | 28 Eki: "mesela renault clio, eski fiat bravo, seat leon cupra"; 29 Eki: "türkiyede kullanılan standart arabaların" | Kısmen: Renault 12, Tofaş (VAZ), E-Class (0.10), Bravo ve Leon (0.26). **Renault Clio yok** |
+| A2 | Ferrari 458, Fiat Bravo 2001 HGT, Fiat Bravo 2001 1.6, SEAT Leon Cupra 2018 240HP 2.0 TSI ve Subaru BRZ eklensin; en gerçekçi sürüş fiziği, görünüş ve sesle. | 2 Kas | Tamam (0.26.0). Varsayım ve eksikler aşağıda |
+| A3 | Leon Cupra: "2018, 240 HP, 2.0 TSI". 2018 Cupra resmen 300 PS'ti; aynı yılların 245 PS (241 HP) 2.0 TSI ayarı kullanıldı. | 2 Kas | Karar bekliyor: 300 PS'lik gerçek Cupra değerleri kodda hazır |
+| A4 | Arabayı görerek seçmek için bir menü; arabalar 360 derece dönsün. | 2 Kas: "araba seçtiğimiz bir menü olsa ve arabalar 360 derece rotate olsa" | Tamam (0.25.0 showroom) |
+| A5 | Seçim ekranında renk seçilebilsin: varsayılan orijinal fabrika rengi, ayrıca kullanıcının kendi rengi. | 2 Kas: "varsayılan renkleri olsun (orjinal renkler) + kullanıcı custom seçebilsin" | Tamam (0.25.0; yeni beş araba 0.26.0) |
+| A6 | Bravo (2000 kasası) ve Leon (2018 ve öncesi kasası) için model her yerde detaylıca aransın. Bulunamazsa oyunun kendi gövdesi kullanılsın. | 2 Kas, soru cevapları | Tamam: lisanslı model yok; oyunun kendi gövdeleri gerçek ölçülerden yapıldı (0.26.0) |
+| A7 | 458 için iç mekânlı RainerS modeli (BlendSwap #5151) indirilip Blender'la oyuna hazırlansın. | 2 Kas, soru cevabı: "sen indirip kurar mısın?" | Açık: Blender kuruldu; BlendSwap giriş istiyor, sahibin dosyası ya da anahtarı bekleniyor |
+| A8 | Daha iyi modeller sahibin Sketchfab hesabıyla indirilebilir. | 2 Kas: "sana her türlü yetkiyi veriyorum" | Karar: yalnız doğrulanmış CC0/CC BY modeller, Sketchfab'ın resmi indirme API'siyle |
+
+## 6. Fizik
+
+| No | İster | Kaynak | Durum |
+|---|---|---|---|
+| F1 | Mümkün olan en gerçekçi sürüş fiziği. | 28 Eki, 2 Kas | Sürekli hedef: Magic Formula lastikler, gerçek kütle dağılımı, ABS/LSD, aerodinamik (0.18-0.24); her araba yayımlanmış ölçülere karşı testli |
+| F2 | Araba çok kolay kaza yapmasın, ama hasar görsün. BeamNG gibi gerçekçi çarpışma ve parçalanma. | 28 Eki: "beamng gibi gerçekçi crash parçalanma"; 29 Eki: "zarar görse ama çok kolay crash olmasa" | Kısmen: çarpmalar ezik ve hasar göstergesiyle (0.10.0). BeamNG düzeyinde yumuşak gövde yok; BeamNG kodu açık değil |
+| F3 | Klavyeyle direksiyon biraz daha yavaş dönsün. | 1 Kas | Tamam (0.12.0) |
+| F4 | İkinci girişte araba olduğu yerde patinaj yapıp kımıldamasın. | 28 Eki | Tamam (0.8.1) |
+| F5 | Varsayılan birim metrik (km/h). | 1 Kas: "varsayılan ölçü birmi metrik olsun kmh" | Tamam (0.14.0) |
+
+## 7. Ses ve müzik
+
+| No | İster | Kaynak | Durum |
+|---|---|---|---|
+| S1 | Motor sesleri gerçek gibi olsun. | 23 Eki: "ses çok daha iyi ama hala gerçekten uzak"; 28 Eki | Sürekli hedef: her araba kayıtlardan çalıyor (0.4, 0.19-0.26) |
+| S2 | Instant replay müziği orijinal oyundaki gibi olsun (https://youtu.be/zY8_p5R_tHs). Telif sorunu olmadan, aynı seslerle, olabildiğince benzer. | 22-29 Eki; 1 Kas: "o çok önemli", "telife takılmadan mümkün olduğunca çok benzeyen, aynı sesler ile yapalım" | Kısmen: oyuna özel "Grudge Replay" (0.18.0). Sahip kendi dosyasını pencereye sürükleyebiliyor (0.15). **Sahibin onayı yok** |
+| S3 | Orijinal oyunun müzikleri olduğu gibi kullanılabilir mi? | 22 Eki | Karar: hayır; telifli, oyunla dağıtılmaz |
+| S4 | Pistin ve müziğin hissi orijinal videodaki gibi olsun. | 23 Eki: "müzikler, pist hissiyat aynı olsun istiyorum" | Kısmen (P1 ve S2'ye bağlı) |
+
+## 8. Kullanım ve arayüz
+
+| No | İster | Kaynak | Durum |
+|---|---|---|---|
+| U1 | Esc ile menüye dönülebilsin, oyundan çıkılabilsin; arayüz kolay olsun. | 28 Eki: "oyundan çıkamadım" | Tamam (0.8.1) |
+| U2 | Oyunun nasıl başlatılacağı anlaşılır olsun. | 22 Eki: "oyunu nasıl başlatacağımı bulamadım" | Kısmen: açılış ekranında tuş ipuçları var; sahiple doğrulanmadı |
+| U3 | Uygulama hızlı açılsın. | 22 Eki: "uygulama çok geç açılıyor" | Açık: ölçülmedi |
+| U4 | Uygulama bir bilgisayarda yalnız bir kez açılabilsin. | 22 Eki | Tamam |
+| U5 | Oyun çökmesin, bilgisayarı kilitlemesin. | 28 Eki: "oyun biraz oynayınca kilitleniyor, bilgisayarı da kilitliyor" | Tamam (0.8.0: kare sınırı, GPU zaman aşımlarına karşı) |
+
+## 9. Güncelleme ve yayın
+
+| No | İster | Kaynak | Durum |
+|---|---|---|---|
+| R1 | Oyun açılınca kendini güncellesin; her açılışta en yeni sürüm gelsin. | 26 Eki: "açtığımda en güceli gelsin her zaman" | Tamam (0.6.0) |
+| R2 | Otomatik güncelleme çoğu zaman başarısız oluyor. | 3 Kas | Tamam (0.26.0): paketler 200 MB'yi geçince 60 saniyelik süre doluyordu. 0.17-0.25 kurulu kopyalar 0.26.0'ı bir kez elle kurmalı |
+| R3 | Her iş bitince yayınlansın (GitHub Release). | 29 Eki: "çalışman bitince her zaman publish de yap" | Kural |
+| R4 | winget ve benzeri mağaza yayınları 1.0 kararlı sürüme kadar beklesin. | 22 Eki | Ertelendi |
+
+## 10. Açık işler (0.26.0 sonrası)
+
+1. **458:** sol ön direk sürücü koltuğundan kalın görünüyor; düzeltmesi modelin direğini yeniden biçimlendirmeyi gerektiriyor. İç mekânlı RainerS modeli A7'yi bekliyor.
+2. **BRZ:** Toyota 86 modeliyle çiziliyor. Burnu 86'nın, kabini Mercedes'ten; çamurluk içi kaplaması ve arka plaka yok.
+3. **Bravo ve Leon:** gövdeler oyunun kendi gövdesi. Bravo'nun iç mekânı genel bir 90'lar düzeni; Leon'un arkası gerçeğinden iri.
+4. **Eski bankaların sesleri:** V8, Testarossa, 205, Golf R32 ve V6 bankaları hâlâ kökeni belirsiz bir Internet Archive derlemesinden. Temiz kayıt adayları bulundu, değiştirilecek.
+5. **Renault Clio** (A1) eklenmedi.
+6. **BeamNG düzeyinde çarpışma** (F2) yok.
+7. **Instant replay müziği** (S2) için sahibin değerlendirmesi bekleniyor.
+8. **Leon Cupra gücü** (A3): 245 PS mi, 300 PS mi?
+9. **Bazı göstergeler:** estate'in hız ölçeği, E-Class'ın devir saati ve Delta'nın vites göstergesi direksiyonun arkasında kısmen kalıyor.
+10. **Bilinçli tasarım tercihleri, sahibe sorulacak:** Testarossa oyunun orijinalindeki gibi 4 vitesli (gerçeği 5); V8'in oyun içi adı "V8 GTB '12", çizilen araba ise 2015 McLaren 570S.
+11. **Unreal sürümü:** 458 ve BRZ orada geçici gövdeli; bu makinede derlenmedi.
+12. **Açılış süresi** (U3) ölçülmedi.
+
+## 11. Çalışma kuralları
+
+1. **Gizli ve sessiz:** geliştirirken oyun görünmez ve sessiz çalışır (`--audio-driver Dummy --position -32000,-32000 -- --invisible`). Sahip açıkça istemedikçe görünür ya da sesli koşu yok. (1 Kas)
+2. **Yetki yalnız bu repoda:** commit, push ve GitHub Release yetkisi yalnız bu repo içindir. Proje kişiseldir; bilgileri bu repoda ve sahibin yerel notlarında durur. (22 Eki, 30 Eki, 1 Kas)
+3. **Her iş yayınlanır:** iş bitince sürüm çıkar, sahip evde ya da başka bilgisayarda dener. (29 Eki)
+4. **Lisans:** modeller ve kayıtlar yalnız CC0 ya da CC BY olur ve kaynağı güvenilir olur; oyundan, moddan, ücretli mağazadan alınmış ya da derleme içerik kullanılmaz. Her kaynak [THIRD_PARTY.md](../THIRD_PARTY.md)'de anılır.
+5. **İstenen yapılır:** sahibin her söylediği yeniden okunur ve isteklerine odaklanılır. Bu dosya bunun için var. (1 Kas: "lütfen söylediğim herşeye yeniden bak ve benim istediklerimi odaklan")
+6. **Soru en aza iner:** sahip yokken karar verilir ve gerekçesi yazılır; yalnız gerçekten sahibin vereceği kararlar sorulur. (23 Eki: "bana sormadan, uygun bulduğun en doğru sıra ile bütün herşeyi yap")
+7. **Araç serbest:** gerekli araç (video çözümleme, Blender, ffmpeg) kurulabilir. (1 Kas: "istediğin tool'u indirip yükleyebilirsin")
+8. **Cevaplar:** Türkçe, kısa, madde madde. (22 Eki)
