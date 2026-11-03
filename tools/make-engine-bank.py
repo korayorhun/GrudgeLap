@@ -18,7 +18,12 @@ than a bin, may hold none, and the estimate sticks where it was. A slow idle can
 follow instead (the optional last field, 2 for the second): its band is that many times wider in hertz, and the
 estimate is divided back to the firing frequency. Without it a diesel four's idle at about 980 rpm was labelled 28.63 Hz
 on 150 of its 352 pulses, 7 to 12 % under the 32.6 Hz the rest of the segment and its spectrum's lines show (diesel6
-review), and those grains were laid that much too slow.
+review), and those grains were laid that much too slow. The field may also be a fraction (0.5 follows the half order):
+heard from inside a McLaren 540C the half order is the strongest line and the tracker on the firing frequency itself lost
+the pull between the lines (banks2; that recording was passed over, so no shipped bank uses a fraction). A quiet idle
+whose firing line is weak beside its harmonics is tracked on its second harmonic over a band wider than the frame's bin
+(banks2: the Volvo's and the Coupé's idles over 25-33 and 27-33 Hz; over 24-31 the tracker stuck at its seed, every
+label 27.0 Hz, and the voice took the idle's top for 810 rpm, under the governed idle).
 """
 import json
 import site
@@ -161,7 +166,7 @@ def main():
     for spec in sys.argv[3:]:
         fields = spec.split("@")
         path, start, end, f0, lo, hi = fields[:6]
-        harmonic = int(fields[6]) if len(fields) > 6 else 1
+        harmonic = float(fields[6]) if len(fields) > 6 else 1.0
         # The tracker's frames are 4096 samples long and centred on their positions: tracked over the segment alone, its
         # first and last 46 ms held the frequency of the frames at either end, and on a fast run-up (the V6's blips of
         # the throttle, which gain 1000 rpm in a tenth of a second) the last pulses were laid at revs long passed.

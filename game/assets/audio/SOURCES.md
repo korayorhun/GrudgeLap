@@ -9,23 +9,28 @@ played by Godot's `SampledEngine` and by the Unreal version through the simulati
 of a bank per firing period of the simulated revs, taken from the pulses recorded at the nearest revs, and
 overlap-adds them; nothing loops and nothing is pitch-shifted.
 
-| Bank | Source | Segments (start@end s @ firing Hz at start @ search band Hz) |
+Since banks2 (3 November 2026, 0.27.0) every bank of these five cars is cut from a recording whose maker describes
+the car, the engine and the recording: seven Wikimedia Commons uploads of YouTube videos' soundtracks and two Freesound
+recordings. The Internet Archive item `car-engines` the first banks were cut from (below, on its provenance) is used by
+no bank of the game any more.
+
+| Bank | Source | Segments (start@end s @ firing Hz at start @ search band Hz [@ harmonic followed]) |
 |---|---|---|
 | `v8/engine_idle` | Freesound #585215 "Car Engine: Maserati GranTurismo Switch to Sport Mode and Launch" by myeclecticself, https://freesound.org/s/585215/ (CC0 1.0) | 0.5@4.8@56@40@80 |
-| `v8/engine_drive` | `3 Ferrari 458.mp3` from the Internet Archive item "Car Engine Sounds" (below) | 0.3@3.95@164@120@700, 4.85@5.6@400@330@560, 5.95@6.95@460@330@560, 7.3@9.5@370@300@500 |
+| `v8/engine_drive` | Wikimedia Commons "McLaren 570S with Fi Exhaust system - engine and exhaust sound (YouTube dBRIVYIzRm4).opus", the audio track of FiExhaust's video "McLaren 570S w/ Full Catless Fi EXHAUST X One Belief X BBT Tuning" (a 570S's M838TE 3.8 twin-turbocharged V8, the engine of the car the game's V8 is drawn as, on a catless Fi Exhaust system and a BBT tune, revved and driven at a tuning shop), https://commons.wikimedia.org/wiki/File:McLaren_570S_with_Fi_Exhaust_system_-_engine_and_exhaust_sound_(YouTube_dBRIVYIzRm4).opus (CC BY 3.0, credit FiExhaust), its two full-throttle pulls levelled over half-second windows; and for the top, past the 570S's 8,500 rpm limiter, Wikimedia Commons "Ferrari 458 Speciale - engine and exhaust sound (YouTube nltPXKAN6BI).opus", the audio track of TvdL Films' video "Ferrari 458 Speciale with F1 Exhaust FLAMES & Revs" (a 458 Speciale's F136 FL 4.5 flat-plane V8 revved standing to its 9,000 rpm limiter at Top Marques Monaco 2017), https://commons.wikimedia.org/wiki/File:Ferrari_458_Speciale_-_engine_and_exhaust_sound_(YouTube_nltPXKAN6BI).opus (CC BY 3.0, credit TvdL Films) | the 570S's first pull, 64.0-68.4 s, in 9 half-second stretches (3,200-8,560 rpm), its second, 81.8-83.2 s, in 5 stretches of 0.3 s (3,910-8,150), and the Speciale held against its limiter, 17.75-20.25 s, in 10 quarter-second stretches (7,500-9,210) |
+| `v8/engine_overrun` | Wikimedia Commons "McLaren 540C with Fi Exhaust system - engine and exhaust sound (YouTube CGrl3VILOGc).opus", the audio track of FiExhaust's video "McLaren 540C Catless DownPipes Fi EXHAUST sound X StanceTech" (a 540C, the same M838TE in its 540 PS tune, on Fi Exhaust catless downpipes, revved standing), https://commons.wikimedia.org/wiki/File:McLaren_540C_with_Fi_Exhaust_system_-_engine_and_exhaust_sound_(YouTube_CGrl3VILOGc).opus (CC BY 3.0, credit FiExhaust) | the revs falling after two blips of the throttle, 43.3-44.0 s (6,710 to 4,060 rpm) and 47.3-48.0 s (6,430 to 3,860), each in two stretches |
 | `flat12/engine_idle` | Freesound #112075 "Lambo idle and rev.mp3" by cheesepuff, https://freesound.org/s/112075/ (CC0 1.0) | 4.0@16.3@121@98@128 |
-| `flat12/engine_drive` | `15 Lamborghini Countach.mp3` from the Internet Archive item "Car Engine Sounds" (below) | 0.08@2.75@262@220@800, 3.3@5.6@556@450@820 |
-| `v8/engine_overrun` | `3 Ferrari 458.mp3` (the stretches with the throttle shut and the revs falling) | 15.0@16.3@436@380@480, 19.0@20.0@377@300@420 |
-| `flat12/engine_overrun` | `15 Lamborghini Countach.mp3` (the throttle shut at the end of the run) | 8.65@9.65@290@200@320 |
-| `hothatch/engine_idle` | `honda civic type r.mp3` from the Internet Archive item "Car Engine Sounds" (below) | 3.05@3.45@38@30@46, 10.3@11.9@35@27@42 |
-| `hothatch/engine_drive` | `honda civic type r.mp3` | 14.2@16.3@60@45@235, 17.4@19.6@150@125@240 |
-| `hothatch/engine_overrun` | `honda civic type r.mp3` (the throttle shut, revs falling) | 0.85@2.2@109@45@130, 4.5@6.2@110@40@125, 8.5@9.75@91@35@100 |
-| `turbohatch/engine_idle` | `25 Nissan Pulsar.mp3` from the Internet Archive item "Car Engine Sounds" (below) | 0.55@2.4@33@22@48 |
-| `turbohatch/engine_drive` | `25 Nissan Pulsar.mp3` | 6.0@8.7@94@80@175, 21.3@22.2@109@90@210, 23.1@24.5@129@90@210, 25.0@27.9@127@110@200 |
-| `turbohatch/engine_overrun` | `25 Nissan Pulsar.mp3` (the throttle shut, revs falling) | 13.0@15.3@130@60@140, 16.65@19.2@92@28@100 |
-| `v6/engine_idle` | `Jaguar f-type s.mp3` from the Internet Archive item "Car Engine Sounds" (below) | 13.0@14.4@32@25@40, 30.5@31.05@32@25@40 |
-| `v6/engine_drive` | `Jaguar f-type s.mp3` (the blips of the throttle, rising, each up to where its recording overloads) | 14.80@15.1@60@45@110, 4.46@4.8@60@45@110, 1.12@1.85@44@36@130, 18.15@18.70@82@65@200, 20.53@20.875@86@60@200, 22.73@23.005@106@90@200, 25.40@25.97@72@55@170, 26.57@26.815@124@60@200 |
-| `v6/engine_overrun` | `Jaguar f-type s.mp3` (the revs falling from the limiter after each blip, the throttle shut) | 21.55@22.66@180@95@210, 23.62@25.32@181@65@210, 27.40@29.9@180@44@210 |
+| `flat12/engine_drive` | Wikimedia Commons "Ferrari F12 - engine and exhaust sound (YouTube JNvonF5LGYQ).opus", the audio track of Supercars1989's video "Ferrari F12 TDF LOVELY SOUND - Start up, accelerations and hard revs!" (an F12tdf's F140 FC 6.3 V12 accelerating hard on the road, filmed from outside), https://commons.wikimedia.org/wiki/File:Ferrari_F12_-_engine_and_exhaust_sound_(YouTube_JNvonF5LGYQ).opus (CC BY 3.0, credit Supercars1989), the pull levelled over half-second windows | 100.5-104.0 s in 7 half-second stretches, 2,350-5,690 rpm |
+| `flat12/engine_overrun` | the same track, the throttle lifted at the top of that pull | 104.25-105.25 s in four quarter-second stretches, 5,800 to 4,540 rpm |
+| `hothatch/engine_idle` | Freesound #639227 "Engine Start Idle Rev Shut Off (From Outside Hood Closed) on 1990 Volvo 240 DL" by j_soundeffects, https://freesound.org/s/639227/ (CC BY 4.0): a 240's B230F 2.3 eight-valve four idling, heard outside the car with the bonnet closed; its floor taken out (`clean-recording.py`, below) | 4.0-13.0 s in two stretches, the second harmonic followed over 25-33 Hz (750-990 rpm; below) |
+| `hothatch/engine_drive` | Wikimedia Commons "Alfa Romeo Spider - engine and exhaust sound (YouTube ZQQRnxRINac).opus", the audio track of Luciano's Classics' video "1982 Alfa Romeo Spider 2000 Exhaust Sound" (a Spider 2000's 1,962 cc twin-cam eight-valve four revved standing, from behind the exhaust), https://commons.wikimedia.org/wiki/File:Alfa_Romeo_Spider_-_engine_and_exhaust_sound_(YouTube_ZQQRnxRINac).opus (CC BY 3.0 as Commons tags it, CC BY 4.0 on YouTube; credit Luciano's Classics; below), two blips of the throttle levelled over quarter-second windows | the blips from 15.6 s (2,620-4,760 rpm) and 20.35 s (2,920-6,780) in stretches of 0.15 s |
+| `hothatch/engine_overrun` | the same track, the revs falling after the two blips | 16.35-17.85 s (3,990 to 2,030 rpm) in quarter-second stretches, 21.4-24.9 s (5,970 to 1,500) in half-second ones |
+| `turbohatch/engine_idle` | Wikimedia Commons "Fiat Coupé Turbo - engine and exhaust sound (YouTube S1IzD5dTWng).opus", the audio track of Witu Tech (SimsonSBL)'s video "Fiat Coupe Turbo 2.0 16vt 0-200km/h Blowoff! Acceleration!" (a Coupé 2.0 16v Turbo, the Delta Integrale's engine family: Fiat's two-litre sixteen-valve turbo four), https://commons.wikimedia.org/wiki/File:Fiat_Coupé_Turbo_-_engine_and_exhaust_sound_(YouTube_S1IzD5dTWng).opus (CC BY 3.0, credit Witu Tech (SimsonSBL)), its floor taken out | 17.0-21.5 s in two stretches, the second harmonic followed over 27-33 Hz (850-990 rpm) |
+| `turbohatch/engine_drive` | Wikimedia Commons "Audi S1 - engine and exhaust sound (YouTube 2axudw2mPHk).opus", the audio track of Calvin MotorSport's video "Audi S1 Acceleration 0 to 240 Km/h" (an S1's 2.0 TFSI turbocharged four, 231 PS, through its gears), https://commons.wikimedia.org/wiki/File:Audi_S1_-_engine_and_exhaust_sound_(YouTube_2axudw2mPHk).opus (CC BY 3.0, credit Calvin MotorSport); tracked on the fourth crank order, twice the firing, the strongest line of the recording (the harmonic field at 2) | first gear 3.5-6.8 s (4,390-5,700 rpm), third 14.0-19.4 (5,480-6,660) and fourth 20.0-28.0 (5,080-6,800), in half-second stretches |
+| `turbohatch/engine_overrun` | the Coupé's track again, the throttle lifted at the end of its run, its floor taken out and low-passed at 4 kHz | 104.3-107.4 s in half-second stretches, 6,500 to 1,840 rpm |
+| `v6/engine_idle` | Freesound #754775 "Sports Car Accelerating/Speeding Up Fast - Exhaust" by EvanBoyerman, https://freesound.org/s/754775/ (CC BY 4.0): a 3.2 V6 VTEC (a Honda J32, in an Acura) recorded with a lavalier microphone just above the exhaust, idling after the drive; its floor taken out | 83.2-86.2 s in one-second stretches, the second harmonic followed (770-900 rpm) |
+| `v6/engine_drive` | the same recording, driving fast through two gears, levelled over half-second windows (0.6-11.5 s) | 2.3-8.8 s (1,570-4,130 rpm) and 9.3-11.3 s (4,370-5,160) in half-second stretches |
+| `v6/engine_overrun` | the same recording, the long coast after the drive, the throttle shut | 58.0-80.5 s in one-second stretches, 2,150 to 870 rpm |
 
 The overrun banks play in place of the run-up as the throttle closes (`GranularEngine`): off the throttle a real
 engine stops firing and what is left is the exhaust's rasp, which no filter on the run-up gave.
@@ -36,10 +41,205 @@ one loudness (`GranularEngine`, BS.1770); since soundfix it also levels every gr
 the run-up's trend, against the drift of level within a recording (`GrainBank.LevelGains`), and since banks the idle's
 too when the engine pulls, so that from the idle's revs to the run-up's the voice follows one trend. Nothing is written back.
 
+Rebuild a bank (the cylinder count turns firing frequency into rpm: rpm = Hz x 120 / cylinders). The Wikimedia Commons
+files are saved by their videos' YouTube ids (`dBRIVYIzRm4.opus` from
+https://upload.wikimedia.org/wikipedia/commons/1/1d/McLaren_570S_with_Fi_Exhaust_system_-_engine_and_exhaust_sound_%28YouTube_dBRIVYIzRm4%29.opus,
+`CGrl3VILOGc.opus` from
+https://upload.wikimedia.org/wikipedia/commons/5/5e/McLaren_540C_with_Fi_Exhaust_system_-_engine_and_exhaust_sound_%28YouTube_CGrl3VILOGc%29.opus,
+`nltPXKAN6BI.opus` from
+https://upload.wikimedia.org/wikipedia/commons/b/bd/Ferrari_458_Speciale_-_engine_and_exhaust_sound_%28YouTube_nltPXKAN6BI%29.opus,
+`JNvonF5LGYQ.opus` from
+https://upload.wikimedia.org/wikipedia/commons/a/ab/Ferrari_F12_-_engine_and_exhaust_sound_%28YouTube_JNvonF5LGYQ%29.opus,
+`ZQQRnxRINac.opus` from
+https://upload.wikimedia.org/wikipedia/commons/5/5e/Alfa_Romeo_Spider_-_engine_and_exhaust_sound_%28YouTube_ZQQRnxRINac%29.opus,
+`2axudw2mPHk.opus` from
+https://upload.wikimedia.org/wikipedia/commons/6/6e/Audi_S1_-_engine_and_exhaust_sound_%28YouTube_2axudw2mPHk%29.opus,
+`S1IzD5dTWng.opus` from
+https://upload.wikimedia.org/wikipedia/commons/a/ae/Fiat_Coup%C3%A9_Turbo_-_engine_and_exhaust_sound_%28YouTube_S1IzD5dTWng%29.opus),
+the Freesound previews by their numbers (`754775.mp3` from https://cdn.freesound.org/previews/754/754775_6823432-hq.mp3,
+`639227.mp3` from https://cdn.freesound.org/previews/639/639227_14030247-hq.mp3); the preparation first:
+
+    python tools/level-recording.py dBRIVYIzRm4.opus dBRIVYIzRm4-levelled.wav 63.5 69.5 0.5
+    python tools/level-recording.py dBRIVYIzRm4.opus dBRIVYIzRm4-levelled-b.wav 81.5 84.0 0.5
+    python tools/level-recording.py JNvonF5LGYQ.opus JNvonF5LGYQ-levelled.wav 100.3 104.2 0.5
+    python tools/level-recording.py ZQQRnxRINac.opus ZQQRnxRINac-levelled-1.wav 15.2 16.25 0.25
+    python tools/level-recording.py ZQQRnxRINac-levelled-1.wav ZQQRnxRINac-levelled-2.wav 19.8 21.4 0.25
+    python tools/level-recording.py ZQQRnxRINac-levelled-2.wav ZQQRnxRINac-levelled.wav 27.8 29.4 0.5
+    python tools/clean-recording.py S1IzD5dTWng.opus S1IzD5dTWng-clean.wav
+    python tools/clean-recording.py S1IzD5dTWng.opus S1IzD5dTWng-clean4k.wav 700 4000
+    python tools/clean-recording.py 754775.mp3 754775-clean.wav
+    python tools/level-recording.py 754775.mp3 754775-levelled.wav 0.6 11.5 0.5
+    python tools/clean-recording.py 639227.mp3 639227-clean.wav
+    python tools/make-engine-bank.py game/assets/audio/hothatch/engine_idle 4 "639227-clean.wav@4.00@8.50@28.8@25@33@2" "639227-clean.wav@8.50@13.00@28.8@25@33@2"
+    python tools/make-engine-bank.py game/assets/audio/hothatch/engine_drive 4 "ZQQRnxRINac-levelled.wav@15.60@15.75@87.6@82.4@125.0" "ZQQRnxRINac-levelled.wav@15.75@15.90@113.6@106.8@159.3" "ZQQRnxRINac-levelled.wav@15.90@16.05@144.8@136.1@174.5" "ZQQRnxRINac-levelled.wav@16.05@16.20@156.5@139.0@172.2" "ZQQRnxRINac-levelled.wav@20.35@20.50@98.4@92.5@138.2" "ZQQRnxRINac-levelled.wav@20.50@20.65@125.7@118.1@172.0" "ZQQRnxRINac-levelled.wav@20.65@20.80@156.4@147.0@198.3" "ZQQRnxRINac-levelled.wav@20.80@20.95@180.2@169.4@224.1" "ZQQRnxRINac-levelled.wav@20.95@21.10@203.7@191.5@245.3" "ZQQRnxRINac-levelled.wav@21.10@21.25@223.0@202.3@248.6" "ZQQRnxRINac-levelled.wav@21.25@21.30@215.3@202.3@236.8" "ZQQRnxRINac-levelled.wav@27.90@28.40@123.0@110.9@148.8" "ZQQRnxRINac-levelled.wav@28.40@28.90@135.2@127.1@161.2" "ZQQRnxRINac-levelled.wav@28.90@29.30@146.3@136.9@163.7"
+    python tools/make-engine-bank.py game/assets/audio/hothatch/engine_overrun 4 "ZQQRnxRINac.opus@16.35@16.60@128@100@140" "ZQQRnxRINac.opus@16.60@16.85@113@90@125" "ZQQRnxRINac.opus@16.85@17.10@100@80@112" "ZQQRnxRINac.opus@17.10@17.35@90@70@100" "ZQQRnxRINac.opus@17.35@17.60@78@62@88" "ZQQRnxRINac.opus@17.60@17.85@70@55@78" "ZQQRnxRINac.opus@21.40@21.90@198.2@145.6@218.0" "ZQQRnxRINac.opus@21.90@22.40@155.2@116.5@174.4" "ZQQRnxRINac.opus@22.40@22.90@123.9@93.9@138.0" "ZQQRnxRINac.opus@22.90@23.40@102.7@74.7@114.7" "ZQQRnxRINac.opus@23.40@23.90@80.2@60.9@88.2" "ZQQRnxRINac.opus@23.90@24.40@66.1@49.6@74.6" "ZQQRnxRINac.opus@24.40@24.90@55.2@46.5@122.4"
+    python tools/make-engine-bank.py game/assets/audio/turbohatch/engine_idle 4 "S1IzD5dTWng-clean.wav@17.00@19.25@29.5@27@33@2" "S1IzD5dTWng-clean.wav@19.25@21.50@29.5@27@33@2"
+    python tools/make-engine-bank.py game/assets/audio/turbohatch/engine_drive 4 "2axudw2mPHk.opus@3.50@4.00@148.9@137.0@194.1@2.0" "2axudw2mPHk.opus@4.00@4.50@173.8@138.7@205.7@2.0" "2axudw2mPHk.opus@4.50@5.00@157.6@140.6@189.2@2.0" "2axudw2mPHk.opus@5.00@5.50@168.4@148.8@203.6@2.0" "2axudw2mPHk.opus@5.50@6.00@178.5@146.2@206.2@2.0" "2axudw2mPHk.opus@6.00@6.50@173.9@163.5@208.5@2.0" "2axudw2mPHk.opus@6.50@6.80@189.6@140.5@208.9@2.0" "2axudw2mPHk.opus@14.00@14.50@183.4@172.4@220.7@2.0" "2axudw2mPHk.opus@14.50@15.00@200.6@188.6@238.6@2.0" "2axudw2mPHk.opus@15.00@15.50@216.9@192.8@242.6@2.0" "2axudw2mPHk.opus@15.50@16.00@205.1@159.8@225.6@2.0" "2axudw2mPHk.opus@16.00@16.50@170.0@159.8@196.1@2.0" "2axudw2mPHk.opus@16.50@17.00@178.3@167.6@206.7@2.0" "2axudw2mPHk.opus@17.00@17.50@187.9@176.6@216.2@2.0" "2axudw2mPHk.opus@17.50@18.00@196.6@184.8@225.5@2.0" "2axudw2mPHk.opus@18.00@18.50@205.0@192.7@233.9@2.0" "2axudw2mPHk.opus@18.50@19.00@212.7@199.9@242.8@2.0" "2axudw2mPHk.opus@19.00@19.40@220.7@186.9@244.1@2.0" "2axudw2mPHk.opus@20.00@20.50@169.8@159.4@190.9@2.0" "2axudw2mPHk.opus@20.50@21.00@173.6@163.2@196.2@2.0" "2axudw2mPHk.opus@21.00@21.50@178.3@167.6@200.9@2.0" "2axudw2mPHk.opus@21.50@22.00@182.6@171.6@205.8@2.0" "2axudw2mPHk.opus@22.00@22.50@187.1@175.9@210.3@2.0" "2axudw2mPHk.opus@22.50@23.00@191.2@179.7@214.7@2.0" "2axudw2mPHk.opus@23.00@23.50@195.0@183.3@219.3@2.0" "2axudw2mPHk.opus@23.50@24.00@199.4@187.4@223.5@2.0" "2axudw2mPHk.opus@24.00@24.50@203.2@190.8@227.1@2.0" "2axudw2mPHk.opus@24.50@25.00@206.4@194.0@230.7@2.0" "2axudw2mPHk.opus@25.00@25.50@209.7@197.1@234.3@2.0" "2axudw2mPHk.opus@25.50@26.00@213.0@200.1@237.7@2.0" "2axudw2mPHk.opus@26.00@26.50@216.1@203.1@240.8@2.0" "2axudw2mPHk.opus@26.50@27.00@218.9@205.7@244.2@2.0" "2axudw2mPHk.opus@27.00@27.50@221.9@208.6@247.4@2.0" "2axudw2mPHk.opus@27.50@28.00@224.9@210.9@249.1@2.0"
+    python tools/make-engine-bank.py game/assets/audio/turbohatch/engine_overrun 4 "S1IzD5dTWng-clean4k.wav@104.30@104.80@205.7@167.5@231.4" "S1IzD5dTWng-clean4k.wav@104.80@105.30@210.3@169.6@238.4" "S1IzD5dTWng-clean4k.wav@105.30@105.80@180.4@132.3@206.9" "S1IzD5dTWng-clean4k.wav@105.80@106.30@140.8@103.3@155.1" "S1IzD5dTWng-clean4k.wav@106.30@106.80@110.6@77.5@121.7" "S1IzD5dTWng-clean4k.wav@106.80@107.30@82.5@57.1@90.7" "S1IzD5dTWng-clean4k.wav@107.30@107.40@62.6@58.9@69.3"
+    python tools/make-engine-bank.py game/assets/audio/v6/engine_idle 6 "754775-clean.wav@83.20@84.20@44.1@39.7@49.6@2.0" "754775-clean.wav@84.20@85.20@42.9@37.9@48.7@2.0" "754775-clean.wav@85.20@86.20@41.6@37.7@53.9@2.0"
+    python tools/make-engine-bank.py game/assets/audio/v6/engine_drive 6 "754775-levelled.wav@2.30@2.80@78.6@73.7@98.7" "754775-levelled.wav@2.80@3.30@89.7@83.5@100.6" "754775-levelled.wav@3.30@3.80@91.5@86.0@110.3" "754775-levelled.wav@3.80@4.30@98.5@91.6@109.7" "754775-levelled.wav@4.30@4.80@99.7@93.7@121.7" "754775-levelled.wav@4.80@5.30@109.5@102.5@124.5" "754775-levelled.wav@5.30@5.80@113.2@106.2@129.6" "754775-levelled.wav@5.80@6.30@116.9@109.9@138.1" "754775-levelled.wav@6.30@6.80@125.5@117.7@146.1" "754775-levelled.wav@6.80@7.30@132.3@124.4@189.3" "754775-levelled.wav@7.30@7.80@172.1@158.0@202.6" "754775-levelled.wav@7.80@8.30@184.2@172.2@214.5" "754775-levelled.wav@8.30@8.80@195.0@183.2@225.0" "754775-levelled.wav@9.30@9.80@218.4@205.3@253.6" "754775-levelled.wav@9.80@10.30@230.5@216.5@266.5" "754775-levelled.wav@10.30@10.80@242.3@227.2@276.8" "754775-levelled.wav@10.80@11.30@251.7@236.6@283.5"
+    python tools/make-engine-bank.py game/assets/audio/v6/engine_overrun 6 "754775.mp3@58.00@59.00@104.1@94.8@118.4" "754775.mp3@59.00@60.00@102.9@95.0@114.0" "754775.mp3@60.00@61.00@101.2@92.6@111.3" "754775.mp3@61.00@62.00@98.6@89.6@108.5" "754775.mp3@62.00@63.00@95.4@86.4@105.3" "754775.mp3@63.00@64.00@92.2@83.8@101.4" "754775.mp3@64.00@65.00@89.1@81.6@98.4" "754775.mp3@65.00@66.00@86.9@78.9@96.0" "754775.mp3@66.00@67.00@84.1@76.6@92.8" "754775.mp3@67.00@68.00@81.5@74.9@89.7" "754775.mp3@68.00@69.00@79.8@73.0@88.0" "754775.mp3@69.00@70.00@77.8@71.1@86.1" "754775.mp3@70.00@71.00@75.6@69.9@83.8" "754775.mp3@71.00@72.00@74.4@68.5@82.2" "754775.mp3@72.00@73.00@72.9@67.1@80.5" "754775.mp3@73.00@74.00@71.3@66.2@78.9" "754775.mp3@74.00@75.00@70.4@65.0@77.4" "754775.mp3@75.00@76.00@69.3@63.2@76.2" "754775.mp3@76.00@77.00@67.5@60.7@74.2" "754775.mp3@77.00@78.00@64.5@55.0@71.0" "754775.mp3@78.00@79.00@60.3@49.3@66.4" "754775.mp3@79.00@80.00@56.8@48.9@62.8" "754775.mp3@80.00@80.50@52.2@40.9@58.4"
+    python tools/make-engine-bank.py game/assets/audio/v8/engine_drive 8 "dBRIVYIzRm4-levelled.wav@64.00@64.50@213.3@200.5@245.1" "dBRIVYIzRm4-levelled.wav@64.50@65.00@222.8@208.8@256.7" "dBRIVYIzRm4-levelled.wav@65.00@65.50@233.4@219.4@276.9" "dBRIVYIzRm4-levelled.wav@65.50@66.00@251.7@236.6@302.8" "dBRIVYIzRm4-levelled.wav@66.00@66.50@275.3@258.7@341.2" "dBRIVYIzRm4-levelled.wav@66.50@67.00@310.1@291.5@394.5" "dBRIVYIzRm4-levelled.wav@67.00@67.50@358.7@337.2@469.5" "dBRIVYIzRm4-levelled.wav@67.50@68.00@426.9@401.2@575.2" "dBRIVYIzRm4-levelled.wav@68.00@68.40@522.9@491.6@629.6" "dBRIVYIzRm4-levelled-b.wav@81.80@82.10@261.5@245.2@295.8" "dBRIVYIzRm4-levelled-b.wav@82.10@82.40@264.2@248.3@333.1" "dBRIVYIzRm4-levelled-b.wav@82.40@82.70@302.8@284.6@404.3" "dBRIVYIzRm4-levelled-b.wav@82.70@83.00@357.6@336.1@544.2" "dBRIVYIzRm4-levelled-b.wav@83.00@83.20@494.8@461.3@571.0" "nltPXKAN6BI.opus@17.75@18.00@548.8@490.3@640.1" "nltPXKAN6BI.opus@18.00@18.25@549.6@516.6@660.5" "nltPXKAN6BI.opus@18.25@18.50@555.8@506.8@665.2" "nltPXKAN6BI.opus@18.50@18.75@599.9@515.2@670.4" "nltPXKAN6BI.opus@18.75@19.00@548.1@512.8@669.0" "nltPXKAN6BI.opus@19.00@19.25@589.0@513.0@674.4" "nltPXKAN6BI.opus@19.25@19.50@547.9@512.2@668.2" "nltPXKAN6BI.opus@19.50@19.75@604.7@512.8@665.8" "nltPXKAN6BI.opus@19.75@20.00@561.0@527.4@672.7" "nltPXKAN6BI.opus@20.00@20.25@574.3@494.9@631.8"
+    python tools/make-engine-bank.py game/assets/audio/v8/engine_overrun 8 "CGrl3VILOGc.opus@43.30@43.65@425.9@351.9@478.8" "CGrl3VILOGc.opus@43.65@44.00@428.3@262.6@472.2" "CGrl3VILOGc.opus@47.30@47.65@430.2@305.3@473.2" "CGrl3VILOGc.opus@47.65@48.00@324.8@242.0@357.2"
+    python tools/make-engine-bank.py game/assets/audio/flat12/engine_drive 12 "JNvonF5LGYQ-levelled.wav@100.50@101.00@237.8@223.5@307.3" "JNvonF5LGYQ-levelled.wav@101.00@101.50@279.3@262.6@363.3" "JNvonF5LGYQ-levelled.wav@101.50@102.00@330.3@310.5@402.6" "JNvonF5LGYQ-levelled.wav@102.00@102.50@366.0@344.0@445.3" "JNvonF5LGYQ-levelled.wav@102.50@103.00@404.8@380.5@494.6" "JNvonF5LGYQ-levelled.wav@103.00@103.50@442.0@409.1@502.2" "JNvonF5LGYQ-levelled.wav@103.50@104.00@444.4@417.8@626.3"
+    python tools/make-engine-bank.py game/assets/audio/flat12/engine_overrun 12 "JNvonF5LGYQ.opus@104.25@104.50@575.0@483.9@632.5" "JNvonF5LGYQ.opus@104.50@104.75@553.8@505.2@630.5" "JNvonF5LGYQ.opus@104.75@105.00@537.5@432.7@591.2" "JNvonF5LGYQ.opus@105.00@105.25@460.3@427.4@619.7"
+
+(The third pass of the Spider's levelling, 27.8-29.4 s, prepared a hold at 3,540-4,460 rpm that is no longer cut: laid
+beside the blips' pulses it stepped the level 2.6 LU at 3,500 rpm. The file is still made that way so the segments'
+samples match.)
+
+The banks are imported uncompressed (`compress/mode=0` in their `.import` files) because the voice reads their
+samples; a compressed import would not give them back.
+
+Which bank a car plays is its engine's `EngineSpec.SoundFolder` (physics/Vehicle/EngineModel.cs), with its
+`Cylinders` turning revs into firing pulses; the Unreal version's table in `GlpAudio.cpp` follows it.
+
+SHA-256 of the nine recordings, each fetched from its page on 3 November 2026 under a descriptive User-Agent (the
+Commons files are the uploads themselves, Opus at 48 kHz, their SHA-1 checked against the file pages' metadata):
+`dBRIVYIzRm4.opus` 0ff8a519dd090f5c2123db855358bbe96217777101e7d0eadbbdfeb32b5d4e29,
+`CGrl3VILOGc.opus` c0f3b53ca001ac2dfc307f0e435990223b14e114a12f7c1561703ed999fc13a2,
+`nltPXKAN6BI.opus` 6c357f7e94ba68467dd4f82baf6a2307203ced7baa1f6507855cc5dbe69afe49,
+`JNvonF5LGYQ.opus` 012f00b4f320fe5d569beaee91f26b0944dfbdbde1f74b6f29e45f459d76e264,
+`ZQQRnxRINac.opus` f10308cd4c6416ea160d96fc5453db29de70cc3f94d69f1944894c50fc2aed4c,
+`2axudw2mPHk.opus` 8ed0b230faa0c9a038722306e45f0f81b301734ae7e7419b33970303ea5fa723,
+`S1IzD5dTWng.opus` 7799e139bc75f1d16699c30c11d34452a1bde159940685928ac0be6743239708,
+`754775.mp3` 6bb2ac28ffb644be408ed5a04a889a752f01e25c7948a0e6b5698d4b03d7f48f,
+`639227.mp3` af341d6ebd914606fef6e38717e5d11c585d46af6af8a94141d76226f4740e62.
+
+**Licences (banks2).** Commons' "engine and exhaust sound (YouTube ...)" files carry the YouTube licence of their
+video, and their Commons licence review is pending (all seven are in "License review needed (audio)"; uploaded by Braiion
+on 22 and 26 October 2026, each tagged CC BY 3.0). Each video's licence was read from YouTube's own metadata on 3
+November 2026 ("Creative Commons Attribution license (reuse allowed)"). Six of the videos were published before 1
+August 2025, when YouTube's Creative Commons option was 3.0: FiExhaust's 570S (17 July 2021) and 540C (31 August
+2019), TvdL Films' 458 Speciale (22 April 2017), Supercars1989's F12tdf (1 July 2016), Calvin MotorSport's S1 (12
+October 2020) and Witu Tech's Coupé (26 November 2017). Luciano's Classics' Spider was published on 28 December 2025,
+under the 4.0 option, so its source is CC BY 4.0 where Commons' template tags it 3.0; the credit given here meets both.
+The Commons pages name the author and link the video, and each video describes its own recording (an exhaust maker's
+cars at tuning shops, a classic-car dealer's Spider, a show's 458 Speciale, a spotter's F12tdf, an owner's S1 and Coupé),
+so the uploaders are plausibly the authors of their soundtracks. The two Freesound recordings are their recordists' own
+by their descriptions (a lavalier above the exhaust of a 3.2 V6 driven fast; a Volvo 240 idling outside with the bonnet
+closed), CC BY 4.0.
+
+**What each stands in for, and why these recordings (banks2).** The V8 is drawn as a McLaren 570S and now plays its
+engine: the 570S's M838TE pulling twice from 3,200 to about 8,500 rpm, the 570S's limiter, on a catless Fi Exhaust
+system like the 458's F430 track; the 540C's revs falling after its blips for the overrun (the 540C is the same engine
+at 540 PS). The game's V8 redlines at 9,000 rpm, as the 458-type engine of its name does and no McLaren: cut to the
+570S's top alone the voice laid the 8,500 rpm pulses closer at 9,000 and held less of the sound as a tone there (-6.0
+dB, -4.77 asked, `EngineVoiceTests.Pulls_as_a_tone_up_to_the_redline`), and the tracker's labels past the limiter
+followed the half order (620 Hz where the firing was 545, the engine bouncing off the cut) and were cut off; so the
+top, 7,500-9,210 rpm, is a 458 Speciale's flat-plane 4.5 held against its 9,000 rpm limiter at a show, ten quarter-second
+stretches laid beside the 570S's pulls (with them the voice holds the third the test asks). The flat-twelve: no clean recording
+of a flat-twelve was found (below), so the Testarossa's 1984 flat-twelve plays a Ferrari V12 of 2016, an F12tdf's F140
+FC 6.3 (an even-firing twelve like the flat-twelve, each bank's exhaust pulsing at three times the crank's speed),
+accelerating hard from 2,350 to 5,690 rpm on the road and lifting off at the top; its idle stays the Lamborghini V12's
+(CC0). The hot hatch (the 205 GTi's eight-valve 1.9): an 8-valve two-litre twin cam of the same years, a 1982 Alfa Romeo
+Spider 2000's, revved standing with the microphone at its exhaust, for the run-up and the overrun; its idle a 1990 Volvo
+240's 2.3 eight-valve four heard outside with the bonnet closed, because the Spider's idle at the exhaust is the brightest
+idle of the catalogue (its 1-3 kHz -5.0 dB of its sound, where the diesel's idle holds -9.3 and the game asks every petrol
+four's to lie 6 dB under the diesel's: `DieselCharacterTests`; the Volvo's, cleaned, -16.6). The rally hatch (the Delta
+Integrale's 2.0 16-valve turbo four): an Audi S1's 2.0 TFSI turbocharged four pulling through first, third and fourth
+gears on a 0-240 km/h run for the run-up (4,390-6,800 rpm; the S1 is the Integrale's modern counterpart, a small
+four-wheel-drive hatch with a two-litre turbo four), and a Fiat Coupé 2.0 16v Turbo, the Integrale's own engine family,
+for the idle (850-990 rpm) and the lift-off at the end of its 0-200 run (6,500 to 1,840 rpm). The V6 hatch (the Golf
+R32's 3.2 VR6): a 3.2 V6 of the same displacement and cylinder count, a Honda J32 in an Acura, driven fast with a
+lavalier above its exhaust, for all three banks: a pull from 1,570 to 4,130 rpm and the next gear to 5,160, a coast from
+2,150 rpm to a stop with the throttle shut, and its idle after the drive. A VR6 fires its six cylinders every 120
+degrees of crank like any even-firing six, so the voice fires at rpm x 6 / 120 as the real engine does; the Acura's pulls
+replace the Jaguar's blips of a standing car (3,600 rpm at most) with a car under load to 5,160, so past the R32's 5,160
+rpm the voice lays the run-up's top pulses closer, up to 1.3 times at its 6,600 rpm redline (2 times before).
+
+*Levelled, cleaned, and where each starts.* The 570S's pulls, the F12tdf's pull and the Acura's are levelled over
+half-second windows (`level-recording.py`, as the 458's F430 pull is), the Spider's blips over quarter-second ones (a
+blip gains 1,000 rpm in a tenth of a second). The Acura's run-up starts at 2.3 s (1,570 rpm), not at the throttle's
+opening at 0.8 s (1,360): its first second and a half, the throttle opening, is its dullest, and cut from 0.8 s the level
+at the idle revs rose 0.2 LU from a load of 0.3 to 0.45 and 1.8 LU to full throttle (2.5 asked); from 2.3 s it passes
+(`Opening_the_throttle_at_the_idle_revs_raises_the_level`), and cut without levelling it did not rise at all. The Spider's
+blips start at 2,620 and 2,920 rpm, not at the throttle's opening (1,430 and 2,100): cut from there, the level at the idle
+revs fell with the throttle (-0.8 LU from a load of 0.3 to 0.45), the blips' first pulses being soft; and the hold at
+3,540-4,460 rpm (27.9-29.3 s) stepped the level 2.6 LU at 3,500 rpm beside the blips' pulses, and is left out. The
+Acura's idle, the Coupé's idle and lift-off and the Volvo's idle are quiet recordings (-32 to -45 dBFS RMS; the Coupé's
+lift -40 to -48) and are cut from copies with their floor taken out (`clean-recording.py`, from 700 Hz up and low-passed
+at 6 kHz; the lift-off at 4 kHz): cut from the raw Coupé the rally hatch's overrun was as bright above 2 kHz as its
+run-up (2.9 dB under it, 3 asked, `GranularEngineTests.Overrun_is_quieter_than_the_throttle_at_the_same_revs_in_every_band`),
+the recorder's hiss brought up with the segments, and low-passed at 6 kHz still within 0.1 dB of that line. The Coupé's
+first idle stretch (1.3-4.6 s) is not an idle: its lines fall from 5,600 to 1,000 rpm, the engine spinning down after a
+rev, and cut as the idle the voice at 950 rpm peaked at 36 Hz, not its 31.7 (`Idles_at_the_idle_firing_frequency`); the
+idle is 17.0-21.5 s. The Acura's gear-change lifts (11.3-11.75 and 15.95-16.4 s, 5,160 to 3,510 and 4,310 to 2,960
+rpm) were cut into the overrun first and are left out: lifting off from the redline the voice ticked 14 to 28 times in
+five seconds on them (one asked, `Lifts_off_from_the_redline_without_a_run_of_ticks`); on the coast alone it does not.
+
+*The idles' labels.* The Volvo's and the Coupé's idles are quiet and their firing line is weak beside its harmonics
+(the Volvo's at 27 Hz under its 2.5th-order line at 43-48 Hz and its second at 59; the Coupé's second order at 59 Hz
+the strongest line of 17-21.5 s), so both are tracked on the second harmonic (the harmonic field at 2) over a band wide
+enough for the tracker to move (25-33 and 27-33 Hz of firing: under about 45 Hz a band of 12 % is narrower than a
+frame's bin, and the tracker sticks at its seed, as the tool's own notes say). Tracked over 24-31 Hz the Volvo's labels
+sat at 27.0 Hz (810 rpm) to the pulse, and the voice took the top of its idle as 810 rpm: held at the hot hatch's governed
+idle, 930 rpm, it was already across into the run-up's pulses, 5 to 6 LU louder than every other car's idle (-18.6 LUFS
+against -21 to -29), and the throttle lowered the level from there (`The_idle_governors_throttle_keeps_a_quiet_idle`,
+`Opening_the_throttle_at_the_idle_revs_raises_the_level`). Tracked over the wider band the labels span 750-990 rpm,
+the idle's top lies over the governed idle, and both pass; the Coupé's over 25-35 Hz spanned 760-1,050 and stepped
+the level 1.4 LU at 1,000 rpm (`The_level_follows_the_revs_evenly_from_the_idle_to_the_redline`), over 27-33 it does not.
+
+*The S1's firing line.* In the S1's and the Coupé's tracks the strongest line is the fourth crank order, twice the
+firing, with the firing a weaker line under it: at the S1's 0-240 km/h run the pairs (183 and 366 Hz at 14 s, 221 and
+441 at 19 s) are the firing and twice it, the firing 5,480 to 6,630 rpm at the top of third gear, where the dominant
+line taken as the firing would put the car at 11,000-13,000 rpm. The S1's run-up is therefore tracked on that line
+with the bank tool's harmonic field at 2 (the field now takes a fraction too, 0.5, to follow the half order of a V8
+heard from inside; no bank uses it). The S1's fifth gear (29-38 s, 5,410-6,250 rpm) and its second run (73-79 s, 2,700-
+7,060) were cut in and are left out: with the fifth the evening of the banks did not even the timbre (the spread of
+brightness about its trend 1.85 dB evened against 1.78 raw, `The_timbre_follows_the_revs_more_evenly`) and the limiter's
+cut fell in 12 ms (10 asked); with the second run the level stepped 1.8 LU at 4,600 rpm and the overrun was as bright as
+the run-up above 2 kHz. The Coupé's own run (46-101 s) was not cut: through most of it the two lines are of equal
+strength and neither reading gave the revs of a 0-200 run in its gears (the lower line read as the firing puts the car
+at 3,200-3,700 rpm through fourth gear, the upper at 6,500-7,400), so only its idle and its lift-off, whose line is one
+and falls alone, are used.
+
+**Checked and not used (banks2, 3 November 2026; Commons' "Sounds of automobiles" category, 386 "engine and exhaust
+sound" tracks, and Freesound, CC0 and CC BY only):**
+
+- *for the V8:* a 540C onboard from 0 to 215 km/h (L'argus, g8dJtzLeb4o: clean, no sample past full scale, but heard
+  from inside the half order is its strongest line and the cabin's boom is on every pulse; its three gears, 3,500-8,000
+  rpm, were tracked and kept as a fallback), the 600LT (RXj9PUkF0gk: 1.36 million decoded samples past full scale in
+  351 s, a limiter on everything), the 650S (yjsN6YoJm2o: 27,600, and held at one speed at a show), the 675LT
+  (Uc0FP4UDuQ0, 75,700 in its first ten seconds), the 720S with Novitec exhaust (XfgP-gX7KNg, 9,800), the P1
+  (M1xuT1ue10c: revs held near 4,000 rpm standing), the 765LT (5oSRv66QFW0: drive-bys with squealing tyres, Doppler on
+  every pass), the 488 GTB with Novitec exhaust, the 488 Spider and the F8 Tributo with Fi Exhaust (Ei59DHJ5acU,
+  52YexV8ube4, Qlx_Eay0xeM: 8,000 rpm engines, 16, 348 and 587 flat-topped samples). The 570S's, 540C's and Speciale's
+  own counts of decoded samples past full scale (39,000, 24 and 3,200) are a loud master, not clipping: 101, 0 and 10
+  flat-topped samples.
+- *for the flat-twelve:* the Commons Testarossa (denkblockade, jOiYsgNQvEM) is a phone at a distance from an open engine
+  bay, -40 to -55 dBFS, its blips reaching 2,400 rpm; the Countach LP500S in Singapore (uYv1l31kgKc) peaks at 0.19 and is
+  an idle and a departure at a distance; the Enzo (lbF-36BGnNc) and the Espada (3D3ryefwttM) are spotters' drive-bys
+  with Doppler; the FF at a show (PsNPUYhhWU0) holds 1,100-2,600 rpm with one rev to 5,600; the 599 SA Aperta
+  (DW4EhNXlkoM, 10,100 samples past full scale), the Aventador SV (qll6WBfaXvM, blips at a show) and the 812 Superfast
+  (UbQ5e4z5WXc, a spotter's pulls with the car passing) were passed over for the F12tdf, whose pull is one car, one
+  gear, 42 flat-topped samples in 157 s and none in the stretch cut.
+- *for the hot hatch:* the Spider's idle (41-57 s, above); a Peugeot 205 started and idling close-miked (#140418,
+  Thurcke, CC BY 4.0: 1-3 kHz -8.7 dB of its sound), a 2006 Peugeot idling (#811898, CC0, -6.0), a Twingo (1iwuiuqE2QY,
+  -4.2), an Alfa 156 Twin Spark idling (UwnBSjQfJt8, -46 dBFS and -3.5), a Fiat Uno 1.3 ridden in binaurally (#670868,
+  CC BY 4.0: its stops are dark enough, -26 dB, but their lines are the cabin's, no firing line to follow), a 106 Rallye
+  (Z2iFd9mSyhE: held at 1,500-4,000 rpm, loud) and an Escort RS2000 on a Supersprint exhaust (B2swcWkMOMM: a 2.0
+  eight-valve Pinto, but held at 2,500-3,000 rpm throughout, no idle and no pull); the Golf GTI (NrA1GgbjFRg, a tuning
+  shop's video), the Saxo (launch control) and the Alfa 147 Twin Spark (flames) were not needed once the Spider's blips
+  were cut.
+- *for the rally hatch:* the Commons Integrale (Grzegorz Kalinecki, 0qq7MZ00ipI) is 80 s held within 5.6 dB by a limiter
+  and cruising at 1,600-1,800 rpm, no pull; the S1's own idle (1.5-3.4 s) is 1.4 s and as bright as the Spider's
+  (-10.4 dB, 3.3 dB short of the diesel test's margin even cleaned); the Mégane RS 0-250 (TplQIptv-ME, 41,300 samples
+  past full scale), the Sierra Cosworth (7e3q50wwmNE, idle only), the Leon Cupra R (jAD7wLKT5KE, Motor1: a low idle
+  whose every half order shows, no pull told), the 200SX (QF3N_McYdwk: an SR20DET on a straight pipe held at 3,700-6,000
+  rpm), the 406 turbo, the Corsa OPC, the Clio RS Trophy and the second Mégane RS were passed over for the S1's run.
+- *for the V6 hatch:* a BMW E46 M3's S54 pulling through its gears on an airstrip (#415276 and #415275, ikbenraar, CC BY
+  4.0: clean, 3,900-7,000 rpm, a straight six) is the next candidate if the Acura's 5,160 rpm top is ever raised; the
+  GTV6's Busso (kX2PYswTWdg, 15,800 decoded samples past full scale and 260 flat tops), the Omega 3.0 V6 and the Laguna
+  II V6 (short, standing), the Touareg VR6 and the Lexus IS300 (clipped, the banks review) stay out.
+
 The Internet Archive item **"Car Engine Sounds"** (identifier `car-engines`, dated 2011-02-22, uploaded in two batches:
 27 files on 2015-09-01 and 44 on 2019-03-14) was published by its uploader under **CC0 1.0 Universal** (`licenseurl` in
 the item's metadata: http://creativecommons.org/publicdomain/zero/1.0/). Item page:
-https://archive.org/details/car-engines
+https://archive.org/details/car-engines. Until banks2 the banks of these five cars were cut from it (`3 Ferrari 458`
+for the V8's run-up and overrun, `15 Lamborghini Countach` for the flat-twelve's, `honda civic type r` for the hot hatch's
+three, `25 Nissan Pulsar` for the rally hatch's three, `Jaguar f-type s` for the V6 hatch's three), as were the cars13
+banks until cars13 audio2 (below).
 
 The CC0 is as declared by the uploader, and the item says nothing else of where its tracks come from: its description
 is "Car engine sounds - free use", and no track names a recordist, a microphone or a date. Read against the Freesound
@@ -58,89 +258,12 @@ recordings used here (cars13 review, 2 November 2026), it looks like a compilati
   https://www.motorauthority.com/news/1034233_put-the-458-italia-in-your-pocket-ferrari-releases-ringtones); no archived
   copy of those files was found to compare it with.
 
-None of this shows that a track is someone else's, but no further bank is cut from the item, and the banks that lean on
-it are the first to move to recordings whose recordists describe them. The three cars13 engines that did moved in cars13
-audio2 (below): the 458's run-up and overrun (`3 Ferrari 458`), the Bravo HGT's five (`honda s2000`) and the Bravo 1.6
-16V (`mazda MX 5`) are cut from Wikimedia Commons and Freesound recordings their recordists describe, so no bank of the
-five cars13 engines uses the item. The shipped banks of five cars still do: the V8's run-up and overrun (`v8/`, the
-`3 Ferrari 458` track), the flat-twelve's (`flat12/`, `15 Lamborghini Countach`), the hot hatch's three (`hothatch/`,
-`honda civic type r`), the rally hatch's three (`turbohatch/`, `25 Nissan Pulsar`) and the V6 hatch's three (`v6/`,
-`Jaguar f-type s`). Candidates for a later pass, each a Wikimedia Commons "engine and exhaust sound" track whose
-YouTube licence (CC BY) was read off its video's page on 2 November 2026, none analysed yet:
+None of this shows that a track is someone else's, but no bank is cut from the item any more: the three cars13 engines
+that leaned on it moved in cars13 audio2 (below), and the five first cars' banks in banks2 (above). The drones' engine
+loop (`traffic/drone.wav`), which was the flat-twelve voice itself playing the Countach bank, was recorded again from the
+voice on the F12tdf's bank (below, under Traffic).
 
-- the V8 (the 570S's M838T): a McLaren 540C by L'argus (YouTube g8dJtzLeb4o, 0 to 215 km/h onboard; the 540C has the
-  570S's engine), a 570S and a 600LT with Fi Exhaust by FiExhaust (dBRIVYIzRm4, RXj9PUkF0gk), and a Ferrari California T
-  by Karla CM (nSDuWqypsNM, the twin-turbo flat-plane F154);
-- the flat-twelve: "Ferrari Testarossa" by denkblockade (jOiYsgNQvEM, 55 s), a real flat-twelve with a usable licence;
-- the rally hatch: "Lancia Delta Integrale" by Grzegorz Kalinecki (0qq7MZ00ipI), its CC BY now confirmed on YouTube;
-- the hot hatch and the V6 hatch: nothing new.
-
-Rebuild a bank (the cylinder count turns firing frequency into rpm: rpm = Hz x 120 / cylinders):
-
-    python tools/make-engine-bank.py game/assets/audio/v8/engine_drive 8 "3 Ferrari 458.mp3@0.15@3.95@150@120@700" ...
-
-The banks are imported uncompressed (`compress/mode=0` in their `.import` files) because the voice reads their
-samples; a compressed import would not give them back.
-
-No recording of a flat-twelve with a usable licence was found before cars13 audio2 (a Commons Testarossa is listed
-above for a later pass); the twelve-cylinder banks of the 1984 car are a
-Lamborghini V12 at idle and the Countach track, the closest in era and sound. Swap the files (same names, made
-with the script) to use other recordings.
-
-Which bank a car plays is its engine's `EngineSpec.SoundFolder` (physics/Vehicle/EngineModel.cs), with its
-`Cylinders` turning revs into firing pulses; the Unreal version's table in `GlpAudio.cpp` follows it.
-
-The three hatchbacks follow the cars the game draws (cars3). The hot hatch (the 205 GTi's eight-valve 1.9) plays the
-Civic Type R's four of the same CC0 item. The rally hatch (the Delta Integrale's two-litre turbo four) plays the
-turbo four of the `turbohatch` banks, the Pulsar track of the same item, with the turbo synthesised for any engine
-with boost (`audio/TurboNoise.cs`, 0.20: the compressor's whistle from the shaft's speed, the vent of a blow-off
-valve or the flutter of a surging compressor). The same item holds a `Lancia Delta HF
-Integrale.mp3`; it is a 15-second drive-by, Doppler-shifted, with no idle and no steady run-up, and the voice could
-not be cut from it (its spectrogram and pitch track, 1 November 2026). A Commons recording of an Integrale ("Lancia
-Delta Integrale - engine and exhaust sound", Grzegorz Kalinecki, CC BY 3.0, its licence review pending) is left for a
-later pass.
-The V6 hatch (the Golf R32's 3.2 VR6) plays a six: no CC0 or CC BY recording of a VR6 was found (Freesound's and
-Wikimedia Commons' searches turned up none; the VR6 recordings on offer are commercial libraries), so its banks are
-cut from the same CC0 item's `Jaguar f-type s.mp3`, the supercharged three-litre V6 of the F-type S. A VR6 fires
-its six cylinders every 120 degrees of crank like any even-firing six, so the voice fires at rpm x 6 / 120 as
-the real engine does and the recording's pulses are those of a six; the V6's supercharger whine and its sharper
-note are the difference. The recording is the car revved at a standstill, so the run-up bank is cut from the
-throttle's blips (unloaded) and the overrun from the revs falling after them. Each blip runs up to the car's limiter at
-a standstill, about 4,000 rpm, and its recording overloads on the way, from about 3,600 rpm: the microphone crackles
-for 40 ms (steps of nearly full scale between samples, which the voice replayed as clicks wherever it picked those
-pulses), and the stretch at the limiter is the ignition cut every 150 ms with the throttle partly shut, 10 dB duller
-than the run-up. The run-up is cut from each blip's start to just before its crackle (up to about 3,600 rpm), the
-overrun from where the revs leave the limiter (from about 3,800 rpm; 1 November 2026), and since the banks pass
-from 0.1 to 0.15 s later (from about 3,650 rpm, 2 November 2026): the first tenth of a second after each limiter holds the
-ignition's last bangs, ticks 7 to 9 dB over the rest of a grain's top end, which the voice laid past the overrun's top as
-the driver lifted from the redline (28 sharp transients in five seconds, 43 once the tool filled its missing marks). Past 3,600 rpm the voice lays
-the run-up's 16 highest pulses closer, up to 1.8 times at the R32's 6,600 rpm, each held to the period it is laid at
-so it plays at its recorded strength (`GranularEngine`); a recording of those revs would serve better.
-None was found on 2 November 2026 either. Freesound (searched for VR6, R32, Golf R32, Corrado, six cylinder, inline and
-straight six, V6, and the six-cylinder BMWs, Nissans, Porsches and Toyotas, CC0 and CC BY only, high-quality previews):
-a Toyota Supra on a chassis dyno (#496171, CC0) pulls through its gears but its recording distorts from about 4,700 rpm
-(steps four to six times sharper than below, as its uploader warns); a Chevrolet Traverse's 3.6 V6 accelerating (#351962, CC BY 4.0) is recorded
-in its cabin through an automatic's shifts, the firing buried under the body's boom; a BMW M3 (#343369, CC BY 3.0) is 20
-seconds of driving that does not run up past about 4,500 rpm; a Suzuki Vitara's V6 (#249720), a DeLorean's PRV V6
-(#623436) and a Porsche 911 (#772802) are revved standing, like the Jaguar. Wikimedia Commons (1,400 engine and exhaust
-recordings, most of them YouTube audio under CC BY 3.0) has at least eight Volkswagens ("Volkswagen ... - engine and
-exhaust sound (YouTube ...)"), which the search of 2 November missed; the nearest, a Touareg's 3.6 VR6 (the R32's engine
-family, CC BY 3.0), is revved standing and clipped (99 s with 270,894 samples at full scale, its peaks decoding 3.5 dB
-past it; banks review). Of Commons' other sixes a Lexus IS300 (the 2JZ-GE straight six) is the one pulling through its
-gears, from 1,100 to 5,200 rpm, but clipped from 1,800 rpm on (its peaks decode past full scale, 79,000 samples in ten
-seconds); the others are a cold start (BMW Z4 M Coupé) and exhaust videos with talking (Nissan 350Z, 300ZX), and its
-"Audi A3" and "BMW 330i" are a 2.0 TDI and a four. The CC0 archive item's other sixes, passed over for the Jaguar in
-cars3, show in their pitch tracks no run-up of one engine through the revs the Jaguar lacks: the GT-R's V6, the Cayman
-S's flat six and the Ghibli's V6, the "2 Toyota Supra 950" (9 s, its revs jumping between 3,000 and 8,300 rpm), and the
-"18 Porsche 911 GT3" and "19 Porsche 997 GT3 RS" (4 and 5 s of blips, fetched for the banks review). The "alfa romeo
-giulia" track does not say which Giulia it is, a six or a four. The Jaguar stays.
-
-The rally hatch's run-up leaves out 22.2-23.1 s of the Pulsar track: a compressor's flutter, a band at 1.3 kHz beating
-ten times a second with bursts of hiss, whose pulses were up to 30 dB brighter than their neighbours at 3,300-3,500
-rpm (the "brighter at 3350 rpm" of the 0.19 audit, finding 9, which the evening could not take out); the voice
-synthesises the turbo's own sounds (`audio/TurboNoise.cs`).
-
-Every bank was re-cut on 2 November 2026 (banks) from the same recordings with the tool seeking exactly. Those cut
+History: every bank was re-cut on 2 November 2026 (banks), before banks2 replaced the five first cars' recordings (above), from the same recordings with the tool seeking exactly. Those cut
 before the V6's re-cut began their segments with the MP3 decoder's silence: 50 grains 12 dB or more under their
 neighbours, most 40 to 160 dB under (the V8's run-up 15 and its overrun 7, the flat-twelve's run-up 8 and its overrun
 7, the rally hatch's overrun 5, the hot hatch's run-up 4 and its overrun 3, the estate's overrun 1), each a drop-out of a
@@ -189,7 +312,7 @@ as its car's; the bank-level tests (`EngineVoiceTests.Every_bank_is_cut_without_
 and renamed `inline5/` when the car took it: `--car=five` is the Delta's short name (its model files carry the key of
 the five-cylinder hatch it replaced) and keeps it. The 458's run-up and overrun and the HGT's and the 1.6's three banks
 were cut again in cars13 audio2 from recordings whose recordists describe them (below); the Internet Archive item is
-used by none of the five.
+used by none of the five, and since banks2 by no bank of the game.
 
 | Bank | Source | Segments (start@end s @ firing Hz at start @ search band Hz [@ harmonic followed]) |
 |---|---|---|
@@ -636,9 +759,10 @@ motorway speed. Wind and bumps are synthesised.
 
 ## Traffic (`traffic/drone.wav`)
 
-The drones' engine: 2.4 s of the flat-twelve voice itself (the Countach run-up bank played by
-`GranularEngine` at cruise, recorded from the game) looped with a 0.4 s cross-fade by `tools/make-loop.py`;
-no new source material. `WorldAudio` places it on every drone, each a touch off the others in pitch, with
+The drones' engine: 2.4 s of the flat-twelve voice itself (`GranularEngine` on the flat-twelve's banks, held at 3,200
+rpm and 0.35 of the throttle, rendered to a WAV by a one-off test of the audio project and, since banks2, from the
+F12tdf's run-up: until then the Countach bank's, recorded from the game) looped with a 0.4 s cross-fade by
+`tools/make-loop.py` (`make-loop.py drone-raw.wav 0.8 2.4 traffic/drone.wav 0.4 0.7`); no new source material. `WorldAudio` places it on every drone, each a touch off the others in pitch, with
 inverse-distance attenuation and the Doppler shift computed from the simulation.
 
 ## Train (`train/steam.wav`, `train/whistle.wav`)

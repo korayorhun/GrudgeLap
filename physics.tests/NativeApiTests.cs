@@ -246,9 +246,11 @@ public sealed unsafe class NativeApiTests
             var hatchFolder = FindInRepository(Path.Combine("game", "assets", "audio", "hothatch"));
             Assert.NotNull(hatchFolder);
             var hgt = Array.FindIndex(VehicleSpec.Catalogue, c => c.Style == CarStyle.HgtFive);
-            var hgtExpected = new float[2048];
+            // Four blocks, not one: the voice's first 2,048 samples can be silent (the saloon's are, and the hot hatch's since
+            // banks2), and two silent blocks are equal whatever the car.
+            var hgtExpected = new float[8192];
             NativeApi.CreateEngineForCar(hatchFolder, hgt).Render(hgtExpected, 5000f, 1f, true);
-            var hatchExpected = new float[2048];
+            var hatchExpected = new float[8192];
             NativeApi.CreateEngine(hatchFolder, 4).Render(hatchExpected, 5000f, 1f, true);
             Assert.NotEqual(hatchExpected, hgtExpected);
             var hatchName = Encoding.UTF8.GetBytes(hatchFolder + "\0");

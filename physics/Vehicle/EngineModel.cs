@@ -395,7 +395,8 @@ public sealed record EngineSpec
     };
 
     /// <summary>
-    /// The Delta's turbo four. Its voice is the turbo four of the "turbohatch" recordings (the Pulsar's), with the
+    /// The Delta's turbo four. Its voice is the turbo four of the "turbohatch" recordings (an Audi S1's 2.0 TFSI pulling
+    /// through its gears, a Fiat Coupé 2.0 16v Turbo idling and lifting off: game/assets/audio/SOURCES.md), with the
     /// whistle and the blow-off valve the view synthesises for any engine with boost.
     /// </summary>
     public static EngineSpec RallyTurboFour => new()
@@ -414,7 +415,7 @@ public sealed record EngineSpec
         BoostThresholdRpm = 2000f,
     };
 
-    /// <summary>The R32's VR6. Its voice is a six (the "v6" recordings: a supercharged V6 of the same 120-degree firing interval).</summary>
+    /// <summary>The R32's VR6. Its voice is a six (the "v6" recordings: a 3.2 V6 driven through its gears, of the same 120-degree firing interval).</summary>
     public static EngineSpec VrSix => new()
     {
         IdleRpm = 800f,

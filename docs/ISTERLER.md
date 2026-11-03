@@ -8,7 +8,7 @@ Yeni bir istek gelince buraya satır olarak eklenir. Bir sürüm bir isteği kar
 - **Durum:** `Tamam` karşılandı, `Kısmen` bir kısmı karşılandı, `Açık` henüz yapılmadı, `Karar` yön belirlendi, `Ertelendi` bilerek sonraya bırakıldı.
 - **Ayrıntı:** teknik gerekçeler [design.md](design.md)'de, sürüm notları GitHub Releases'te.
 
-Son güncelleme: 3 Kasım 2026 (sürüm 0.26.0).
+Son güncelleme: 3 Kasım 2026 (sürüm 0.27.0).
 
 ## 1. Hedef
 
@@ -50,6 +50,7 @@ Son güncelleme: 3 Kasım 2026 (sürüm 0.26.0).
 | G4 | Araç içi gerçek gibi olsun: göstergeler yarım görünmesin, direksiyon, tavan, konsol, gövde gerçekçi olsun. | 28 Eki: "göstergeler yarım gözüküyor"; 29 Eki; 1 Kas: "direksiyon arabanın içeriden tavanı falan.. konsol gövde" | Kısmen: gerçek kabinler (0.16, 0.17, 0.20), göstergeler tam (0.8.1). Eksikler bölüm 10'da |
 | G5 | Kokpitte sol ön direk ince olsun. | 22 Eki: "kokpitte sol A-direği çok kalın ve baskın" | Tamam (0.4.0). 458'de aynı sorun yeniden var, bölüm 10 |
 | G6 | McLaren'in kokpitinden yol görünsün. | 2 Kas: "mclaren ile kokpitte kullanırken yolu göremiyoruz" | Tamam (0.25.0) |
+| G7 | Bazı arabaların kokpitleri çok karanlık, hiçbir şey görünmüyor; hepsi kontrol edilsin. | 3 Kas: "bazı arabaların kokpitleri çok karanlık hiç görünmüyor.. hepsini kontrol et" | Açık: 0.27.0'dan sonra sıradaki iş (her arabanın kokpit görüntüsü alınıp karşılaştırılacak) |
 
 ## 5. Araba seçimi ve yeni arabalar
 
@@ -78,7 +79,8 @@ Son güncelleme: 3 Kasım 2026 (sürüm 0.26.0).
 
 | No | İster | Kaynak | Durum |
 |---|---|---|---|
-| S1 | Motor sesleri gerçek gibi olsun. | 23 Eki: "ses çok daha iyi ama hala gerçekten uzak"; 28 Eki | Sürekli hedef: her araba kayıtlardan çalıyor (0.4, 0.19-0.26) |
+| S1 | Motor sesleri gerçek gibi olsun. | 23 Eki: "ses çok daha iyi ama hala gerçekten uzak"; 28 Eki | Sürekli hedef: her araba kayıtlardan çalıyor (0.4, 0.19-0.27) |
+| S5 | Motor ses bankaları yalnız kaynağı ve kaydedeni belli, lisansı temiz kayıtlardan kesilsin (bölüm 11, madde 4). | 1 Kas (kural) | Tamam (0.27.0): V8, Testarossa, 205, Delta ve Golf R32 bankaları kökeni belirsiz Internet Archive derlemesi yerine Wikimedia Commons (CC BY) ve Freesound (CC BY) kayıtlarından; derleme artık hiçbir bankada yok |
 | S2 | Instant replay müziği orijinal oyundaki gibi olsun (https://youtu.be/zY8_p5R_tHs). Telif sorunu olmadan, aynı seslerle, olabildiğince benzer. | 22-29 Eki; 1 Kas: "o çok önemli", "telife takılmadan mümkün olduğunca çok benzeyen, aynı sesler ile yapalım" | Kısmen: oyuna özel "Grudge Replay" (0.18.0). Sahip kendi dosyasını pencereye sürükleyebiliyor (0.15). **Sahibin onayı yok** |
 | S3 | Orijinal oyunun müzikleri olduğu gibi kullanılabilir mi? | 22 Eki | Karar: hayır; telifli, oyunla dağıtılmaz |
 | S4 | Pistin ve müziğin hissi orijinal videodaki gibi olsun. | 23 Eki: "müzikler, pist hissiyat aynı olsun istiyorum" | Kısmen (P1 ve S2'ye bağlı) |
@@ -107,7 +109,7 @@ Son güncelleme: 3 Kasım 2026 (sürüm 0.26.0).
 1. **458:** sol ön direk sürücü koltuğundan kalın görünüyor; düzeltmesi modelin direğini yeniden biçimlendirmeyi gerektiriyor. İç mekânlı RainerS modeli A7'yi bekliyor.
 2. **BRZ:** Toyota 86 modeliyle çiziliyor. Burnu 86'nın, kabini Mercedes'ten; çamurluk içi kaplaması ve arka plaka yok.
 3. **Bravo ve Leon:** gövdeler oyunun kendi gövdesi. Bravo'nun iç mekânı genel bir 90'lar düzeni; Leon'un arkası gerçeğinden iri.
-4. **Eski bankaların sesleri:** V8, Testarossa, 205, Golf R32 ve V6 bankaları hâlâ kökeni belirsiz bir Internet Archive derlemesinden. Temiz kayıt adayları bulundu, değiştirilecek.
+4. **Motor sesi yer tutucuları:** Testarossa'nın düz on ikisi bir Ferrari F12tdf V12'si, 205'in 1.9 8V'si bir Alfa Spider 2000 (blip'ler) + Volvo 240 (rölanti), Golf R32'nin VR6'sı bir Acura 3.2 V6'sı, Delta'nın turbosu bir Audi S1 + Fiat Coupé Turbo ile çalıyor; aynı motorun temiz CC0/CC BY kaydı bulunursa değiştirilir (0.27.0).
 5. **Renault Clio** (A1) eklenmedi.
 6. **BeamNG düzeyinde çarpışma** (F2) yok.
 7. **Instant replay müziği** (S2) için sahibin değerlendirmesi bekleniyor.
@@ -116,6 +118,7 @@ Son güncelleme: 3 Kasım 2026 (sürüm 0.26.0).
 10. **Bilinçli tasarım tercihleri, sahibe sorulacak:** Testarossa oyunun orijinalindeki gibi 4 vitesli (gerçeği 5); V8'in oyun içi adı "V8 GTB '12", çizilen araba ise 2015 McLaren 570S.
 11. **Unreal sürümü:** 458 ve BRZ orada geçici gövdeli; bu makinede derlenmedi.
 12. **Açılış süresi** (U3) ölçülmedi.
+13. **Karanlık kokpitler** (G7): her arabanın koltuk görünümü gizli koşuda görüntülenip aydınlatması/malzemesi karşılaştırılacak; karanlık olanlar düzeltilecek.
 
 ## 11. Çalışma kuralları
 

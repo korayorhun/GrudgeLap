@@ -2457,9 +2457,65 @@ licences, credits, segments, rebuild lines and the candidates passed over are in
   sports header and exhaust and a processed soundtrack (its driving held within 2.4 dB); its overrun is another engine,
   a Golf's. Commons' licence reviews of the three tracks are still pending (their YouTube licences were read on the
   videos' pages, 2 November 2026). The shipped banks of the V8 (`v8`), the flat-twelve, the hot hatch, the rally hatch
-  and the V6 hatch still rely on the archive item; `SOURCES.md` lists the candidates for a later pass (a 540C, a 570S and
-  a 600LT for the V8, a Testarossa for the flat-twelve, an Integrale for the rally hatch; nothing for the hot hatch and
-  the V6 hatch).
+  and the V6 hatch still relied on the archive item then; they moved in banks2 (below).
+
+### Sound, banks2: the five first cars' engines from described recordings (0.27.0)
+
+The V8's run-up and overrun, the flat-twelve's, and the hot hatch's, the rally hatch's and the V6 hatch's three
+banks each were the Internet Archive item `car-engines`' (`3 Ferrari 458`, `15 Lamborghini Countach`, `honda civic type
+r`, `25 Nissan Pulsar`, `Jaguar f-type s`: a likely compilation whose CC0 is only its uploader's word, stage 1's notes),
+the last banks of the game cut from it after cars13 audio2. They are cut again from recordings whose makers describe the
+car, the engine and the recording, so no bank uses the item, and the drones' loop, which was the flat-twelve voice on
+the Countach bank, is rendered again on the new one. Sources, licences, credits, segments, rebuild lines and the
+candidates passed over are in `game/assets/audio/SOURCES.md` and `THIRD_PARTY.md`.
+
+- **What each plays.** The V8, drawn as a McLaren 570S: the 570S's own M838TE pulling twice to its 8,500 rpm limiter
+  on a catless Fi Exhaust system (FiExhaust's video, Wikimedia Commons, CC BY 3.0), a 458 Speciale held against its
+  9,000 rpm limiter at a show for the top the game's 9,000 rpm redline asks for (TvdL Films, Commons, CC BY 3.0), and
+  the 540C's revs falling after its blips for the overrun (FiExhaust, Commons); the Maserati's idle (CC0) stays. The
+  flat-twelve: an F12tdf's 6.3 V12 accelerating hard on the road, 2,350 to 5,690 rpm, and lifting off (Supercars1989,
+  Commons, CC BY 3.0); its Lamborghini idle (CC0) stays. The hot hatch: a 1982 Alfa Romeo Spider 2000's two-litre
+  eight-valve twin cam revved standing at its exhaust, two blips for the run-up and their falls for the overrun
+  (Luciano's Classics, Commons, CC BY 4.0 at source), and a 1990 Volvo 240's 2.3 eight-valve four idling outside with the
+  bonnet closed (j_soundeffects, Freesound, CC BY 4.0). The rally hatch: an Audi S1's 2.0 TFSI through first, third and
+  fourth gears of a 0-240 km/h run (Calvin MotorSport, Commons, CC BY 3.0), and a Fiat Coupé 2.0 16v Turbo, the
+  Integrale's engine family, idling and lifting off at the end of its 0-200 run (Witu Tech, Commons, CC BY 3.0). The V6
+  hatch: a 3.2 V6, a Honda J32 driven fast with a lavalier above its exhaust, for the pull (1,570-5,160 rpm), the coast
+  after it and the idle (EvanBoyerman, Freesound, CC BY 4.0). Every file was fetched from its page with a descriptive
+  User-Agent (the Commons files' SHA-1 checked against their pages) and its video's licence read from YouTube's metadata.
+- **Firing lines.** In the S1's and the Coupé's tracks the strongest line is twice the firing (the fourth crank order),
+  told from the pairs of lines and the revs they give in each gear; the S1's run-up is tracked on it with the bank
+  tool's harmonic field at 2 (the field now takes a fraction too, for a half order; unused). Quiet idles whose firing
+  line is weak (the Volvo's, the Coupé's) are tracked on their second harmonic over a band wider than a frame's bin:
+  over a narrow band the tracker stuck at its seed, every label 27.0 Hz, and the voice took the Volvo idle's top for 810
+  rpm, under the hot hatch's governed idle of 930, where it was already across into the run-up's pulses, 5 to 6 LU
+  louder than every other idle (the voice's idle, governor and throttle tests).
+- **Choices the tests made.** The Acura's run-up starts at 2.3 s (1,570 rpm), past the throttle's dull opening, and is
+  levelled over half-second windows (from 0.8 s, or unlevelled, the level at the idle revs did not rise with the
+  throttle); its gear-change lifts are out of the overrun (14 to 28 ticks in five seconds lifting off from the
+  redline; none on the coast alone); its idle is 3 s of its steadiest stretch (the wider 6 s stepped the level 1.2 LU
+  at 1,400 rpm). The Spider's blips start at 2,620 and 2,920 rpm (from their first soft pulses the level fell with the
+  throttle at the idle revs) and the hold at 3,540-4,460 rpm is out (a step of 2.6 LU at 3,500 rpm); the Spider's own
+  idle is out for the Volvo's: at the exhaust it is the brightest idle of the catalogue (1-3 kHz -5.0 dB of its sound,
+  where the diesel test asks every petrol four's idle 6 dB under the diesel's -9.3). The S1's fifth gear and its second
+  run are out (the evening did not even the timbre, the limiter's cut fell in 12 ms, a step of 1.8 LU at 4,600 rpm and
+  an overrun as bright as the run-up); the Coupé's lift-off is low-passed at 4 kHz (at 6 kHz it was 2.9 dB under the
+  run-up above 2 kHz, 3 asked). The 570S's labels past its limiter followed the half order and are cut off; cut to
+  8,560 rpm alone the voice held -6.0 dB of the sound as a tone at 9,000 (-4.77 asked), with the Speciale's ten
+  quarter-second stretches it passes.
+- **Measured** (the audio tests, every one green on the final banks): the bank-level checks of every folder (no grain
+  12 dB under its neighbours, none four times as sharp as its segment's, every side 0.6 of a period or more), the
+  catalogue's voice checks on the five cars (full load reaching the voice, a quiet governed idle, the tone to the
+  redline, the limiter's crisp cut, the level following the revs within 1.2 LU a step and 2.1 LU a sag, the throttle
+  raising the level at the idle revs, lifting off without a run of ticks, the overrun quieter than the throttle in every
+  band at the same revs, the firing frequency at idle and pulling, the diesel's knock over every petrol four's).
+- **Caveats.** The flat-twelve is a 2016 V12, not a flat-twelve (no usable recording of one was found: the Commons
+  Testarossa is a phone at a distance, the Countach an idle and a departure); the hot hatch's idle is another eight-valve
+  four's than its run-up; the rally hatch's run-up is a modern turbo four, its idle and lift-off the Integrale's own
+  family; the V6 hatch's run-up ends at 5,160 rpm and the voice lays its top pulses closer to the R32's 6,600 (1.3
+  times; the E46 M3's S54 on Freesound, #415276, is the candidate if that is ever raised); the V8's top is a flat-plane
+  458 Speciale's beside a cross-plane 570S's pulls. Commons' licence reviews of the seven tracks are pending (their
+  YouTube licences were read on 3 November 2026). The Unreal version's bank table is unchanged (the folders are).
 
 ## Unreal Engine version (`unreal/`)
 
