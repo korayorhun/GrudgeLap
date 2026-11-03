@@ -45,8 +45,8 @@
     "wheel_centre": [-0.37, 0.17, -0.22],
     "eye_from_wheel": [0.0, 0.28, 0.52],
     "dials": {
-      "centre": [-0.285, 0.191, -0.312],
-      "width": 0.269,
+      "centre": [-0.33, 0.203, -0.282],
+      "width": 0.255,
       "gear_top": 120
     },
     "mirror": {
@@ -63,8 +63,8 @@
     "wheel_centre": [-0.351, 0.22, -0.228],
     "eye_from_wheel": [0.0, 0.28, 0.52],
     "dials": {
-      "centre": [-0.351, 0.255, -0.33],
-      "width": 0.26,
+      "centre": [-0.301, 0.2, -0.29],
+      "width": 0.24,
       "gear_top": 120
     },
     "mirror": {
@@ -99,8 +99,8 @@
     "wheel_centre": [-0.36, 0.19, -0.05],
     "eye_from_wheel": [0.0, 0.28, 0.52],
     "dials": {
-      "centre": [-0.373, 0.254, -0.285],
-      "width": 0.269,
+      "centre": [-0.385, 0.254, -0.26],
+      "width": 0.24,
       "gear_top": 120
     },
     "mirror": {
@@ -159,8 +159,8 @@
     "wheel_centre": [-0.344, 0.237, -0.274],
     "eye_from_wheel": [0.0, 0.28, 0.52],
     "dials": {
-      "centre": [-0.344, 0.248, -0.437],
-      "width": 0.26,
+      "centre": [-0.344, 0.235, -0.437],
+      "width": 0.3,
       "gear_top": 120
     },
     "mirror": {

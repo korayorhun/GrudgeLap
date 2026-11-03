@@ -8,7 +8,7 @@ Yeni bir istek gelince buraya satır olarak eklenir. Bir sürüm bir isteği kar
 - **Durum:** `Tamam` karşılandı, `Kısmen` bir kısmı karşılandı, `Açık` henüz yapılmadı, `Karar` yön belirlendi, `Ertelendi` bilerek sonraya bırakıldı.
 - **Ayrıntı:** teknik gerekçeler [design.md](design.md)'de, sürüm notları GitHub Releases'te.
 
-Son güncelleme: 3 Kasım 2026 (sürüm 0.29.0).
+Son güncelleme: 3 Kasım 2026 (sürüm 0.30.0).
 
 ## 1. Hedef
 
@@ -47,7 +47,7 @@ Son güncelleme: 3 Kasım 2026 (sürüm 0.29.0).
 | G1 | Arabalar kutu gibi değil, gerçek arabalar gibi görünsün. | 1 Kas: "otomoiller kutu gibi, gerçeğine benzemiyor" | Tamam: 0.16'dan beri gerçek, CC BY lisanslı modeller; 0.20'de malzemeler düzeltildi |
 | G2 | Ana araba Testarossa'ya benzesin; kaybolan Testarossa geri gelsin. | 23 Eki: "araba da testarossa'ya pek benzemiyor"; 1 Kas: "Testarossa kaybolmuş???" | Tamam (0.17.0) |
 | G3 | Birbirinin aynı görünen arabalar ayrışsın. | 1 Kas: "bazı arabalar birbirinin aynı" | Tamam (0.17.0) |
-| G4 | Araç içi gerçek gibi olsun: göstergeler yarım görünmesin, direksiyon, tavan, konsol, gövde gerçekçi olsun. | 28 Eki: "göstergeler yarım gözüküyor"; 29 Eki; 1 Kas: "direksiyon arabanın içeriden tavanı falan.. konsol gövde" | Kısmen: gerçek kabinler (0.16, 0.17, 0.20), göstergeler tam (0.8.1). Eksikler bölüm 10'da |
+| G4 | Araç içi gerçek gibi olsun: göstergeler yarım görünmesin, direksiyon, tavan, konsol, gövde gerçekçi olsun. | 28 Eki: "göstergeler yarım gözüküyor"; 29 Eki; 1 Kas: "direksiyon arabanın içeriden tavanı falan.. konsol gövde" | Kısmen: gerçek kabinler (0.16, 0.17, 0.20), göstergeler tam (0.8.1); direksiyonun arkasında kalan göstergeler (R12, E-Class, Delta, Golf) direksiyon açıklığına taşındı (0.30.0). Eksikler bölüm 10'da |
 | G5 | Kokpitte sol ön direk ince olsun. | 22 Eki: "kokpitte sol A-direği çok kalın ve baskın" | Tamam (0.4.0). 458'de aynı sorun yeniden var, bölüm 10 |
 | G6 | McLaren'in kokpitinden yol görünsün. | 2 Kas: "mclaren ile kokpitte kullanırken yolu göremiyoruz" | Tamam (0.25.0) |
 | G7 | Bazı arabaların kokpitleri çok karanlık, hiçbir şey görünmüyor; hepsi kontrol edilsin. | 3 Kas: "bazı arabaların kokpitleri çok karanlık hiç görünmüyor.. hepsini kontrol et" | Tamam (0.28.0): gerçek modelle çizilen kabinlerde (Esprit, 570S, 205, Delta, SAAB, VAZ, W212, R12, 458 ve BRZ'nin ödünç kabinleri) kabin gün ışığı hiç kurulmuyordu, yalnız gökyüzünün ortam ışığıyla tavanın altında kalıyordu; artık her kabin kendi göz noktasından aydınlatılıyor (karanlık piksel payı W212 %55→%13, R12 %51→%45, 205 %48→%22, Delta %43→%9, 458 %35→%11, BRZ %46→%18) |
@@ -91,7 +91,7 @@ Son güncelleme: 3 Kasım 2026 (sürüm 0.29.0).
 |---|---|---|---|
 | U1 | Esc ile menüye dönülebilsin, oyundan çıkılabilsin; arayüz kolay olsun. | 28 Eki: "oyundan çıkamadım" | Tamam (0.8.1) |
 | U2 | Oyunun nasıl başlatılacağı anlaşılır olsun. | 22 Eki: "oyunu nasıl başlatacağımı bulamadım" | Kısmen: açılış ekranında tuş ipuçları var; sahiple doğrulanmadı |
-| U3 | Uygulama hızlı açılsın. | 22 Eki: "uygulama çok geç açılıyor" | Kısmen (0.29.0): dağıtılan oyunda ılık açılış 9.4 s → 8.2, its first frame at 4.8 s (ineklerin post dokusu paralel boyanıyor: 7 inek 7,2 s → 0,8 s; trafik arabalarının modelleri açılışın başında yükleyici iş parçacığında: 2,2 s → 0,04 s). İlk açılış (kurulumdan sonraki ilk kez) hâlâ ~58 s: shader derlemesi, Godot'un kendi işi; arazi 1,0 s ve yollar 0,5 s açık |
+| U3 | Uygulama hızlı açılsın. | 22 Eki: "uygulama çok geç açılıyor" | Kısmen (0.29.0): dağıtılan oyunda ılık açılış 9,4 s → 8,2 s, ilk kare 4,8 s'de (ineklerin post dokusu paralel boyanıyor: 7 inek 7,2 s → 0,8 s; trafik arabalarının modelleri açılışın başında yükleyici iş parçacığında: 2,2 s → 0,04 s). İlk açılış (kurulumdan sonraki ilk kez) hâlâ ~58 s: shader derlemesi, Godot'un kendi işi; arazi 1,0 s ve yollar 0,5 s açık |
 | U4 | Uygulama bir bilgisayarda yalnız bir kez açılabilsin. | 22 Eki | Tamam |
 | U5 | Oyun çökmesin, bilgisayarı kilitlemesin. | 28 Eki: "oyun biraz oynayınca kilitleniyor, bilgisayarı da kilitliyor" | Tamam (0.8.0: kare sınırı, GPU zaman aşımlarına karşı) |
 
@@ -114,10 +114,10 @@ Son güncelleme: 3 Kasım 2026 (sürüm 0.29.0).
 6. **BeamNG düzeyinde çarpışma** (F2) yok.
 7. **Instant replay müziği** (S2) için sahibin değerlendirmesi bekleniyor.
 8. **Leon Cupra gücü** (A3): 245 PS mi, 300 PS mi?
-9. **Bazı göstergeler:** estate'in hız ölçeği, E-Class'ın devir saati ve Delta'nın vites göstergesi direksiyonun arkasında kısmen kalıyor.
+9. **Bazı göstergeler** direksiyonun arkasında kısmen kalıyordu (estate'in hız ölçeği, E-Class'ın devir saati, Delta'nın vites göstergesi ve kümesinin üstü, Golf'ün küçük kümesi): Tamam (0.30.0), panel dört arabada direksiyonun açıklığına taşındı (araba başına düzeltme, `tools/car_models.json` dials). Kalan küçük kusur: Delta'da kilometre sayacı satırı torpido dudağının altında.
 10. **Bilinçli tasarım tercihleri, sahibe sorulacak:** Testarossa oyunun orijinalindeki gibi 4 vitesli (gerçeği 5); V8'in oyun içi adı "V8 GTB '12", çizilen araba ise 2015 McLaren 570S.
 11. **Unreal sürümü:** 458 ve BRZ orada geçici gövdeli; bu makinede derlenmedi.
-12. **Açılış süresi** (U3): ılık açılış 8.2, its first frame at 4.8 s (0.29.0, `--perf-log` aşama damgalarını yazar); kalan büyük kalemler arazi ağı (1,0 s) ve yollar (0,5 s), ilk açılıştaki shader derlemesi (~58 s) motorun işi.
+12. **Açılış süresi** (U3): ılık açılış 8,2 s, ilk kare 4,8 s'de (0.29.0, `--perf-log` aşama damgalarını yazar); kalan büyük kalemler arazi ağı (1,0 s) ve yollar (0,5 s), ilk açılıştaki shader derlemesi (~58 s) motorun işi.
 
 ## 11. Çalışma kuralları
 

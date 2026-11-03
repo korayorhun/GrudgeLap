@@ -2551,6 +2551,27 @@ a time, on one core), the drones 2.2 s (`BuildDroneViews` loads the five everyda
 - Left: the terrain's refinement and mesh (1.0 s; its heights are already sampled in parallel), the roads (0.5 s),
   and the first start's shader compilation.
 
+### Dials in the wheel's opening (0.30.0)
+
+Open item 9: the live instrument panel partly behind the steering wheel in four model cabins, seen on the hidden
+seat-view shots taken for 0.28.0 (the R12's speedometer behind the rim's left side, the W212's tachometer behind its
+right, the Delta's gear readout and the top of its cluster under the rim, the Golf's cluster small with its top
+clipped). The preparation puts the panel on the named instrument mesh's face, or where the line of sight over the hub
+meets the dashboard, and on these models that is not where the wheel's opening is: the R12's instruments sit 8.5 cm
+right of its wheel's axis; the W212's are recessed in tubes whose bezels occlude as well; the Delta's wheel is part of
+the dashboard mesh, modelled turned and to the right of the eyes, so its opening lies low and right of the model's own
+instrument recess; the Golf's is simply small from 0.68 m. Fixed with the entries' `dials` corrections alone
+(`tools/car_models.json`: offset in the car frame and width), each read off a shot and checked on the next:
+
+- R12 (estate): 4.5 cm left, 1.2 cm up and 3 cm nearer the eyes (in front of its bezels), 25.5 cm wide.
+- W212 (fleet): 1.2 cm left and 2.5 cm nearer, 24 cm wide (2 to 3 cm higher put it under the binnacle's cowl).
+- Delta (five): 5 cm right, 5.5 cm down and 4 cm nearer, 24 cm wide.
+- Golf R32 (turbohatch): 1.3 cm down, 30 cm wide.
+
+Both dials and the gear readout are in the opening on all four now (shots six seconds into the attract lap, the wheel
+straight); the Delta's odometer line is under the dashboard's lip. The record `tools/car_cockpits.json` moved with
+them; the other cars' models are untouched.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and
