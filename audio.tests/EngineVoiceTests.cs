@@ -561,8 +561,8 @@ public class EngineVoiceTests(ITestOutputHelper output)
     /// which the voice played as a drop-out of a firing period; and the rally hatch's idle and overrun, the hot hatch's
     /// overrun, the saloon's idle and the fleet saloon's Bravo segments held crackles. Measured on the re-cut banks: the
     /// deepest grain 9.8 dB under its neighbours (the V6 hatch's run-up, a blip's last pulse). Every bank folder is
-    /// checked (<see cref="Banks"/>), the five cut in cars13 ahead of their cars among them: at most 7.6 dB (the HGT's
-    /// overrun) and 3.9 times (the 1.6's overrun).
+    /// checked (<see cref="Banks"/>), the five cut in cars13 ahead of their cars among them: at most 6.3 dB (the 458's
+    /// overrun, cut again in cars13 audio2) and 3.8 times (the Cupra's overrun).
     /// </summary>
     [Theory]
     [MemberData(nameof(Banks))]
@@ -885,6 +885,158 @@ public class EngineVoiceTests(ITestOutputHelper output)
             Assert.True(levels[k] >= levels[k - 1] + 0.2, $"{car}: {levels[k] - levels[k - 1]:+0.0;-0.0} LU from a load of {loads[k - 1]:0.00} to {loads[k]:0.00}");
         }
         Assert.True(levels[^1] - levels[0] >= 2.5, $"{car}: full throttle only {levels[^1] - levels[0]:0.0} LU over the governor's");
+    }
+
+    /// <summary>
+    /// The Bravo HGT's five beats in the voice as its recording does (cars13 audio2). Its banks are a real five's, an Audi
+    /// TT RS's (game/assets/audio/SOURCES.md), and a five's beat is the orders of its cycle (two turns of the crank) that
+    /// are not the firing's: k = 1-4, 6-9 and 11-14 of rpm / 120, where the firing is 5, 10 and 15. Held at full throttle
+    /// every 500 rpm from 2,500 to 6,000 the voice holds those orders over the noise between them (the half orders, k +
+    /// 0.5) by about what its run-up's recording does, order-tracked on its own labels within 8 % of the same revs: their
+    /// means within 2.5 dB, neither less (the beat lost to the grains' picks) nor more (a beat of the voice's own). Measured:
+    /// the recording 7.8 dB, the voice 6.2 (0.4 to 8.7 by the revs; 0.4 at 3,500 rpm, which the run-up passes in half a
+    /// second, so the voice strings few of its grains in their order there).
+    /// <para>
+    /// So the voice lays no beat of its own over a five. Until audio2 it weighted each cylinder's pulse of a five
+    /// (GranularEngine.FivePattern: 1.00, 0.82, 0.94, 0.78 and 0.90), meant for the S2000's four laid at a five's firing in
+    /// 0.9-0.20 and kept on the five's banks since; laid over the TT RS's banks it moved these orders by 0.1 dB at most,
+    /// and the voice with it differed from the voice without by 27 to 32 dB under its level: the ring divides the shares
+    /// of the grains overlapping at a sample back out (GrainRing.Take), so the weights only tilted the crossfade between
+    /// neighbours. A recording of the engine itself needs none; one of another engine laid at a five's firing would need
+    /// a gain per pulse outside the ring.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void The_five_beats_as_its_recording_does()
+    {
+        const string car = "inline5";
+        var index = IndexOf(car);
+        var cylinders = VehicleSpec.Catalogue[index].Engine.Cylinders;
+        Assert.Equal(5, cylinders);
+        var raw = Bank(car, "engine_drive", even: false)!;
+        var (recorded, heard) = (new List<double>(), new List<double>());
+        for (var rpm = 2500f; rpm <= 6000f; rpm += 500f)
+        {
+            var mine = BeatOfRecording(raw, cylinders, rpm);
+            var voice = BeatOfVoice(car, index, rpm);
+            output.WriteLine($"{car} at {rpm:0} rpm: the five's orders {mine:+0.0;-0.0} dB over the half orders in the recording, {voice:+0.0;-0.0} in the voice");
+            recorded.Add(mine);
+            heard.Add(voice);
+        }
+        output.WriteLine($"{car}: the recording {recorded.Average():+0.0;-0.0} dB, the voice {heard.Average():+0.0;-0.0} on average");
+        Assert.True(recorded.Average() >= 3, $"the recording holds the five's orders only {recorded.Average():0.0} dB over the noise between them");
+        Assert.InRange(heard.Average() - recorded.Average(), -2.5, 2.5);
+    }
+
+    /// <summary>The cycle's orders <c>k = 1..15</c> and half orders <c>k + 0.5</c> the beat is measured on.</summary>
+    private static readonly double[] BeatOrders = [.. Enumerable.Range(1, 15).Select(k => (double)k), .. Enumerable.Range(0, 15).Select(k => k + 0.5)];
+
+    /// <summary>The mean power of a five's orders that are not the firing's against the half orders', dB.</summary>
+    private static double Beat(IReadOnlyDictionary<double, double> power)
+    {
+        var five = Enumerable.Range(1, 14).Where(k => k % 5 != 0).Average(k => power[k]);
+        var noise = Enumerable.Range(0, 15).Average(k => power[k + 0.5]);
+        return 10.0 * Math.Log10(five / noise);
+    }
+
+    /// <summary>
+    /// The beat (<see cref="Beat"/>) of the voice held at full throttle at <paramref name="rpm"/>: three seeds, the second
+    /// half of three seconds each, the power at each order the strongest bin within 1.5 % of it (a 65,536-point spectrum).
+    /// </summary>
+    private static double BeatOfVoice(string car, int index, float rpm)
+    {
+        var power = BeatOrders.ToDictionary(o => o, _ => 0.0);
+        foreach (var seed in Seeds.Take(3))
+        {
+            var p = Spectrum.Power(Hold(Voice(car, index, seed: seed), rpm, 1f, 3f).AsSpan(3 * Rate / 2), 65536);
+            foreach (var o in BeatOrders)
+            {
+                var hz = o * rpm / 120.0;
+                var (from, to) = ((int)Math.Floor(hz * 0.985 * 65536 / Rate), (int)Math.Ceiling(hz * 1.015 * 65536 / Rate));
+                power[o] += Enumerable.Range(from, to - from + 1).Max(k => p[k]);
+            }
+        }
+        return Beat(power);
+    }
+
+    /// <summary>
+    /// The beat (<see cref="Beat"/>) of a bank's own recording near <paramref name="rpm"/>: every run of consecutive pulses
+    /// of one segment labelled within 8 % of its firing frequency, order-tracked on the labels (<see cref="AddOrders"/>).
+    /// </summary>
+    private static double BeatOfRecording(GrainBank bank, int cylinders, float rpm)
+    {
+        var firing = rpm * cylinders / 120f;
+        var power = BeatOrders.ToDictionary(o => o, _ => 0.0);
+        var run = new List<int>();
+        for (var i = 0; i <= bank.Marks.Length; i++)
+        {
+            var near = i < bank.Marks.Length && MathF.Abs(bank.Firing[i] / firing - 1f) < 0.08f;
+            if (near && (run.Count == 0 || bank.Segment[i] == bank.Segment[run[^1]] && i == run[^1] + 1))
+            {
+                run.Add(i);
+                continue;
+            }
+            if (run.Count >= 3 * cylinders) AddOrders(bank, cylinders, run, power);
+            run.Clear();
+            if (near) run.Add(i);
+        }
+        return Beat(power);
+    }
+
+    /// <summary>
+    /// Adds a run of pulses' power at <see cref="BeatOrders"/> to <paramref name="power"/>: the cycle's phase integrated
+    /// from the labels interpolated between the marks, the run resampled at 64 points a cycle and Hann-windowed, each
+    /// order's power the strongest of a transform at the order and 0.05 and 0.1 either side, against the run's own energy
+    /// and weighted by its cycles.
+    /// </summary>
+    private static void AddOrders(GrainBank bank, int cylinders, List<int> run, Dictionary<double, double> power)
+    {
+        const int perCycle = 64;
+        var first = bank.Marks[run[0]];
+        var phase = new double[bank.Marks[run[^1]] - first + 1];
+        for (var k = 0; k + 1 < run.Count; k++)
+        {
+            var (a, b) = (bank.Marks[run[k]], bank.Marks[run[k + 1]]);
+            for (var j = a; j < b; j++)
+            {
+                var hz = bank.Firing[run[k]] + (bank.Firing[run[k + 1]] - bank.Firing[run[k]]) * (j - a) / (double)(b - a);
+                phase[j - first + 1] = phase[j - first] + hz / cylinders / bank.SampleRate;
+            }
+        }
+        var cycles = (int)Math.Floor(phase[^1]);
+        if (cycles < 3) return;
+        var y = new double[cycles * perCycle];
+        var at = 0;
+        for (var n = 0; n < y.Length; n++)
+        {
+            var target = n / (double)perCycle;
+            while (at + 2 < phase.Length && phase[at + 1] < target) at++;
+            var f = (target - phase[at]) / Math.Max(phase[at + 1] - phase[at], 1e-12);
+            y[n] = bank.Samples[first + at] + (bank.Samples[first + at + 1] - bank.Samples[first + at]) * f;
+        }
+        var mean = y.Average();
+        var energy = 0.0;
+        for (var n = 0; n < y.Length; n++)
+        {
+            y[n] = (y[n] - mean) * (0.5 - 0.5 * Math.Cos(2 * Math.PI * n / y.Length));
+            energy += y[n] * y[n];
+        }
+        foreach (var o in BeatOrders)
+        {
+            var strongest = 0.0;
+            foreach (var d in new[] { -0.1, -0.05, 0.0, 0.05, 0.1 })
+            {
+                double re = 0, im = 0;
+                var step = 2 * Math.PI * (o + d) / perCycle;
+                for (var n = 0; n < y.Length; n++)
+                {
+                    re += y[n] * Math.Cos(step * n);
+                    im -= y[n] * Math.Sin(step * n);
+                }
+                strongest = Math.Max(strongest, re * re + im * im);
+            }
+            power[o] += strongest / energy * cycles;
+        }
     }
 
     private static float[] LoopSamples(string file)
