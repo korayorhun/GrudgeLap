@@ -125,14 +125,30 @@ internal static class WorldBuilder
         PropBuilder.ReleaseShared();
     }
 
+    /// <summary>--perf-log: each stage of <see cref="Build"/> timed to the log (U3).</summary>
+    public static bool PerfLog { get; set; }
+
+    private static System.Diagnostics.Stopwatch? _stageWatch;
+
+    private static void Stage(string name)
+    {
+        if (!PerfLog) return;
+        if (_stageWatch is not null) GD.Print($"start:   world {name}: {_stageWatch.Elapsed.TotalMilliseconds:0} ms");
+        _stageWatch = System.Diagnostics.Stopwatch.StartNew();
+    }
+
     public static void Build(Node3D root, TrackGeometry track)
     {
+        _stageWatch = null;
+        Stage("");
         root.AddChild(BuildEnvironment());
         root.AddChild(BuildSun());
         root.AddChild(BuildFarGround(track));
         root.AddChild(BuildMountains(track));
         if (BuildClouds(track) is { } clouds) root.AddChild(clouds);
+        Stage("sky, sun, far ground, mountains, clouds");
         root.AddChild(BuildTerrain(track));
+        Stage("terrain");
         foreach (var path in track.Paths)
         {
             root.AddChild(BuildRoad(track, path));
@@ -146,14 +162,18 @@ internal static class WorldBuilder
             foreach (var node in BuildBridges(path)) root.AddChild(node);
             if (BuildLoopFrame(path, track.Terrain) is { } frame) root.AddChild(frame);
         }
+        Stage("roads, shoulders, lines, posts, bridges, the loop");
         if (BuildTowers(track) is { } towers) root.AddChild(towers);
         foreach (var pad in track.Pads) root.AddChild(BuildPad(pad));
         root.AddChild(FoliageBuilder.BuildGrass(track));
+        Stage("towers, pads, grass");
         var (minX, maxX, minZ, maxZ) = RoadBounds(track);
         // The wood fills the terrain out to its margin; beyond that lies the flat far ground.
         _forest = FoliageBuilder.BuildForest(track, minX - TerrainMargin + 40f, maxX + TerrainMargin - 40f, minZ - TerrainMargin + 40f, maxZ + TerrainMargin - 40f);
         root.AddChild(_forest);
+        Stage("forest");
         ApplyQuality();
+        Stage("quality");
     }
 
     /// <summary>The extent of the road centre lines.</summary>

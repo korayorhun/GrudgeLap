@@ -8,7 +8,7 @@ Yeni bir istek gelince buraya satır olarak eklenir. Bir sürüm bir isteği kar
 - **Durum:** `Tamam` karşılandı, `Kısmen` bir kısmı karşılandı, `Açık` henüz yapılmadı, `Karar` yön belirlendi, `Ertelendi` bilerek sonraya bırakıldı.
 - **Ayrıntı:** teknik gerekçeler [design.md](design.md)'de, sürüm notları GitHub Releases'te.
 
-Son güncelleme: 3 Kasım 2026 (sürüm 0.28.0).
+Son güncelleme: 3 Kasım 2026 (sürüm 0.29.0).
 
 ## 1. Hedef
 
@@ -91,7 +91,7 @@ Son güncelleme: 3 Kasım 2026 (sürüm 0.28.0).
 |---|---|---|---|
 | U1 | Esc ile menüye dönülebilsin, oyundan çıkılabilsin; arayüz kolay olsun. | 28 Eki: "oyundan çıkamadım" | Tamam (0.8.1) |
 | U2 | Oyunun nasıl başlatılacağı anlaşılır olsun. | 22 Eki: "oyunu nasıl başlatacağımı bulamadım" | Kısmen: açılış ekranında tuş ipuçları var; sahiple doğrulanmadı |
-| U3 | Uygulama hızlı açılsın. | 22 Eki: "uygulama çok geç açılıyor" | Açık: ölçülmedi |
+| U3 | Uygulama hızlı açılsın. | 22 Eki: "uygulama çok geç açılıyor" | Kısmen (0.29.0): dağıtılan oyunda ılık açılış 9.4 s → 8.2, its first frame at 4.8 s (ineklerin post dokusu paralel boyanıyor: 7 inek 7,2 s → 0,8 s; trafik arabalarının modelleri açılışın başında yükleyici iş parçacığında: 2,2 s → 0,04 s). İlk açılış (kurulumdan sonraki ilk kez) hâlâ ~58 s: shader derlemesi, Godot'un kendi işi; arazi 1,0 s ve yollar 0,5 s açık |
 | U4 | Uygulama bir bilgisayarda yalnız bir kez açılabilsin. | 22 Eki | Tamam |
 | U5 | Oyun çökmesin, bilgisayarı kilitlemesin. | 28 Eki: "oyun biraz oynayınca kilitleniyor, bilgisayarı da kilitliyor" | Tamam (0.8.0: kare sınırı, GPU zaman aşımlarına karşı) |
 
@@ -117,7 +117,7 @@ Son güncelleme: 3 Kasım 2026 (sürüm 0.28.0).
 9. **Bazı göstergeler:** estate'in hız ölçeği, E-Class'ın devir saati ve Delta'nın vites göstergesi direksiyonun arkasında kısmen kalıyor.
 10. **Bilinçli tasarım tercihleri, sahibe sorulacak:** Testarossa oyunun orijinalindeki gibi 4 vitesli (gerçeği 5); V8'in oyun içi adı "V8 GTB '12", çizilen araba ise 2015 McLaren 570S.
 11. **Unreal sürümü:** 458 ve BRZ orada geçici gövdeli; bu makinede derlenmedi.
-12. **Açılış süresi** (U3) ölçülmedi.
+12. **Açılış süresi** (U3): ılık açılış 8.2, its first frame at 4.8 s (0.29.0, `--perf-log` aşama damgalarını yazar); kalan büyük kalemler arazi ağı (1,0 s) ve yollar (0,5 s), ilk açılıştaki shader derlemesi (~58 s) motorun işi.
 
 ## 11. Çalışma kuralları
 

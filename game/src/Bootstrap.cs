@@ -1,3 +1,4 @@
+using System.Linq;
 using Godot;
 using GrudgeLap.Physics;
 using GrudgeLap.Physics.Race;
@@ -67,6 +68,8 @@ public sealed partial class Bootstrap : Node3D
     private float _menuAt = -1f;      // automation: the menu opened for a picture of it (--menu-after)
     private string? _dropFile;        // automation: a file dropped on the window two seconds in (--drop=)
     private bool _perfLog;            // automation: GPU and CPU time per frame, logged every five seconds (--perf-log)
+    private ulong _startMark;         // --perf-log: the engine's clock at the last start-up mark (StartMark)
+    private bool _firstFrameMarked;
     private bool _holdBrake;          // automation: the brake held down all the time, for pictures of the brake lamps (--hold-brake)
     private bool _dentTest;           // automation: a deep dent in the car's nose two seconds in, for pictures of it (--dent-test)
     private double _perfGpu, _perfCpu, _perfSince;
@@ -118,8 +121,20 @@ public sealed partial class Bootstrap : Node3D
     private bool _focused = true;
     private float _frameCapCheckAt;
 
+    /// <summary>
+    /// A start-up stage done (--perf-log, U3): its name, the engine's clock and the stage's own time, so a slow start can
+    /// be read off the log (the owner's "the game opens very late", 22 October 2026).
+    /// </summary>
+    private void StartMark(string stage)
+    {
+        var now = Time.GetTicksMsec();
+        GD.Print($"start: {stage} at {now} ms (+{now - _startMark} ms)");
+        _startMark = now;
+    }
+
     public override void _Ready()
     {
+        _startMark = Time.GetTicksMsec();
         InputSetup.Register();
         GetWindow().FilesDropped += OnFilesDropped;
         _carIndex = Math.Clamp(LoadChoice("car", 0), 0, VehicleSpec.Catalogue.Length - 1);
@@ -159,24 +174,42 @@ public sealed partial class Bootstrap : Node3D
             return;
         }
 
+        if (_perfLog) StartMark("settings, paints and arguments");
+        // The car models on the loader thread while the world is built here (U3): the player's and the traffic's.
+        CarView.RequestModels([VehicleSpec.Catalogue[_carIndex], .. TrafficCars]);
         _track = OriginalInspiredTrack.Build();
+        if (_perfLog) StartMark("track");
         if (_ram == "test")
         {
             // The crash replay's test (--ram=test): a tree on the start straight, 80 m on, in the middle of the road.
             var spot = _track.Common.FrameAt(80f);
             _track.Props.Add(new TrackProp(PropKind.Tree, spot.Origin, 0f, new SN.Vector3(1.0f, 7f, 1.0f), "crash-test"));
         }
+        WorldBuilder.PerfLog = _perfLog;
         WorldBuilder.Build(this, _track);
+        if (_perfLog) StartMark("world (terrain, roads, foliage, buildings)");
         AddChild(_knockSmoke);
         // Before the train and the drones: they hand their nodes to it for their sounds.
         _world = new WorldAudio();
         AddChild(_world);
+        var propTimes = _perfLog ? new Dictionary<PropKind, (double Ms, int Count)>() : null;
         for (var i = 0; i < _track.Props.Count; i++)
         {
+            var propWatch = propTimes is null ? null : System.Diagnostics.Stopwatch.StartNew();
             var node = PropBuilder.Build(_track.Props[i], _track.Terrain);
             _propNodes[i] = node;
             AddChild(node);
             if (_track.Props[i].Kind == PropKind.Cow) _world.AttachCow(node, i);
+            if (propTimes is not null)
+            {
+                var kind = _track.Props[i].Kind;
+                var so = propTimes.GetValueOrDefault(kind);
+                propTimes[kind] = (so.Ms + propWatch!.Elapsed.TotalMilliseconds, so.Count + 1);
+            }
+        }
+        if (propTimes is not null)
+        {
+            foreach (var (kind, (ms, count)) in propTimes.OrderByDescending(e => e.Value.Ms)) GD.Print($"start:   props {kind}: {count} in {ms:0} ms");
         }
         if (_track.Train is { } train)
         {
@@ -185,6 +218,7 @@ public sealed partial class Bootstrap : Node3D
             AddChild(TrainView.BuildRailway(train, _track));
             _world.AttachTrain(_trainView.Locomotive, train);
         }
+        if (_perfLog) StartMark("props, cows and the train");
         GetViewport().UseTaa = true;
         // A window resized (or made full screen) changes the render ceiling of ApplyGraphics.
         GetViewport().SizeChanged += () =>
@@ -194,6 +228,7 @@ public sealed partial class Bootstrap : Node3D
 
         _carView = CarView.Create(VehicleSpec.Catalogue[_carIndex], PlayerPaint);
         AddChild(_carView);
+        if (_perfLog) StartMark("the player's car");
         _carView.MarkPlayer();
         AddChild(WorldBuilder.BuildCarProbe());
         _cameraRig = new CameraRig { Mode = _orbit is not null ? CameraMode.Orbit : _startChase ? CameraMode.Chase : CameraMode.Cockpit };
@@ -207,8 +242,10 @@ public sealed partial class Bootstrap : Node3D
         var layer = new CanvasLayer { Visible = !_noHud };
         layer.AddChild(_hud);
         AddChild(layer);
+        if (_perfLog) StartMark("camera, hud and scores");
         _audio = new EngineAudio();
         AddChild(_audio);
+        if (_perfLog) StartMark("engine audio");
         _updater = new Updater();
         AddChild(_updater);
         SubViewport panel;
@@ -219,9 +256,11 @@ public sealed partial class Bootstrap : Node3D
         _instrumentPanel = panel.GetTexture();
         _hud.Instruments = _instrumentPanel;
         FitOutPlayerCar();
+        if (_perfLog) StartMark("updater, instruments and the player's fit-out");
 
         _savedBestLap = LoadBestLap();
         NewSession();
+        if (_perfLog) StartMark("session");
         if (_exportWorld is not null)
         {
             // After the session: the car stands at the start and the cockpit camera is placed.
@@ -234,6 +273,7 @@ public sealed partial class Bootstrap : Node3D
         if (_retro) SetRetro(true);
         else ApplyGraphics();
         ApplyFrameCap();
+        if (_perfLog) StartMark("graphics");
         if (_showroomArg is not null)
         {
             // The automation's showroom, reached as a player reaches it: through the menu's CAR line, or from the title.
@@ -392,6 +432,7 @@ public sealed partial class Bootstrap : Node3D
         options = options with { Weather = _weather ?? (_weatherChoice == 4 ? WeatherModel.Draw(System.Random.Shared) : (Weather)_weatherChoice) };
         var spec = VehicleSpec.Catalogue[_carIndex];
         _session = new RaceSession(_track, spec, options);
+        if (_perfLog) StartMark("  session: the race session");
         WorldBuilder.SetWeather(_session.Weather);
         ApplyRain();
         EndCrash();
@@ -399,7 +440,9 @@ public sealed partial class Bootstrap : Node3D
         _carView.Repair();
         if (_carView.IsInsideTree() && (_carView.Name != $"Car-{spec.Style}" || _repaintLofted)) BuildPlayerCar();
         _carView.Name = $"Car-{spec.Style}";
+        if (_perfLog) StartMark("  session: weather, repair, the car");
         _audio.SetCar(spec);
+        if (_perfLog) StartMark("  session: the engine voice");
         if (_savedBestLap is not null && !_noGhost) _session.LoadBestLap(_savedBestLap);
         _hud.Bind(_session);
         _instruments.Bind(_session);
@@ -407,8 +450,11 @@ public sealed partial class Bootstrap : Node3D
         _scoreOffered = false;
         _keyboard.Reset();
         _cameraRig.ResetChase();
+        if (_perfLog) StartMark("  session: best lap, hud, instruments");
         BuildDroneViews();
+        if (_perfLog) StartMark("  session: the drones");
         BuildGhostView();
+        if (_perfLog) StartMark("  session: the ghost");
         if (_attract || _park || _ram is not null)
         {
             _session.ChooseTransmission(_attractMode);
@@ -425,6 +471,9 @@ public sealed partial class Bootstrap : Node3D
         CarView.Overcast = _session is not null && !_retro && WeatherModel.Overcast(_session.Weather);
     }
 
+    /// <summary>The everyday cars the traffic is drawn as, in turn (BuildDroneViews).</summary>
+    private static readonly VehicleSpec[] TrafficCars = [VehicleSpec.Saloon, VehicleSpec.Estate, VehicleSpec.Fleet, VehicleSpec.HotHatch, VehicleSpec.TurboHatch];
+
     private void BuildDroneViews()
     {
         _world.DetachDrones();
@@ -439,7 +488,7 @@ public sealed partial class Bootstrap : Node3D
         // and twelve colours repeat a pair only every sixty drones, and a credit has eight. Only the look: the drones
         // move as before (physics/Race/Traffic.cs), whatever car is drawn; their cabins are drawn only near
         // (CarView.TrimCabinForTraffic).
-        VehicleSpec[] everyday = [VehicleSpec.Saloon, VehicleSpec.Estate, VehicleSpec.Fleet, VehicleSpec.HotHatch, VehicleSpec.TurboHatch];
+        var everyday = TrafficCars;
         foreach (var drone in _session.Traffic.Cars)
         {
             var index = _droneSerial++ % (everyday.Length * CarView.TrafficPaints.Length);
@@ -636,6 +685,11 @@ public sealed partial class Bootstrap : Node3D
     public override void _Process(double delta)
     {
         if (_leaving) return;
+        if (_perfLog && !_firstFrameMarked)
+        {
+            _firstFrameMarked = true;
+            StartMark("first frame");
+        }
         var dt = (float)delta;
         _elapsed += dt;
         if (SingleInstance.ActivationRequested()) BringToFront();

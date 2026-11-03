@@ -2530,6 +2530,27 @@ eye point, the lofted style's or the model's (`CarView.Model.cs`, in the body's 
 model cabin has them: 5-22 % after (the R12 45: its dashboard is the model's black plastic, lit now but dark by
 colour; the 458 11, its header still low over the screen, open item 1). The lofted cabins are unchanged (within 0.5 %).
 
+### Start-up time (U3, 0.29.0)
+
+The owner's "the game opens very late" (22 October 2026), measured on the shipped 0.28.0 build, hidden and silent, to
+its first frame: 9.4 s warm, 58 s the first time after an install (the engine compiling its shaders;
+not the game's to shorten). `--perf-log` now stamps every stage of `Bootstrap._Ready`, the props by kind, the world
+builder's stages and the session's parts (`StartMark`, `WorldBuilder.Stage`). In the editor build the start took 13.6 s:
+the seven cows 7.2 s (a second each: `CowBuilder.Paint` paints a 768 x 384 hide from three-octave value noise a pixel at
+a time, on one core), the drones 2.2 s (`BuildDroneViews` loads the five everyday cars' models one after another,
+0.4 s each), the world 2.1 s (the terrain 1.0, the roads 0.5), the track 0.3, everything else under 0.15.
+
+- The hide's rows are painted in parallel (`Parallel.For` over the rows of each tube; every helper is a pure function
+  of its arguments and each row writes its own stretch of the atlas, so the hides are the same to the byte): the seven
+  cows 0.8 s.
+- The models of the player's car and of the traffic's five everyday cars are asked of Godot's loader thread at the top
+  of `_Ready` (`CarView.RequestModels`), before the world is built on the main thread, and taken from it when a car is
+  built (`LoadModelScene`: a path the thread has, or is still on, comes from `LoadThreadedGet`, which waits; any other
+  is loaded as before). The drones then take 40 ms. The showroom's own threaded preload is untouched.
+- Editor build 13.6 s to 7.1 s; the shipped build 9.4 s to 8.2, its first frame at 4.8 s warm.
+- Left: the terrain's refinement and mesh (1.0 s; its heights are already sampled in parallel), the roads (0.5 s),
+  and the first start's shader compilation.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

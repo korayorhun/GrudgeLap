@@ -138,7 +138,7 @@ internal sealed partial class CarView
     {
         if (ModelPath(spec) is not { } path) return false;
         var key = System.IO.Path.GetFileNameWithoutExtension(path);
-        if (ResourceLoader.Load<PackedScene>(path)?.Instantiate() is not Node3D scene) return false;
+        if (LoadModelScene(path)?.Instantiate() is not Node3D scene) return false;
         if (scene.FindChild("CarModel", true, false) is not Node3D model || model.GetNodeOrNull<Node3D>("Wheel0") is null)
         {
             GD.PrintErr($"{path} is not a prepared car model (tools/prepare_car_models.py); the lofted body is drawn");
@@ -186,6 +186,28 @@ internal sealed partial class CarView
             BuildCabinLight(_body, modelEye, modelEye.X);
         }
         return true;
+    }
+
+    /// <summary>
+    /// Asks Godot's loader thread for the models of the cars a credit draws (the player's and the traffic's), so they
+    /// are parsed while the world is built on the main thread (U3, 0.29.0: loaded one after another when the drones
+    /// were built, the five everyday models took 2.2 s of the start). A path already loading or loaded is left alone.
+    /// </summary>
+    public static void RequestModels(IEnumerable<VehicleSpec> specs)
+    {
+        foreach (var path in specs.Select(ModelPath).OfType<string>().Distinct())
+        {
+            if (ResourceLoader.HasCached(path)) continue;
+            if (ResourceLoader.LoadThreadedGetStatus(path) == ResourceLoader.ThreadLoadStatus.InvalidResource) ResourceLoader.LoadThreadedRequest(path);
+        }
+    }
+
+    /// <summary>The model's scene: from the loader thread when it has it or is still on it (RequestModels), loaded here otherwise.</summary>
+    private static PackedScene? LoadModelScene(string path)
+    {
+        var status = ResourceLoader.LoadThreadedGetStatus(path);
+        if (status is ResourceLoader.ThreadLoadStatus.InProgress or ResourceLoader.ThreadLoadStatus.Loaded) return ResourceLoader.LoadThreadedGet(path) as PackedScene;
+        return ResourceLoader.Load<PackedScene>(path);
     }
 
     /// <summary>A node's transform in this node's frame, before it is in the tree (Node3D.GlobalTransform needs the tree).</summary>

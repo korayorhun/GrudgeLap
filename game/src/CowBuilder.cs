@@ -278,22 +278,28 @@ internal static class CowBuilder
             var y0 = (int)tube.Uv.Position.Y;
             var w = Math.Max((int)tube.Uv.Size.X, 1);
             var h = Math.Max((int)tube.Uv.Size.Y, 1);
-            for (var py = 0; py < h; py++)
+            // Every row on its own core (U3, 0.29.0): the hide is 295,000 pixels of three-octave value noise, and painted
+            // on one core the seven cows took 7 s of the start (a second each). The rows are independent, every helper
+            // here is a pure function of its arguments, and each row writes its own stretch of the atlas.
+            var rings = tube.Rings;
+            var part = tube.Part;
+            var offset = tube.Offset;
+            Parallel.For(0, h, py =>
             {
-                var t = (tube.Rings.Length - 1) * (py + 0.5f) / h;
-                var k = Math.Min((int)t, tube.Rings.Length - 2);
-                var ring = Lerp(tube.Rings[k], tube.Rings[k + 1], t - k);
+                var t = (rings.Length - 1) * (py + 0.5f) / h;
+                var k = Math.Min((int)t, rings.Length - 2);
+                var ring = Lerp(rings[k], rings[k + 1], t - k);
                 for (var px = 0; px < w; px++)
                 {
                     var angle = MathF.Tau * (px + 0.5f) / w;
                     var local = OnRing(ring, angle);
-                    var colour = HideAt(tube.Part, local + tube.Offset, local, ring, shift, threshold);
+                    var colour = HideAt(part, local + offset, local, ring, shift, threshold);
                     var index = ((y0 + py) * AtlasWidth + x0 + px) * 3;
                     data[index] = (byte)(Mathf.Clamp(colour.R, 0f, 1f) * 255f);
                     data[index + 1] = (byte)(Mathf.Clamp(colour.G, 0f, 1f) * 255f);
                     data[index + 2] = (byte)(Mathf.Clamp(colour.B, 0f, 1f) * 255f);
                 }
-            }
+            });
         }
         var image = Image.CreateFromData(AtlasWidth, AtlasHeight, false, Image.Format.Rgb8, data);
         image.GenerateMipmaps();
