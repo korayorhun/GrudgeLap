@@ -200,13 +200,13 @@ internal sealed partial class CarView : Node3D
                 CarStyle.Saloon => BodyStyle.Saloon,
                 CarStyle.Estate => BodyStyle.Estate,
                 CarStyle.Fleet => BodyStyle.Fleet,
-                // cars13, until their models land: the nearest lofts, fitted to each car's axles. The 458 and the BRZ take
-                // the V8's (a low two-door; the BRZ is front-engined, so the glass deck is a stand-in), the two Bravos the
-                // loft keyed on the 1995 Bravo (BodyStyle.FiveHatch), the Leon Cupra the one keyed on the 2007 Leon
-                // (BodyStyle.TurboHatch).
+                // cars13: the 458 and the BRZ are drawn by their models, and their lofts (with --lofted) are the V8's, a
+                // low two-door (the BRZ is front-engined, so the glass deck is a stand-in); no credible model of the first
+                // Bravo or of the 2017 Leon exists, so theirs are lofts of their own (CarView.Cars13.cs, cars13 bodies).
                 CarStyle.FlatPlaneV8 or CarStyle.Boxer => BodyStyle.V8,
-                CarStyle.HgtFive or CarStyle.HatchSixteen => BodyStyle.FiveHatch,
-                CarStyle.CupraTsi => BodyStyle.TurboHatch,
+                CarStyle.HgtFive => BodyStyle.BravoHgt,
+                CarStyle.HatchSixteen => BodyStyle.BravoSixteen,
+                CarStyle.CupraTsi => BodyStyle.LeonCupra,
                 _ => BodyStyle.FlatTwelve,
             }).FittedTo(spec),
         };
@@ -490,6 +490,9 @@ internal sealed partial class CarView : Node3D
             fitted.PillarsZ = Zs(PillarsZ);
             fitted.HandleZ = Z(HandleZ);
             fitted.MirrorZ = Z(MirrorZ);
+            fitted.RearHandleZ = Z(RearHandleZ);
+            fitted.PaintedCovers = [.. PaintedCovers.Select(c => c.Select(p => new Vector2(Z(p.X), p.Y)).ToArray())];
+            fitted.BlackCovers = [.. BlackCovers.Select(c => c.Select(p => new Vector2(Z(p.X), p.Y)).ToArray())];
             fitted.KeyedFrontAxle = spec.FrontAxle;
             fitted.KeyedRearAxle = spec.RearAxle;
             return fitted;
@@ -807,6 +810,8 @@ internal sealed partial class CarView : Node3D
         {
             var p = outline[k];
             var radius = FilletRadius(k);
+            // The shoulder's crease as sharp as the style draws it (the Leon's); the rest pressed as the others.
+            if (radius > 0f && (k == 4 || k == RingSize - 4)) radius = style.ShoulderFillet;
             if (radius <= 0f)
             {
                 ring.Add(new Vector3(p.X, p.Y, z));
@@ -973,9 +978,14 @@ internal sealed partial class CarView : Node3D
         // turned the red pink; a slightly rough colour coat under a hard, near-mirror clearcoat, which is where the
         // gloss and the reflections of the car's probe (WorldBuilder.BuildCarProbe) come from; a metallic paint's
         // base is partly metal (CarPaint).
+        // The loft's colours ride on its vertices as the sRGB values the paints are written in (CarPaint, Trim); without
+        // VertexColorIsSrgb Godot takes a vertex colour as linear and the body came out paler than its own swatch and
+        // its painted details (the mirrors, the spoiler: AlbedoColor, which is converted): Desire Red's 0.65 drew as
+        // 0.83 (cars13 bodies, "Paler stand-ins").
         var paint = new StandardMaterial3D
         {
             VertexColorUseAsAlbedo = true,
+            VertexColorIsSrgb = true,
             Metallic = _finish.Metallic,
             Roughness = _finish.Roughness,
             ClearcoatEnabled = true,
@@ -1468,7 +1478,8 @@ internal sealed partial class CarView : Node3D
         var spin = new Node3D { Name = "Wheel" };
         column.AddChild(spin);
         _steeringSpin = spin;
-        spin.AddChild(new MeshInstance3D { Mesh = new TorusMesh { InnerRadius = 0.158f, OuterRadius = 0.194f, Material = dash, Rings = 48, RingSegments = 12 } });
+        if (style.FlatBottomWheel) BuildFlatBottomRim(spin, dash);
+        else spin.AddChild(new MeshInstance3D { Mesh = new TorusMesh { InnerRadius = 0.158f, OuterRadius = 0.194f, Material = dash, Rings = 48, RingSegments = 12 } });
         // The modern cars carry the airbag in a padded hub and leather spokes; the 1984 car has a small horn push and
         // satin spokes. The pad sits a little below the column (local +Z is down) and no wider than keeps the gear
         // readout between the dials in view.
@@ -1503,7 +1514,7 @@ internal sealed partial class CarView : Node3D
         // sit upright on a base above the floor, the cushion 0.62 m under the eyes.
         var seatZ = style.Hatchback ? style.EyeZ + 0.07f : 0.22f;
         var seatY = style.Hatchback ? style.EyeH - 0.62f : 0.47f;
-        foreach (var x in new[] { DriverX, -DriverX }) BuildSeat(body, x, seatY, seatZ, seatCover, dark, style.Hatchback);
+        foreach (var x in new[] { DriverX, -DriverX }) BuildSeat(body, x, seatY, seatZ, seatCover, dark, style.Hatchback, style.SportSeats);
         if (style.Hatchback) BuildRearSeats(body, seatCover, carpet);
 
         // The A-pillars from the screen's foot to the header, the cabin's daylight, the door trims and the dashboard's
@@ -1560,6 +1571,7 @@ internal sealed partial class CarView : Node3D
             for (var i = 0; i < 4; i++) Box(stack, new Vector3(0.11f, 0.006f, 0.014f), new Vector3(x, 0.077f + i * 0.015f, 0.024f), slat);
         }
         var display = new StandardMaterial3D { AlbedoColor = new Color(0.1f, 0.25f, 0.3f), EmissionEnabled = true, Emission = new Color(0.25f, 0.75f, 0.85f), EmissionEnergyMultiplier = 0.6f };
+        if (style.CentreScreen) BuildCentreScreen(body, cowlH, faceZ, dark);
         Box(stack, new Vector3(0.19f, 0.055f, 0.01f), new Vector3(0f, 0.01f, 0.021f), dark);
         Box(stack, new Vector3(0.08f, 0.018f, 0.004f), new Vector3(0f, 0.016f, 0.027f), display);
         foreach (var x in new[] { -0.08f, 0f, 0.08f })
@@ -1640,10 +1652,10 @@ internal sealed partial class CarView : Node3D
         rubber.Uv1Triplanar = true;
         rubber.Uv1Scale = new Vector3(14f, 14f, 14f);
         var steel = new StandardMaterial3D { AlbedoColor = new Color(0.45f, 0.45f, 0.47f), Metallic = 0.85f, Roughness = 0.4f };
-        var caliperMat = new StandardMaterial3D { AlbedoColor = new Color(0.75f, 0.08f, 0.05f), Roughness = 0.5f };
-        var alloy = new StandardMaterial3D { AlbedoColor = new Color(0.76f, 0.76f, 0.78f), Metallic = 0.9f, Roughness = 0.28f };
-        var dish = new StandardMaterial3D { AlbedoColor = new Color(0.16f, 0.16f, 0.17f), Metallic = 0.6f, Roughness = 0.5f };
         var style = _style;
+        var caliperMat = new StandardMaterial3D { AlbedoColor = style.CaliperTint, Roughness = 0.5f };
+        var alloy = new StandardMaterial3D { AlbedoColor = style.AlloyTint, Metallic = 0.9f, Roughness = 0.28f };
+        var dish = new StandardMaterial3D { AlbedoColor = new Color(0.16f, 0.16f, 0.17f), Metallic = 0.6f, Roughness = 0.5f };
         var tyres = new[] { Tyre(spec.WheelRadius, style.FrontTyreWidth * 0.5f, style.RimRadius, rubber), Tyre(spec.WheelRadius, style.RearTyreWidth * 0.5f, style.RimRadius, rubber) };
         var front = HalfTrack(spec, true);
         var rear = HalfTrack(spec, false);
@@ -1711,15 +1723,21 @@ internal sealed partial class CarView : Node3D
                 Position = new Vector3(side * 0.115f * inset, 0f, 0f),
                 RotationDegrees = new Vector3(0f, 0f, 90f),
             });
-            for (var s = 0; s < 5; s++)
+            // A pair of thin spokes either side of each spoke's line on a twin-spoke wheel (the Cupra's).
+            float[] offsets = style.TwinSpokes ? [-0.11f, 0.11f] : [0f];
+            var spokeWidth = style.TwinSpokes ? 0.022f : 0.045f;
+            for (var s = 0; s < style.Spokes; s++)
             {
-                var angle = s * Mathf.Tau / 5f;
-                spinner.AddChild(new MeshInstance3D
+                foreach (var offset in offsets)
                 {
-                    Mesh = new BoxMesh { Size = new Vector3(0.025f, rim - 0.028f, 0.045f), Material = alloy },
-                    Position = new Vector3(side * 0.11f * inset, ((rim - 0.028f) * 0.5f + 0.01f) * Mathf.Cos(angle), ((rim - 0.028f) * 0.5f + 0.01f) * Mathf.Sin(angle)),
-                    Rotation = new Vector3(angle, 0f, 0f),
-                });
+                    var angle = s * Mathf.Tau / style.Spokes + offset;
+                    spinner.AddChild(new MeshInstance3D
+                    {
+                        Mesh = new BoxMesh { Size = new Vector3(0.025f, rim - 0.028f, spokeWidth), Material = alloy },
+                        Position = new Vector3(side * 0.11f * inset, ((rim - 0.028f) * 0.5f + 0.01f) * Mathf.Cos(angle), ((rim - 0.028f) * 0.5f + 0.01f) * Mathf.Sin(angle)),
+                        Rotation = new Vector3(angle, 0f, 0f),
+                    });
+                }
             }
             _wheelPivots[i] = pivot;
             _wheelSpinners[i] = spinner;

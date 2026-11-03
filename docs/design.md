@@ -957,6 +957,10 @@ they drive like the real cars before their models and sounds land:
     real car's launch or press colour (under Each car's paint). No physics value changed: the eight cars' and the
     five's figures are this item's.
 
+    Bodies (cars/bodies, under Real car models): the BRZ is drawn by a model, a first-generation Toyota 86 (its twin,
+    the same shell) with the W212's cabin; the two Bravos and the Leon Cupra by lofts of their own
+    (`BodyStyle.BravoHgt`, `BravoSixteen`, `LeonCupra`), since no credible model of either exists.
+
 Kept, as earlier decisions: the fixed 240 Hz step with semi-implicit Euler for the body, the raycast wheels, the
 grass's grip and rolling resistance (0.9), the weather's grip figures (0.12), the speed-sensitive steering lock,
 the clutch's lock/slip machine, and the low-speed fades of the slip angle (no jitter at rest).
@@ -1243,9 +1247,15 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
     #F0C000), the Bravo 1.6 Verde Reflex (Fiat 391, Bravo-only, metallic, #2E6B4F), the Leon Cupra Desire Red (the
     metallic SEAT launched the Cupra 300 with, #A61427), the BRZ WR Blue Pearl (#1A4FD6, PaintScratch's reading of
     02C, a pearl). The sources are in the code; no press-car colour of either Bravo was found, so both are colours only
-    the Bravo was sold in, their shades estimated. The showroom's swatches read these values; the lofted bodies draw
-    them paler on the turntable than the models draw theirs (their clearcoat mirrors the studio's light sky, a solid
-    as much as a metallic), as any lofted body does there.
+    the Bravo was sold in, their shades estimated. The showroom's swatches read these values. The lofted bodies drew
+    them paler on the turntable than the swatches until cars/bodies, solids as much as metallics: not the paint but
+    the loft's material, which carries its colours on the vertices as the sRGB values the paints are written in, and
+    Godot took them as linear (`VertexColorIsSrgb` was off): Desire Red's red channel 0.65 drew as 0.83, while the
+    loft's own painted details (mirrors, spoiler, `AlbedoColor`, converted) came out darker than the body they sit on.
+    The loft's paint now declares its vertex colours sRGB; its black trim (0.06) is black now too, not a 0.27 grey. On
+    the turntable at 100 degrees the body's median colour went from (128, 33, 48) to (95, 0, 3) for the Cupra's
+    #A61427, from (190, 168, 45) to (183, 146, 19) for the HGT's #F0C000, from (62, 97, 80) to (15, 49, 31) for the
+    1.6's #2E6B4F: as saturated as the swatch, darker where the side is in shade.
 - A fault in the sound update is logged once and the frame carries on (`Bootstrap._Process`). In 0.8.0 the
   world sound kept the players of the last credit's drones, freed with their views, and threw on every frame of
   the next credit: the view stopped following the car, which stood at the line while the engine revved and the
@@ -1420,12 +1430,10 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
   The 458's paint is the material named "Material", given as "==Material" since the name is part of every
   Material.0NN; the lens over its round tail lamps lights when braking; its calipers stay with the body. Its tyres
   are alike in the model where the real car's are staggered (235/35 R20 in front, 0.672 m; 295/35 R20 behind,
-  0.715 m), which the game's one radius a car would not show anyway. The boxer coupe keeps its loft: the only BRZ,
-  86 or FR-S of a credible origin, RoninVR's Scion FR-S 2015, is unfinished at the tail the chase camera looks into
-  (no lower bumper, ragged rear quarters, arches open at the back: 17.9 % of the band 0.10-0.35 m over the road
-  see-through from straight behind, the 458's none; no tail lamps under their covers), so it is not fetched and its
-  LICENSE.txt keeps the record and the measurements for a pass that repairs the tail, with a chase view as the
-  check. No CC-licensed model of the first-generation Fiat Bravo or of the 2018 Leon Cupra exists outside a login
+  0.715 m), which the game's one radius a car would not show anyway. The boxer coupe kept its loft here: the only
+  BRZ, 86 or FR-S of a credible origin then found, RoninVR's Scion FR-S 2015, is unfinished at the tail the chase
+  camera looks into (no lower bumper, ragged rear quarters, arches open at the back), and was not fetched (cars/bodies
+  found the BRZ a model, below, and dropped that record). No CC-licensed model of the first-generation Fiat Bravo or of the 2018 Leon Cupra exists outside a login
   (the Objaverse catalogue's 80 Fiat records, Sketchfab with and without the downloadable filter, archive.org's
   Thingiverse clips), so the Bravos and the Cupra keep theirs too. `CarModelSourceTests` pins the 458's entry and ties
   the four places a model is named: every file `fetch_models.py` fetches has its LICENSE.txt (with its Sketchfab uid) and is drawn by the game
@@ -1455,6 +1463,75 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
   the same bytes as main's (SHA-256 against a preparation of main's tree), `tools/car_cockpits.json` takes the 458,
   and `A_seat_pair_in_one_mesh_does_not_lower_the_eyes` holds its eyes, dials and dashboard to the 570S's against the
   same wheel.
+- cars13 bodies (cars/bodies): the BRZ, the two Bravos and the Leon Cupra as much like their real cars as the game
+  can draw them, from the chase view, the showroom and the seat.
+  - The BRZ is drawn by "ToYoTa FR" by Ethan (Sketchfab, CC BY 4.0; `toyota-86-ethanchew.LICENSE.txt`): a
+    first-generation Toyota 86 (ZN6) in the facelift's styling, the BRZ ZC6's twin on the same shell, the only credible
+    model of the car found (1,105 Sketchfab models of the BRZ, 86, GT86, FR-S and GR86 checked: game rips, SketchUp
+    conversions, non-commercial licences, race cars). Uploaded after the Objaverse snapshot, it is fetched from the
+    project's own copy, a release asset (`models-2026-11`), checked against the SHA-256 of the file its LICENSE.txt
+    describes (`fetch_models.py`'s `RELEASED`, held to the LICENSE.txt by `CarModelSourceTests`). At the BRZ's 2570 mm
+    wheelbase it is 4.24 m long (Subaru: 4240), 1.795 m wide (1775) and 1.263 m high (1285), tracks 1.511 m
+    (1520 / 1540). The entry (`tools/car_models.json` "brz"): forward +z; the four tyres with their rims rolling; the
+    discs and calipers, one mesh each across the four corners, fixed to the body; the paint "==material" (a part of
+    "black_car_material"); the windows' near-black "Glass" drawn as the game's glass and the headlamps' covers, which
+    share it, as clear lenses (`lens`: a copy of the material named for the lens pass); the lamps' strength-10
+    emission, a night render's, drawn unlit by day with the headlamps faintly lit (`materials`' new `emissive` and
+    `emissive_strength`), the tail lamps lit when braking. Dropped: the two seats, which the author says are not his
+    and so are outside the licence, the Toyota badges and the caps' logos (`The_BRZ_leaves_out_what_its_licence_does_not_cover`).
+  - The BRZ's cabin: the model has a plain dashboard top and door cards and nothing else, so it borrows the W212's
+    (`cabin_from` "fleet"), placed as the preparation places a donor, and cut where a saloon's cabin shows through a
+    1.26 m coupe (`crop`, new: the triangles of the named parts whose centres lie in a car-frame box): the donor's
+    dashboard and gauges higher than 0.36 m in the car's frame (8.5 cm under the eyes; the saloon's dash top stood over
+    the coupe's scuttle), its panels from 12 cm ahead of the eyes back, the rear bench, the front doors' tops over
+    0.2 m (through the coupe's lower window line), the wheel's Mercedes star and a gauge sliver the rim cut across. Eyes 1.069 m over the road for left-hand drive (asked: about 1.06), 0.13 m under
+    the lining, 0.52 m behind and 0.28 m over the wheel's centre; the road at the centre column from about row 390 to
+    the bonnet at 535 of 900, parked. The dials 0.24 m wide, 1 cm up (`dials`), projected from the eyes as the McLaren's
+    were (`dialmask`, five head positions: at rest, 4.5 cm either side, 6 cm forward, 3 cm back): 20-240 km/h and
+    750-8,250 rpm readable at every one, the gear readout in full. The mirror is hung by the game. Frame time against
+    the V8 (`--perf-log`, chase view, 25 s, 72 fps cap): the BRZ 5.6 ms of GPU and 6.9 of CPU a frame, the V8 5.6 and
+    7.6; from the seat 7.0 and 10.1 against 6.7 and 10.8. The other nine models prepare to the same bytes as before.
+  - The Bravos and the Leon keep lofts: no credible model of either exists (cars13 hunt: the only Brava is a GTA San
+    Andreas mod, the Marea a BeamNG one; no 5F Leon that is not a rip), and the user chose the game's own bodies. Each
+    is now a style of its own (`CarView.Cars13.cs`), keyed on the published dimensions (auto-data.net: the Bravo
+    4025 x 1755 x 1410 / 1420 mm, wheelbase 2540, tracks 1471 / 1430 for the HGT and 1461 / 1463 for the 1.6,
+    205/50 R15 and 185/60 R14; the Leon Cupra five-door 4271 x 1816 x 1435, wheelbase 2631, overhangs 855 / 785, tracks
+    1535 / 1510, 235/35 R19) and on drawings: the 1995 Bravo three-door's (getoutlines, CC BY 4.0, the one the
+    five-cylinder hatch was keyed on; the 1999 drawing beside it in the logs is the five-door Brava) and the 2015 Leon
+    Cupra five-door's preview (getoutlines; its side view read every 4.5 cm for the roofline, the window's edges and
+    the sills, its end views every 3 cm for the widths, its heights 1.4 % short of the published and scaled up). Only
+    the measurements come from them; no drawing or photograph is shipped (THIRD_PARTY.md), and the reference photos
+    (Wikimedia Commons, for comparison) stay in the logs.
+  - The Bravo (three-door 182): the five-cylinder hatch's keys with the belt raised into the wedge the drawing has
+    (0.915 m at the door's front, 1.025 m at the C-pillar; 0.895 to 0.985 before), the screen's foot 5.5 cm further
+    back (the drawing's), slim headlamps from the narrow grille to the wings' corners, the big oval tail lamps in the
+    tailgate's corners at the foot of the rear window (0.65-0.95 m) with the clear lens under each, the "smile" handle
+    between them, a dark rubbing strip round both bumpers at the doors' strip's height, and the side glass's shape laid
+    over the loft's glass strip (`BlackCovers`, `PaintedCovers`, new: side-view polygons in black or paint, lined
+    inside): a black sail ahead of the door glass, a black B-pillar, and the C-pillar over the quarter window's back,
+    whose top falls to the point the window ends in, 1.07 m up. The HGT: body-colour side skirts, a lip under the
+    bumper, a wide lower intake, 15 in five-spoke alloys on 205s and 1.41 m; the 1.6: 14 in steel wheels under
+    vented covers on 185s, the plain bumper's two intakes, 1.42 m. The task's brief spoke of tall thin vertical tail
+    lamps; the drawing and every photograph of the 182 show the big ovals, which the loft draws.
+  - The Leon Cupra (5F facelift five-door): keyed new: a near-upright nose to the grille's top at 0.72 m, the sharp
+    crease along the flanks (`ShoulderFillet` 8 mm where the others roll it over 5 cm), the full-LED headlamps swept
+    back to a point with the running light along their foot (`HeadlampLed`), the hexagonal grille, the Cupra bumper's
+    lower intake under the plate and its corner intakes (`CornerIntake`), the window line kicking up into the C-pillar
+    to a small quarter window (covers again) behind black B- and C-pillars, the roof spoiler, the slim tail lamps
+    across the shoulders, the diffuser (`RearDiffuser`) with two round tailpipes at each end, the rear doors' handles,
+    and 19 in twin-spoke wheels in dark alloy (`Spokes`, `TwinSpokes`, `AlloyTint`) on 235s. By day the lofts' tail
+    lamps are unlit red lenses that light when the driver brakes (`TailLampGlow`, the models' `Braking`).
+  - Inside: lofted cabins laid out like the real cars' rather than a model's cabin borrowed into the loft. The lofted
+    shell and its lining are analytic (the covers above, the door trims, the pillars), so a lofted cabin fits it with
+    nothing through the doors or the roof, where a borrowed one would be cut to an analytic shape it was not made for
+    (as the W212's had to be for the BRZ, a model whose shell at least is a car's), and the SAAB's and the W212's would
+    have shown their own makers' wheels and stacks in a Fiat and a SEAT. The Leon: the Cupra's flat-bottomed wheel
+    (`FlatBottomWheel`), the touch screen standing over the centre stack (`CentreScreen`), bucket seats with moulded
+    headrests (`SportSeats`), a black headlining; the HGT bucket seats too; both Bravos a dark grey dashboard.
+  - Not done: the BRZ's arches are open behind the tyres in the model (no wheel-well liners), so from the side, at
+    the wheels' height, the road beyond shows through the front arch; the plate recess has no plate; the Unreal level
+    keeps the BRZ's lofted stand-in (its preparation rigs the model, but would keep the V8 loft's cabin, whose door
+    linings stand about 4 cm outside the 86's doors: a cabin for it there is another step).
 - Real car models (0.16, `tools/prepare_car_models.py`, `CarView.Model.cs`). The lofted bodies and the boxes of
   their cabins read as toys, from the seat most of all, so the catalogue's cars are drawn as CC BY models of real
   cars with cabins of their own (THIRD_PARTY.md): the flat-twelve a Lotus Esprit Turbo 1983 (right-hand drive,

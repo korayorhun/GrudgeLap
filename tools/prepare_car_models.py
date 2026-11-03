@@ -509,6 +509,81 @@ def borrow_cabin(model, blob, r, world, boxes, car, spec, donor_entry, cabin):
     print(f"  cabin from {donor_entry['file']}: {len(added)} part(s) {added[:12]}")
 
 
+def crop_parts(model, blob, r, world, boxes, crops):
+    """Cuts out of the named parts the triangles whose centres lie in a box (crop: [{nodes, min, max}], car frame,
+    metres, after a borrowed cabin is placed): a donor's parts that a shell of another shape would show, or a shell's
+    own plain cabin where the borrowed one goes. The BRZ's model (cars13 bodies) is a coupe 1.26 m high with the
+    W212 saloon's cabin: the saloon's rear bench rose through the coupe's rear side windows, and the model's own
+    dashboard top, a plain shell, lay over the borrowed one's. A part cut gets a mesh of its own (another node may
+    draw the same one), and its box is measured again by the vertices it keeps; a part with nothing left goes."""
+    nodes = model["nodes"]
+    for crop in crops:
+        words = [s.lower() for s in crop["nodes"]]
+        low, high = np.array(crop["min"], dtype=float), np.array(crop["max"], dtype=float)
+        cut = 0
+        for i in list(r["body_nodes"]):
+            if not cm.matches(i, r["name_of"](i), words):
+                continue
+            mesh = model["meshes"][nodes[i]["mesh"]]
+            primitives = []
+            for primitive in mesh["primitives"]:
+                if primitive.get("mode", 4) != 4:
+                    primitives.append(primitive)
+                    continue
+                positions = cm.accessor_array(model, blob, primitive["attributes"]["POSITION"])
+                if "indices" in primitive:
+                    indices = cm.accessor_array(model, blob, primitive["indices"]).astype(np.int64).reshape(-1)
+                else:
+                    indices = np.arange(len(positions))
+                triangles = indices[: len(indices) // 3 * 3].reshape(-1, 3)
+                p = (np.c_[positions, np.ones(len(positions))] @ world[i].T)[:, :3]
+                c = p[triangles].mean(axis=1)
+                inside = np.all((c > low) & (c < high), axis=1)
+                if not inside.any():
+                    primitives.append(primitive)
+                    continue
+                cut += int(inside.sum())
+                if inside.all():
+                    continue
+                part = dict(primitive)
+                part["indices"] = append_accessor(model, blob, triangles[~inside].reshape(-1).astype(np.uint32), 5125, "SCALAR", 34963)
+                primitives.append(part)
+            if primitives == mesh["primitives"]:
+                continue
+            if not primitives:
+                r["body_nodes"].remove(i)
+                continue
+            model["meshes"].append(dict(mesh, primitives=primitives))
+            nodes[i]["mesh"] = len(model["meshes"]) - 1
+            points = cm.mesh_points(model, blob, nodes[i]["mesh"], world[i])
+            boxes[i] = (points.min(axis=0), points.max(axis=0))
+        print(f"  crop {crop['nodes'][:3]} in ({crop['min']}, {crop['max']}): {cut} triangle(s) cut")
+
+
+def lens_parts(model, r, words):
+    """The named parts' glass drawn as clear lamp lenses (lens: node selectors): a model whose lamp covers share the
+    windows' material (the BRZ's "Glass", a near-black tint on the windscreen and the headlamps alike) gets a copy of
+    that material for them, named so the materials pass makes it GLP_Lens."""
+    nodes = model["nodes"]
+    copies = {}
+    for i in r["body_nodes"]:
+        if not cm.matches(i, r["name_of"](i), words):
+            continue
+        mesh = model["meshes"][nodes[i]["mesh"]]
+        primitives = []
+        for primitive in mesh["primitives"]:
+            source = primitive.get("material")
+            if source is not None and source not in copies:
+                copy = json.loads(json.dumps(model["materials"][source]))
+                copy["name"] = f"{copy.get('name', 'glass')} lens"
+                model["materials"].append(copy)
+                copies[source] = len(model["materials"]) - 1
+            primitives.append(dict(primitive, material=copies[source]) if source is not None else primitive)
+        model["meshes"].append(dict(mesh, primitives=primitives))
+        nodes[i]["mesh"] = len(model["meshes"]) - 1
+        print(f"  {r['name_of'](i)} drawn as a lamp lens")
+
+
 def in_present_frame(entry, spec):
     """The entry with its hand-given car-frame points (eye_at, mirror_box) carried from the geometry they were read in
     (the entry's frame) to the spec's present one.
@@ -570,6 +645,10 @@ def prepare(car, entry, inspect=False, config=None):
     if entry.get("cabin_from"):
         cabin = entry["cabin_from"]
         borrow_cabin(model, blob, r, world, boxes, car, spec, config[cabin["car"]], cabin)
+    if entry.get("crop"):
+        crop_parts(model, blob, r, world, boxes, entry["crop"])
+    if entry.get("lens"):
+        lens_parts(model, r, [s.lower() for s in entry["lens"]])
     print(f"{car}: {entry['file']} wheelbase {r['wheelbase']:.3f} -> scale {r['scale']:.4f} ({r['length']:.2f} m long), "
           f"tyre radius {r['tyre_radius']:.3f} m (simulation {spec['radius']:.3f}); {len(r['body_nodes'])} body node(s), "
           f"{sum(len(a) - 1 for a in r['assemblies'])} wheel part(s), {len(r['dropped'])} dropped")
@@ -833,6 +912,17 @@ def prepare(car, entry, inspect=False, config=None):
                     srgb = [int(value.lstrip("#")[k:k + 2], 16) / 255.0 for k in (0, 2, 4)]
                     linear = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in srgb]
                     pbr["baseColorFactor"] = [round(c, 6) for c in linear] + [pbr.get("baseColorFactor", [1, 1, 1, 1.0])[3]]
+                elif key == "emissive":
+                    srgb = [int(value.lstrip("#")[k:k + 2], 16) / 255.0 for k in (0, 2, 4)]
+                    material["emissiveFactor"] = [round(c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4, 6) for c in srgb]
+                elif key == "emissive_strength":
+                    # The BRZ's lamps glow at 10 (KHR_materials_emissive_strength), lit as in a night render: by day
+                    # a lamp unlit, or a headlamp's glass catching the light, not a lamp blazing white or amber.
+                    if float(value) > 0.0:
+                        material.setdefault("extensions", {})["KHR_materials_emissive_strength"] = {"emissiveStrength": float(value)}
+                    else:
+                        material.get("extensions", {}).pop("KHR_materials_emissive_strength", None)
+                        material.pop("emissiveFactor", None)
                 else:
                     pbr[f"{key}Factor"] = float(value)
         alpha = pbr.get("baseColorFactor", [1, 1, 1, 1])

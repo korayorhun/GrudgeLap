@@ -9,6 +9,7 @@
 | Freesound #585215 "Car Engine: Maserati GranTurismo Switch to Sport Mode and Launch" by myeclecticself | the V8's idle grain bank (`v8/engine_idle`) | CC0 1.0 — https://freesound.org/s/585215/ |
 | Freesound #112075 "Lambo idle and rev.mp3" by cheesepuff | the twelve's idle grain bank (`flat12/engine_idle`) | CC0 1.0 — https://freesound.org/s/112075/ |
 | getoutlines.com blueprints of a 1984 coupe, the 2000 Clio, the 1995 Bravo, the 2007 Leon, the 1980 Fiat 131 Mirafiori saloon and the 1969 Dacia 1300 Break | the measurements the car lofts are keyed on (`CarView.BodyStyle`); no drawing is shipped | CC BY 4.0 — https://getoutlines.com |
+| getoutlines.com's preview of its 2015 SEAT Leon Cupra five-door drawing | the measurements the Leon Cupra's loft is keyed on (`CarView.BodyStyle.LeonCupra`, with the car's published dimensions); no drawing is shipped | used as a reference only — https://getoutlines.com/vector-drawings/9730/2015-seat-leon-cupra-drawings |
 | Wikimedia Commons photographs of the Tofas Sahin, the Renault 12 Toros and the Fiat Tipo saloon (by Mr.choppers, Emre Ayhan and others; listed in `game/assets/audio/SOURCES.md` under "References") | looked at for the proportions and the details of the everyday cars; no photograph is shipped | public domain / CC BY-SA, reference only |
 | BigSoundBank "Cow moos #2"-"#6" by Joseph Sardin | the cows' moos (`cow/moo1.wav` ... `moo5.wav`) | CC0 1.0 — https://bigsoundbank.com/cow-moos-2-s2382.html |
 | Freesound #187029 "car Niva.wav" by dobrymolodec | the 1.6 saloon's idle (`saloon/engine_idle`) | CC0 1.0 — https://freesound.org/s/187029/ |
@@ -44,6 +45,7 @@
 | "Renault 12" by boitaloran | the 1.4 estate's body and cabin (the saloon: the Toros shares everything ahead of the B-pillar) | CC BY 4.0 — https://sketchfab.com/3d-models/f8c26a68a3dd45b492d6d9a33cda6fcd; modified: re-scaled and re-rigged for GrudgeLap |
 | "VAZ-2106" by domhathair | the 1990s saloon's body and cabin | CC BY 4.0 — https://sketchfab.com/3d-models/a73b3cdeddd846209bf7c73d5f04d20f; modified: re-scaled, re-rigged and lit for GrudgeLap |
 | "Mercedes-Benz E-Class W212" by Peter_D (better_peter) | the fleet saloon's body and cabin | CC BY 4.0 — https://sketchfab.com/3d-models/119c5e10733142b197aa53b86f6aeb04; modified: re-scaled and re-rigged for GrudgeLap |
+| "ToYoTa FR" by Ethan (ethanchew) | the boxer coupe's body (`tools/car_models.json` "brz": a first-generation Toyota 86, the Subaru BRZ's twin, with the Mercedes W212's cabin) | CC BY 4.0 — https://sketchfab.com/3d-models/5b8ec05b53b345cda8ed582b59ff3950, the copy used published with the game's releases, https://github.com/korayorhun/GrudgeLap/releases/download/models-2026-11/toyota-86-ethanchew.glb; modified: seats (not the author's work), Toyota badges and cap logos removed, re-scaled, re-rigged, given the W212's cabin and its materials corrected for GrudgeLap |
 | "ferrari 458 italia" by Antonis_zks | the flat-plane V8's body (`tools/car_models.json` "458", with the 570S's cabin) | CC BY 4.0 — https://sketchfab.com/3d-models/9fc3bebac5ee4ad1a7fb1d743e0db7d3, the copy used from the Objaverse mirror, https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-011/9fc3bebac5ee4ad1a7fb1d743e0db7d3.glb; modified: re-scaled, re-rigged and given the 570S's cabin for GrudgeLap. The Sketchfab page has since been taken down, as was every Ferrari model of that period; the licence it was published under, recorded in the mirror, stands for the copy used |
 | xunit, Microsoft.NET.Test.Sdk | tests only, not shipped | Apache-2.0 / MIT |
 | Inno Setup 6 | builds the installer, not shipped | Inno Setup License |
@@ -51,8 +53,8 @@
 
 The track, the world and every other mesh in the game are generated at run time by the code in this
 repository, but for the cars: the CC BY models above are drawn in their place (fetched from the Objaverse
-mirror by `unreal/Scripts/fetch_models.py` and prepared by `tools/prepare_car_models.py` at build time; a build
-without them draws the game's own lofted bodies). The only other files brought in are the
+mirror, or from the project's own copy for a model uploaded after it, by `unreal/Scripts/fetch_models.py` and
+prepared by `tools/prepare_car_models.py` at build time; a build without them draws the game's own lofted bodies). The only other files brought in are the
 CC0 textures, the CC0 sky, the engine grain banks, the tyre and road loops, the exhaust pops, the train's steam
 and whistle and the crashes (the grass-tuft atlas, the road
 wear sheet and the cloud sheet are drawn by scripts in `tools/`; the drones' engine loop is the game's own
@@ -70,11 +72,11 @@ The car names ("FLAT-12 GT '84", "V8 GTB '12 SPORT EXHAUST", "HOT HATCH 1.9 8V '
 "HATCH 2.0 20V '01", "HATCH 1.6 16V '01", "HOT HATCH 2.0 TSI '18", "COUPE 2.0 BOXER '13") are descriptions of an engine layout, a body style and a year; they are not the
 names of any make or model. The lofted bodies are our own, keyed on the proportions of the period cars; the
 models drawn in their place show real cars (two Ferraris, a McLaren, a Peugeot, a Lancia, a Volkswagen, a VAZ, a
-Renault, a Mercedes-Benz, and cabins of a Lotus and a SAAB), whose names
-and designs belong to their makers, as stand-ins for the catalogue's cars. No CC-licensed model of the first-generation
-Fiat Bravo or of the 2018 SEAT Leon Cupra could be found (none exists in the Objaverse mirror, and what Sketchfab lists needs an account),
-and the only Subaru BRZ twin of a credible origin, a Scion FR-S, has an unfinished tail
-(`unreal/Import/Models/scion-frs-2015-roninvr.LICENSE.txt`), so those cars are drawn as the game's own lofted bodies.
+Renault, a Mercedes-Benz, a Toyota standing for the Subaru it shares its body with, and cabins of a Lotus and a SAAB),
+whose names and designs belong to their makers, as stand-ins for the catalogue's cars; the Toyota's badges are left
+out. No CC-licensed model of the first-generation Fiat Bravo or of the 2018 SEAT Leon Cupra could be found (none exists
+in the Objaverse mirror, and what Sketchfab lists is a game rip or needs an account), so those cars are drawn as the
+game's own lofted bodies, keyed on their published dimensions and dimensioned drawings.
 
 Not affiliated with, endorsed by, or derived from the assets of any arcade manufacturer or car maker. The
 game mechanics it pays homage to are described in expired U.S. patents (5,044,956; 5,005,148; 5,269,687;

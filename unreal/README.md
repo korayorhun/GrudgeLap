@@ -179,7 +179,11 @@ its export (`--car=458|bravohgt|bravo16|leoncupra|brz --export-world=../unreal/I
 as the build's loop spells it) with the lofted stand-in the game draws, and a slot whose export is missing stays
 empty, which the title screen skips. Their engine voices come from the simulation core by car
 (`glp_engine_create_for_car`), each on its own banks since cars13 stage 2 (`v8flat`, `inline5`, `four16v`, `tsi4`,
-`boxer4`), and a car playing another's banks would still be voiced and trimmed as itself.
+`boxer4`), and a car playing another's banks would still be voiced and trimmed as itself. The game has since drawn
+the 458 and the BRZ by models (the BRZ a Toyota 86, `toyota-86-ethanchew.glb`, fetched from the project's release
+assets); this level keeps their lofted stand-ins: `prepare_car_model.py` rigs the 86 cleanly (`models.json` would need
+only its file, axis, tyres, fixed and dropped parts, as `tools/car_models.json` has them), but it keeps the export's
+lofted cabin, and the BRZ's is the V8 loft's, whose door linings stand about 4 cm outside the 86's doors.
 
 Since 0.16 the Godot game draws real models too, with their own cabins (`tools/prepare_car_models.py` and
 `tools/car_models.json`, the shared rigging in `tools/car_models.py`; credited in `THIRD_PARTY.md`): there the V8
