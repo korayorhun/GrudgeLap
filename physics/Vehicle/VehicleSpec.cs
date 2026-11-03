@@ -11,7 +11,8 @@ namespace GrudgeLap.Physics.Vehicle;
 /// so saved choices keep their index: the flat-plane V8 of 2010 (<see cref="FlatPlaneV8"/>, after the Ferrari 458
 /// Italia), the five-cylinder and the 1.6 hatchbacks of 2001 (<see cref="HgtFive"/> and <see cref="HatchSixteen"/>,
 /// after the Fiat Bravo HGT 2.0 20V and 1.6 16V), the hot hatch of 2018 (<see cref="CupraTsi"/>, after the SEAT Leon
-/// Cupra 300) and the coupe of 2013 (<see cref="Boxer"/>, after the Subaru BRZ). The numbers are game numbers, tuned
+/// Cupra with the 245 PS tune of its platform) and the coupe of 2013 (<see cref="Boxer"/>, after the Subaru BRZ). The
+/// numbers are game numbers, tuned
 /// for feel from the published figures of the cars they follow (power, torque, mass, wheelbase, track, tyres, gearing),
 /// not a manufacturer datasheet.
 /// </summary>
@@ -937,16 +938,49 @@ public sealed record VehicleSpec
     };
 
     /// <summary>
-    /// The hot hatch of 2018, after the SEAT Leon Cupra 300 (the Mk3 facelift, type 5F, 2017-18): the 2.0 TSI EA888,
-    /// 300 PS from 5500 to 6200 and 380 N m from 1800 to 5500, the six-speed manual (3.357 / 2.087 / 1.481 / 1.088 on a
-    /// 3.944 final drive, 1.097 / 0.912 on 3.087, reverse 3.990: SEAT's technical sheet of the Leon SC CUPRA 300 of
-    /// 02/2017), front-wheel drive with the VAQ, 235/35 R19 tyres (225/40 R18 on the 18 in wheels), 340 x 30 mm
-    /// ventilated discs in front and 310 x 22 behind, ESC with ABS and traction control, 1375 kg in running order with a
-    /// driver for the three-door (the five-door is listed 20 kg heavier). SEAT's figures: 0-100 km/h in 5.7 s (5.8 for
-    /// the five-door), 250 km/h, limited. The user asked for a 240 HP Cupra: the 2018 car was sold at 300 PS until the
-    /// petrol particulate filter of autumn 2018 brought it to 290 PS with its 380 N m kept (ADAC's listings of the Cupra
-    /// 290 of 09/2019: 213 kW, 380 N m), and the game follows the 300 PS car of SEAT's sheet, the tune published in full
-    /// with its gearing; the 290 can be set later by lowering the top of the curve.
+    /// The hot hatch of 2018, after the SEAT Leon Cupra five-door (the Mk3 facelift, type 5F) with the 245 PS tune of
+    /// the 2.0 TSI EA888 that its MQB platform carried in 2017-20 (cars/phys2): 245 PS from 5000 to 6700 and 370 N m
+    /// from 1600 to 4300 (EngineSpec.TsiFour), the six-speed manual of the Octavia RS 245 (3.77 / 2.09 / 1.48 / 1.09 on
+    /// a 3.45 final drive, 1.10 / 0.91 on 2.76, reverse 4.55: Skoda's technical data of the Octavia Combi RS 245,
+    /// 5 June 2017, cdn.skoda-storyboard.com), front-wheel drive with the VAQ the 245 PS Golf and Octavia also have,
+    /// and the 2018 Leon's body and chassis: 235/35 R19 tyres (225/40 R18 on the 18 in wheels), 340 x 30 mm ventilated
+    /// discs in front and 310 x 22 behind, ESC with ABS and traction control, 1395 kg in running order with a driver
+    /// (SEAT's technical sheet of the Leon SC CUPRA 300 of 02/2017: 1375 kg for the three-door, the five-door listed
+    /// 20 kg heavier).
+    /// <para>
+    /// Why this car. The user asked for a "Seat Leon Cupra 2018 240HP 2.0TSI", and no 2018 Leon Cupra had 240 hp: SEAT
+    /// sold it at 300 PS until the petrol particulate filter of autumn 2018 brought it to 290 PS with its 380 N m kept
+    /// (ADAC's listings of the Cupra 290 of 09/2019: 213 kW, 380 N m); the 240 PS Cupra was the Mk2 of 2006-12. The
+    /// 2018 body and chassis are kept and given the 245 PS (180 kW, 241.6 hp) tune the same platform carried in the
+    /// Volkswagen Golf GTI Performance (Mk7.5) and the Skoda Octavia RS 245, the nearest real engine to the request: an
+    /// assumption the user can reverse (docs/design.md item 23 says how; the 300 PS car's figures are kept in comments
+    /// here, in EngineSpec's TsiFourCurve and in the tests' rows).
+    /// </para>
+    /// <para>
+    /// Why the manual. Skoda's sheet gives both gearboxes' ratios: the manual's above and the seven-speed DSG's (DQ381:
+    /// 3.40 / 2.75 / 1.77 / 0.93 / 0.71 / 0.76 / 0.64, reverse 2.90, on 4.17 / 3.13). The one independent road test
+    /// of the platform's 245 PS cars found drove a manual: Auto Express timed a six-speed Octavia vRS 245 hatch at 6.8 s
+    /// to 60 mph, 5.5 s from 30 to 70 mph through the gears and 4.1 s from 30 to 50 in fourth ("Skoda Octavia vRS 245 vs
+    /// Ford Focus ST", 16 August 2017; the same figures for the vRS Challenge of 18 June 2019, 1,365 kg at the kerb). No
+    /// magazine's timing of a DSG car of this generation was found, only the makers' figures (the DSG timed with the tune
+    /// is the next generation's Octavia RS of 2021, below), and the manual carries the 250 km/h both makers publish
+    /// (Volkswagen's DSG Golf 248). The Leon Cupra 300 of SEAT's sheet, whose body this is, was a manual too,
+    /// on a box with the same ratios from second gear up and its own first gear and final drives (below).
+    /// </para>
+    /// <para>
+    /// Published figures. Volkswagen: 6.2 s to 100 km/h for the Golf GTI Performance with either gearbox and 250 km/h
+    /// with the manual (its newsroom, "Golf GTI Performance (245 PS): icon for the ages", 13 April 2018); ADAC's
+    /// catalogue lists the five-door manual of 03/2017-08/2018 at 1387 kg with a driver, 2626 mm between the axles,
+    /// 6.2 s and 250 km/h. Skoda: 6.6 s for the heavier Octavia RS 245 hatch (6.7 the Combi, 1467 kg with a driver) and
+    /// 250 km/h, electronically limited (Skoda's sheet; its launch release). The Golf, the Leon's twin in size and
+    /// mass, sets the targets (a tenth either side of 6.2 s; the tests' rows say how), a window the Octavia's 6.6 s
+    /// falls in too; Auto Express's through-the-gears time checks the car (its 0-60 mph, slower than Skoda's own
+    /// 0-62 mph, is not taken as the launch's). The quarter mile: no time was found for the platform's 245 PS cars of
+    /// 2017-20; the one found for the tune is Wheels' for the next generation's Octavia RS of 2021, a larger car with the
+    /// same 180 kW and 370 N m on the seven-speed DSG, 14.47 s at 163.08 km/h (101.3 mph) with a DriftBox, 6.15 s to
+    /// 97 km/h and 6.41 s to 100 (Scott Newman, "2021 Skoda Octavia RS review: performance tested", whichcar.com.au,
+    /// 24 September 2021), which the tests hold the car to a tenth either side of, the trap speed too.
+    /// </para>
     /// </summary>
     /// <remarks>
     /// Its size is the five-door's: 4281 x 1816 x 1443 mm, 2631 mm between the axles, tracks of 1536 / 1510 mm on the
@@ -962,7 +996,8 @@ public sealed record VehicleSpec
     /// of a bend as the unit is meant to; the brake function of its ESC (XDS) is left out, the VAQ doing its work. The
     /// 250 km/h is the limiter's (<see cref="SpeedLimiterKmh"/>): the car has the power for more. About 60/40 (a
     /// transverse four and its gearbox ahead of the axle; no axle loads were found); Cd 0.32 (none published for the
-    /// Cupra; the Leon 5F is given as 0.30-0.31 in its economy trims: a game figure); the springs give the R32's sag.
+    /// Cupra; the Leon 5F is given as 0.30-0.31 in its economy trims, the Octavia RS 245 0.319: a game figure); the springs
+    /// give the R32's sag.
     /// </remarks>
     public static VehicleSpec CupraTsi => new()
     {
@@ -982,7 +1017,8 @@ public sealed record VehicleSpec
         // Its speedometer reads to 280 km/h.
         SpeedoMaxMph = 175f,
         SpeedLimiterKmh = 250f,
-        // SEAT's 1375 kg for the three-door with a driver; the five-door's 1395.
+        // SEAT's 1375 kg for the three-door with a driver; the five-door's 1395, kept: the 245 PS tune is the same EA888 with a
+        // manual of the same family (ADAC's 245 PS Golf five-door manual: 1387 kg; a DSG adds 20 kg on Skoda's sheet).
         MassKg = 1395f,
         // The R32's inertias at 1395 kg and the Leon's wheelbase, width and height (see HotHatch's remarks).
         InertiaRoll = 475f,
@@ -1014,10 +1050,17 @@ public sealed record VehicleSpec
         // 340 x 30 mm ventilated discs in front, 310 x 22 behind, proportioned so the fronts lock first on a 60/40 car.
         FrontBrakeTorque = 3300f,
         RearBrakeTorque = 720f,
-        // The box drives gears 1-4 and 5-6 through two final drives, as the R32's 02M: 5th and 6th are given on the
-        // first one (1.097 x 3.087 / 3.944, 0.912 x 3.087 / 3.944); reverse is taken on the first.
-        GearRatios = [-3.99f, 0f, 3.357f, 2.087f, 1.481f, 1.088f, 0.8587f, 0.7138f],
-        FinalDrive = 3.944f,
+        // The Octavia RS 245's six-speed manual (Skoda's sheet). The box drives gears 1-4 and 5-6 through two output shafts
+        // with their own final drives, 3.45 and 2.76, as the R32's 02M does: the only order that keeps the overall ratios
+        // falling (5th on 3.45 would be lower than 4th). 5th and 6th are given on the first one (1.10 x 2.76 / 3.45 = 0.880,
+        // 0.91 x 2.76 / 3.45 = 0.728); the sheet does not say which carries reverse, taken on the first. That gives 13.0,
+        // 7.21, 5.11, 3.76, 3.04 and 2.51 overall: 100 km/h in second, 250 km/h at about 5,100 rpm in sixth. It is a
+        // manual's gear change (ShiftSeconds' default), so the showroom reads a six-speed manual.
+        // The 300 PS alternative (SEAT's sheet of the Leon SC CUPRA 300, 02/2017; the gearing until cars/phys2): its box's
+        // 3.357 / 2.087 / 1.481 / 1.088 on 3.944 and 1.097 / 0.912 on 3.087, reverse 3.990, that is
+        // GearRatios = [-3.99, 0, 3.357, 2.087, 1.481, 1.088, 0.8587, 0.7138] and FinalDrive = 3.944.
+        GearRatios = [-4.55f, 0f, 3.77f, 2.09f, 1.48f, 1.09f, 0.88f, 0.728f],
+        FinalDrive = 3.45f,
         ClutchMaxTorque = 600f,
         // The EA888's dual-mass flywheel.
         EngineInertia = 0.17f,
@@ -1049,6 +1092,28 @@ public sealed record VehicleSpec
     /// these axles, stands in for it until its model lands (CarStyle.Boxer): the nearest in height and proportion,
     /// though its glass engine deck belongs to a mid-engined car. The inertias follow the sports cars' (the dynamic index
     /// about 0.9); the springs and bars a sports coupe's of 1315 kg (game figures, none published).
+    /// <para>
+    /// The facelift of 2017-20, compared (cars/phys2): the drawn model is a facelifted first-generation twin (a Toyota
+    /// 86), still the ZC6. In Europe the facelift kept the engine and the figures this spec follows: 200 PS, 205 N m at
+    /// 6400-6600, 1243 kg at the kerb, 0-100 km/h in 7.6 s, 226 km/h, 215/45 R17 (motor1.com's German test of the
+    /// facelift, 19 January 2017); its revised springs and dampers and larger rear anti-roll bar are published without
+    /// rates (Subaru of America's release of 24 October 2016; motor1.com), its final drive not at all. The American and
+    /// Japanese manual took 205 hp at 7000, 156 lb ft at 6400 and a 4.30 final drive in place of the 4.10 (Subaru of
+    /// America, "2017 Subaru BRZ brings higher performance, updated styling", 24 October 2016), and Car and Driver
+    /// timed its twin, a 2017 Toyota 86 manual on the same 215/45 Michelin Primacy HP tyres (2,754 lb), at 6.2 s to
+    /// 60 mph, 16.8 s to 100 mph, the quarter mile in 14.8 s at 95 mph and 134 mph flat out, drag-limited (Car and
+    /// Driver, 13 October 2016, as Yahoo Autos carries it; its 2013 BRZ took 6.3-6.4 s, as 0-60specs.com lists the
+    /// magazine's tests). Set to those figures here (205 hp and 4.30, the rest as it is), the car runs 7.13 s to 60 mph
+    /// launched as a road test (7.20 now), 16.5 s to 100 mph and the quarter mile in 15.3 s at 95.8 mph: 0.9 s off that
+    /// test's 0-60 mph, as the 2013 car is off Car and Driver's (its rollout of a foot and launch are not the road-test
+    /// launch's), and the trap speed its; but flat out it runs to 253 km/h at 7,200 rpm in sixth, 12 % over Subaru's
+    /// 226 and 17 % over Car and Driver's 134 mph, out of the tenth either side every car's top speed is held to, as
+    /// the model's road load does not grow with speed (8 % over on the 4.10 already, above). So the BRZ stays the
+    /// 2013-16 car, which in Europe is the facelift's engine and published figures too; only its curve's redline point
+    /// is lowered so that the power peaks at 7000 as published (EngineSpec.BoxerFour). Moving to the American facelift
+    /// takes the curve through 205 hp at 7000 and 212 N m at 6400 and FinalDrive = 4.30, with the top speed's window
+    /// settled first (docs/design.md item 23).
+    /// </para>
     /// </remarks>
     public static VehicleSpec Boxer => new()
     {
@@ -1231,7 +1296,8 @@ public enum CarStyle
     /// </summary>
     HatchSixteen,
     /// <summary>
-    /// The front-wheel-drive turbo hot hatch of 2018 (after the SEAT Leon Cupra 300; cars13). Model key "leoncupra",
+    /// The front-wheel-drive turbo hot hatch of 2018 (after the SEAT Leon Cupra, with its platform's 245 PS tune since
+    /// cars/phys2; cars13). Model key "leoncupra",
     /// sound folder "tsi4"; drawn with the V6 hatch's loft (keyed on the 2007 Leon) until a model of it is found.
     /// </summary>
     CupraTsi,

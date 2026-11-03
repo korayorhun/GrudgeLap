@@ -62,9 +62,12 @@ public sealed class HandlingTests(ITestOutputHelper output)
     [InlineData(9, 7.6f, 9.4f, 34f, 44f)]
     // 1.6 hatch: 11.0 s for the Bravo 1.6 16V (cars-data); ABS, drums behind, no published stop (the class: 38-47 m).
     [InlineData(10, 9.9f, 12.1f, 38f, 47f)]
-    // Hot hatch of 2018: SEAT quotes 5.8 s for the Leon Cupra 300 five-door the spec follows (5.7 for the three-door);
-    // ESC with ABS, no published stop (a hot hatch of 2018 on 235/35 R19 performance tyres with 340 mm discs: 31-38 m).
-    [InlineData(11, 5.2f, 6.4f, 31f, 38f)]
+    // Hot hatch of 2018 with the 245 PS tune of its platform (cars/phys2, VehicleSpec.CupraTsi): Volkswagen quotes 6.2 s
+    // for the Golf GTI Performance, the Leon's twin in size and mass, with that engine and either gearbox (Skoda's 6.6 s
+    // for the heavier Octavia RS 245 falls in the window too); ESC with ABS, no published stop (a hot hatch of 2018 on
+    // 235/35 R19 performance tyres with 340 mm discs: 31-38 m). The 300 PS alternative (docs/design.md item 23) was held
+    // round SEAT's 5.8 s for the five-door: 5.2-6.4 s.
+    [InlineData(11, 5.6f, 6.8f, 31f, 38f)]
     // Boxer coupe: Subaru quotes 7.6 s for the BRZ; ABS; Car and Driver stopped a 2013 BRZ from 70 mph in 165 ft, about
     // 39.6 m from 100 km/h on its touring tyres.
     [InlineData(12, 6.8f, 8.4f, 35f, 44f)]
