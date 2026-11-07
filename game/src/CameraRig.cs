@@ -62,7 +62,7 @@ internal sealed partial class CameraRig : Node3D
 
     public override void _Ready()
     {
-        _camera = new Camera3D { Fov = 72f, Near = 0.15f, Far = 9000f, Current = true };   // far enough for the mountains on the horizon
+        _camera = new Camera3D { Fov = 72f, Near = 0.15f, Far = 65000f, Current = true };   // the real land and its skirt reach 60 km (0.37; 9 km for the old mountains)
         AddChild(_camera);
     }
 

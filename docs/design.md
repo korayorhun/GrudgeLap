@@ -2830,6 +2830,51 @@ and the drawbridge's deck "a millimetre thin" at the jump (P10).
 - **The export** (`--export-world`, for the Unreal version): glTF cannot carry Godot's shaders, so
   `WorldBuilder.ExportMode` builds the ground and the verge with the standard materials, as before.
 
+### The real land (0.37.0)
+
+The Godot/Unreal comparison of 7 November showed the mountains as the weakest thing in both versions: in Godot a ring
+of noise with vertex colours that under the haze read as a bank of cloud. 0.37 puts a real place round the plain.
+
+- **The place**: Jackson Hole, Wyoming, centred on the sagebrush flats east of Moose (43.70 N, 110.67 W): the Teton
+  Range to the west (its front 6 to 8 km out, the Grand Teton 13 km, 2.1 km over the valley floor), the Gros Ventre to
+  the east, the valley running north to Jackson Lake. A flat floor 10 km wide fits the game's own terrain (the roads and
+  2.4 km round them), and the range rises where the old ring stood. The game's +X looks west (`--heading 270`): the
+  start straight runs at the Tetons, and the game's sun (from 144 degrees, 43 degrees up) lights their face from the
+  south-east as the morning sun does.
+- **The data** (`tools/make-terrain.py`): the USGS 3DEP 1 arc-second elevation model (tile n44w111, public domain) and
+  a Sentinel-2 L2A true-colour image (S2B_12TWP_20240705: 5 July 2024, 0.4 % cloud, snow on the high peaks only; the
+  13 June image had the range white to its foot, the 23 June one half the swath missing). A 48 km square round the
+  circuit's centre, in a transverse Mercator frame about it: a 30 m grid of heights over the valley floor (2019 m),
+  the game's sun's visibility (marched towards the sun to 12 km: the mountains' own shadows, which the shadow maps,
+  ending at 350 m, cannot give) and the sky's (twelve horizons to 3 km: the gullies darker), zlib'd into
+  `assets/terrain/jackson.bin` (5.5 MB); and a 5120 px colour texture (9.4 m a texel). The image's own sunlight
+  (65 degrees up, from 143) is mostly divided out with the elevation's normals, so the game's lower sun shades the
+  slopes again without doubling it; the product's 0..0.2 reflectance scale is taken back towards reflectance (dark
+  ground near its old sRGB value, bright ground held down), the saturated snow set white, and the valley floor
+  graded from the pinkish tan the satellite sees to the olive grey the sagebrush shows from the ground.
+- **The mesh** (`RealLand`): a polar grid round the circuit's centre, since the land is only ever seen from within a
+  kilometre of it: 1024 bearings, rings 0.6 % of their radius apart (12 m at 2 km, 60 m at 10 km, 140 m at 24 km),
+  439 000 vertices in 32 wedges the camera can leave out. Inside the game's terrain the land lies flat at the old far
+  ground's level and the triangles wholly inside it less 60 m are left out (the cuttings go below that level); the real
+  heights come in over 1.2 km from the terrain's edge. The Earth's curvature with the air's refraction drops the land
+  7 m at 10 km and 39 m at 24 km; a skirt carries the rim out to 60 km. The wedges are worked out in parallel and
+  committed in series: 0.3 s of the start-up (the colour texture, imported lossless at first, took 0.7 s to load by
+  itself: a texture added later needs its `.import` set to VRAM compression with mipmaps and its `.md5` under
+  `.godot/imported` deleted before the next import; run headless, the importer notices a changed source, not changed
+  settings).
+- **The material** (`assets/shaders/land.gdshader`): the image's colour, the plain's own green by the terrain's edge
+  (`WorldBuilder.PlainFar`, over 900 m), a little grain where the 9 m texels are magnified; Lambert light with the
+  baked sun's visibility on the directional light and the sky's share on the ambient only; no specular. The GPU time
+  did not move (13.4 to 14.1 ms with the land, 13.5 to 14.8 ms with the old far ground and ring: `--land=0`).
+- **The clouds** (`assets/shaders/clouds.gdshader`): the 14 km sheet at 1.5 km would have cut through the peaks; the
+  layer is now 60 km at 2.8 km, the sheet sampled at two scales and angles (it repeated as a wallpaper at one),
+  thinned by a slow noise into clear and cloudy stretches, faded out from 9 to 28 km so its edge is never seen, drifted
+  by the game in metres (`WorldBuilder.Tick`).
+- **The air**: a clear day's fog 0.00009 to 0.00003 (about 130 km of visibility, the Rockies' dry air: the Tetons a
+  quarter hazed at 10 km); overcast and rain keep their denser air, the range grey through it. The cameras see 65 km.
+- **The 1989 look** keeps the old far ground and ring (`ShowLand`); the export (`--export-world`) carries the land
+  with its colour on a standard material and leaves the hidden ring behind.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

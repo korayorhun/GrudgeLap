@@ -27,6 +27,8 @@ internal static class WorldExport
         {
             // The clouds are a sheet for this engine's sky; the other builds its own.
             if (child is not Node3D node || node is CameraRig or Light3D or Camera3D || node.Name == "FarGround" || node.Name == "Clouds") continue;
+            // With the real land (0.37) the old ring of mountains is hidden and stays behind; the land goes out instead.
+            if (node.Name == "Mountains" && !node.Visible) continue;
             if (node is CarView && node != car) continue;
             foreach (var multimesh in Descendants(node).OfType<MultiMeshInstance3D>())
             {

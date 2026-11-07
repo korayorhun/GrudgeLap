@@ -53,6 +53,10 @@ internal static class WorldBuilder
     private static StandardMaterial3D? _earth;
     // The road furniture of today (edge lines, marker posts): hidden in 1989 mode, the cabinet's road had neither.
     private static readonly List<Node3D> _modernRoad = [];
+    /// <summary>The old far ground and mountains, shown only in the 1989 look once the real land is there (0.37).</summary>
+    private static readonly List<Node3D> _retroLand = [];
+    private static Node3D? _land;
+    private static ShaderMaterial? _landShader;
     private static StandardMaterial3D? _edgeLines;
     // 1989 mode's orange for the shoulders and the earthworks; otherwise the shoulders are grey-brown gravel and the
     // cuttings' earth a natural brown (0.9.1; before, the orange of the original was kept in both).
@@ -98,8 +102,9 @@ internal static class WorldBuilder
     private static readonly Color DrySun = new(1f, 0.96f, 0.90f);
     private static readonly Color CloudSun = new(0.84f, 0.87f, 0.93f);
     private const float SunEnergy = 1.45f;
-    /// <summary>How fast the cloud sheet drifts, in tiles per second: about five metres a second on a 2.8 km tile.</summary>
-    private const float CloudDrift = 0.0018f;
+    /// <summary>The wind that drifts the clouds, metres a second along x and z (0.37: in tiles a second until then).</summary>
+    private static readonly Vector2 CloudDrift = new(5f, 1.75f);
+    private static Vector2 _cloudOffset;
     private static readonly List<(StandardMaterial3D Material, Texture2D? Albedo, Texture2D? Normal, Texture2D? Roughness)> _textured = new();
     private static readonly Dictionary<string, StandardMaterial3D> _propMaterials = new();
     /// <summary>Sun direction measured from the brightest patch of the sky HDRI (see assets/textures/SOURCES.md): elevation 43.0, panorama u 0.600.</summary>
@@ -129,11 +134,15 @@ internal static class WorldBuilder
         _earth = null;
         _edgeLines = null;
         _modernRoad.Clear();
+        _retroLand.Clear();
+        _land = null;
+        _landShader = null;
         _environment = null;
         _mirrorEnvironment = null;
         _sun = null;
         _steel = null;
         _clouds = null;
+        _cloudOffset = Vector2.Zero;
         _forest = null;
         _textured.Clear();
         _propMaterials.Clear();
@@ -159,10 +168,22 @@ internal static class WorldBuilder
         Stage("");
         root.AddChild(BuildEnvironment());
         root.AddChild(BuildSun());
-        root.AddChild(BuildFarGround(track));
-        root.AddChild(BuildMountains(track));
+        var farGround = BuildFarGround(track);
+        var mountains = BuildMountains(track);
+        root.AddChild(farGround);
+        root.AddChild(mountains);
         if (BuildClouds(track) is { } clouds) root.AddChild(clouds);
         Stage("sky, sun, far ground, mountains, clouds");
+        // The real land (RealLand) in place of the far ground and the old mountains, which stay for the 1989 look.
+        _land = BuildLand(track);
+        if (_land is not null)
+        {
+            root.AddChild(_land);
+            _retroLand.Add(farGround);
+            _retroLand.Add(mountains);
+            ShowLand();
+        }
+        Stage("land");
         root.AddChild(BuildTerrain(track));
         Stage("terrain");
         foreach (var path in track.Paths)
@@ -210,9 +231,10 @@ internal static class WorldBuilder
     /// <summary>Once a frame: the clouds drift.</summary>
     public static void Tick(float dt)
     {
-        if (_clouds?.Mesh is PlaneMesh { Material: StandardMaterial3D material })
+        if (_clouds?.Mesh is PlaneMesh { Material: ShaderMaterial material })
         {
-            material.Uv1Offset += new Vector3(dt * CloudDrift, dt * CloudDrift * 0.35f, 0f);
+            _cloudOffset += CloudDrift * dt;
+            material.SetShaderParameter("drift", _cloudOffset);
         }
     }
 
@@ -356,6 +378,7 @@ internal static class WorldBuilder
         }
         _groundShader?.SetShaderParameter("tint", DryGrass.Lerp(WetGrass, wet));
         _groundShader?.SetShaderParameter("wetness", wet);
+        _landShader?.SetShaderParameter("wetness", wet);
         _shoulderShader?.SetShaderParameter("wetness", wet);
         FoliageBuilder.SetWeather(DryGrass.Lerp(WetGrass, wet), wet);
         if (_edgeLines is not null) _edgeLines.Roughness = Mathf.Lerp(0.65f, 0.25f, wet);
@@ -430,6 +453,7 @@ internal static class WorldBuilder
         {
             if (GodotObject.IsInstanceValid(node)) node.Visible = !retro;
         }
+        ShowLand();
         ApplyQuality();
         if (_environment is null) return;
         RetroLook(_environment, retro);
@@ -839,24 +863,24 @@ internal static class WorldBuilder
     /// Fair-weather clouds: one wide sheet of the cloud texture (tools/make-clouds.py) high over the circuit, seen
     /// from below, unlit so that it stays as white as the sky's own clouds, drifting slowly (<see cref="Tick"/>).
     /// </summary>
+    /// <summary>The cloud layer's side and height (0.37: 14 km at 1.5 km until the real land's peaks rose through it).</summary>
+    private const float CloudSize = 60000f;
+    private const float CloudHeight = 2800f;
+
     private static MeshInstance3D? BuildClouds(TrackGeometry track)
     {
         if (!ResourceLoader.Exists("res://assets/textures/clouds.png")) return null;
-        var material = new StandardMaterial3D
-        {
-            AlbedoTexture = GD.Load<Texture2D>("res://assets/textures/clouds.png"),
-            AlbedoColor = new Color(0.94f, 0.95f, 0.97f),
-            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-            CullMode = BaseMaterial3D.CullModeEnum.Disabled,
-            Uv1Scale = new Vector3(5f, 5f, 1f),
-            TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmaps,
-        };
+        // The sheet at two scales, thinned into clear and cloudy stretches, faded out from 9 to 28 km so the layer's
+        // edge is never seen (assets/shaders/clouds.gdshader).
+        var material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/clouds.gdshader") };
+        material.SetShaderParameter("clouds_tex", GD.Load<Texture2D>("res://assets/textures/clouds.png"));
+        material.SetShaderParameter("tile", 5200f);
+        material.SetShaderParameter("drift", _cloudOffset);
         var (minX, maxX, minZ, maxZ) = RoadBounds(track);
         _clouds = new MeshInstance3D
         {
-            Mesh = new PlaneMesh { Size = new Vector2(14000f, 14000f), Material = material },
-            Position = Convert.ToGodot(new SN.Vector3((minX + maxX) * 0.5f, 1500f, (minZ + maxZ) * 0.5f)),
+            Mesh = new PlaneMesh { Size = new Vector2(CloudSize, CloudSize), Material = material },
+            Position = Convert.ToGodot(new SN.Vector3((minX + maxX) * 0.5f, CloudHeight, (minZ + maxZ) * 0.5f)),
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             Name = "Clouds",
         };
@@ -1736,9 +1760,54 @@ internal static class WorldBuilder
         return group;
     }
 
-    /// <summary>The air's colour and density on a clear day (0.36: 0.00004 and a paler blue let nothing fade with distance).</summary>
+    /// <summary>
+    /// The air's colour and density on a clear day: a visibility of about 130 km, as in the dry air of the Rockies (the
+    /// Tetons a quarter hazed at 10 km). 0.36's 0.00009 suited mountains 4 km out; with the real land 8 to 24 km out it
+    /// turned them into the bank of cloud the old ones were (and 0.00004 until 0.36 let nothing fade).
+    /// </summary>
     private static readonly Color ClearAir = new(0.66f, 0.74f, 0.86f);
-    private const float ClearAirDensity = 0.00009f;
+    private const float ClearAirDensity = 0.00003f;
+
+    /// <summary>The plain's colour seen from afar (the terrain shader's lawn under its tint), which the real land takes by the terrain's edge.</summary>
+    private static readonly Color PlainFar = new(0.22f, 0.29f, 0.08f);
+
+    /// <summary>Automation (--land=0): the old far ground and mountains instead of the real land, for comparisons.</summary>
+    public static bool? LandOverride { get; set; }
+
+    /// <summary>The real land round the game's terrain (RealLand), or null without its data.</summary>
+    private static Node3D? BuildLand(TrackGeometry track)
+    {
+        if (LandOverride == false || !ResourceLoader.Exists(RealLand.AlbedoPath)) return null;
+        var (minX, maxX, minZ, maxZ) = TerrainBounds(track);
+        var albedo = GD.Load<Texture2D>(RealLand.AlbedoPath);
+        Stage("  land: the colour loaded");
+        Material material;
+        if (ExportMode)
+        {
+            // glTF carries no Godot shader: the colour alone, for the Unreal version to light.
+            material = new StandardMaterial3D { AlbedoTexture = albedo, Roughness = 1f, MetallicSpecular = 0.2f };
+        }
+        else
+        {
+            _landShader = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/land.gdshader") };
+            _landShader.SetShaderParameter("albedo_tex", albedo);
+            _landShader.SetShaderParameter("plain_colour", PlainFar);
+            material = _landShader;
+        }
+        // The terrain's bounds are the simulation's x and z; Godot's z is the simulation's turned round.
+        return RealLand.Build((minX, maxX, -maxZ, -minZ), material, Stage);
+    }
+
+    /// <summary>The real land in the modern look, the old far ground and mountains in the 1989 one.</summary>
+    private static void ShowLand()
+    {
+        if (_land is null || !GodotObject.IsInstanceValid(_land)) return;
+        _land.Visible = !_retro;
+        foreach (var node in _retroLand)
+        {
+            if (GodotObject.IsInstanceValid(node)) node.Visible = _retro;
+        }
+    }
 
     /// <summary>The ground's shader (assets/shaders/terrain.gdshader), or the standard grass for the export.</summary>
     private static Material GroundMaterial => ExportMode ? Grass : _groundShader ??= MakeGroundShader();
