@@ -3310,6 +3310,35 @@ The puddles were the view's alone: a mirror-flat patch on the asphalt, under the
   and the arcs: it is on a layer of its own, which the mirror's camera and the car's probe leave out.
 - `--puddles=0` leaves the water out for comparisons; the pose log prints `aqua=` when a tyre floats.
 
+### The night (0.57.0)
+
+- **The hour** (`WorldBuilder.Hour`, `SetHour`): the day, the sunrise (0.55) and the night; the menu's LIGHT steps
+  through day, sunrise, night and random (a draw of the three), its stored numbers keeping 0.55's (random 2, night 3).
+- **The sky and the moon**: Poly Haven's Kloppenheim 02 pure sky (Greg Zaal, sky edits Jarod Guest, CC0), a clear
+  night with the moon 17 degrees up and its stars, used as photographed: its moon stands at u 0.599, where the day's sun
+  stands, so the moon is the day sun's bearing (144) and the land's baked shadows are the day's (a little short for a
+  moon this low, which no one sees by its light). Poly Haven exposes its skies for a picture, this one only 1.75 times
+  darker than the day's: it is drawn at 0.035 of its level (`panorama_energy`), the volumetric clouds' sky light comes
+  down with it (or they glowed as by day) and take the moon's colour, a third of the sky covered. The moon's light is
+  blue-white (0.70, 0.80, 1) at 0.18, the air a deep blue, the camera's exposure 1.35; no clouds' shadows and no glare
+  on the glass by its light.
+- **What lit the night as dusk**: the ambient's fifth that is not the sky's is a constant warm ground bounce, a day's
+  (`GroundBounce`); the closed cabin's probe has a constant ambient (`CabinAmbient`) and two shadowless lights stand in
+  for the daylight through the glass (`BuildCabinLight`). All three now come down with the night sky
+  (`CarView.CabinLight`), leaving the cabin to its instruments.
+- **The lamps** (`CarView.Headlights`): two spot lights at the body's front corners, 0.65 m up, aimed 1.5 degrees down
+  through a low beam's pattern drawn into a projector texture (`LowBeam`: a flat cut-off on the oncoming side that steps
+  up 15 degrees over the verge, the hot spot just under it, a broad fill), 28 at 120 m and 32 degrees, their shadows
+  leaving the car's own layer out (`ShadowCasterMask`, or the bumper and the lamp glass blacked them out) and lighting
+  the volumetric fog (beams in the rain); a red omni light behind, 3.5 m, for the tail lamps' glow on the road.
+- **The reflectors** (`assets/shaders/retroreflector.gdshader`): the posts' reflectors send a lamp's light back the way
+  it came, a lobe a few degrees wide round the light's own direction at 400 times, so a post a hundred metres ahead
+  flares in the faint light over the cut-off; the sun is left out of the lobe (with it behind the driver every post lit
+  up by day).
+- **Cost**: 13.5 ms a frame at night against 11.7 by day (the two lamps' shadows), an attract lap at 1080p.
+- Still to come: the traffic's and the train's lamps, the farms' yard lights; a few cars' light trim (the estate's dash
+  panel, the flat-twelve's console) stays lighter than the rest at night.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

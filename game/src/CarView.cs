@@ -278,6 +278,8 @@ internal sealed partial class CarView : Node3D
         {
             return;
         }
+        _lampBounds = bounds;
+        _lampCentre = centre;
         var shade = new Gradient();
         shade.SetColor(0, new Color(0f, 0f, 0f, 0.80f));
         shade.SetColor(1, new Color(0f, 0f, 0f, 0f));
@@ -302,6 +304,107 @@ internal sealed partial class CarView : Node3D
             LowerFade = 0.5f,
             UpperFade = 0.5f,
         });
+    }
+
+    private Aabb? _lampBounds;
+    private Vector3 _lampCentre;
+    private SpotLight3D[]? _headlamps;
+    private OmniLight3D? _tailGlow;
+
+    /// <summary>
+    /// The player's lamps at night (0.57): two low beams from the front corners of the body, 0.65 m up, and a red glow
+    /// behind; made the first time they are switched on (<see cref="BuildLamps"/>).
+    /// </summary>
+    public bool Headlights
+    {
+        get => _headlamps is { } lamps && lamps[0].Visible;
+        set
+        {
+            if (value && _headlamps is null) BuildLamps();
+            if (_headlamps is null) return;
+            foreach (var lamp in _headlamps) lamp.Visible = value;
+            if (_tailGlow is not null) _tailGlow.Visible = value;
+        }
+    }
+
+    /// <summary>
+    /// Two spot lights at the body's front corners (a quarter of a metre in from its sides), aimed a degree and a half
+    /// down, through a low beam's pattern (<see cref="LowBeam"/>): a flat cut-off on the oncoming side that steps up
+    /// over the verge, the brightest just under it. Their shadows leave the car's own layer out, or its bumper and lamp
+    /// glass would black them out. A red omni light behind for the tail lamps' glow on the road.
+    /// </summary>
+    private void BuildLamps()
+    {
+        if (_lampBounds is not { } bounds) return;
+        var ground = -_cgHeight;
+        // From the centre the car was measured round, so a body set off in its node still has its lamps at its nose.
+        var front = _lampCentre.Z - bounds.Size.Z * 0.5f + 0.15f;
+        var side = MathF.Max(bounds.Size.X * 0.5f - 0.25f, 0.3f);
+        var beam = LowBeam();
+        _headlamps = new SpotLight3D[2];
+        for (var i = 0; i < 2; i++)
+        {
+            var lamp = new SpotLight3D
+            {
+                Name = i == 0 ? "HeadlampLeft" : "HeadlampRight",
+                Position = new Vector3(_lampCentre.X + (i == 0 ? -side : side), ground + 0.65f, front),
+                Rotation = new Vector3(Mathf.DegToRad(-1.5f), 0f, 0f),
+                LightColor = new Color(1f, 0.95f, 0.86f),
+                LightEnergy = 28f,
+                SpotRange = 120f,
+                SpotAngle = 32f,
+                SpotAttenuation = 0.9f,
+                SpotAngleAttenuation = 0.5f,
+                LightProjector = beam,
+                ShadowEnabled = true,
+                ShadowCasterMask = 0xFFFFFu & ~2u,
+                LightVolumetricFogEnergy = 1.5f,
+                Visible = false,
+            };
+            AddChild(lamp);
+            _headlamps[i] = lamp;
+        }
+        _tailGlow = new OmniLight3D
+        {
+            Name = "TailGlow",
+            Position = new Vector3(_lampCentre.X, ground + 0.75f, _lampCentre.Z + bounds.Size.Z * 0.5f + 0.25f),
+            LightColor = new Color(1f, 0.08f, 0.04f),
+            LightEnergy = 0.35f,
+            OmniRange = 3.5f,
+            Visible = false,
+        };
+        AddChild(_tailGlow);
+    }
+
+    private static Texture2D? _lowBeam;
+
+    /// <summary>
+    /// A low beam's pattern for the spot lights' projector: dark above a flat cut-off a little under the lamps' axis on
+    /// the left (the oncoming side, driving on the right) that steps up 15 degrees over the right; under it the hot spot
+    /// just below the cut-off, a little right of centre, and a broad fill fading to the sides and to the bonnet.
+    /// </summary>
+    private static Texture2D LowBeam()
+    {
+        if (_lowBeam is not null) return _lowBeam;
+        const int size = 128;
+        var image = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
+        for (var y = 0; y < size; y++)
+        {
+            for (var x = 0; x < size; x++)
+            {
+                // u from -1 (left) to 1 (right), v from -1 (top) to 1 (bottom).
+                var u = (x + 0.5f) / size * 2f - 1f;
+                var v = (y + 0.5f) / size * 2f - 1f;
+                var cut = u < 0.05f ? 0.06f : 0.06f - (u - 0.05f) * 0.27f;
+                var under = Mathf.SmoothStep(cut - 0.03f, cut + 0.03f, v);
+                var spot = MathF.Exp(-((u - 0.12f) * (u - 0.12f) / 0.06f + (v - cut - 0.08f) * (v - cut - 0.08f) / 0.02f));
+                var fill = MathF.Exp(-(u * u / 0.55f + (v - 0.25f) * (v - 0.25f) / 0.35f));
+                var rim = 1f - Mathf.SmoothStep(0.85f, 1f, MathF.Sqrt(u * u + v * v));
+                var level = Mathf.Clamp((under * (0.8f * spot + 0.45f * fill) + 0.02f) * rim, 0f, 1f);
+                image.SetPixel(x, y, new Color(level, level, level));
+            }
+        }
+        return _lowBeam = ImageTexture.CreateFromImage(image);
     }
 
     /// <summary>Puts the instrument panel (<see cref="InstrumentCluster"/>) into the binnacle: lit dials under the hood.</summary>

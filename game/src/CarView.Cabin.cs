@@ -62,6 +62,7 @@ internal sealed partial class CarView
         {
             body.AddChild(light);
             _cockpitOnly.Add(light);
+            _cabinFill.Add((light, light.LightEnergy));
         }
     }
 

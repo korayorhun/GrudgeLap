@@ -842,6 +842,25 @@ internal sealed partial class CarView
         };
         AddChild(shade);
         _cockpitOnly.Add(shade);
+        _cabinShade = shade;
+    }
+
+    private ReflectionProbe? _cabinShade;
+    /// <summary>The cabin's daylight fill (BuildCabinLight) and each light's day energy, for <see cref="CabinLight"/>.</summary>
+    private readonly List<(OmniLight3D Light, float Energy)> _cabinFill = [];
+
+    /// <summary>
+    /// The cabin's light against the day's (0.57): the closed cabin's dim constant ambient (CabinAmbient) and the two
+    /// lights standing in for the daylight through the glass (BuildCabinLight) lit the dashboard grey at night as by day;
+    /// they come down with the night sky, leaving the cabin to its instruments.
+    /// </summary>
+    public float CabinLight
+    {
+        set
+        {
+            if (_cabinShade is not null) _cabinShade.AmbientColor = CabinAmbient * value;
+            foreach (var (light, energy) in _cabinFill) light.LightEnergy = energy * value;
+        }
     }
 
     /// <summary>The cabin's ambient light (BuildCabinShade): about a quarter of the open sky's, a little warm from the trim it bounces off.</summary>

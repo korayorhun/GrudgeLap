@@ -106,8 +106,8 @@ public sealed partial class Bootstrap : Node3D
     private bool _noTraffic;
     private Weather? _weather;   // --weather=: a fixed weather for automated runs; otherwise the menu's choice
     private int _weatherChoice;  // the menu's weather: 0-3 a fixed Weather, 4 random for every credit; kept in the settings
-    private int _lightChoice;    // the menu's hour (0.55): 0 the day, 1 the sunrise, 2 drawn for every credit; kept in the settings
-    private bool? _sunriseArg;   // automation: --light=day|sunrise
+    private int _lightChoice;    // the menu's hour (0.55): 0 the day, 1 the sunrise, 2 drawn for every credit, 3 the night (0.57); kept in the settings
+    private WorldBuilder.Hour? _hourArg;   // automation: --light=day|sunrise|night
     private PaintBook _paints = null!;   // every car's paint (0.25: the showroom, the menu's PAINT line); kept in the settings
     private string? _paintArg;   // --paint=: the run's car in this paint, this run only
     private bool _repaintLofted; // a lofted car repainted during a crash's replay: built again in the new colour next credit
@@ -167,7 +167,7 @@ public sealed partial class Bootstrap : Node3D
         _quality = (GraphicsQuality)Math.Clamp(LoadChoice("quality", (int)GraphicsQuality.High), 0, 2);
         // The weather (0.15): clear by default; the menu chooses clear, overcast, wet road, rain or random, and keeps it.
         _weatherChoice = Math.Clamp(LoadChoice("weather", 0), 0, 4);
-        _lightChoice = Math.Clamp(LoadChoice("light", 0), 0, 2);
+        _lightChoice = Math.Clamp(LoadChoice("light", 0), 0, 3);
         ParseArgs();   // may override the saved car with --car= and the paint with --paint=
         // The paints (0.21, per car since 0.25): every car in its own colour by default; the showroom and the menu
         // choose another, and keep it. An automated run reads them but never writes the player's file.
@@ -383,7 +383,7 @@ public sealed partial class Bootstrap : Node3D
             else if (arg == "--no-ghost") _noGhost = true;       // pictures of the car without the best lap's ghost over it
             else if (arg == "--no-traffic") _noTraffic = true;
             else if (arg.StartsWith("--weather=", System.StringComparison.Ordinal)) _weather = WeatherModel.Parse(arg["--weather=".Length..]);
-            else if (arg.StartsWith("--light=", System.StringComparison.Ordinal)) _sunriseArg = arg["--light=".Length..] == "sunrise";
+            else if (arg.StartsWith("--light=", System.StringComparison.Ordinal)) _hourArg = arg["--light=".Length..] switch { "sunrise" => WorldBuilder.Hour.Sunrise, "night" => WorldBuilder.Hour.Night, _ => WorldBuilder.Hour.Day };
             else if (arg == "--no-hud") _noHud = true;
             else if (arg.StartsWith("--orbit=", System.StringComparison.Ordinal))
             {
@@ -542,7 +542,7 @@ public sealed partial class Bootstrap : Node3D
         _skidMarks.Clear();
         if (_perfLog) StartMark("  session: the race session");
         // The credit's hour (0.55): --light= for an automated run, otherwise the menu's (the day by default, or drawn).
-        WorldBuilder.SetSunrise(_sunriseArg ?? (_lightChoice == 2 ? System.Random.Shared.Next(2) == 1 : _lightChoice == 1));
+        WorldBuilder.SetHour(_hourArg ?? ChosenHour());
         WorldBuilder.SetWeather(_session.Weather);
         ApplyRain();
         EndCrash();
@@ -1076,6 +1076,9 @@ public sealed partial class Bootstrap : Node3D
         _audio.Interior = cockpit;
         _world.Interior = cockpit;
         _world.Wipers = _cameraRig.Wipers;
+        // The lamps at night (0.57); the 1989 cabinet knew no night.
+        _carView.Headlights = WorldBuilder.CurrentHour == WorldBuilder.Hour.Night && !_retro;
+        _carView.CabinLight = WorldBuilder.CabinLight;
         _world.Covered = _audio.Covered;
         _mirror?.SetActive(cockpit);
         SyncTraffic(dt);
@@ -1632,12 +1635,24 @@ public sealed partial class Bootstrap : Node3D
     /// </summary>
     private void CycleLight(int step)
     {
-        _lightChoice = (_lightChoice + step + 3) % 3;
+        // The menu's order: day, sunrise, night, random; the stored numbers keep 0.55's (random 2) and add the night as 3.
+        int[] order = [0, 1, 3, 2];
+        var at = Array.IndexOf(order, _lightChoice);
+        _lightChoice = order[(Math.Max(at, 0) + step + order.Length) % order.Length];
         SaveChoice("light", _lightChoice);
-        if (_lightChoice < 2) WorldBuilder.SetSunrise(_lightChoice == 1);
+        if (_lightChoice != 2) WorldBuilder.SetHour(ChosenHour());
     }
 
-    private string LightLabel() => _lightChoice switch { 0 => "DAY", 1 => "SUNRISE", _ => "RANDOM" };
+    /// <summary>The menu's hour: the one chosen, or one of the three drawn for the credit.</summary>
+    private WorldBuilder.Hour ChosenHour() => _lightChoice switch
+    {
+        1 => WorldBuilder.Hour.Sunrise,
+        3 => WorldBuilder.Hour.Night,
+        2 => (WorldBuilder.Hour)System.Random.Shared.Next(3),
+        _ => WorldBuilder.Hour.Day,
+    };
+
+    private string LightLabel() => _lightChoice switch { 0 => "DAY", 1 => "SUNRISE", 3 => "NIGHT", _ => "RANDOM" };
 
     /// <summary>
     /// Automation (--perf-log): the main view's measured GPU time and the frame's CPU time, averaged over five
