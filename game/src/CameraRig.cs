@@ -84,7 +84,7 @@ internal sealed partial class CameraRig : Node3D
     /// <summary>
     /// Rain in the air (0.12): a box of falling streaks that travels with the camera, 32 m across and 10 m above it,
     /// the drops in world space so they fall straight past a moving car. Thin vertical quads turned to the camera
-    /// about their own axis (a billboard fixed on Y), unlit and faint, a few thousand at a time.
+    /// about their own axis (a billboard fixed on Y), unlit and faint, a few thousand at a time, and none right at the eye.
     /// </summary>
     public void SetRain(bool raining)
     {
@@ -116,6 +116,12 @@ internal sealed partial class CameraRig : Node3D
                     BillboardMode = BaseMaterial3D.BillboardModeEnum.FixedY,
                     BillboardKeepScale = true,
                     CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+                    // Gone within a metre and a bit of the eye, whole from four and a half (0.53): a drop half a metre away is a
+                    // streak thirty pixels wide, which no eye or camera sees in focus, and from the seat the drops fell inside
+                    // the cabin.
+                    DistanceFadeMode = BaseMaterial3D.DistanceFadeModeEnum.PixelAlpha,
+                    DistanceFadeMinDistance = 1.2f,
+                    DistanceFadeMaxDistance = 4.5f,
                 },
             };
             _rain = new GpuParticles3D

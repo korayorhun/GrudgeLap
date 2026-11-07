@@ -3201,6 +3201,31 @@ The world was silent but for the cars, the train and the cows: standing at the s
   rain; silent in the replay (which plays its tune alone) and the 1989 look. At speed the engine, the tyres and the wind
   cover it as they would; standing, it is the sound of the place.
 
+### The overcast's deck of cloud and the wet road's spray (0.53.0)
+
+- **The deck** (`WorldBuilder.OvercastDeck`): an overcast, wet or rainy credit showed the procedural grey of 0.12, a flat
+  gradient. It now has the clear sky's volumetric clouds (`assets/shaders/volumetric_sky.gdshader`, the same noises and
+  wind) as a low deck over a grey dome in place of the photo (`use_photo` off: lighter towards the horizon, darker
+  below it), so the grey has a deck's texture, thicker and darker patches and thinner lighter ones drifting by; the
+  dome is the radiance map too, so the light is the old overcast's grey. The deck sits lower and closes as the weather
+  worsens: 1.2-2.6 km and 85 % cover overcast, 0.9-2.4 km and 93 % wet, 0.7-2.2 km and whole in the rain, its underside
+  darker; the sun behind it at 1.6 instead of 3.6. Without the volumetric sky (the export, `--volumetric-clouds=0`) the
+  procedural grey stays.
+- **The air under it**: the deck fades into the dome's grey towards the horizon over the fog's own distance
+  (`haze_distance`: 20 km overcast, 9 km wet, 3.5 km in the rain; the clear sky keeps its 28 km), and the fog is the
+  dome's grey at the horizon (0.60, 0.62, 0.66; 0.9 of it wet, 0.78 in the rain; 0.70-0.76 on every grey day until
+  0.53), so the far land and the far deck meet in one grey. With the clear sky's haze the rain's deck stayed dark down
+  to the horizon, and the fogged Tetons stood against it as pale cut-outs. The radiance map stays the dome alone (the
+  march in the cubemap pass would have cost three times the quarter-resolution pass's pixels). The deck costs about
+  0.3 ms a frame in the rain (10.7 against 10.4 ms with `--volumetric-clouds=0`, an attract lap at 1080p).
+- **The spray** (`WheelDust`): on a wet road each tyre throws up a fine mist, a third particle system a wheel beside
+  the dust and the smoke, from 30 km/h and full at 120, scaled by the road's wetness (0.85 wet, 1 in the rain): thin
+  (a third of the dust's opacity), quick (0.8 s) and drifting downwind with the rest. All three now fade where they
+  meet the road or the ground (proximity fade over 0.6 m) instead of cutting into it in hard bands.
+- **The rain by the eye** (`CameraRig.SetRain`): the streaks fade in from 1.2 m and are whole from 4.5 m. A drop half
+  a metre away was a streak thirty pixels wide, which no eye or camera sees in focus, and from the seat the drops fell
+  inside the cabin.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

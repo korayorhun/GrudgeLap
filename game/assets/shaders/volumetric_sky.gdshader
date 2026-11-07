@@ -24,6 +24,22 @@ uniform vec3 ambient_top : source_color = vec3(0.58, 0.68, 0.85);
 uniform vec3 ambient_bottom : source_color = vec3(0.34, 0.37, 0.42);
 uniform float ambient_strength = 1.0;
 uniform float max_distance = 40000.0;
+// The air between the eye and a cloud: how far it takes to fade a cloud into the sky behind it, and how far it goes.
+// The clear sky's 28 km and 0.8; under a rain deck (0.53) the air is as thick as the fog that hides the land, so the
+// deck fades into the same grey towards the horizon as the mountains do (with the clear sky's haze it stayed dark
+// down to the horizon, and the fogged mountains stood against it as pale cut-outs).
+uniform float haze_distance = 28000.0;
+uniform float haze_strength = 0.8;
+// The overcast's sky (0.53): no photo behind the deck but a grey dome, lighter towards the horizon as a real overcast is,
+// and darker below it.
+uniform bool use_photo = true;
+uniform vec3 dome_top : source_color = vec3(0.34, 0.37, 0.42);
+uniform vec3 dome_horizon : source_color = vec3(0.60, 0.62, 0.66);
+uniform vec3 dome_ground : source_color = vec3(0.30, 0.31, 0.31);
+
+vec3 dome(vec3 d) {
+	return d.y >= 0.0 ? mix(dome_horizon, dome_top, pow(clamp(d.y, 0.0, 1.0), 0.6)) : mix(dome_horizon, dome_ground, clamp(-d.y * 4.0, 0.0, 1.0));
+}
 
 
 float cloud(vec3 p) {
@@ -51,7 +67,7 @@ float cloud(vec3 p) {
 }
 
 void sky() {
-	vec3 photo = texture(panorama, SKY_COORDS).rgb * panorama_energy;
+	vec3 photo = use_photo ? texture(panorama, SKY_COORDS).rgb * panorama_energy : dome(EYEDIR);
 	if (AT_CUBEMAP_PASS) {
 		COLOR = photo;
 	} else if (AT_QUARTER_RES_PASS) {
@@ -106,8 +122,8 @@ void sky() {
 					transmittance = 0.0;
 				}
 				// The air between: far clouds fade into the sky's own colour, near the horizon.
-				float haze = 1.0 - exp(-t0 / 28000.0);
-				light = mix(light, photo * (1.0 - transmittance), haze * 0.8);
+				float haze = 1.0 - exp(-t0 / haze_distance);
+				light = mix(light, photo * (1.0 - transmittance), haze * haze_strength);
 				COLOR = light;
 				ALPHA = 1.0 - transmittance;
 			}

@@ -96,6 +96,11 @@ internal static class WorldBuilder
     private static Weather _weather = Weather.Dry;
     private static Material? _clearSky;              // the photo sky, kept while the overcast one shows
     private static ProceduralSkyMaterial? _overcastSky;
+    // The overcast's deck of cloud (0.53, OvercastDeck): the volumetric sky over a grey dome, on the clear sky's noises.
+    private static ShaderMaterial? _overcastDeck;
+    private static NoiseTexture3D? _shapeNoise;
+    private static NoiseTexture3D? _detailNoise;
+    private static NoiseTexture2D? _weatherNoise;
     private static NoiseTexture2D? _puddles;
     private static readonly Color DryAsphalt = new(0.52f, 0.52f, 0.53f);
     private static readonly Color WetAsphalt = new(0.15f, 0.15f, 0.16f);
@@ -126,6 +131,10 @@ internal static class WorldBuilder
         _carProbe = null;
         _clearSky = null;
         _overcastSky = null;
+        _overcastDeck = null;
+        _shapeNoise = null;
+        _detailNoise = null;
+        _weatherNoise = null;
         _puddles = null;
         _grass = null;
         _groundShader = null;
@@ -272,6 +281,7 @@ internal static class WorldBuilder
                 _skyWindClock = 0f;
                 if (_clouds is null) _cloudOffset += CloudDrift * 2f;
                 _volumetricSky.SetShaderParameter("wind", _cloudOffset * 2f);
+                _overcastDeck?.SetShaderParameter("wind", _cloudOffset * 2f);
             }
         }
         // The shadows take the sky's wind every frame, where the sky moves every two seconds (CloudShadows).
@@ -448,7 +458,7 @@ internal static class WorldBuilder
         if (_environment.Sky is { } sky)
         {
             _clearSky ??= sky.SkyMaterial;
-            sky.SkyMaterial = overcast ? OvercastSky : _clearSky;
+            sky.SkyMaterial = overcast ? OvercastDeck(_weather) ?? (Material)OvercastSky : _clearSky;
         }
         if (_clouds is not null) _clouds.Visible = !overcast && _volumetricSky is null;   // the grey sky is its own cloud
         _sunEnergy = overcast ? 0.6f : SunEnergy;
@@ -466,7 +476,10 @@ internal static class WorldBuilder
             if (environment is null) continue;
             environment.AmbientLightSkyContribution = overcast ? 0.95f : SkyAmbientShare;
             environment.AmbientLightEnergy = overcast ? 1.1f : AmbientEnergy;
-            environment.FogLightColor = overcast ? new Color(0.70f, 0.72f, 0.76f) : ClearAir;
+            // Under the deck the air is the dome's own grey at the horizon (0.53), darker as the weather worsens: brighter,
+            // the rain's thick air stood the mountains up as pale cut-outs against a darker sky.
+            var greyAir = WeatherModel.Raining(_weather) ? 0.78f : _weather == Weather.Wet ? 0.9f : 1f;
+            environment.FogLightColor = overcast ? new Color(0.60f, 0.62f, 0.66f) * greyAir : ClearAir;
             environment.FogDensity = !overcast ? ClearAirDensity : WeatherModel.Raining(_weather) ? 0.00032f : 0.00016f;
             environment.FogAerialPerspective = overcast ? 0.8f : 0.55f;
             environment.VolumetricFogDensity = overcast ? 0.00035f : 0.00012f;
@@ -1906,6 +1919,7 @@ internal static class WorldBuilder
             Noise = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.Perlin, FractalType = FastNoiseLite.FractalTypeEnum.Fbm, FractalOctaves = 4, Frequency = 0.035f, Seed = 1989 },
         };
         material.SetShaderParameter("shape_noise", shape);
+        _shapeNoise = shape;
         material.SetShaderParameter("detail_noise", new NoiseTexture3D
         {
             Width = 48, Height = 48, Depth = 48, Seamless = true, Normalize = true,
@@ -1917,6 +1931,7 @@ internal static class WorldBuilder
             Noise = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth, FractalOctaves = 3, Frequency = 0.012f, Seed = 7 },
         };
         material.SetShaderParameter("weather_map", weather);
+        _weatherNoise = weather;
         // The same clouds' shadows on the ground (0.44).
         CloudShadows.SetClouds(shape, weather, SunDirection);
         _volumetricSky = material;
@@ -1948,6 +1963,47 @@ internal static class WorldBuilder
 
     /// <summary>Automation (--meadow=0): the roadside without the meadow's cards, for comparisons.</summary>
     public static bool? MeadowOverride { get; set; }
+
+    /// <summary>
+    /// The sky of an overcast, wet or rainy credit (0.53): the volumetric sky's own clouds as a low deck over a grey dome
+    /// (assets/shaders/volumetric_sky.gdshader, use_photo off), so the grey has the deck's texture, thicker and darker
+    /// patches and thinner lighter ones drifting with the wind, where the procedural grey of 0.12 was a flat gradient.
+    /// The deck sits lower and closes up as the weather worsens: 1.2-2.6 km and 85 % cover overcast, 0.9-2.4 km and 93 %
+    /// wet, 0.7-2.2 km whole in the rain, its underside darker. Null without the volumetric sky (the export,
+    /// --volumetric-clouds=0): the procedural grey stays.
+    /// </summary>
+    private static ShaderMaterial? OvercastDeck(Weather weather)
+    {
+        if (_volumetricSky is null || _shapeNoise is null || _weatherNoise is null) return null;
+        if (_overcastDeck is null)
+        {
+            _overcastDeck = new ShaderMaterial { Shader = _volumetricSky.Shader };
+            _overcastDeck.SetShaderParameter("use_photo", false);
+            _overcastDeck.SetShaderParameter("shape_noise", _shapeNoise);
+            _overcastDeck.SetShaderParameter("detail_noise", _volumetricSky.GetShaderParameter("detail_noise"));
+            _overcastDeck.SetShaderParameter("weather_map", _weatherNoise);
+            _overcastDeck.SetShaderParameter("sun_strength", 1.6f);
+        }
+        // haze: how far the air takes to fade the deck into the dome's grey at the horizon, as thick as the fog (rain's
+        // 0.00032 hides the land in about 9 km), so the far deck and the fogged land meet in one grey.
+        var (bottom, top, cover, under, dark, haze) = weather switch
+        {
+            Weather.Rain => (700f, 2200f, 1.0f, 0.62f, 0.78f, 3500f),
+            Weather.Wet => (900f, 2400f, 0.93f, 0.8f, 0.9f, 9000f),
+            _ => (1200f, 2600f, 0.85f, 1f, 1f, 20000f),
+        };
+        _overcastDeck.SetShaderParameter("cloud_bottom", bottom);
+        _overcastDeck.SetShaderParameter("cloud_top", top);
+        _overcastDeck.SetShaderParameter("coverage", cover);
+        _overcastDeck.SetShaderParameter("haze_distance", haze);
+        _overcastDeck.SetShaderParameter("haze_strength", 1f);
+        _overcastDeck.SetShaderParameter("density", 0.055f);
+        _overcastDeck.SetShaderParameter("ambient_top", new Color(0.78f, 0.80f, 0.83f) * dark);
+        _overcastDeck.SetShaderParameter("ambient_bottom", new Color(0.46f, 0.48f, 0.51f) * under);
+        _overcastDeck.SetShaderParameter("dome_top", new Color(0.34f, 0.37f, 0.42f) * dark);
+        _overcastDeck.SetShaderParameter("dome_horizon", new Color(0.60f, 0.62f, 0.66f) * dark);
+        return _overcastDeck;
+    }
 
     /// <summary>Automation (--motion-blur=0): the camera without its motion blur, for comparisons.</summary>
     public static bool? MotionBlurOverride { get; set; }
