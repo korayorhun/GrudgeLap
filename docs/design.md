@@ -2706,6 +2706,62 @@ solid prop kind by name (pier, barrier, pump, tower). `--ssao=`, `--sun-shadow=`
 effect for a picture. A lap chart of the stunt route from the pose log (default car, attract speed): the drawbridge at
 28-32 s, the loop at 43.6-48 s, the banked 180 at 60-66 s, the merge at 101 s.
 
+### The crash carried on by the simulation (0.35.0)
+
+Until 0.35 the simulation stopped the car where it struck and the view played a scripted slide (`CrashScene.Advance`:
+a level slide with a yaw from the blow, a pitch that rocked, the car's height pinned to the crash height with the
+terrain's rise clamped to 0.6 m). That is what put a wreck under the road: a car crashed nose-down in the air kept its
+nose-down pose at the crash height, a car on a bank sank into the road, and nothing ever checked the body's lowest point
+against the ground. The owner asked for the car not to freeze at the crash, for an explosion as in the original, and
+for the other cars to move in the replay. All three come from one change: the crash is a blow the simulation plays out.
+
+- **The blow** (`RaceSession.Knocks.Knock`): a knock over the crash speed used to return before any impulse. Now the
+  car is pushed out of what it hit, takes the blow through its centre of mass (a tenth of the closing speed back; the
+  crush zone spreads a head-on's load across the front, so a tree a hand's breadth off the centre line does not spin
+  the car: applied at the touch, 9 cm off centre gave 1.6 rad/s) with friction at the touch on what slides, the
+  engine dies (`EngineModel.Stop`) and the wheels lock. The car's origin sits below its centre of mass
+  (`VehicleSpec.CentreOfMassOffset`): a blow at the origin's height pitched the car up on its tail, so the knock's
+  point and the blow are at the centre of mass's height.
+- **The wreck window** (`RaceSession.Step`, the replay phase's first `RaceOptions.ImpactSeconds` = 2 s): the car is
+  stepped on, out of gear with the brakes on, the knocks looked for after every piece (it bounces off what it meets;
+  a second blow is only a knock), the drones brake for it as for the car, the train and the cows go on, and the
+  replay keeps recording. The wreck skids to a stop where the blow threw it; off the drawbridge it falls to the ground
+  under the bridge and lands; off the loop it falls and comes to rest on its roof.
+- **The body on the ground** (`VehicleSim.BodyContacts`): eight corners of the body box (the sills at the axles, the
+  roof inset for the cabin) against the surface each is over, looked at when a wheel is off the ground or the car is
+  tilted. A corner under its surface by up to 20 cm has its speed into the surface taken away at once (a tenth of it
+  back: a body does not bounce like a tyre), friction on its slide, and is moved out by a quarter of its depth a step
+  (a spring stored the blow and threw the car 20 m up; the overhangs' corners touched first in a nose-down landing and
+  threw the tail down). A corner deeper than that is under something it never touched (the roof of a wreck sliding
+  under the landing ramp was pushed up through the deck). A tilted car carried by its corners counts as rolled over
+  (`BodyGrounded`), which the loop test needs: a fallen car now rests on its roof beside the loop's foot instead of
+  sinking out of the world. `VehicleTests.A_car_on_its_roof_comes_to_rest_on_it`: 0.65 m over the road, up.y -1.00.
+- **The probe under a deck** (`TrackGeometry.Probe`): a point more than a metre under a bridge, a ramp or the loop
+  is over the ground below, not on that road (the wreck under the landing ramp was given the deck over its head as its
+  surface and fell through the ground); over the drawbridge's gap the chasm holds to 1.5 m below the gap line
+  (`FellOffBridge` is called a metre below it).
+- **The replay** (`CrashScene.Pose`): the recorded poses by game time, the `ReplaySeconds` before the end of the
+  wreck window, the first second after the blow at `RaceSession.ReplaySlowRate` (0.35); the blow's effects when the
+  playback reaches `RaceSession.CrashTime` (the dent, the parts and bits thrown, sparks, steam, cracked glass, the
+  explosion and the fire); the drones from their recorded poses by the same clock (`Bootstrap.SyncTrafficReplay`,
+  `RaceSession.ReplayTraffic`). The scripted slide is gone. The replay camera keeps low for a car fallen under a bridge
+  (`CameraRig.Replay`, `low`), and the chase camera takes the car's up and moves in towards the loop's centre as the
+  road tilts (it sat inside the deck for the whole climb).
+- **The crash from the seat** (`CrashScene.Impact`, `Hud.DrawGlassCracks`): through the wreck window the view stays
+  where the player sits: the explosion (a burst of big flame tongues with a flash that dies in a third of a second,
+  `CrashScene.Explode`), the fire and the smoke that follow the wreck, and the cabinet's white cracks over the
+  windscreen; the replay's caption and tune come with the playback. The crash's thump sounds once, as it happens; the
+  engine note dies with the engine and the wreck slides in silence; in the replay only the tune plays.
+- **What is a crash** (`RaceSession.CrashNow`): looked for after every sixtieth of a second of the car's motion (a
+  long frame put a tree deep inside the car's plan before the first look, and the car went through it); a nose-first
+  touchdown at speed (pitched more than 20 degrees down at over 60 km/h) is a hard landing whatever its vertical speed;
+  a side-swipe at 2.5 times the crash speed (an oncoming drone at 200 km/h relative) is a crash whatever the overlap's
+  axis; a sawhorse is soft (`TrackProp.Soft`): it tips over like a sign for a scuff of damage; the wood's trunks near
+  the roads are solid (`FoliageBuilder.NearTrunks`, registered after the props are drawn).
+- **The banked 180's inner edge** (`TrackBuilder.Curve`): with transition spirals the centre line climbs with the bank
+  by the half width's rise, so the inner edge stays at grade and the outer edge is the embankment (banked about a
+  centre line at ground level, the inside sat 2.9 m down in a ditch).
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

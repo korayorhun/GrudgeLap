@@ -132,7 +132,11 @@ public sealed class TrackBuilder
             _bank = MathUtil.Lerp(startBank, turnSign * bankDeg * MathUtil.Deg2Rad, w);
             _heading += dHeading * 0.5f;
             var next = _pos + MathUtil.HeadingDirection(_heading) * step;
-            next.Y = startY + heightDelta * EaseInOut(s / length);
+            // With transition spirals the centre line climbs with the bank by the half width's rise (0.35), so the inner
+            // edge stays at grade and the outer edge is the embankment: banked about a centre line at ground level, the
+            // inside edge of the 180 sat 2.9 m down in a ditch with an earth face along it. A curve without spirals keeps
+            // the old profile: its 25 m ease is too short a ramp for that climb.
+            next.Y = startY + heightDelta * EaseInOut(s / length) + (transition > 0f ? HalfWidth * MathF.Sin(MathF.Abs(_bank)) : 0f);
             _heading += dHeading * 0.5f;
             MoveTo(next);
             Emit(kind, SurfaceType.Road);

@@ -35,6 +35,8 @@ public sealed record VehicleSpec
     public float FrontAxle { get; init; } = 1.27f;           // m, CG to front hubs
     public float RearAxle { get; init; } = 1.28f;            // m, CG to rear hubs
     public float HubHeight { get; init; } = -0.12f;          // m, hub plane below the CG
+    /// <summary>The roof's height over the road at rest (m): the top of the body box the ground holds a wreck up by (VehicleSim.BodyContacts, 0.35).</summary>
+    public float RoofHeight { get; init; } = 1.3f;
     /// <summary>
     /// The body's footprint for knocks against obstacles: the reference point to the front and the rear bumper and half
     /// the widest width without the mirrors (m). On the cars that follow a real one since dims6 (the three hatchbacks and

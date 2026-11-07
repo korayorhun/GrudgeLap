@@ -351,7 +351,7 @@ public sealed class RaceSessionTests
         Assert.Equal(CrashReason.HitTraffic, session.LastCrash);
         Assert.Equal(SessionPhase.Replay, session.Phase);
 
-        for (var i = 0; i < 60 * 11; i++) session.Step(DriverInputs.Idle, Dt);
+        for (var i = 0; i < (int)(60f * (session.ReplayLength + 1f)); i++) session.Step(DriverInputs.Idle, Dt);
         Assert.Equal(SessionPhase.StartEngine, session.Phase);
         // Nothing is parked on the return point.
         foreach (var car in session.Traffic.Cars) Assert.True(Vector3.Distance(car.Position, session.Car.Position) > 20f);
@@ -402,6 +402,60 @@ public sealed class RaceSessionTests
     /// A pier under a bridge stops the car like a building (until 0.9 the car drove through them): driven at from the
     /// field beside the bridge, under the deck's edge, it knocks the car back.
     /// </summary>
+    /// <summary>
+    /// The wreck moves on after the crash (0.35): the simulation carries the car through the wreck window (it rebounds off
+    /// the tree and slides), recording it, with its engine dead and the car on the road, not under it.
+    /// </summary>
+    [Fact]
+    public void The_wreck_moves_on_after_the_crash()
+    {
+        var (_, session, _) = TreeAhead(15f);
+        var events = new List<RaceEvent>();
+        RollInto(session, 25f, events);
+        Assert.Equal(SessionPhase.Replay, session.Phase);
+        Assert.Equal(CrashReason.HitTree, session.LastCrash);
+        var at = session.Car.Position;
+        var samples = session.Replay.Count;
+        for (var i = 0; i < 60; i++) session.Step(DriverInputs.Idle, Dt);
+        var moved = Vector3.Distance(session.Car.Position, at);
+        _out.WriteLine($"wreck: moved {moved:F2} m in the second after the crash, {session.Replay.Count - samples} samples recorded, y {session.Car.Position.Y:F2}, engine running {session.Car.Drivetrain.Engine.Running}");
+        Assert.True(moved > 0.3f, "the wreck rebounds and slides on");
+        Assert.True(session.Replay.Count > samples, "the wreck is recorded");
+        Assert.False(session.Car.Drivetrain.Engine.Running);
+        Assert.True(session.Car.Position.Y > -0.5f, "not under the road");
+        Assert.True(session.ReplayTime < session.Options.ImpactSeconds);
+    }
+
+    /// <summary>A sawhorse is knocked over, not a wall (0.35): the car drives on through it with a scuff of damage and no crash.</summary>
+    [Fact]
+    public void A_sawhorse_is_knocked_over_not_a_wall()
+    {
+        var track = OriginalInspiredTrack.Build();
+        var index = track.Props.FindIndex(p => p.Kind == PropKind.Barrier);
+        var barrier = track.Props[index];
+        var session = new RaceSession(track, new VehicleSpec(), RaceOptions.MediumNoTraffic);
+        session.ChooseTransmission(TransmissionMode.Automatic);
+        session.Step(new DriverInputs { Gear = DriverInputs.NoGearChange, Ignition = true }, Dt);
+        var yaw = barrier.YawDeg * MathUtil.Deg2Rad;
+        var along = new Vector3(MathF.Sin(yaw), 0f, MathF.Cos(yaw));   // the sawhorse stands across the road's direction
+        var from = barrier.Position - along * 20f;
+        from.Y = track.Terrain.Height(from.X, from.Z);
+        var start = new RoadFrame(from, along, MathUtil.Up, Vector3.Cross(MathUtil.Up, along), 0f, 5.5f, SurfaceType.Road, SegmentKind.Straight, 0);
+        session.Car.Reset(start, track.StartCursor);
+        session.Car.LaunchAt(14f);
+        var events = new List<RaceEvent>();
+        for (var i = 0; i < 60 * 4 && session.Phase == SessionPhase.Driving; i++)
+        {
+            session.Step(new DriverInputs { Throttle = 0.3f, Gear = DriverInputs.NoGearChange }, Dt);
+            events.AddRange(session.Events);
+        }
+        _out.WriteLine($"sawhorse: events {string.Join(",", events.Distinct())}, damage {session.Damage:F2}, speed {session.Car.Speed * 3.6f:F0} km/h, phase {session.Phase}");
+        Assert.Contains(RaceEvent.SignHit, events);
+        Assert.DoesNotContain(RaceEvent.Crashed, events);
+        Assert.True(session.Damage < 0.1f);
+        Assert.True(session.Car.Speed > 8f, "the car drives on through the sawhorse");
+    }
+
     [Fact]
     public void Running_into_a_bridge_pier_knocks_the_car_back()
     {
@@ -476,7 +530,7 @@ public sealed class RaceSessionTests
         Assert.Equal(CrashReason.HitBuilding, session.LastCrash);
         Assert.NotEmpty(session.Replay);
 
-        for (var i = 0; i < 60 * 11; i++) session.Step(DriverInputs.Idle, Dt);
+        for (var i = 0; i < (int)(60f * (session.ReplayLength + 1f)); i++) session.Step(DriverInputs.Idle, Dt);
         Assert.Equal(SessionPhase.StartEngine, session.Phase);
         Assert.False(session.Car.Drivetrain.Engine.Running);
         _out.WriteLine($"returned to {session.ReturnPath.Kind} {session.ReturnDistance:F0} m");
@@ -599,7 +653,7 @@ public sealed class RaceSessionTests
         Assert.Equal(SessionPhase.Replay, session.Phase);
         Assert.Equal(CrashReason.HitTree, session.LastCrash);
         Assert.InRange(knocks, 2, 4);
-        for (var i = 0; i < 60 * 11; i++) session.Step(DriverInputs.Idle, Dt);
+        for (var i = 0; i < (int)(60f * (session.ReplayLength + 1f)); i++) session.Step(DriverInputs.Idle, Dt);
         Assert.Equal(SessionPhase.StartEngine, session.Phase);
         Assert.Equal(0f, session.Damage);
         Assert.Equal(1f, session.Car.Drivetrain.Engine.PowerFactor);

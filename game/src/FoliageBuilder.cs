@@ -302,8 +302,12 @@ internal static class FoliageBuilder
     /// three variants; the band near the roads casts shadows, the far one does not. The nodes are named Forest-*
     /// so that <see cref="WorldExport"/> can tell them from the grass.
     /// </summary>
+    /// <summary>The trunks of the wood near the roads, in simulation space, for the track to make solid (0.35).</summary>
+    public static List<SN.Vector3> NearTrunks { get; } = new();
+
     public static Node3D BuildForest(TrackGeometry track, float minX, float maxX, float minZ, float maxZ)
     {
+        NearTrunks.Clear();
         var root = new Node3D { Name = "Forest" };
         const float cell = 20f;
         // The wood keeps 260 m back from the roads and thins over the next 440 m (0.15): far enough for the loop, the
@@ -373,6 +377,7 @@ internal static class FoliageBuilder
                 var basis = new Basis(Vector3.Up, (float)rng.NextDouble() * MathF.Tau).Scaled(new Vector3(scale, scale * (0.9f + 0.3f * (float)rng.NextDouble()), scale));
                 var transform = new Transform3D(basis, Convert.ToGodot(new SN.Vector3(px, y - 0.15f, pz)));
                 (isNear ? nearTrees : farTrees)[rng.Next(ForestVariants)].Add(transform);
+                if (isNear) NearTrunks.Add(Convert.ToSim(transform.Origin));
             }
         }
 

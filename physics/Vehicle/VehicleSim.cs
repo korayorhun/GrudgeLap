@@ -347,7 +347,7 @@ public sealed class VehicleSim
                 // drawbridge's landing deck hits its edge (RaceSession.HitBridgeEdge) or falls into the gap, as before,
                 // and a car that has fallen outside the loop is not pulled onto its deck.
                 var depth = Vector3.Dot(c.Hit.SurfaceNormal, c.Hit.SurfacePoint - c.Hub);
-                if (depth > 0.6f || Vector3.Dot(up, c.Hit.SurfaceNormal) < 0.3f || (c.Hit.Frame.Kind == SegmentKind.RampDown && depth > 0.1f)) continue;
+                if (depth > 0.6f || Vector3.Dot(up, c.Hit.SurfaceNormal) < 0.3f || (c.Hit.Frame.Kind is SegmentKind.RampUp or SegmentKind.RampDown or SegmentKind.Overpass or SegmentKind.Gap && depth > 0.1f)) continue;
                 if (depth + hubClearance > sunk)
                 {
                     sunk = depth + hubClearance;
@@ -494,12 +494,26 @@ public sealed class VehicleSim
             w.ContactNormal = n;
         }
 
-        // Body touching the ground means a roll-over or a landing on the roof.
+        // The body's corners against the ground (0.35): a wreck on its roof or its side, a car bottoming on a bank. Looked
+        // at only with a wheel off the ground or the car tilted: on its wheels the corners stay clear.
+        var wheelsDown = 0;
+        foreach (var w in Wheels)
+        {
+            if (w.InContact) wheelsDown++;
+        }
+        var bodyContacts = wheelsDown < 4 || up.Y < 0.85f ? BodyContacts(dt) : 0;
+
+        // Body touching the ground means a roll-over or a landing on the roof: the centre of gravity down near the surface
+        // with the car tilted, or (0.35) the body's corners carrying a tilted car.
         BodyHit = Track.Probe(Position, ref Cursor, true);
-        BodyGrounded = BodyHit.HasSurface && BodyHit.Height < 0.28f && Vector3.Dot(up, BodyHit.SurfaceNormal) < 0.55f;
+        var tilted = BodyHit.HasSurface && Vector3.Dot(up, BodyHit.SurfaceNormal) < 0.55f;
+        BodyGrounded = tilted && (BodyHit.Height < 0.28f || bodyContacts > 0);
         // The centre of gravity itself under the surface (0.34): the whole car has gone through (a fall at speed onto
         // a bank, a step it was set down into); it comes back to a hand's breadth over the surface.
-        if (BodyHit.HasSurface && BodyHit.Height < -0.1f && BodyHit.Height > -1.5f && Vector3.Dot(up, BodyHit.SurfaceNormal) > 0.2f)
+        // Not under a deck (a car fallen under the drawbridge or into a cutting under an overpass is under a surface it was
+        // never on, and was lifted onto it).
+        if (BodyHit.HasSurface && BodyHit.Height < -0.1f && BodyHit.Height > -1.5f && Vector3.Dot(up, BodyHit.SurfaceNormal) > 0.2f
+            && BodyHit.Frame.Kind is not (SegmentKind.RampUp or SegmentKind.RampDown or SegmentKind.Overpass or SegmentKind.Gap))
         {
             var sag = _spec.MassKg * MathUtil.Gravity / 4f / _spec.SuspensionStiffness;
             var rest = _spec.SuspensionRest + _spec.WheelRadius - sag - _spec.HubHeight;   // the centre of gravity's height at rest (Reset)
@@ -553,6 +567,72 @@ public sealed class VehicleSim
 
         Airborne = !anyContact;
         AirborneTime = Airborne ? AirborneTime + dt : 0f;
+    }
+
+    private const float BodyFriction = 0.6f;
+
+    /// <summary>
+    /// The body's eight corners (the sills at the axles and the roof, inset for the cabin) against the surface each is
+    /// over (0.35): a corner under its surface has its speed into it taken away at once (a tenth of it back: a body does
+    /// not bounce like a tyre), friction on its slide, and is moved back out by a share of its depth each step, with no
+    /// spring to store the blow and throw the car up again. So a wreck tumbles, slides and comes to rest on its roof or
+    /// its side instead of sinking through the ground (the simulation never carried a car past its crash before). A
+    /// corner far through is left to the ground guard. Returns how many corners touch.
+    /// </summary>
+    private int BodyContacts(float dt)
+    {
+        var touching = 0;
+        var sag = _spec.MassKg * MathUtil.Gravity / 4f / _spec.SuspensionStiffness;
+        // The sills at the axles (not the overhangs: the valance of a car landing nose-down touched first and threw the
+        // tail down harder) and the roof, inset for the cabin.
+        var floor = _spec.HubHeight - 0.05f;
+        var roof = _spec.RoofHeight - (_spec.SuspensionRest + _spec.WheelRadius - sag - _spec.HubHeight);
+        var halfWidth = _spec.BodyHalfWidth;
+        Span<Vector3> corners = stackalloc Vector3[8];
+        corners[0] = new Vector3(-halfWidth * 0.95f, floor, _spec.FrontAxle);
+        corners[1] = new Vector3(halfWidth * 0.95f, floor, _spec.FrontAxle);
+        corners[2] = new Vector3(-halfWidth * 0.95f, floor, -_spec.RearAxle);
+        corners[3] = new Vector3(halfWidth * 0.95f, floor, -_spec.RearAxle);
+        corners[4] = new Vector3(-halfWidth * 0.8f, roof, _spec.BodyFront * 0.3f);
+        corners[5] = new Vector3(halfWidth * 0.8f, roof, _spec.BodyFront * 0.3f);
+        corners[6] = new Vector3(-halfWidth * 0.8f, roof, -_spec.BodyRear * 0.45f);
+        corners[7] = new Vector3(halfWidth * 0.8f, roof, -_spec.BodyRear * 0.45f);
+        var share = _spec.MassKg * 0.25f;
+        foreach (var local in corners)
+        {
+            var p = Position + Vector3.Transform(local, Orientation);
+            var cursor = Cursor;
+            var hit = Track.Probe(p, ref cursor, false);
+            if (!hit.HasSurface) continue;
+            var n = hit.SurfaceNormal;
+            var depth = Vector3.Dot(n, hit.SurfacePoint - p);
+            // Only a shallow penetration is a contact: a corner can sink no further than it moved. A corner far under a
+            // surface is under something it never touched (the roof of a wreck sliding under the drawbridge's landing
+            // ramp, which this pushed up through the deck).
+            if (depth <= 0f || depth > 0.2f) continue;
+            touching++;
+            var v = VelocityAt(p);
+            var vn = Vector3.Dot(v, n);
+            // The weight the corner carries over the step, and the blow it takes if it arrives.
+            var load = share * MathUtil.Gravity * dt;
+            if (vn < 0f)
+            {
+                var push = 1.1f * -vn / InverseMassAlong(p, n);
+                ApplyImpulse(p, n * push);
+                load += push;
+                v = VelocityAt(p);
+                vn = Vector3.Dot(v, n);
+            }
+            var slide = v - n * vn;
+            var slideSpeed = slide.Length();
+            if (slideSpeed > 1e-3f)
+            {
+                var t = slide / slideSpeed;
+                ApplyImpulse(p, -t * MathF.Min(BodyFriction * load, slideSpeed / InverseMassAlong(p, t)));
+            }
+            _centreOfMass += n * (depth * 0.25f);
+        }
+        return touching;
     }
 
     /// <summary>

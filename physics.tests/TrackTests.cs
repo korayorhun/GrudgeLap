@@ -142,6 +142,28 @@ public sealed class TrackTests
         Assert.True(taperIn >= 60f && taperOut >= 60f, "the taper at each end should be at least 60 m");
     }
 
+    /// <summary>The banked 180's inner edge stays at grade (0.35): the arc climbs with its bank, so the inside is not a ditch.</summary>
+    [Fact]
+    public void Banked_bend_keeps_its_inner_edge_at_grade()
+    {
+        var track = OriginalInspiredTrack.Build();
+        var frames = track.Stunt.Frames;
+        var first = Enumerable.Range(0, frames.Count).First(i => frames[i].Kind == SegmentKind.BankedCurve);
+        var grade = frames[first - 1].Origin.Y;
+        var worst = 0f;
+        var outer = 0f;
+        foreach (var f in frames.Where(f => f.Kind == SegmentKind.BankedCurve))
+        {
+            // A left-hander: the inside is the left edge, the one the bank lowers.
+            var inner = f.Origin - f.Lateral * f.HalfWidth;
+            worst = MathF.Max(worst, MathF.Abs(inner.Y - grade));
+            outer = MathF.Max(outer, (f.Origin + f.Lateral * f.HalfWidth).Y - grade);
+        }
+        _out.WriteLine($"banked 180: inner edge within {worst:F2} m of grade, outer edge up to {outer:F1} m over it");
+        Assert.True(worst < 0.35f, $"the inner edge leaves grade by {worst:F2} m");
+        Assert.InRange(outer, 5f, 6.5f);
+    }
+
     [Fact]
     public void Solid_props_stay_clear_of_every_road()
     {

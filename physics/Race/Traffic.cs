@@ -223,6 +223,14 @@ public sealed class Traffic
         _ => _track.Final,
     };
 
+    /// <summary>A drone's pose at a distance along a path (0.35: the replay runs the drones on past their last recorded pose).</summary>
+    public static (Vector3 Position, Quaternion Orientation) PoseAlong(TrackPath path, float distance, float laneOffset, bool oncoming)
+    {
+        var frame = path.FrameAt(MathUtil.Clamp(distance, 0f, path.Length));
+        var forward = oncoming ? -frame.Tangent : frame.Tangent;
+        return (frame.Origin + frame.Lateral * laneOffset + frame.Normal * RideHeight, LookRotation(forward, frame.Normal));
+    }
+
     private static void Pose(TrafficCar car)
     {
         var frame = car.Path.FrameAt(car.Distance);

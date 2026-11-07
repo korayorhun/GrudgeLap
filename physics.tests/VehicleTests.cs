@@ -697,15 +697,19 @@ public sealed class VehicleTests
         var fell = false;
         var maxHeight = 0f;
         var minSpeed = float.MaxValue;
+        var entered = false;
         for (var i = 0; i < 60 * 12; i++)
         {
             var inLoop = car.Cursor.Distance > loopStart - 2f;
+            entered |= inLoop;
             var (throttle, brake) = inLoop ? (0.35f, 0f) : HoldSpeed(car, target);
             car.Step(Follow(car, throttle, brake), Dt);
             maxHeight = MathF.Max(maxHeight, car.Position.Y);
             if (inLoop) minSpeed = MathF.Min(minSpeed, car.SpeedMph);
             if (car.Cursor.Distance > loopEnd + 20f && car.OnRoad && Vector3.Dot(car.Up, MathUtil.Up) > 0.9f) { completed = true; break; }
-            if (inLoop && car.Cursor.Distance < loopEnd && (car.BodyGrounded || car.LandingImpact > 7.5f)) { fell = true; break; }
+            // A fall: the car lands on its body or hard on its wheels short of the loop's end (since 0.35 a fallen car comes to
+            // rest on its roof beside the loop's foot, where the cursor sits before the loop, instead of sinking out of the world).
+            if (entered && car.Cursor.Distance < loopEnd && (car.BodyGrounded || car.LandingImpact > 7.5f)) { fell = true; break; }
             if (car.Position.Y < -1f) { fell = true; break; }
         }
         _out.WriteLine($"entry {entryMph} mph: completed={completed} fell={fell} maxHeight={maxHeight:F1} m, slowest {minSpeed:F0} mph, exit speed {car.SpeedMph:F0} mph");
@@ -800,6 +804,22 @@ public sealed class VehicleTests
         Assert.InRange(car.Position.Y, before - 0.15f, before + 0.15f);
         Assert.Equal(4, car.Wheels.Count(w => w.InContact));
         Assert.True(car.Speed > 15f, "the car drives on");
+    }
+
+    /// <summary>A car set down on its roof comes to rest on it (0.35: the body's corners meet the ground), instead of sinking through.</summary>
+    [Fact]
+    public void A_car_on_its_roof_comes_to_rest_on_it()
+    {
+        var track = DragStrip();
+        var car = new VehicleSim(new VehicleSpec(), track);
+        var frame = track.Common.FrameAt(60f);
+        var upsideDown = new RoadFrame(frame.Origin + new Vector3(0f, 1.6f, 0f), frame.Tangent, -frame.Normal, Vector3.Cross(-frame.Normal, frame.Tangent), frame.Distance, frame.HalfWidth, frame.Surface, frame.Kind, frame.SegmentIndex);
+        car.Reset(upsideDown, new PathCursor(track.Common, track.Common.FrameIndexAt(60f)));
+        for (var i = 0; i < 60 * 3; i++) car.Step(DriverInputs.Idle, Dt);
+        var over = car.Position.Y - frame.Origin.Y;
+        _out.WriteLine($"on its roof: centre {over:F2} m over the road, up.y {car.Up.Y:F2}, guard lifts {car.GroundGuardLifts}, speed {car.Speed:F2} m/s");
+        Assert.True(car.Up.Y < -0.9f, "still on its roof");
+        Assert.InRange(over, 0.35f, 1.1f);
     }
 
     /// <summary>A car steered at a drawbridge ramp's edge is held on the deck by its kerb and rail (0.34): a knock, no drop.</summary>

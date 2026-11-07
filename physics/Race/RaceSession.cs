@@ -30,6 +30,9 @@ public sealed partial class RaceSession
 
     private readonly List<RaceEvent> _events = new();
     private readonly List<PoseSample> _replay = new();
+    /// <summary>The drones' poses with every replay sample (0.35), so the replay shows the traffic as it was.</summary>
+    private readonly List<TrafficPose[]> _replayTraffic = new();
+    private bool _replayAnnounced;
     private readonly List<PoseSample> _lapSamples = new();
     private float _replayRecordAccumulator;
     private float _lapSampleAccumulator;
@@ -105,6 +108,18 @@ public sealed partial class RaceSession
     public float ReturnDistance { get; private set; }
     public float ReplayTime { get; private set; }
     public IReadOnlyList<PoseSample> Replay => _replay;
+    /// <summary>The drones at each sample of <see cref="Replay"/> (0.35): empty arrays when there is no traffic.</summary>
+    public IReadOnlyList<TrafficPose[]> ReplayTraffic => _replayTraffic;
+    /// <summary>The first second after the blow plays at this rate in the replay, so the playback runs <see cref="ReplaySlowExtra"/> longer.</summary>
+    public const float ReplaySlowSeconds = 1f;
+    public const float ReplaySlowRate = 0.35f;
+    public static float ReplaySlowExtra => ReplaySlowSeconds / ReplaySlowRate - ReplaySlowSeconds;
+    /// <summary>Seconds the replay phase lasts: the wreck window, then the playback with its slow second.</summary>
+    public float ReplayLength => Options.ImpactSeconds + Options.ReplaySeconds + ReplaySlowExtra;
+    /// <summary>The playback is on: the wreck window is over and the crane's replay runs (its tune starts with it).</summary>
+    public bool ReplayPlaying => Phase == SessionPhase.Replay && ReplayTime >= Options.ImpactSeconds;
+    /// <summary>The session clock (<see cref="Elapsed"/>) at the last crash: where the replay's playback reaches the blow.</summary>
+    public float CrashTime { get; private set; }
     /// <summary>Events raised during the last <see cref="Step"/> (audio and UI hooks).</summary>
     public IReadOnlyList<RaceEvent> Events => _events;
     /// <summary>Distance along the current path, for the HUD and tests.</summary>
@@ -156,8 +171,35 @@ public sealed partial class RaceSession
                 return;
 
             case SessionPhase.Replay:
+                if (ReplayTime < Options.ImpactSeconds)
+                {
+                    // The wreck window (0.35): the simulation carries the wreck on through the crash's own moment (it used
+                    // to freeze the car where it struck): the car rebounds, tumbles or slides to rest on its body, the
+                    // drones drive on, and it is all recorded, so the replay shows the crash as it happened.
+                    Traffic?.Step(dt, PlayerOnRoad());   // the drones brake for the wreck as for the car (without that one ran into it)
+                    Track.Train?.Step(dt);
+                    Herd.Step(dt, Elapsed, Car.Position, Car.Velocity);
+                    for (var left = dt; left > 1e-5f;)
+                    {
+                        var piece = MathF.Min(left, 1f / 60f);
+                        left -= piece;
+                        // Out of gear, the brakes on: a wreck's wheels are jammed, it skids to a stop where the blow threw it
+                        // (rolling free, it ran back six metres from the tree at a walking pace).
+                        Car.Step(new DriverInputs { Gear = 0, Clutch = 1f, Brake = 1f }, piece);
+                        Knocks();   // the wreck bounces off what it meets; a second blow is a knock, the car is wrecked already
+                    }
+                    Elapsed += dt;
+                    RecordReplay(dt);
+                }
                 ReplayTime += dt;
-                if (ReplayTime >= Options.ReplaySeconds) EndReplay();
+                // The crash itself is shown first, from where the player sits (the explosion, the cracked glass of the
+                // cabinet); the replay and its caption follow.
+                if (!_replayAnnounced && ReplayTime >= Options.ImpactSeconds)
+                {
+                    _replayAnnounced = true;
+                    SetMessage("INSTANT REPLAY", float.PositiveInfinity);
+                }
+                if (ReplayTime >= ReplayLength) EndReplay();
                 return;
 
             case SessionPhase.StartEngine:
@@ -193,7 +235,17 @@ public sealed partial class RaceSession
         if (Herd.Mooed >= 0) _events.Add(RaceEvent.CowMooed);
         LastSoftHit = -1;
         var wasRunning = Car.Drivetrain.Engine.Running;
-        Car.Step(input, dt);
+        // The car is stepped in pieces of at most a sixtieth of a second and the knocks and the crash looked for after
+        // each (0.35): looked for once a frame, a long frame (a hitch of a tenth of a second at 100 km/h is 2.8 m) put a
+        // tree deep inside the car's plan before the first look, and the car went through it with a sideways shove.
+        var crash = CrashReason.None;
+        for (var left = dt; left > 1e-5f && crash == CrashReason.None;)
+        {
+            var piece = MathF.Min(left, 1f / 60f);
+            left -= piece;
+            Car.Step(input, piece);
+            if (_gracePeriod <= 0f) crash = CrashNow();
+        }
         if (wasRunning && !Car.Drivetrain.Engine.Running)
         {
             _events.Add(RaceEvent.EngineStalled);
@@ -215,7 +267,7 @@ public sealed partial class RaceSession
         UpdateOffRoad(dt);
         UpdateWrongWay(dt);
         CheckSoftProps();
-        DetectCrash();
+        if (crash != CrashReason.None) Crash(crash);
         if (Phase != SessionPhase.Driving) return;
 
         if (TimeRemaining <= 0f)
@@ -255,10 +307,27 @@ public sealed partial class RaceSession
     {
         _replayRecordAccumulator += dt;
         if (_replayRecordAccumulator < 1f / ReplayRecordHz) return;
-        _replayRecordAccumulator = 0f;
+        // The remainder is kept (0.35): zeroed, every long frame lost its surplus and the replay ran the approach fast.
+        _replayRecordAccumulator -= 1f / ReplayRecordHz;
         _replay.Add(new PoseSample(Elapsed, Car.Position, Car.Orientation, Car.SteerAngle));
+        // The drones with the car (0.35): until then the replay showed them frozen where the crash had left them.
+        if (Traffic is null) _replayTraffic.Add(System.Array.Empty<TrafficPose>());
+        else
+        {
+            var poses = new TrafficPose[Traffic.Cars.Count];
+            for (var i = 0; i < poses.Length; i++)
+            {
+                var drone = Traffic.Cars[i];
+                poses[i] = new TrafficPose(drone.Position, drone.Orientation, drone.Path, drone.Distance, drone.Speed, drone.Oncoming, drone.LaneOffset);
+            }
+            _replayTraffic.Add(poses);
+        }
         var keep = (int)((Options.ReplaySeconds + 2f) * ReplayRecordHz);
-        if (_replay.Count > keep) _replay.RemoveRange(0, _replay.Count - keep);
+        if (_replay.Count > keep)
+        {
+            _replayTraffic.RemoveRange(0, _replay.Count - keep);
+            _replay.RemoveRange(0, _replay.Count - keep);
+        }
     }
 
     private void RecordLap(float dt)
@@ -457,22 +526,22 @@ public sealed partial class RaceSession
         else if (Message == "WRONG WAY") Message = "";
     }
 
-    private void DetectCrash()
+    /// <summary>The crash the car's state calls for at this moment, or none; the knocks are taken on the way.</summary>
+    private CrashReason CrashNow()
     {
-        if (_gracePeriod > 0f) return;
-
-        var reason = CrashReason.None;
-        if (Car.LandingImpact > Options.LandingCrashSpeed) reason = CrashReason.HardLanding;
-        else if (Car.BodyGrounded) reason = CrashReason.RolledOver;
-        else if (Car.BodyHit.Surface == SurfaceType.Chasm && Car.Position.Y < Car.BodyHit.Frame.Origin.Y - 2.5f) reason = CrashReason.FellOffBridge;
-        else if (Car.Position.Y < Track.Terrain.Height(Car.Position.X, Car.Position.Z) - 6f) reason = CrashReason.FellOffBridge;
-        else if (HitBridgeEdge()) reason = CrashReason.FellOffBridge;
-        else if (HitTrain()) reason = CrashReason.HitTrain;
-        else if (LandedHard()) reason = CrashReason.HardLanding;
-        else reason = Knocks();
-
-        if (reason == CrashReason.None) return;
-        Crash(reason);
+        if (Car.LandingImpact > Options.LandingCrashSpeed) return CrashReason.HardLanding;
+        // A nose-first touchdown at speed (0.35): a car that comes down pitched more than 20 degrees nose-down at over
+        // 60 km/h buries its nose whatever its vertical speed (the overshoot of the drawbridge was a knock one run and a
+        // roll-over the next); flat landings keep the vertical-speed rule.
+        if (Car.LandingImpact > 0.5f && Car.Forward.Y < -0.34f && MathF.Abs(Car.Speed) > 16f) return CrashReason.HardLanding;
+        if (Car.BodyGrounded) return CrashReason.RolledOver;
+        // Called a metre below the gap line (2.5 m until 0.35): below 1.5 m the probe hands the car to the ground under the bridge.
+        if (Car.BodyHit.Surface == SurfaceType.Chasm && Car.Position.Y < Car.BodyHit.Frame.Origin.Y - 1.0f) return CrashReason.FellOffBridge;
+        if (Car.Position.Y < Track.Terrain.Height(Car.Position.X, Car.Position.Z) - 6f) return CrashReason.FellOffBridge;
+        if (HitBridgeEdge()) return CrashReason.FellOffBridge;
+        if (HitTrain()) return CrashReason.HitTrain;
+        if (LandedHard()) return CrashReason.HardLanding;
+        return Knocks();
     }
 
     /// <summary>
@@ -515,6 +584,8 @@ public sealed partial class RaceSession
             {
                 LastSoftHit = i;
                 _events.Add(RaceEvent.SignHit);
+                // A sawhorse is knocked flying (0.35; a wall that wrote the car off at 54 km/h before): a scuff of damage.
+                if (prop.Kind == PropKind.Barrier) Damage = MathF.Min(Damage + 0.03f, 1f);
             }
         }
     }
@@ -527,8 +598,15 @@ public sealed partial class RaceSession
         CrashCount++;
         Phase = SessionPhase.Replay;
         ReplayTime = 0f;
+        CrashTime = Elapsed;
         GhostVisible = false;
-        SetMessage("INSTANT REPLAY", float.PositiveInfinity);
+        _replayAnnounced = false;
+        Message = "";
+        // The engine dies in the crash (0.35): the wreck is silent but for the fire, and no note hangs through the replay;
+        // the wheels lock (a wrecked car does not roll on: its wheels still spinning at the road's speed drove it on
+        // round the tree it had hit).
+        Car.Drivetrain.Engine.Stop();
+        foreach (var w in Car.Wheels) w.AngularVelocity = 0f;
         _events.Add(RaceEvent.Crashed);
     }
 
@@ -554,6 +632,7 @@ public sealed partial class RaceSession
         _wrongWayTime = 0f;
         _gracePeriod = 1.0f;
         _replay.Clear();
+        _replayTraffic.Clear();
         if (resetTimer) TimeRemaining = Options.InitialTime;
         if (Phase == SessionPhase.Driving)
         {
@@ -624,6 +703,13 @@ public sealed record RaceOptions
     public float LapBonus { get; init; } = 45f;
     public float CheckpointBonus { get; init; } = 45f;
     public float ReplaySeconds { get; init; } = 10f;
+    /// <summary>
+    /// Seconds the crash is shown from where the player sits before the replay (0.35): the wreck window, in which the
+    /// simulation carries the car on through the crash (it rebounds, tumbles, slides to rest) with the explosion and the
+    /// cracked windscreen in view, as the cabinet showed its crash before its instant replay. The replay phase lasts
+    /// this, then <see cref="ReplaySeconds"/> of playback with its slow second (<see cref="RaceSession.ReplayLength"/>).
+    /// </summary>
+    public float ImpactSeconds { get; init; } = 2.0f;
     public float OffRoadSeconds { get; init; } = 10f;
     public float PointsPerMetre { get; init; } = 10f;
     /// <summary>
@@ -664,3 +750,6 @@ public sealed record RaceOptions
 }
 
 public readonly record struct PoseSample(float Time, Vector3 Position, Quaternion Orientation, float SteerAngle);
+
+/// <summary>A drone's pose at a replay sample (0.35): where it was and, for running it on past the recording, its road, its place along it, its speed and its lane.</summary>
+public readonly record struct TrafficPose(Vector3 Position, Quaternion Orientation, TrackPath Path, float Distance, float Speed, bool Oncoming, float LaneOffset);

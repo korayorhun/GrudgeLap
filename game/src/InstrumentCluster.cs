@@ -55,7 +55,7 @@ internal sealed partial class InstrumentCluster : Control
     public override void _Process(double delta)
     {
         if (_session is null) return;
-        _odometer += MathF.Abs(_session.Car.Speed) * delta;
+        if (_session.Phase == SessionPhase.Driving) _odometer += MathF.Abs(_session.Car.Speed) * delta;   // not through a replay (0.35)
         QueueRedraw();
     }
 

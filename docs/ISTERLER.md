@@ -8,7 +8,7 @@ Yeni bir istek gelince buraya satır olarak eklenir. Bir sürüm bir isteği kar
 - **Durum:** `Tamam` karşılandı, `Kısmen` bir kısmı karşılandı, `Açık` henüz yapılmadı, `Karar` yön belirlendi, `Ertelendi` bilerek sonraya bırakıldı.
 - **Ayrıntı:** teknik gerekçeler [design.md](design.md)'de, sürüm notları GitHub Releases'te.
 
-Son güncelleme: 7 Kasım 2026 (sürüm 0.34.0).
+Son güncelleme: 7 Kasım 2026 (sürüm 0.35.0).
 
 ## 1. Hedef
 
@@ -82,9 +82,9 @@ Son güncelleme: 7 Kasım 2026 (sürüm 0.34.0).
 | F3 | Klavyeyle direksiyon biraz daha yavaş dönsün. | 1 Kas | Tamam (0.12.0) |
 | F4 | İkinci girişte araba olduğu yerde patinaj yapıp kımıldamasın. | 28 Eki | Tamam (0.8.1) |
 | F5 | Varsayılan birim metrik (km/h). | 1 Kas: "varsayılan ölçü birmi metrik olsun kmh" | Tamam (0.14.0) |
-| F6 | Araba çimenin ve asfaltın altına ASLA düşmesin. | 7 Kas: "araba çimenin ve asfaltın altına asla düşmesin bazen oluyor" | Tamam (0.34.0): zemin koruması: yüzeyin altında kalan tekerlek göbeği (sert iniş, dik şev, çarpma) eskiden "havada" sayılıyor ve araba dünyadan düşüyordu; artık tampon stopa oturur ve gövde aynı adımda yüzeyin üstüne çıkarılır, ağırlık merkezi yüzeyin altına inerse geri konur; köprü ve rampa tabliyelerinde kaldırım + korkuluk arabayı tutar (çarpma, düşme değil) |
-| F7 | Çarpışma ve hasar gerçekçi olsun: ufacık şeyde araba patlamasın; kaza olunca orijinaldeki gibi alev çıksın; çarpınca araba yolun altına girmesin. | 7 Kas: "ufacık birşeyde patlıyor", "araba çarpınca alevler çıkıyor onda, öyle olsun", "çarpınca araba yolun altına giriyor" | Açık (0.35 hedefi; F6'nın koruması tekrarda da geçerli) |
-| F8 | Instant replay'de diğer arabalar hareket etsin. | 7 Kas: "instant replayda diğer arabalar duruyor" | Açık (0.35 hedefi) |
+| F6 | Araba çimenin ve asfaltın altına ASLA düşmesin. | 7 Kas: "araba çimenin ve asfaltın altına asla düşmesin bazen oluyor" | Tamam (0.34.0): zemin koruması: yüzeyin altında kalan tekerlek göbeği (sert iniş, dik şev, çarpma) eskiden "havada" sayılıyor ve araba dünyadan düşüyordu; artık tampon stopa oturur ve gövde aynı adımda yüzeyin üstüne çıkarılır, ağırlık merkezi yüzeyin altına inerse geri konur; köprü ve rampa tabliyelerinde kaldırım + korkuluk arabayı tutar (çarpma, düşme değil). 0.35.0: gövdenin sekiz köşesi de zemine basar (takla atan araba çatısının üstünde durur, batmaz); köprü altına düşen araç tabliyeyi değil altındaki zemini görür ve ona iner |
+| F7 | Çarpışma ve hasar gerçekçi olsun: ufacık şeyde araba patlamasın; kaza olunca orijinaldeki gibi alev ve patlama olsun; çarpınca araba yolun altına girmesin; araba kaza yapınca donup kalmasın, devam etsin. | 7 Kas: "ufacık birşeyde patlıyor", "araba çarpınca alevler çıkıyor onda, öyle olsun", "çarpınca araba yolun altına giriyor", "araba kaza yapınca donup kalmasa, devam etse", "araba çarpınca patlama, orjinal oyundaki gibi" | Tamam (0.35.0): kaza anında araba donmuyor, simülasyon 2 saniye daha sürüyor (darbe ağırlık merkezinden, onda bir geri sekme, kilitlenen tekerlekler, motor stop; araba seker, takla atar, gövdesinin üstünde kayar ve durur, hepsi kaydedilir); kaza anı koltuktan gösterilir: patlama (alev püskürmesi + ışık parlaması), yanmaya devam eden ateş ve duman, orijinaldeki gibi çatlayan ön cam; tekrar kaydı kazayı ve enkazın hareketini olduğu gibi oynatır (ilk saniye ağır çekim), darbede göçük, kopan parçalar, kıvılcım, buhar ve patlama yeniden; sawhorse'lar duvar değil devrilen hafif engel (0,03 hasar); burnu 20°'den fazla aşağı 60 km/h üstü iniş kaza; 200 km/h bağıl hızla yan sıyıran dron kaza; vuruşlar kare başına değil her 1/60 s'de bakılıyor (takılan karede ağacın içinden geçme bitti); orman gövdeleri (yola yakın 604 ağaç) katı; köprü altına düşen enkazın tekrar kamerası alçak |
+| F8 | Instant replay'de diğer arabalar hareket etsin. | 7 Kas: "instant replayda diğer arabalar duruyor" | Tamam (0.35.0): dronların pozları tekrar kaydıyla birlikte (saniyede 30) kaydediliyor ve tekrarda arabayla aynı saatle oynatılıyor; enkaz penceresinde dronlar enkaz için fren yapıyor. Tren ve inekler tekrarda hâlâ donuk (bölüm 10) |
 
 ## 7. Ses ve müzik
 
@@ -96,6 +96,7 @@ Son güncelleme: 7 Kasım 2026 (sürüm 0.34.0).
 | S3 | Orijinal oyunun müzikleri olduğu gibi kullanılabilir mi? | 22 Eki | Karar: hayır; telifli, oyunla dağıtılmaz |
 | S4 | Pistin ve müziğin hissi orijinal videodaki gibi olsun. | 23 Eki: "müzikler, pist hissiyat aynı olsun istiyorum" | Kısmen (P1 ve S2'ye bağlı) |
 | S6 | Instant replay müziği orijinal oyunun müziği olsun; lisans sorunu şimdilik görmezden gelinsin, sonra bir yol düşünülecek. | 7 Kas: "lisans sorunu var biliyorum, şimdilik görmezden gelelim" | Açık: karar bölüm 10, madde 20 |
+| S7 | Kaza olunca ses takılı kalmasın; instant replay'de yalnız müzik duyulsun. | 7 Kas: "kaza olunca ses takılı kalıyor, instant replay'da sadece müzik duyulsun" | Tamam (0.35.0): kazada motor stop ediyor (ses kesiliyor), enkaz penceresinde lastik sesi yok, tekrarda yalnız müzik (tekrardaki darbe sesi kaldırıldı); müzik tekrar oynatımıyla başlıyor |
 
 ## 8. Kullanım ve arayüz
 
@@ -134,8 +135,8 @@ Son güncelleme: 7 Kasım 2026 (sürüm 0.34.0).
 14. **Uzak görünüm** (P13): yaklaştıkça değişen görünüm (doku ayrıntısı, gölge kademesi, çimen tutamlarının 110-170 m'de solması, sis) teşhis ediliyor.
 15. **Kokpit gölgeleri** (G8): SSAO (1,5 m yarıçap) ve güneş gölgesi ayarları kabinde lekeli görünüyor; `--ssao=`, `--sun-shadow=`, `--shadow-filter=` anahtarlarıyla teşhis sürüyor.
 16. **Yeni arabalar** (G9): Bravo HGT, Bravo 1.6 ve Leon Cupra oyunun kendi gövdesiyle (loft) çiziliyor ve oyuncak gibi görünüyor; CC BY model iki aramada bulunamadı (A6). Seçenekler: loft'a panel çizgileri, cam çerçeveleri, far/ızgara ayrıntısı ve daha gerçekçi boya; ya da yeni bir model avı.
-17. **Çarpışma ve hasar** (F7): küçük çarpmada hurda (sawhorse ve pompa duvar gibi katı; iniş eşiği 10 m/s), kaza anında alev yok, tekrarda araba eğimli yolda zemine göre ±0,6 m sınırıyla yolun altına girebiliyor. 0.35 hedefi.
-18. **Tekrarda trafik** (F8): tekrar yalnız oyuncunun pozlarını kaydediyor; dronlar, tren ve inekler donuyor. 0.35 hedefi: dron pozları tekrarla birlikte kaydedilip oynatılacak.
+17. **Çarpışma ve hasar** (F7): Tamam (0.35.0). Kalan: pompalar hâlâ sabit duvar (kafası kopmuyor); göçük derinliği hızla sınırlı (100 km/h'lik ağaç kazasında kaput katlanmıyor, tekerlek yerinden oynamıyor); buhar orta motorlu arabalarda da burundan çıkıyor; tekrar kamerası döngünün içinde ve tabliyelerin içinden bakabiliyor (köprü altı için alçak kamera var); çimde araba 130 km/h tutabiliyor ve 260 m kayıyor (çim sürtünmesi hızla artmıyor).
+18. **Tekrarda trafik** (F8): Tamam (0.35.0). Kalan: tren ve inekler tekrarda donuk; inek çarpmada itiliyor ama yere düşmüyor; `--ram=traffic` aynı yönde giden dronları hedefliyor (`--ram=oncoming` karşıdan gelenleri).
 19. **Oyun içi test anahtarları** (0.34.0): `--at=t1,t2,...` (bir koşuda birçok ekran görüntüsü), `--pose-log` (yarım saniyede bir yer/hız/yüzey + olaylar), `--camera=x,y,z,tx,ty,tz[,fov]` (sabit kamera), `--hold=yol:başlangıç:bitiş:hız` (bir yol parçasında hız tutma: köprüye yavaş girme, döngüden düşme, deverli virajı tam gazla alma), `--ram=<prop türü>` (pier, barrier, pump, tower...), `--ssao=`, `--sun-shadow=`, `--shadow-filter=`. Sahibin "oyunu oyna, kaza yap" isteği bunlarla ve paralel oyuncu ajanlarıyla yürütülüyor.
 20. **Orijinal tekrar müziği** (S6): sahip 7 Kasım'da lisansı şimdilik görmezden gelmeyi söyledi. Karar: orijinal kaydın kendisi (Atari Games'in telifli kaydı) sürüme gömülmez, internetten indirilmez; bunun yerine ezgi, sahibin verdiği arcade videosundaki tekrar bölümünden nota nota çıkarılıp oyunun kendi 1989 sentezleyicisiyle yeniden çalınır (cover) ve THIRD_PARTY.md'de "Atari Games'in bestesi, lisanssız, sahibin kararı, değiştirilecek" diye açıkça yazılır; sahip isterse kendi kaydını `REPLAY MUSIC` klasörüne bırakır (0.15'ten beri çalışıyor). 0.37 hedefi.
 

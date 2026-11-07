@@ -114,9 +114,13 @@ public sealed partial class RaceSession
                 if (d.LengthSquared() > 49f || MathF.Abs(Vector3.Dot(d, car.Up)) > 1.6f) continue;
                 var plan = Footprint.Of(drone.Position, drone.Forward, Traffic.HalfLength, Traffic.HalfLength, Traffic.HalfWidth);
                 if (!Plan().Overlaps(plan, out var normal, out var depth, out var at)) continue;
+                // A side-swipe at a closing speed no car survives (0.35): the overlap's normal is the shallow sideways axis
+                // of a corner clip, so the 200 km/h of an oncoming drone counted as a 30 km/h knock and the car drove on.
+                if ((car.Velocity - drone.Forward * drone.Speed).Length() > 2.5f * Options.ImpactCrashSpeed) return CrashReason.HitTraffic;
                 // The drone keeps to its lane: the car takes all of the overlap, the drone only the change of speed.
                 if (Knock(normal, depth, at, drone.Forward * drone.Speed, 1f / Traffic.Mass, 1f, Options.ImpactCrashSpeed, KnockKind.Drone, i, out var onDrone, out _))
                 {
+                    Traffic.Knock(drone, onDrone);
                     return CrashReason.HitTraffic;
                 }
                 Traffic.Knock(drone, onDrone);
@@ -135,6 +139,9 @@ public sealed partial class RaceSession
             var cowVelocity = new Vector3(cow.Velocity.X, 0f, cow.Velocity.Y);
             if (Knock(normal, depth, at, cowVelocity, 1f / Herd.CowMass, carShare, Options.CowCrashSpeed, KnockKind.Cow, i, out var onCow, out var closing))
             {
+                // The cow takes the blow too (0.35): shoved on at most of the closing speed, so it is not standing where it was
+                // when the car is set down again.
+                Herd.Knock(cow, onCow, new Vector3(at.X, 0f, at.Y), Elapsed);
                 return CrashReason.HitCow;
             }
             Herd.Displace(cow, new Vector3(normal.X, 0f, normal.Y) * (depth * (1f - carShare)));
@@ -162,12 +169,36 @@ public sealed partial class RaceSession
     {
         var car = Car;
         var n = new Vector3(normal.X, 0f, normal.Y);
-        // At the height of the centre of gravity: the blow turns the car about its vertical axis, it does not trip it.
-        var point = new Vector3(at.X, car.Position.Y, at.Y);
+        // At the height of the centre of gravity: the blow turns the car about its vertical axis, it does not trip it (the
+        // car's origin sits below the centre of mass: a blow at its height pitched the car up on its tail, 0.35).
+        var point = new Vector3(at.X, car.CentreOfMass.Y, at.Y);
         var relative = car.VelocityAt(point) - otherVelocity;
         closing = Vector3.Dot(relative, n);
         onOther = Vector3.Zero;
-        if (closing > crashSpeed) return true;
+        if (closing > crashSpeed)
+        {
+            // The crash is a blow too (0.35): the car is pushed out, rebounds at a tenth of the closing speed and keeps a
+            // third of its sliding speed, spun by the blow off its centre; the wreck window then carries it on instead of
+            // freezing it where it struck.
+            car.Displace(-n * (depth * carShare + 0.002f));
+            // The blow's push acts through the car's centre (the crush zone spreads a head-on's load across the front: a
+            // tree a hand's breadth off the centre line does not spin the car), its friction at the touch.
+            var crush = 1.1f * closing / (1f / car.Spec.MassKg + otherInverseMass);
+            var blow = -n * crush;
+            car.ApplyImpulse(car.CentreOfMass, blow);
+            var skid = relative - n * closing;
+            skid.Y = 0f;
+            var skidSpeed = skid.Length();
+            if (skidSpeed > 1e-3f)
+            {
+                var t = skid / skidSpeed;
+                var rub = -t * MathF.Min(0.7f * crush, 0.66f * skidSpeed / (car.InverseMassAlong(point, t) + otherInverseMass));
+                car.ApplyImpulse(point, rub);
+                blow += rub;
+            }
+            onOther = -blow;
+            return true;
+        }
         var ratio = closing / crashSpeed;
         var harm = closing > ScrapeSpeed ? DamageAtCrashSpeed * ratio * ratio : 0f;
         if (Damage + harm >= 1f) return true;

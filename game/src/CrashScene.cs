@@ -6,25 +6,21 @@ using SN = System.Numerics;
 namespace GrudgeLap.Game;
 
 /// <summary>
-/// The instant replay of a crash as drawn. The simulation stops the car where it struck and starts the replay; this
-/// plays the recorded poses of the seconds before, then the crash itself, which the simulation never plays out: the
-/// body dents where it hit and the parts there break off, flying with bits of trim, paint and glass; sparks burst,
-/// a holed radiator steams, the glass near the blow cracks; and the car rebounds off what it hit and spins to a
-/// stop, the first second in slow motion. When the replay is over the car is repaired and the debris cleared.
+/// The instant replay of a crash as drawn. The simulation carries the wreck on through the crash's own moment (0.35:
+/// it used to stop the car where it struck and play a scripted slide): the car rebounds, tumbles or slides to rest
+/// on its body, and it is all recorded. The replay plays the recorded poses of the seconds before, the crash itself
+/// (the first second of it in slow motion) and the wreck coming to rest; at the blow the body dents where it hit and
+/// the parts there break off, flying with bits of trim, paint and glass, sparks burst, a holed radiator steams, the
+/// glass near the blow cracks, and the car explodes into fire that burns through the replay, as the cabinet's
+/// fireball did. Before the replay the crash is shown for a moment from where the player sits (<see cref="Impact"/>).
+/// When the replay is over the car is repaired and the debris cleared.
 /// </summary>
 /// <remarks>
-/// The rebound is a level slide with a yaw spin from the blow's impulse acting off the centre of gravity, and a
-/// pitch that rocks and settles; enough to read as an impact without a second, view-side simulation of the car.
-/// In 1989 mode the replay is the cabinet's: the recorded poses only, no damage.
+/// In 1989 mode the replay is the cabinet's: the recorded poses only, no damage and no fire.
 /// </remarks>
 internal sealed class CrashScene
 {
-    /// <summary>Replay seconds given to the crash and what follows it, at the end of the replay.</summary>
-    public const float AftermathSeconds = 2.6f;
-    private const float SlowSeconds = 1.0f;        // replay seconds of slow motion right after the blow
-    private const float SlowRate = 0.35f;
-    private const float DentGrowth = 0.08f;        // aftermath seconds over which the dent is pressed in
-    private const float SampleRate = 30f;          // RaceSession records the poses at 30 Hz
+    private const float DentGrowth = 0.08f;        // seconds of the crash over which the dent is pressed in
 
     private sealed class Piece
     {
@@ -44,20 +40,16 @@ internal sealed class CrashScene
     private readonly Vector3 _velocity;
     private readonly Vector3 _normal;              // level, from the car into what it hit; zero for a crash on the ground
     private readonly Vector3? _surface;            // the nearest point of what it hit, when it is known
-    private readonly float _terrainAtCrash;
-    private readonly float _road;                  // the road under the car's origin, in its frame
     private readonly List<Piece> _pieces = [];
     private readonly List<CpuParticles3D> _particles = [];
+    private readonly List<OmniLight3D> _glows = [];
+    private readonly List<Node> _impactNodes = [];     // the fire and sparks of the moment of the crash, gone when the replay starts
     private readonly Random _random = new(1984);
+    private PathCursor _cursor;                        // the track probe's cursor, kept near the wreck
 
-    private Vector3 _position;
-    private Vector3 _slide;
-    private float _yaw;
-    private float _yawRate;
-    private float _pitchAmplitude;
-    private float _aftermath = -1f;
-    private float _contactAt = -1f;                // aftermath seconds at which the car touches what it hit
+    private float _lastGameTime = float.NaN;
     private bool _contact;
+    private bool _prepared;
     private Vector3 _point;                        // the blow, in the car's frame
     private Vector3 _push;
     private float _depth;
@@ -67,13 +59,13 @@ internal sealed class CrashScene
     private int _crumple = -1;
     private int _buckle = -1;
 
-    /// <summary>True on the frame the replay reaches the blow, for the crash to be heard again.</summary>
+    /// <summary>True on the frame the replay reaches the blow.</summary>
     public bool StruckThisFrame { get; private set; }
     /// <summary>How far the replay's camera has closed in on the crash: 0 the crane's high shot, 1 close by.</summary>
     public float CloseUp { get; private set; }
     /// <summary>
     /// The way the replay's camera looks: the car's heading, and over the last second before the blow round to a
-    /// side-on view of it (square to the way the car hit, on the side the crane was), held while the car spins.
+    /// side-on view of it (square to the way the car hit, on the side the crane was), held while the wreck settles.
     /// </summary>
     public Vector3 ViewForward { get; private set; } = Vector3.Forward;
 
@@ -88,9 +80,7 @@ internal sealed class CrashScene
         _crashPose = Convert.ToGodot(sim.Position, sim.Orientation);
         _velocity = Convert.ToGodot(sim.Velocity);
         (_normal, _surface) = Obstacle(session);
-        _terrainAtCrash = session.Track.Terrain.Height(sim.Position.X, sim.Position.Z);
-        _road = car.Extent.Road;
-        _position = _crashPose.Origin;
+        _cursor = sim.Cursor;
     }
 
     /// <summary>
@@ -155,48 +145,90 @@ internal sealed class CrashScene
     }
 
     /// <summary>
-    /// The car's pose at <paramref name="replayTime"/>: the recorded approach, then the aftermath, in which the car
-    /// runs on until it touches what it hit (the simulation called the crash when it came within reach) and the
-    /// blow is set off. The debris and the particles move on with the aftermath's clock, slow at first.
+    /// The crash as it happens, before the replay (0.35): the explosion, the fire and the sparks at the blow on the
+    /// car as it strikes, which the cabinet showed as a fireball over the cracked windscreen. Cleared when the replay
+    /// starts (<see cref="EndImpact"/>), whose approach shows the car whole.
     /// </summary>
-    public Transform3D Pose(float replayTime, float replaySeconds)
+    public void Impact()
+    {
+        if (!_effects) return;
+        Prepare();
+        var particles = _particles.Count;
+        var glows = _glows.Count;
+        var debris = _debris.GetChildCount();
+        Explode(FireSeat(), MathF.Max(_closing, 4f), _crashPose);
+        Sparks(_crashPose * _point, _crashPose.Basis * _push, _closing);
+        for (var i = particles; i < _particles.Count; i++) _impactNodes.Add(_particles[i]);
+        for (var i = glows; i < _glows.Count; i++) _impactNodes.Add(_glows[i]);
+        for (var i = debris; i < _debris.GetChildCount(); i++) _impactNodes.Add(_debris.GetChild(i));
+    }
+
+    /// <summary>The replay begins: the impact's fire and sparks go (the replay lights its own at the blow).</summary>
+    public void EndImpact()
+    {
+        foreach (var node in _impactNodes)
+        {
+            if (node is CpuParticles3D particles) _particles.Remove(particles);
+            if (node is OmniLight3D glow) _glows.Remove(glow);
+            node.QueueFree();
+        }
+        _impactNodes.Clear();
+    }
+
+    /// <summary>
+    /// The car's pose at <paramref name="replayTime"/> seconds into the playback: the recorded approach at its own
+    /// pace, the first second after the blow at the slow rate, then the wreck coming to rest as recorded. The blow's
+    /// effects are set off when the playback reaches the crash; the debris moves on with the playback's clock.
+    /// </summary>
+    public Transform3D Pose(float replayTime)
     {
         StruckThisFrame = false;
         var samples = _session.Replay;
         if (!_effects)
         {
             // The cabinet's replay: the whole recording spread over the replay, from the crane.
-            var t = Math.Clamp(replayTime / replaySeconds, 0f, 1f);
+            var t = Math.Clamp(replayTime / _session.Options.ReplaySeconds, 0f, 1f);
             var cabinet = Sample(samples, t * (samples.Count - 1));
             ViewForward = -cabinet.Basis.Z;
             return cabinet;
         }
-        var approach = replaySeconds - AftermathSeconds;
-        if (replayTime < approach)
+        var crashTime = _session.CrashTime;
+        var approach = _session.Options.ReplaySeconds - _session.Options.ImpactSeconds;
+        var slowSpan = RaceSession.ReplaySlowSeconds / RaceSession.ReplaySlowRate;
+        float gameTime;
+        if (replayTime < approach) gameTime = crashTime - approach + replayTime;
+        else
         {
-            // The last seconds before the crash at their own pace, the camera closing in over the last one; the last
-            // sample is the crash.
-            var back = (approach - replayTime) * SampleRate;
-            var pose = Sample(samples, MathF.Max(samples.Count - 1 - back, 0f));
-            var t = Math.Clamp((replayTime - (approach - 1.2f)) / 1.2f, 0f, 1f);
-            CloseUp = t * t * (3f - 2f * t);
-            ViewForward = (-pose.Basis.Z).Slerp(SideOn(), CloseUp);
-            return pose;
+            var into = replayTime - approach;
+            gameTime = into < slowSpan ? crashTime + into * RaceSession.ReplaySlowRate : crashTime + RaceSession.ReplaySlowSeconds + (into - slowSpan);
         }
-        CloseUp = 1f;
-        ViewForward = SideOn();
-        var into = replayTime - approach;
-        var aftermath = into < SlowSeconds ? into * SlowRate : SlowSeconds * SlowRate + (into - SlowSeconds);
-        if (_aftermath < 0f)
+        var pose = SampleAt(samples, gameTime);
+        // The camera closes in over the last second before the blow and holds its side-on view after.
+        var closing = Math.Clamp((replayTime - (approach - 1.2f)) / 1.2f, 0f, 1f);
+        CloseUp = closing * closing * (3f - 2f * closing);
+        ViewForward = (-pose.Basis.Z).Slerp(SideOn(), CloseUp);
+        if (gameTime >= crashTime && !_contact)
         {
-            _aftermath = 0f;
-            Prepare();
+            _contact = true;
+            StruckThisFrame = true;
+            Contact(pose);
         }
-        var da = MathF.Max(aftermath - _aftermath, 0f);
-        var rate = into < SlowSeconds ? SlowRate : 1f;
-        foreach (var particles in _particles) particles.SpeedScale = rate;
-        Advance(aftermath, da);
-        return CarPose();
+        var da = float.IsNaN(_lastGameTime) ? 0f : MathF.Max(gameTime - _lastGameTime, 0f);
+        _lastGameTime = gameTime;
+        if (_contact)
+        {
+            var since = gameTime - crashTime;
+            if (_dent >= 0 && since <= DentGrowth + da)
+            {
+                var grown = Math.Clamp(since / DentGrowth, 0.15f, 1f);
+                var ease = 1f - (1f - grown) * (1f - grown);
+                _car.SetDentDepths((_dent, _depth * ease), (_crumple, _depth * 0.4f * ease), (_buckle, _depth * 0.35f * ease));
+            }
+            foreach (var particles in _particles) particles.SpeedScale = replayTime - approach < slowSpan ? RaceSession.ReplaySlowRate : 1f;
+            foreach (var glow in _glows) glow.LightEnergy = 2.6f + 1.2f * MathF.Sin(gameTime * 23f) * MathF.Sin(gameTime * 7.3f);
+            AdvancePieces(da);
+        }
+        return pose;
     }
 
     /// <summary>
@@ -224,27 +256,30 @@ internal sealed class CrashScene
         return Convert.ToGodot(SN.Vector3.Lerp(a.Position, b.Position, f), SN.Quaternion.Slerp(a.Orientation, b.Orientation, f));
     }
 
-    private Transform3D CarPose()
+    /// <summary>The recorded pose at a game time: the samples are a thirtieth of a second apart (RaceSession.RecordReplay).</summary>
+    private static Transform3D SampleAt(IReadOnlyList<PoseSample> samples, float gameTime)
     {
-        var since = _contact ? _aftermath - _contactAt : 0f;
-        var pitch = -_pitchAmplitude * MathF.Exp(-4f * since) * MathF.Sin(9f * since);
-        var basis = new Basis(Vector3.Up, _yaw) * _crashPose.Basis * new Basis(Vector3.Right, pitch);
-        return new Transform3D(basis, _position);
+        if (samples.Count == 0) return Transform3D.Identity;
+        var span = samples[^1].Time - samples[0].Time;
+        var index = span > 1e-4f ? (gameTime - samples[0].Time) / span * (samples.Count - 1) : 0f;
+        return Sample(samples, Math.Clamp(index, 0f, samples.Count - 1));
     }
 
-    /// <summary>The ground under a point near the crash: the road's height there, following the terrain's rise and fall.</summary>
+    /// <summary>The ground under a point near the crash: the road's surface where there is one, the terrain elsewhere.</summary>
     private float Ground(Vector3 point)
     {
-        var rise = _session.Track.Terrain.Height(point.X, -point.Z) - _terrainAtCrash;
-        return _crashPose.Origin.Y + _road + Math.Clamp(rise, -0.6f, 0.6f);
+        var cursor = _cursor;
+        var hit = _session.Track.Probe(Convert.ToSim(point), ref cursor, true);
+        return hit.HasSurface ? hit.SurfacePoint.Y : _session.Track.Terrain.Height(point.X, -point.Z);
     }
 
     /// <summary>
-    /// Where the blow lands on the car, how deep and how wide, from what it hit and how fast; and how long the car
-    /// runs on before it touches it (the gap between the car and what it hit, at the speed it was closing).
+    /// Where the blow lands on the car, how deep and how wide, from what it hit and how fast.
     /// </summary>
     private void Prepare()
     {
+        if (_prepared) return;
+        _prepared = true;
         var level = new Vector3(_velocity.X, 0f, _velocity.Z);
         _closing = _normal == Vector3.Zero ? level.Length() : MathF.Max(level.Dot(_normal), 0f);
         var (nose, tail, halfWidth, road) = _car.Extent;
@@ -283,39 +318,25 @@ internal sealed class CrashScene
             _push = new Vector3(0f, 0.45f, 1f).Normalized();
             (_radius, _depth) = (0.75f, Math.Clamp(level.Length() * 0.012f, 0.08f, 0.35f));
         }
-        _slide = level;
-        var gap = _surface is { } surface && _normal != Vector3.Zero ? MathF.Max((surface - _crashPose * _point).Dot(_normal), 0f) : 0f;
-        _contactAt = MathF.Min(gap / MathF.Max(_closing, 2f), 0.25f);
+    }
+
+    /// <summary>Where the fire starts, in the car's frame: over the crumpled end, at bonnet height.</summary>
+    private Vector3 FireSeat()
+    {
+        var (nose, tail, _, road) = _car.Extent;
+        var frontal = _point.Z < (nose + tail) * 0.5f || _normal == Vector3.Zero;
+        return new Vector3(_point.X * 0.6f, road + 0.8f, frontal ? nose + 0.2f : tail - 0.2f);
     }
 
     /// <summary>
-    /// The blow: the closing speed reversed at a fifth, the sliding speed halved, a spin from the impulse acting at
-    /// the point struck (per unit mass, over a yaw inertia of 1.6 m^2 per kilogram) and a pitch that rocks the car;
-    /// the dent, the parts and bits thrown, sparks, steam, cracked glass.
+    /// The blow as the replay reaches it: the dent, the parts and bits thrown, sparks, steam, cracked glass, and the
+    /// explosion and fire of the cabinet's crash.
     /// </summary>
-    private void Contact()
+    private void Contact(in Transform3D pose)
     {
-        _contact = true;
-        StruckThisFrame = true;
-        var level = new Vector3(_velocity.X, 0f, _velocity.Z);
+        Prepare();
         var (nose, tail, _, road) = _car.Extent;
         var middle = (nose + tail) * 0.5f;
-        if (_normal != Vector3.Zero)
-        {
-            _slide = (level - _normal * _closing) * 0.45f - _normal * (_closing * 0.22f);
-            var arm = (_crashPose.Basis * _point) with { Y = 0f };
-            var impulse = -_normal * (1.22f * _closing);
-            _yawRate = Math.Clamp(arm.Cross(impulse).Y / 1.6f, -3.5f, 3.5f);
-            var frontal = _point.Z < middle ? 1f : -1f;
-            _pitchAmplitude = frontal * Math.Clamp(_closing * 0.006f, 0f, 0.14f);
-        }
-        else
-        {
-            _slide = level * 0.35f;
-        }
-        if (!_effects) return;
-
-        var pose = CarPose();
         // The blow's own dent, deep and as wide as what hit; round it the panel's crumple zone gives a little over
         // a wider patch; and a frontal blow buckles the bonnet up a short way back from the nose.
         _dent = _car.Dent(_point, _push, _depth * 0.15f, _radius);
@@ -335,45 +356,165 @@ internal sealed class CrashScene
         Sparks(world, pose.Basis * _push, _closing);
         // From under the bonnet's front edge, where the radiator sits.
         if (_point.Z < middle && _closing > 7f) Steam(new Vector3(_point.X * 0.5f, road + 0.72f, nose + 0.4f));
+        Explode(FireSeat(), MathF.Max(_closing, 4f), pose);
     }
 
     /// <summary>
-    /// Runs the car on to the blow, presses the dent in over its first moments, then lets the car slide, spin and
-    /// rock to rest, and moves the debris.
+    /// The crash's explosion (0.35, the owner's "an explosion when the car hits, as in the original"): a burst of big
+    /// flame tongues thrown out from the crumpled end with a flash of light that dies in a third of a second, and the
+    /// fire that goes on burning after it (<see cref="Fire"/>).
     /// </summary>
-    private void Advance(float aftermath, float da)
+    private void Explode(Vector3 local, float strength, in Transform3D pose)
+    {
+        var (disc, life) = FlameLook();
+        var flame = FlameMaterial(disc);
+        var grow = new Curve();
+        grow.AddPoint(new Vector2(0f, 0.5f));
+        grow.AddPoint(new Vector2(0.3f, 1f));
+        grow.AddPoint(new Vector2(1f, 0.2f));
+        var burst = new CpuParticles3D
+        {
+            Name = "Explosion",
+            Amount = Math.Clamp((int)(36f + strength * 2f), 36, 80),
+            Lifetime = 0.65f,
+            OneShot = true,
+            Explosiveness = 1f,
+            Mesh = new QuadMesh { Size = new Vector2(1.4f, 1.4f), Material = flame },
+            EmissionShape = CpuParticles3D.EmissionShapeEnum.Sphere,
+            EmissionSphereRadius = 0.4f,
+            Direction = Vector3.Up,
+            Spread = 180f,
+            InitialVelocityMin = 4f,
+            InitialVelocityMax = 9f + strength * 0.2f,
+            Gravity = new Vector3(0f, 3f, 0f),
+            ScaleAmountCurve = grow,
+            ColorRamp = life,
+        };
+        _debris.AddChild(burst);
+        burst.GlobalPosition = pose * local;
+        burst.Emitting = true;
+        _particles.Add(burst);
+        var flash = new OmniLight3D
+        {
+            Name = "Flash",
+            LightColor = new Color(1f, 0.7f, 0.35f),
+            LightEnergy = 14f,
+            OmniRange = 16f,
+            ShadowEnabled = false,
+        };
+        _debris.AddChild(flash);
+        flash.GlobalPosition = pose * local + Vector3.Up * 1.2f;
+        flash.CreateTween().TweenProperty(flash, "light_energy", 0f, 0.35f);
+        Fire(local, strength);
+    }
+
+    /// <summary>The flame billboard's disc and its colour over a tongue's life: white-yellow at birth, orange, deep red, gone.</summary>
+    private static (GradientTexture2D Disc, Gradient Life) FlameLook()
+    {
+        var fade = new Gradient();
+        fade.SetColor(0, new Color(1f, 1f, 1f, 1f));
+        fade.SetColor(1, new Color(1f, 1f, 1f, 0f));
+        var disc = new GradientTexture2D { Gradient = fade, Fill = GradientTexture2D.FillEnum.Radial, FillFrom = new Vector2(0.5f, 0.5f), FillTo = new Vector2(0.5f, 0f), Width = 64, Height = 64 };
+        var life = new Gradient();
+        life.SetColor(0, new Color(1f, 0.95f, 0.65f, 1f));
+        life.AddPoint(0.3f, new Color(1f, 0.55f, 0.12f, 0.95f));
+        life.AddPoint(0.7f, new Color(0.55f, 0.1f, 0.02f, 0.5f));
+        life.SetColor(life.GetPointCount() - 1, new Color(0.1f, 0.02f, 0f, 0f));
+        return (disc, life);
+    }
+
+    private static StandardMaterial3D FlameMaterial(GradientTexture2D disc) => new()
+    {
+        ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+        Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+        BlendMode = BaseMaterial3D.BlendModeEnum.Add,
+        AlbedoColor = new Color(1f, 0.7f, 0.3f),
+        AlbedoTexture = disc,
+        VertexColorUseAsAlbedo = true,
+        BillboardMode = BaseMaterial3D.BillboardModeEnum.Particles,
+    };
+
+    /// <summary>
+    /// Fire from the blow: flames that rise from the crumpled end with black smoke over them, following the wreck,
+    /// and a flickering orange light on the ground and the body. The car burns through the replay and the fire goes
+    /// out with it (<see cref="End"/>).
+    /// </summary>
+    private void Fire(Vector3 local, float strength)
+    {
+        var (disc, life) = FlameLook();
+        var grow = new Curve();
+        grow.AddPoint(new Vector2(0f, 0.35f));
+        grow.AddPoint(new Vector2(0.4f, 1f));
+        grow.AddPoint(new Vector2(1f, 0.3f));
+        var flames = new CpuParticles3D
+        {
+            Name = "Fire",
+            Amount = Math.Clamp((int)(30f + strength * 3f), 30, 96),
+            Lifetime = 0.75f,
+            Mesh = new QuadMesh { Size = new Vector2(0.55f, 0.55f), Material = FlameMaterial(disc) },
+            EmissionShape = CpuParticles3D.EmissionShapeEnum.Sphere,
+            EmissionSphereRadius = 0.35f,
+            Direction = Vector3.Up,
+            Spread = 35f,
+            InitialVelocityMin = 1.2f,
+            InitialVelocityMax = 3.2f,
+            Gravity = new Vector3(0f, 2.8f, 0f),
+            ScaleAmountCurve = grow,
+            ColorRamp = life,
+            Position = local,
+        };
+        _car.AddChild(flames);
+        flames.Emitting = true;
+        _particles.Add(flames);
+
+        var soot = new StandardMaterial3D
+        {
+            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+            AlbedoColor = new Color(0.12f, 0.11f, 0.1f, 0.32f),
+            AlbedoTexture = disc,
+            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+            BillboardMode = BaseMaterial3D.BillboardModeEnum.Particles,
+        };
+        var swell = new Curve();
+        swell.AddPoint(new Vector2(0f, 0.5f));
+        swell.AddPoint(new Vector2(1f, 3f));
+        var smoke = new CpuParticles3D
+        {
+            Name = "Smoke",
+            Amount = 26,
+            Lifetime = 2.4f,
+            Mesh = new QuadMesh { Size = new Vector2(0.8f, 0.8f), Material = soot },
+            EmissionShape = CpuParticles3D.EmissionShapeEnum.Sphere,
+            EmissionSphereRadius = 0.3f,
+            Direction = Vector3.Up,
+            Spread = 20f,
+            InitialVelocityMin = 1.0f,
+            InitialVelocityMax = 2.0f,
+            Gravity = new Vector3(0.4f, 1.2f, 0f),
+            ScaleAmountCurve = swell,
+            Position = local + Vector3.Up * 0.5f,
+        };
+        _car.AddChild(smoke);
+        smoke.Emitting = true;
+        _particles.Add(smoke);
+
+        var glow = new OmniLight3D
+        {
+            Name = "FireGlow",
+            LightColor = new Color(1f, 0.55f, 0.2f),
+            LightEnergy = 3f,
+            OmniRange = 8f,
+            Position = local + Vector3.Up * 0.6f,
+            ShadowEnabled = false,
+        };
+        _car.AddChild(glow);
+        _glows.Add(glow);
+    }
+
+    /// <summary>The debris flies on, falls and comes to rest on the ground, by the playback's clock.</summary>
+    private void AdvancePieces(float da)
     {
         if (da <= 0f) return;
-        if (!_contact)
-        {
-            // Running on into what it hit, at the speed it had; the blow when it touches.
-            var run = MathF.Min(aftermath, _contactAt) - _aftermath;
-            _position += _slide * MathF.Max(run, 0f);
-            _aftermath = aftermath;
-            if (aftermath >= _contactAt) Contact();
-            _position.Y = Ground(_position) - _road;
-            return;
-        }
-        _aftermath = aftermath;
-        var since = aftermath - _contactAt;
-        if (_dent >= 0 && since <= DentGrowth + da)
-        {
-            var grown = Math.Clamp(since / DentGrowth, 0.15f, 1f);
-            var ease = 1f - (1f - grown) * (1f - grown);
-            _car.SetDentDepths((_dent, _depth * ease), (_crumple, _depth * 0.4f * ease), (_buckle, _depth * 0.35f * ease));
-        }
-        var speed = _slide.Length();
-        if (speed > 1e-3f)
-        {
-            // Sliding on its tyres and the wreck's corners: about 0.75 g.
-            var after = MathF.Max(speed - 7.5f * da, 0f);
-            _position += _slide / speed * ((speed + after) * 0.5f * da);
-            _slide *= after / speed;
-        }
-        _yaw += _yawRate * da;
-        _yawRate *= MathF.Exp(-1.6f * da);
-        _position.Y = Ground(_position) - _road;
-
         foreach (var piece in _pieces)
         {
             if (piece.Resting) continue;
@@ -510,6 +651,9 @@ internal sealed class CrashScene
         _car.Repair();
         foreach (var particles in _particles) particles.QueueFree();
         _particles.Clear();
+        foreach (var glow in _glows) glow.QueueFree();
+        _glows.Clear();
+        _impactNodes.Clear();
         _debris.QueueFree();
         _pieces.Clear();
     }

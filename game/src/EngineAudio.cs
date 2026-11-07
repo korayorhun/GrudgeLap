@@ -55,6 +55,7 @@ internal sealed partial class EngineAudio : Node
     private int _songNext;
     private readonly List<Voice> _voices = new();
     private SessionPhase _lastPhase = SessionPhase.SelectTransmission;
+    private bool _replayPlayingBefore;
 
     private SampledEngine _sampled = null!;
     private TyreAudio _tyres = null!;
@@ -427,6 +428,7 @@ internal sealed partial class EngineAudio : Node
         {
             if (w.InContact && w.Surface == SurfaceType.Road) squeal = MathF.Max(squeal, w.SlipIntensity);
         }
+        if (session.Phase == SessionPhase.Replay) squeal = 0f;   // the wreck slides in silence but for the fire (0.35)
         var speedFactor = MathUtil.Clamp01((MathF.Abs(car.Speed) - 3f) / 10f);
         _squeal += (squeal * speedFactor - _squeal) * MathUtil.Clamp01(dt * 10f);
 
@@ -471,9 +473,13 @@ internal sealed partial class EngineAudio : Node
         // The credit's end: the tune of the original's high-score screen, once.
         if (session.Phase == SessionPhase.Finished && _lastPhase != SessionPhase.Finished) PlayJingle(Jingle.GameOver);
         // The instant replay has its tune; skipped or over, it fades out in a third of a second.
-        if (session.Phase == SessionPhase.Replay && _lastPhase != SessionPhase.Replay) PlayJingle(Jingle.Replay);
-        else if (session.Phase != SessionPhase.Replay && _lastPhase == SessionPhase.Replay && ReferenceEquals(_song, ReplaySong)) _songFading = true;
-        if (session.Phase != SessionPhase.Replay && _lastPhase == SessionPhase.Replay && _replayMusic is { Playing: true }) _replayMusicFade = 1f;
+        // The replay's tune starts with the playback, after the crash's own moment (0.35), and in the replay only the tune
+        // plays: the crash's thump sounds once, as it happens, and not again at the replayed blow.
+        var playing = session.ReplayPlaying;
+        if (playing && !_replayPlayingBefore) PlayJingle(Jingle.Replay);
+        else if (!playing && _replayPlayingBefore && ReferenceEquals(_song, ReplaySong)) _songFading = true;
+        if (!playing && _replayPlayingBefore && _replayMusic is { Playing: true }) _replayMusicFade = 1f;
+        _replayPlayingBefore = playing;
         if (_replayMusicFade > 0f && _replayMusic is not null)
         {
             _replayMusicFade = MathF.Max(_replayMusicFade - dt * 3f, 0f);

@@ -24,6 +24,8 @@ internal sealed partial class CameraRig : Node3D
     private GpuParticles3D? _rain;
 
     public CameraMode Mode { get; set; } = CameraMode.Cockpit;
+    /// <summary>The ground's height under a point (Godot space), for keeping the eye out of it (0.35).</summary>
+    public Func<Vector3, float>? Ground { get; set; }
     /// <summary>Orbit view: yaw around the car (0 = from behind, 90 = from its right), pitch above the horizon, distance; degrees and metres.</summary>
     public Vector3 Orbit { get; set; } = new(35f, 18f, 7f);
     /// <summary>Height of the car node's origin (its centre of gravity) above the road at rest; offsets below are ground-relative.</summary>
@@ -158,7 +160,11 @@ internal sealed partial class CameraRig : Node3D
         }
 
         // A little further back and lower since 0.11, with the longer lens below, so the car fills the frame as before.
-        var target = car * new Vector3(0f, 1.7f - CgHeight, 7.4f);
+        // On the loop's wall and over its top the eye moves in towards the loop's centre with the tilt (0.35: straight back
+        // along the car's axis it sat inside the deck for the whole climb).
+        var carUp = car.Basis.Y;
+        var tilt = 1f - MathF.Max(carUp.Dot(Vector3.Up), -1f);
+        var target = car * new Vector3(0f, 1.7f - CgHeight + 2.2f * tilt, 7.4f);
         if (!_chaseInitialised)
         {
             _chasePosition = target;
@@ -167,7 +173,10 @@ internal sealed partial class CameraRig : Node3D
         _chasePosition = _chasePosition.Lerp(target, MathUtil.Clamp01(dt * 6f));
         var focus = car * new Vector3(0f, 0.7f - CgHeight, -2.0f);
         var chase = _chasePosition + car.Basis * (_jolt * 2.5f);
-        _camera.GlobalTransform = new Transform3D(Basis.LookingAt(focus - chase, Vector3.Up), chase);
+        // The car's own up is the view's up once the road tilts past 50 degrees, and the eye keeps clear of the ground.
+        var up = carUp.Dot(Vector3.Up) < 0.64f ? carUp : Vector3.Up;
+        if (Ground is { } ground) chase.Y = MathF.Max(chase.Y, ground(chase) + 0.9f);
+        _camera.GlobalTransform = new Transform3D(Basis.LookingAt(focus - chase, up), chase);
         // A longer lens than the seat's: at 62 degrees the car outside was drawn in a fish-eye and read as a toy (0.11).
         _camera.Fov = 54f;
     }
@@ -176,11 +185,14 @@ internal sealed partial class CameraRig : Node3D
     /// Replay: a high crane shot that keeps the crash car centred, like the "God's eye" view of the original, coming
     /// down to a few metres off the car for the crash itself (<paramref name="closeUp"/> 1, CrashScene).
     /// </summary>
-    public void Replay(Vector3 carPosition, Vector3 viewForward, float closeUp = 0f)
+    public void Replay(Vector3 carPosition, Vector3 viewForward, float closeUp = 0f, bool low = false)
     {
         var back = (viewForward * -1f).Normalized();
-        var reach = Mathf.Lerp(1f, 0.3f, closeUp);
-        var eye = carPosition + back * (26f * reach) + Vector3.Up * Mathf.Lerp(16f, 3.2f, closeUp) + new Vector3(back.Z, 0f, -back.X) * (10f * reach);
+        var reach = Mathf.Lerp(1f, low ? 0.45f : 0.3f, closeUp);
+        // Close by, the eye is 3.2 m up; for a car that fell under a bridge it stays low (1.6 m, a little further back),
+        // under the deck it would otherwise look through (0.35).
+        var eye = carPosition + back * (26f * reach) + Vector3.Up * Mathf.Lerp(16f, low ? 1.6f : 3.2f, closeUp) + new Vector3(back.Z, 0f, -back.X) * (10f * reach);
+        if (Ground is { } ground) eye.Y = MathF.Max(eye.Y, ground(eye) + 1.5f);   // never under the ground beside a cutting (0.35)
         _camera.GlobalTransform = new Transform3D(Basis.LookingAt(carPosition + Vector3.Up * 0.8f - eye, Vector3.Up), eye);
         _camera.Fov = Mathf.Lerp(50f, 56f, closeUp);
     }

@@ -35,6 +35,8 @@ internal sealed partial class CarView
 
     /// <summary>The body's reach in this node's frame (origin at the centre of gravity): nose and tail z, half width, and the road's height.</summary>
     public (float Nose, float Tail, float HalfWidth, float Road) Extent => (_style.Keys[0], _style.Keys[^1], _style.HalfWidth.Max(), -_cgHeight);
+    /// <summary>The roof's height over the road, for a wreck that comes to rest on it (CrashScene, 0.35).</summary>
+    public float RoofHeight => _style.CentreH.Max();
 
     private void AddDeformable(MeshInstance3D node) => _deformables.Add(new DeformableMesh(node));
 

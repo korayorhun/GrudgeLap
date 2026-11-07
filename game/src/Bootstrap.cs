@@ -33,6 +33,7 @@ public sealed partial class Bootstrap : Node3D
     private TrackGeometry _track = null!;
     private CarView _carView = null!;
     private CrashScene? _crash;
+    private bool _impactShown;   // the crash's own moment (the fire, the cracked glass) is on, before the replay (0.35)
     /// <summary>--ram-speed=: the speed (m/s) the ramming run holds, 0 for flat out.</summary>
     private float _ramSpeed;
     /// <summary>--look=kind[:n[:distance[:bearing]]]: the camera on the n-th prop of a kind (House, Barn, Cow...), for inspection shots.</summary>
@@ -237,6 +238,9 @@ public sealed partial class Bootstrap : Node3D
             AddChild(TrainView.BuildRailway(train, _track));
             _world.AttachTrain(_trainView.Locomotive, train);
         }
+        // The wood's trunks near the roads are solid (0.35; until then only the hand-placed trees were, and a car off the road
+        // drove through the forest). Added after the props are drawn, so the wood is drawn once, by FoliageBuilder.
+        foreach (var trunk in FoliageBuilder.NearTrunks) _track.Props.Add(new TrackProp(PropKind.Tree, trunk, 0f, new SN.Vector3(0.7f, 9f, 0.7f), "forest"));
         if (_perfLog) StartMark("props, cows and the train");
         GetViewport().UseTaa = true;
         // A window resized (or made full screen) changes the render ceiling of ApplyGraphics.
@@ -251,6 +255,7 @@ public sealed partial class Bootstrap : Node3D
         _carView.MarkPlayer();
         AddChild(WorldBuilder.BuildCarProbe());
         _cameraRig = new CameraRig { Mode = _orbit is not null ? CameraMode.Orbit : _startChase ? CameraMode.Chase : CameraMode.Cockpit };
+        _cameraRig.Ground = p => _track.Terrain.Height(p.X, -p.Z);
         if (_orbit is { } orbit) _cameraRig.Orbit = orbit;
         _cameraRig.SeatLook = _seatLook;
         AddChild(_cameraRig);
@@ -995,7 +1000,8 @@ public sealed partial class Bootstrap : Node3D
         var dt = (float)GetProcessDeltaTime();
         // From the driver's seat the cabin and the bonnet are drawn and the instruments are in the binnacle; in the
         // other views the shell is drawn and the HUD shows the instruments.
-        var cockpit = _cameraRig.Mode == CameraMode.Cockpit && _session.Phase != SessionPhase.Replay;
+        // From the seat through the crash's own moment (0.35), then the replay from the crane.
+        var cockpit = _cameraRig.Mode == CameraMode.Cockpit && (_session.Phase != SessionPhase.Replay || _session.ReplayTime < _session.Options.ImpactSeconds);
         _carView.SetViewpoint(insideCar: cockpit && !_showAll);
         _hud.Cockpit = cockpit;
         _audio.Interior = cockpit;
@@ -1009,10 +1015,35 @@ public sealed partial class Bootstrap : Node3D
         {
             // The recorded approach, then the crash played out and the car damaged (CrashScene).
             _crash ??= new CrashScene(this, _carView, _session, effects: !_retro);
-            var pose = _crash.Pose(_session.ReplayTime, _session.Options.ReplaySeconds);
-            if (_crash.StruckThisFrame) _audio.ReplayCrash();
+            var impactSeconds = _session.Options.ImpactSeconds;
+            if (_session.ReplayTime < impactSeconds)
+            {
+                // The crash as it happens, from where the player sits (0.35): the car where it struck, the fire, the glass.
+                if (!_impactShown)
+                {
+                    _impactShown = true;
+                    _crash.Impact();
+                    _hud.GlassCracks = cockpit ? 1f : 0f;
+                }
+                _carView.SetPose(car.Position, car.Orientation);
+                _carView.SetWheels(car.Wheels, car.SteerAngle, car.Spec);
+                _cameraRig.FollowCar(_carView.GlobalTransform, MathF.Abs(car.Speed), dt);
+                if (_fixedCamera is { } impactCamera) _cameraRig.Look(impactCamera.Eye, impactCamera.Target, impactCamera.Fov);
+                return;
+            }
+            if (_impactShown)
+            {
+                _impactShown = false;
+                _crash.EndImpact();
+                _hud.GlassCracks = 0f;
+            }
+            // Only the tune plays in the replay (0.35): the crash's thump sounded once, as it happened.
+            var pose = _crash.Pose(_session.ReplayTime - impactSeconds);
             _carView.Transform = pose;
-            _cameraRig.Replay(pose.Origin, _crash.ViewForward, _crash.CloseUp);
+            SyncTrafficReplay(_session.ReplayTime - impactSeconds);
+            // The steam of a car knocked about before the crash stops where it was: the replayed car drives elsewhere (0.35).
+            _knockSmoke.Follow(_carView, 0f, muted: true);
+            _cameraRig.Replay(pose.Origin, _crash.ViewForward, _crash.CloseUp, low: _session.LastCrash == CrashReason.FellOffBridge);
             if (_fixedCamera is { } replayCamera) _cameraRig.Look(replayCamera.Eye, replayCamera.Target, replayCamera.Fov);
             return;
         }
@@ -1065,7 +1096,9 @@ public sealed partial class Bootstrap : Node3D
         var p = car.Position;
         var hit = car.BodyHit;
         var line = $"pose: t={_elapsed.ToString("0.0", c)} phase={_session.Phase} path={car.Cursor.Path.Kind} d={car.Cursor.Distance.ToString("0", c)} x={p.X.ToString("0.0", c)} y={p.Y.ToString("0.00", c)} z={p.Z.ToString("0.0", c)} v={(car.Speed * 3.6f).ToString("0", c)}km/h h={hit.Height.ToString("0.00", c)} {hit.Surface} air={(car.Airborne ? 1 : 0)} dmg={_session.Damage.ToString("0.00", c)} guard={car.GroundGuardLifts}";
-        if (notable) line += $" events={string.Join("+", events)} crash={_session.LastCrash} knock={_session.LastKnock.Kind}@{(_session.LastKnock.Speed * 3.6f).ToString("0", c)}km/h";
+        if (notable) line += $" events={string.Join("+", events)}";
+        if (events.Contains(RaceEvent.Crashed)) line += $" crash={_session.LastCrash}";
+        if (events.Contains(RaceEvent.Knocked)) line += $" knock={_session.LastKnock.Kind}@{(_session.LastKnock.Speed * 3.6f).ToString("0", c)}km/h";
         GD.Print(line);
     }
 
@@ -1147,9 +1180,14 @@ public sealed partial class Bootstrap : Node3D
             nearest = distance;
             found = point;
         }
-        if (_ram == "traffic" && _session.Traffic is not null)
+        if ((_ram is "traffic" or "oncoming") && _session.Traffic is not null)
         {
-            foreach (var drone in _session.Traffic.Cars) Consider(drone.Position);
+            // The drones going the car's way, unless the oncoming ones are asked for (0.35: the nearest in the cone was
+            // always the oncoming one in the next lane, a glancing clip, and then the car steered after a point behind it).
+            foreach (var drone in _session.Traffic.Cars)
+            {
+                if ((SN.Vector3.Dot(drone.Forward, car.Forward) > 0f) == (_ram == "traffic")) Consider(drone.Position);
+            }
         }
         else if (_ram == "cow")
         {
@@ -1168,6 +1206,12 @@ public sealed partial class Bootstrap : Node3D
         // Once a target is taken it is held (a drone's or a cow's is followed as it moves).
         if (found is { } point && (_ramTarget is null || _ram is "traffic" or "cow")) _ramTarget = point;
         if (_ramTarget is not { } target) return input;
+        // A target the car has passed is let go (0.35): held, it steered the car round after a point behind it and off the road.
+        if (SN.Vector3.Dot(target - car.Position, car.Forward) < 0f)
+        {
+            _ramTarget = null;
+            return input;
+        }
         var toTarget = target - car.Position;
         var angle = MathF.Atan2(SN.Vector3.Dot(toTarget, car.Right), MathF.Max(SN.Vector3.Dot(toTarget, car.Forward), 0.1f));
         // Flat out, or held at --ram-speed= (m/s) to see a knock below the crash speed.
@@ -1204,8 +1248,13 @@ public sealed partial class Bootstrap : Node3D
     /// <summary>The replay is over or cut short: the car is repaired and the debris cleared.</summary>
     private void EndCrash()
     {
-        _crash?.End();
+        if (_crash is null) return;
+        _crash.End();
         _crash = null;
+        _impactShown = false;
+        _hud.GlassCracks = 0f;
+        // The chase camera starts afresh behind the car set down (0.35: it eased over from the crash site for a second).
+        _cameraRig.ResetChase();
     }
 
     private void UpdateTipping()
@@ -1228,7 +1277,44 @@ public sealed partial class Bootstrap : Node3D
         for (var i = 0; i < cars.Count && i < _droneViews.Count; i++)
         {
             _droneViews[i].SetTrafficPose(cars[i].Position, cars[i].Orientation);
-            if (_session.Phase is SessionPhase.Driving or SessionPhase.StartEngine) _droneViews[i].AdvanceWheels(cars[i].Speed * dt, 0f);
+            if (_session.Phase is SessionPhase.Driving or SessionPhase.StartEngine || (_session.Phase == SessionPhase.Replay && !_session.ReplayPlaying)) _droneViews[i].AdvanceWheels(cars[i].Speed * dt, 0f);
+        }
+    }
+
+    /// <summary>
+    /// The drones in the replay (0.35; until then they stood frozen where the crash had left them): where the recording
+    /// has them at the playback's game time, the crash and the wreck window included, by the same clock as the car
+    /// (CrashScene.Pose: the approach at its pace, the first second after the blow slow).
+    /// </summary>
+    private void SyncTrafficReplay(float replayTime)
+    {
+        var samples = _session.ReplayTraffic;
+        var poses = _session.Replay;
+        if (samples.Count < 2 || _droneViews.Count == 0 || poses.Count != samples.Count) return;
+        var crashTime = _session.CrashTime;
+        var approach = _session.Options.ReplaySeconds - _session.Options.ImpactSeconds;
+        var slowSpan = RaceSession.ReplaySlowSeconds / RaceSession.ReplaySlowRate;
+        float gameTime;
+        if (replayTime < approach) gameTime = crashTime - approach + replayTime;
+        else
+        {
+            var into = replayTime - approach;
+            gameTime = into < slowSpan ? crashTime + into * RaceSession.ReplaySlowRate : crashTime + RaceSession.ReplaySlowSeconds + (into - slowSpan);
+        }
+        var span = poses[^1].Time - poses[0].Time;
+        var index = span > 1e-4f ? System.Math.Clamp((gameTime - poses[0].Time) / span * (samples.Count - 1), 0f, samples.Count - 1) : 0f;
+        var i0 = (int)index;
+        var i1 = System.Math.Min(i0 + 1, samples.Count - 1);
+        var f = index - i0;
+        for (var d = 0; d < _droneViews.Count; d++)
+        {
+            if (d >= samples[i0].Length || d >= samples[i1].Length) continue;
+            var position = SN.Vector3.Lerp(samples[i0][d].Position, samples[i1][d].Position, f);
+            var orientation = SN.Quaternion.Normalize(SN.Quaternion.Slerp(samples[i0][d].Orientation, samples[i1][d].Orientation, f));
+            var view = _droneViews[d];
+            var before = view.GlobalPosition;
+            view.SetTrafficPose(position, orientation);
+            view.AdvanceWheels(view.GlobalPosition.DistanceTo(before), 0f);
         }
     }
 

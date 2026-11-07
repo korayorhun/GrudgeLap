@@ -258,13 +258,19 @@ public sealed class TrackGeometry
         var height = Vector3.Dot(offset, frame.Normal);
         var onRoad = MathF.Abs(lateral) <= frame.HalfWidth;
 
-        if (frame.Surface == SurfaceType.Chasm && MathF.Abs(lateral) <= frame.HalfWidth + 2f)
+        if (frame.Surface == SurfaceType.Chasm && MathF.Abs(lateral) <= frame.HalfWidth + 2f && height > -1.5f)
         {
-            // Over the open drawbridge gap: nothing to land on until the far ramp.
+            // Over the open drawbridge gap: nothing to land on until the far ramp. A car fallen more than 1.5 m below the
+            // gap line is over whatever lies under the bridge (the ground, graded to the road that passes there), since
+            // 0.35 when the simulation carries a fallen car on to the ground.
             return new SurfaceHit(false, SurfaceType.Chasm, frame, lateral, height, frame.Origin + frame.Lateral * lateral, frame.Normal, bestPath, bestIndex);
         }
 
-        if (onRoad)
+        // Under a deck (a bridge, a ramp, the loop) by more than a metre the point is not on that road but over whatever
+        // lies below it (0.35: a wreck that had fallen off the drawbridge and slid under its landing ramp was given the
+        // deck over its head as its surface, and fell through the ground).
+        var underDeck = frame.Kind is SegmentKind.RampUp or SegmentKind.RampDown or SegmentKind.Overpass or SegmentKind.Loop && height < -1.0f;
+        if (onRoad && frame.Surface != SurfaceType.Chasm && !underDeck)
         {
             // The worn surface lies a little under (or over) the ideal ribbon; the wheels feel every pothole the view draws.
             var dip = RoadWear.Depth(bestPath.Kind, frame.Kind, frame.Distance, lateral, frame.HalfWidth);
@@ -361,9 +367,10 @@ public readonly record struct SurfaceHit(
 /// <summary>A roadside object. Solid props crash the car; soft ones (signs, cows) just react.</summary>
 public sealed record TrackProp(PropKind Kind, Vector3 Position, float YawDeg, Vector3 Size, string Label = "")
 {
-    public bool Solid => Kind is PropKind.Barn or PropKind.House or PropKind.Shop or PropKind.Hut or PropKind.Tree or PropKind.Tower or PropKind.Barrier or PropKind.Train or PropKind.Pump or PropKind.Pier;
+    /// <summary>Props the car knocks into or crashes against. A sawhorse (<see cref="PropKind.Barrier"/>) is soft since 0.35: fifteen kilos of wood tip over, they do not write a car off.</summary>
+    public bool Solid => Kind is PropKind.Barn or PropKind.House or PropKind.Shop or PropKind.Hut or PropKind.Tree or PropKind.Tower or PropKind.Train or PropKind.Pump or PropKind.Pier;
     /// <summary>Soft props the car drives through: they react (a sign tips, a cow moos) but never stop it.</summary>
-    public bool Soft => Kind is PropKind.Cow or PropKind.Sign or PropKind.Crossbuck;
+    public bool Soft => Kind is PropKind.Cow or PropKind.Sign or PropKind.Crossbuck or PropKind.Barrier;
 }
 
 public enum PropKind

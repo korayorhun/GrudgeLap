@@ -26,6 +26,21 @@ internal sealed partial class Hud : Control
     /// <summary>The gearbox the title screen will start with (the player's last choice).</summary>
     public TransmissionMode Gearbox { get; set; }
     public string Overlay { get; set; } = "";
+    private float _glassCracks;
+    private int _crackSeed = 7;
+    /// <summary>
+    /// The windscreen cracked by the crash (0.35), as the cabinet drew it: 1 shows white cracks over the view from the
+    /// seat for the crash's own moment, 0 none; a new pattern each time it is switched on.
+    /// </summary>
+    public float GlassCracks
+    {
+        get => _glassCracks;
+        set
+        {
+            if (value > 0f && _glassCracks <= 0f) _crackSeed = _crackSeed * 31 + 17;
+            _glassCracks = value;
+        }
+    }
     /// <summary>Small line under the lap readout: updater status and the like.</summary>
     public string Notice { get; set; } = "";
     /// <summary>The high-score table and the entry of initials, drawn when the credit is over.</summary>
@@ -65,6 +80,57 @@ internal sealed partial class Hud : Control
         QueueRedraw();
     }
 
+    /// <summary>
+    /// The cracked windscreen (0.35): white cracks radiating from the blow over the glass with side branches and a few
+    /// broken rings round it, each line over a dark shadow so it reads on the sky and on the road alike.
+    /// </summary>
+    private void DrawGlassCracks(Vector2 size)
+    {
+        var rng = new Random(_crackSeed);
+        var centre = new Vector2(size.X * (0.40f + 0.2f * rng.NextSingle()), size.Y * (0.28f + 0.14f * rng.NextSingle()));
+        var white = new Color(1f, 1f, 1f, 0.85f * GlassCracks);
+        var shade = new Color(0.08f, 0.1f, 0.14f, 0.4f * GlassCracks);
+        var reach = size.Y * 0.8f;
+        const int cracks = 15;
+        for (var k = 0; k < cracks; k++)
+        {
+            var angle = k * MathF.Tau / cracks + rng.NextSingle() * 0.35f;
+            var length = reach * (0.4f + 0.6f * rng.NextSingle());
+            var dir = new Vector2(MathF.Cos(angle), MathF.Sin(angle));
+            var across = new Vector2(-dir.Y, dir.X);
+            const int steps = 7;
+            var line = new Vector2[steps + 1];
+            line[0] = centre;
+            for (var s = 1; s <= steps; s++)
+            {
+                line[s] = centre + dir * (length * s / steps) + across * ((rng.NextSingle() - 0.5f) * 0.14f * length);
+            }
+            DrawPolyline(line, shade, 4f, true);
+            DrawPolyline(line, white, 1.5f, true);
+            // A branch or two off the longer cracks.
+            if (length > reach * 0.6f)
+            {
+                var at = line[2 + rng.Next(3)];
+                var side = rng.Next(2) == 0 ? 1f : -1f;
+                var branch = new[] { at, at + (dir * 0.6f + across * side * 0.8f) * (0.18f * length), at + (dir * 0.9f + across * side * 1.1f) * (0.3f * length) };
+                DrawPolyline(branch, shade, 3f, true);
+                DrawPolyline(branch, white, 1.2f, true);
+            }
+        }
+        for (var r = 0; r < 3; r++)
+        {
+            var radius = reach * (0.09f + 0.14f * r) * (0.9f + 0.2f * rng.NextSingle());
+            var start = rng.NextSingle() * MathF.Tau;
+            for (var arc = 0; arc < 3; arc++)
+            {
+                var from = start + arc * 2.2f + rng.NextSingle() * 0.4f;
+                var to = from + 1.1f + rng.NextSingle() * 0.7f;
+                DrawArc(centre, radius, from, to, 18, shade, 3f, true);
+                DrawArc(centre, radius, from, to, 18, white, 1.2f, true);
+            }
+        }
+    }
+
     private void Centred(Font font, string text, float y, int fontSize, Color colour) =>
         DrawString(font, new Vector2(0f, y), text, HorizontalAlignment.Center, GetViewportRect().Size.X, fontSize, colour);
 
@@ -83,7 +149,7 @@ internal sealed partial class Hud : Control
 
         // ---- instrument panel at the foot of the screen, except from the driver's seat ---------------------
         var bandTop = size.Y;
-        if (!Cockpit && Instruments is not null)
+        if (!Cockpit && Instruments is not null && s.Phase != SessionPhase.Replay)
         {
             var width = MathF.Min(size.X * 0.36f, 580f);
             var height = width * Instruments.GetHeight() / Instruments.GetWidth();
@@ -132,6 +198,7 @@ internal sealed partial class Hud : Control
             DrawRect(new Rect2(0f, band, band, size.Y - 2f * band), edge);
             DrawRect(new Rect2(size.X - band, band, band, size.Y - 2f * band), edge);
         }
+        if (GlassCracks > 0f && Cockpit) DrawGlassCracks(size);
 
         // ---- centre messages ------------------------------------------------------------------------
         // The game-over panel says it all; the session's OUT OF TIME would print over the table.
