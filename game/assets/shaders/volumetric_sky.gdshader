@@ -100,6 +100,11 @@ void sky() {
 					}
 					t += step_len;
 				}
+				// A cloud the march gave up in is opaque: at the cut-off's 3 % the photo's sun, thousands of times the sky's
+				// brightness, still shone through a thick cumulus as a white point (0.46).
+				if (transmittance < 0.03) {
+					transmittance = 0.0;
+				}
 				// The air between: far clouds fade into the sky's own colour, near the horizon.
 				float haze = 1.0 - exp(-t0 / 28000.0);
 				light = mix(light, photo * (1.0 - transmittance), haze * 0.8);

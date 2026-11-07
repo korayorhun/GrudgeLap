@@ -3050,6 +3050,33 @@ The clouds drifted and their shadows ran over the plain while every blade and le
   equal parts for every pixel, 64 of them (48 in 0.44), and the bands this leaves are faint; GPU time unchanged within
   the measurement's noise.
 
+### The windscreen (0.46.0)
+
+The glass was not drawn from the seat (CarView hides it), so the rain fell in the air before a windscreen that stayed
+dry, and the sun ahead lit nothing between the driver and the road.
+
+- **One quad over the view** (`Windscreen`, `assets/shaders/windscreen.gdshader`), the camera's child, drawn after
+  everything else with its depth test off; the cabin (nearer than 1.2 m: the dashboard, the pillars, the mirror) is
+  left alone by the depth, the glass is wherever the view reaches past it, side windows included. Premultiplied
+  alpha: the drops replace what is behind them, the haze adds to it.
+- **Drops**: two sizes on grids of cells across the glass, each cell's drop landing at a time drawn from the rain's rate
+  after the last sweep over it (an exponential arrival), so the glass fills as the wipers' blade moves on; a drop is a
+  lens that shows the scene behind it upside down and drawn in, darker at its rim. At speed the air drives the landed
+  drops up the glass and stretches them. Between the sweeps a film of water softens the view.
+- **The wipers**: two blades on pivots below the glass's foot, parked pointing right, sweeping up and back with a
+  crank's eased motion; for every point the shader works out when a blade last passed it from the wipers' clock, so
+  the drops are wiped where the blade has been. Steady in rain; on a wet day without rain a few drops and no wipers.
+- **The dust in the sun**: on a dry day with the sun ahead the glass's dust and the wipers' fine arcs round their
+  pivots light up into a haze round the sun, faint further off; it goes when a cloud covers the sun (CloudShadows).
+- **The motion blur** (`MotionBlur`) runs before the transparent pass now (after it until 0.46): what is drawn on the
+  glass stays sharp as the road streams by behind it; the particles are soft anyway.
+- The cockpit only: hidden outside the car, in the replay and the inspection views, and in the 1989 look;
+  `--windscreen=0` for comparisons. One wipe time a pixel serves every drop round it (a drop the blade is crossing
+  shows cut for that frame, as the blade cuts it; a time a drop cost 36 arc functions a pixel), and the dust's noises
+  are not worked out more than 50 degrees off the sun: about 0.4 ms of GPU time in the rain, none measurable dry.
+- **The sun through a cloud**: a cloud the sky's march gave up in (3 % of the light through) is opaque now; the photo's
+  sun, thousands of times the sky's brightness, shone through a thick cumulus as a white point.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

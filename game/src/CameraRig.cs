@@ -22,6 +22,7 @@ internal sealed partial class CameraRig : Node3D
     private Vector3 _chasePosition;
     private bool _chaseInitialised;
     private GpuParticles3D? _rain;
+    private Windscreen? _windscreen;
 
     public CameraMode Mode { get; set; } = CameraMode.Cockpit;
     /// <summary>The ground's height under a point (Godot space), for keeping the eye out of it (0.35).</summary>
@@ -68,6 +69,9 @@ internal sealed partial class CameraRig : Node3D
         _blur = new MotionBlur { Enabled = WorldBuilder.CameraBlur };
         _camera.Compositor = new Compositor { CompositorEffects = [_blur] };
         AddChild(_camera);
+        // The glass between the driver and the road (0.46): drops and wipers in the rain, the dust's haze in the sun.
+        _windscreen = new Windscreen();
+        _camera.AddChild(_windscreen);
     }
 
     public override void _Process(double delta)
@@ -130,6 +134,14 @@ internal sealed partial class CameraRig : Node3D
         _rain.Emitting = true;
     }
 
+    /// <summary>The water on the windscreen (0.46): how hard it rains (0 to 1) and, on a wet day without rain, what is left on the glass.</summary>
+    public void SetGlass(float rain, float wet)
+    {
+        if (_windscreen is null) return;
+        _windscreen.Rain = rain;
+        _windscreen.Wet = wet;
+    }
+
     public void FollowCar(Transform3D car, float speedMps, float dt)
     {
         // The jolt's spring, sub-stepped: at 20 fps (1989 mode) one step of it would overshoot.
@@ -162,8 +174,11 @@ internal sealed partial class CameraRig : Node3D
             _camera.GlobalTransform = new Transform3D(Basis.LookingAt(look - eye, car.Basis.Y), eye);
             // 62 degrees vertical is about what a windscreen frames; a little more at speed.
             _camera.Fov = 62f + 6f * MathUtil.Clamp01(speedMps / 75f);
+            _windscreen?.Update(!WorldBuilder.Retro, speedMps, _camera.GlobalBasis.Inverse() * WorldBuilder.TowardsSun, WorldBuilder.SunShare, dt);
             return;
         }
+        // Outside the car there is no glass before the eye.
+        if (_windscreen is not null) _windscreen.Visible = false;
 
         if (Mode == CameraMode.Orbit)
         {
@@ -213,6 +228,7 @@ internal sealed partial class CameraRig : Node3D
         if (Ground is { } ground) eye.Y = MathF.Max(eye.Y, ground(eye) + 1.5f);   // never under the ground beside a cutting (0.35)
         _camera.GlobalTransform = new Transform3D(Basis.LookingAt(carPosition + Vector3.Up * 0.8f - eye, Vector3.Up), eye);
         _camera.Fov = Mathf.Lerp(50f, 56f, closeUp);
+        if (_windscreen is not null) _windscreen.Visible = false;
     }
 
     public void ResetChase() => _chaseInitialised = false;
@@ -222,6 +238,7 @@ internal sealed partial class CameraRig : Node3D
     {
         _camera.GlobalTransform = new Transform3D(Basis.LookingAt(target - eye, Vector3.Up), eye);
         _camera.Fov = fov;
+        if (_windscreen is not null) _windscreen.Visible = false;
     }
 
     /// <summary>Where the camera is: the listener of the placed sounds (<see cref="WorldAudio"/>).</summary>

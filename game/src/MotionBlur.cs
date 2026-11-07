@@ -9,7 +9,8 @@ namespace GrudgeLap.Game;
 /// past in steps; a camera, and the eye, see it smeared.
 /// </summary>
 /// <remarks>
-/// Runs on the render thread after the transparent pass, in linear light before glow and tone mapping: the colour is
+/// Runs on the render thread before the transparent pass (after it until 0.46), in linear light before glow and tone
+/// mapping: the colour is
 /// blurred into a copy and the copy written back. <see cref="FrameSeconds"/> comes from the main thread every frame
 /// (a float, read once a frame: a frame late at worst); the smear is the motion over <see cref="Exposure"/>, not over
 /// the frame, so it is the same at 30 and at 90 frames a second.
@@ -36,7 +37,9 @@ public partial class MotionBlur : CompositorEffect
 
     public MotionBlur()
     {
-        EffectCallbackType = EffectCallbackTypeEnum.PostTransparent;
+        // Before the transparent pass (0.46; after it until then): what is drawn on the glass (Windscreen) stays sharp
+        // as the road behind it streams by, and the particles (rain, dust, smoke) are soft anyway.
+        EffectCallbackType = EffectCallbackTypeEnum.PreTransparent;
         NeedsMotionVectors = true;
         AccessResolvedColor = true;
         RenderingServer.CallOnRenderThread(Callable.From(Initialise));
@@ -70,7 +73,7 @@ public partial class MotionBlur : CompositorEffect
 
     public override void _RenderCallback(int effectCallbackType, RenderData renderData)
     {
-        if (_device is null || !_pipeline.IsValid || effectCallbackType != (int)EffectCallbackTypeEnum.PostTransparent) return;
+        if (_device is null || !_pipeline.IsValid || effectCallbackType != (int)EffectCallbackTypeEnum.PreTransparent) return;
         if (renderData.GetRenderSceneBuffers() is not RenderSceneBuffersRD buffers) return;
         var size = buffers.GetInternalSize();
         if (size.X <= 0 || size.Y <= 0) return;

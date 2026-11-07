@@ -416,6 +416,7 @@ public sealed partial class Bootstrap : Node3D
             else if (arg.StartsWith("--motion-blur=", System.StringComparison.Ordinal)) WorldBuilder.MotionBlurOverride = arg["--motion-blur=".Length..] != "0";
             else if (arg.StartsWith("--volumetric-clouds=", System.StringComparison.Ordinal)) WorldBuilder.VolumetricCloudsOverride = arg["--volumetric-clouds=".Length..] != "0";
             else if (arg.StartsWith("--cloud-shadows=", System.StringComparison.Ordinal)) WorldBuilder.CloudShadowsOverride = arg["--cloud-shadows=".Length..] != "0";
+            else if (arg.StartsWith("--windscreen=", System.StringComparison.Ordinal)) Windscreen.Enabled = arg["--windscreen=".Length..] != "0";
             else if (arg.StartsWith("--fsr2=", System.StringComparison.Ordinal)) float.TryParse(arg["--fsr2=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _fsr2Scale);
             else if (arg.StartsWith("--shake=", System.StringComparison.Ordinal)) _shake = arg["--shake=".Length..] != "0";
             else if (arg.StartsWith("--sun-shadow=", System.StringComparison.Ordinal)) WorldBuilder.SunShadowOverride = arg["--sun-shadow=".Length..] != "0";
@@ -563,6 +564,9 @@ public sealed partial class Bootstrap : Node3D
     {
         var raining = _session is not null && !_retro && WeatherModel.Raining(_session.Weather);
         _cameraRig?.SetRain(raining);
+        // The glass (0.46): the rain's drops, or on a wet day a few left from the spray.
+        var wet = _session is not null && !_retro && !raining ? WeatherModel.Wetness(_session.Weather) : 0f;
+        _cameraRig?.SetGlass(raining ? 1f : 0f, wet);
         if (_audio is not null) _audio.Rain = raining ? 1f : 0f;
         CarView.Overcast = _session is not null && !_retro && WeatherModel.Overcast(_session.Weather);
     }

@@ -1906,6 +1906,15 @@ internal static class WorldBuilder
     /// <summary>The sun's energy for the weather, before the clouds over the camera dim it.</summary>
     private static float _sunEnergy = SunEnergy;
 
+    /// <summary>The 1989 look is on.</summary>
+    public static bool Retro => _retro;
+
+    /// <summary>The direction to the sun, Godot axes.</summary>
+    public static Vector3 TowardsSun => SunDirection;
+
+    /// <summary>How much of the sun reaches the camera: none overcast or in the 1989 look, the clouds' share otherwise (CloudShadows).</summary>
+    public static float SunShare => _retro || WeatherModel.Overcast(_weather) ? 0f : _cloudShade;
+
     private static bool CloudShadowsOn => _volumetricSky is not null && !_retro && CloudShadowsOverride != false && !WeatherModel.Overcast(_weather);
 
     /// <summary>Automation (--motion-blur=0): the camera without its motion blur, for comparisons.</summary>
