@@ -2891,6 +2891,35 @@ of noise with vertex colours that under the haze read as a bank of cloud. 0.37 p
   with straight edges and a thin sealed joint, most darker (newer asphalt), a few lighter (old ones gone grey), a lane
   wide, over a wheel track or a trench across the road. 0.36's rounded, jittered patches read as dark puddles of oil.
 
+### The scanned trees (0.39.0)
+
+The wood (37 000 trees round the plain) and the roadside trees were crossed cards of a leaf-cluster photo: blobs at a
+distance, lollipops up close. 0.39 draws them from Poly Haven's photoscanned trees (CC0): three firs (`fir_tree_01`'s
+a, b and c, 19, 14 and 14.5 m), a large broadleaf (`jacaranda_tree`, 19.5 m, green in its scan) and a slender one
+(`tree_small_02`, 4.6 m). They run to 0.4 to 7 million triangles each, so they are drawn as impostors.
+
+- **The bake** (`tools/bake-impostors.py`, in Blender 5.2, portable): an orthographic camera 4 degrees over the
+  horizon at twelve bearings round the tree, the frame square (the crown's reach either side of the trunk's foot, or
+  the height), the foot at the bottom centre; every material redrawn as emission, once its base colour (sRGB) and once
+  its normal in the camera's frame (raw; Blender's camera frame has z along the view, so a face turned to the camera
+  comes out with z at -1), its alpha kept. `tools/pack-impostors.py` scales the 1024 px renders to 768 and packs each
+  pass into a 4 x 3 atlas (`assets/foliage`, BC7 with mipmaps) with a JSON of the frame's size.
+- **The card** (`assets/shaders/impostor.gdshader`): a 1 m quad turned to the camera about the vertical and sized to
+  the frame (its bounds set to the frame, or the culling dropped trees still in view); the camera's bearing in the
+  tree's own frame picks the two nearest views, dithered into each other per pixel (TAA smooths the seam). The atlas is
+  sampled with the card's own derivatives (`textureGrad`): derivatives taken across the per-pixel jump between cells
+  picked the blurriest mip and drew a cloud of speckles round every tree. The alpha is raised with the mip level (1 +
+  0.45 a level), since a mip averages a leaf with the gaps round it and the cut at one half thinned the far trees to
+  dots. The baked normal is turned back into the tree's frame for the view and blended half and half with a round
+  crown's, so a crown is lit on the sun's side and shaded on the other (the leaves' own normals alone scattered the
+  light and some trees read pale); the colour darkens low in the crown, where an unlit bake has no shadow.
+- **The wood** (`FoliageBuilder.WoodOfImpostors`): the card trees' places, 18 m apart instead of 25 (a fir is
+  narrower than a card crown), each given a tree by weight (firs 68 %, the broadleaf 26 %, the slender 6 %) and
+  scaled to 10 to 15 m with the old scatter; one multimesh per tree and band, the near band casting shadows (the card's
+  silhouette turned to the light). The roadside trees are the broadleaf or now and then a fir at the track's heights.
+  The GPU time fell to 11.5 ms (12.4 with the card trees); the world takes 0.15 s longer to plant the wood.
+- **The 1989 look** draws the cards in a flat green; the export keeps the card trees for the Unreal version.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

@@ -320,7 +320,8 @@ internal static class WorldBuilder
         {
             foreach (var child in _forest.GetChildren())
             {
-                if (child is MultiMeshInstance3D band) band.Visible = medium || band.Name.ToString().StartsWith("Forest-near", StringComparison.Ordinal);
+                // The near band stays at every quality and in the 1989 look (the card trees' "Forest-near", the scanned "Wood-near").
+                if (child is MultiMeshInstance3D band) band.Visible = medium || band.Name.ToString().StartsWith("Forest-near", StringComparison.Ordinal) || band.Name.ToString().StartsWith("Wood-near", StringComparison.Ordinal);
             }
         }
         if (_environment is null) return;
@@ -447,6 +448,7 @@ internal static class WorldBuilder
         // marker posts go.
         if (_gravel is not null) _gravel.AlbedoColor = retro ? OrangeShoulder : GravelTint;
         _groundShader?.SetShaderParameter("retro", retro);
+        FoliageBuilder.SetRetro(retro);
         _shoulderShader?.SetShaderParameter("retro", retro);
         if (_earth is not null) _earth.AlbedoColor = retro ? OrangeEarth : SoilTint;
         foreach (var node in _modernRoad)

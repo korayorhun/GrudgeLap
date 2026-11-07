@@ -1,0 +1,9 @@
+{
+ "views": 12,
+ "columns": 4,
+ "rows": 3,
+ "frame_metres": 19.304,
+ "height": 18.925,
+ "source": "fir_tree_01_1k.gltf",
+ "object": "fir_tree_01_a_LOD0"
+}

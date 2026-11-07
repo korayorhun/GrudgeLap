@@ -21,6 +21,7 @@ internal static class FoliageBuilder
 
     public static void ReleaseShared()
     {
+        _impostors = null;
         _tuft = null;
         _tuftShader = null;
         _leaf = null;
@@ -61,11 +62,85 @@ internal static class FoliageBuilder
         return material;
     }
 
-    /// <summary>The weather's grass tint and wetness for the tufts (WorldBuilder.ApplyWeather).</summary>
+    /// <summary>The weather's grass tint and wetness for the tufts and the trees (WorldBuilder.ApplyWeather).</summary>
     public static void SetWeather(Color tint, float wetness)
     {
         _tuftShader?.SetShaderParameter("tint", tint);
         _tuftShader?.SetShaderParameter("wetness", wetness);
+        foreach (var impostor in _impostors ?? []) impostor.Material.SetShaderParameter("wetness", wetness);
+    }
+
+    /// <summary>The 1989 look: the trees as flat green silhouettes.</summary>
+    public static void SetRetro(bool retro)
+    {
+        foreach (var impostor in _impostors ?? []) impostor.Material.SetShaderParameter("retro", retro);
+    }
+
+    // ---- impostors (0.39) -----------------------------------------------------------------------------
+
+    /// <summary>
+    /// A photoscanned tree (Poly Haven, CC0) baked into an impostor: its colour and normals rendered from twelve bearings
+    /// (tools/bake-impostors.py, tools/pack-impostors.py into assets/foliage), drawn on a card that turns to the camera
+    /// (assets/shaders/impostor.gdshader). <see cref="Height"/> is the scanned tree's own, in metres.
+    /// </summary>
+    private sealed record Impostor(string Name, float FrameMetres, float Height, ShaderMaterial Material, QuadMesh Card);
+
+    /// <summary>The wood's mix (0.39): Jackson Hole's edges are mostly fir, with broadleaves by the water.</summary>
+    private static readonly (string Name, float Weight, float Height)[] WoodMix =
+    [
+        ("fir_a", 0.32f, 15f), ("fir_b", 0.28f, 13f), ("fir_c", 0.08f, 12f), ("jacaranda", 0.26f, 13f), ("tree_small_02", 0.06f, 10f),
+    ];
+
+    private static List<Impostor>? _impostors;
+
+    private static List<Impostor> Impostors => _impostors ??= LoadImpostors();
+
+    private static List<Impostor> LoadImpostors()
+    {
+        var list = new List<Impostor>();
+        if (WorldBuilder.ExportMode) return list;
+        var shader = GD.Load<Shader>("res://assets/shaders/impostor.gdshader");
+        foreach (var (name, _, _) in WoodMix)
+        {
+            var path = $"res://assets/foliage/{name}";
+            if (!ResourceLoader.Exists(path + "_albedo.png") || !ResourceLoader.Exists(path + "_normal.png") || !Godot.FileAccess.FileExists(path + ".json")) continue;
+            var meta = Json.ParseString(Godot.FileAccess.GetFileAsString(path + ".json")).AsGodotDictionary();
+            var frame = (float)meta["frame_metres"].AsDouble();
+            var material = new ShaderMaterial { Shader = shader };
+            material.SetShaderParameter("albedo_atlas", GD.Load<Texture2D>(path + "_albedo.png"));
+            material.SetShaderParameter("normal_atlas", GD.Load<Texture2D>(path + "_normal.png"));
+            material.SetShaderParameter("views", (float)meta["views"].AsInt32());
+            material.SetShaderParameter("columns", (float)meta["columns"].AsInt32());
+            material.SetShaderParameter("rows", (float)meta["rows"].AsInt32());
+            material.SetShaderParameter("frame_metres", frame);
+            material.SetShaderParameter("tree_fraction", (float)(meta["height"].AsDouble() / frame));
+            material.SetShaderParameter("retro", false);
+            // The card is a metre square the shader sizes and turns; its bounds must hold the tree seen from any side,
+            // or the culling would drop trees still in view.
+            var card = new QuadMesh { Size = Vector2.One, CustomAabb = new Aabb(new Vector3(-frame * 0.5f, 0f, -frame * 0.5f), new Vector3(frame, frame, frame)) };
+            list.Add(new Impostor(name, frame, (float)meta["height"].AsDouble(), material, card));
+        }
+        return list;
+    }
+
+    /// <summary>A roadside tree as an impostor of the scanned tree nearest its height, or null without the atlases.</summary>
+    private static Node3D? ImpostorTree(TrackProp prop, Random rng)
+    {
+        if (Impostors.Count == 0) return null;
+        var height = prop.Size.Y;
+        // The big broadleaf, now and then a fir (the slender scanned tree is too thin to stand alone by a road).
+        var choice = rng.Next(3) == 0 ? "fir_a" : "jacaranda";
+        var impostor = Impostors.Find(i => i.Name == choice) ?? Impostors[0];
+        var scale = height / impostor.Height;
+        var node = new Node3D { Name = $"Tree-{prop.Label}" };
+        node.AddChild(new MeshInstance3D
+        {
+            Mesh = impostor.Card,
+            MaterialOverride = impostor.Material,
+            Transform = new Transform3D(new Basis(Vector3.Up, (float)rng.NextDouble() * MathF.Tau).Scaled(new Vector3(scale, scale, scale)), Vector3.Zero),
+            Name = "Impostor",
+        });
+        return node;
     }
 
     private static StandardMaterial3D Leaf => _leaf ??= new StandardMaterial3D
@@ -243,6 +318,7 @@ internal static class FoliageBuilder
     /// <summary>A tree: tapered trunk and three branches in bark, a canopy of leaf-cluster cards in one mesh.</summary>
     public static Node3D BuildTree(TrackProp prop, Random rng)
     {
+        if (ImpostorTree(prop, rng) is { } scanned) return scanned;
         var node = new Node3D { Name = $"Tree-{prop.Label}" };
         var height = prop.Size.Y;
         var spread = prop.Size.X * 0.62f;
@@ -391,7 +467,8 @@ internal static class FoliageBuilder
             nearTrees[v] = new List<Transform3D>();
             farTrees[v] = new List<Transform3D>();
         }
-        const float spacing = 25f;
+        // 18 m between the scanned trees (0.39; 25 m for the card trees, whose crowns were wider than a fir's).
+        var spacing = Impostors.Count > 0 ? 18f : 25f;
         for (var z = minZ; z < maxZ; z += spacing)
         {
             for (var x = minX; x < maxX; x += spacing)
@@ -413,6 +490,12 @@ internal static class FoliageBuilder
             }
         }
 
+        if (Impostors.Count > 0)
+        {
+            WoodOfImpostors(root, nearTrees, farTrees);
+            GD.Print($"forest: {nearTrees.Sum(l => l.Count)} trees near the roads, {farTrees.Sum(l => l.Count)} beyond (scanned)");
+            return root;
+        }
         for (var v = 0; v < ForestVariants; v++)
         {
             var mesh = ForestTree(v, new Random(100 + v));
@@ -431,6 +514,54 @@ internal static class FoliageBuilder
         }
         GD.Print($"forest: {nearTrees.Sum(l => l.Count)} trees near the roads, {farTrees.Sum(l => l.Count)} beyond");
         return root;
+    }
+
+    /// <summary>
+    /// The wood drawn with the scanned trees (0.39): the card trees' places, each given a tree from <see cref="WoodMix"/> by
+    /// its weight and scaled to that tree's height there (a scanned tree's own height is its size in the scan), one
+    /// multimesh per tree and band; the near band throws shadows.
+    /// </summary>
+    private static void WoodOfImpostors(Node3D root, List<Transform3D>[] nearTrees, List<Transform3D>[] farTrees)
+    {
+        var rng = new Random(1990);
+        var total = WoodMix.Where(m => Impostors.Any(i => i.Name == m.Name)).Sum(m => m.Weight);
+        foreach (var (lists, near) in new[] { (nearTrees, true), (farTrees, false) })
+        {
+            var placed = Impostors.ToDictionary(i => i.Name, _ => new List<Transform3D>());
+            foreach (var transform in lists.SelectMany(l => l))
+            {
+                var pick = (float)rng.NextDouble() * total;
+                var chosen = Impostors[0];
+                var wanted = 12f;
+                foreach (var (name, weight, height) in WoodMix)
+                {
+                    if (Impostors.Find(i => i.Name == name) is not { } candidate) continue;
+                    chosen = candidate;
+                    wanted = height;
+                    pick -= weight;
+                    if (pick <= 0f) break;
+                }
+                // The card trees' own scatter of size (0.75 to 1.35) kept, about the scanned tree's height in the wood.
+                var spread = transform.Basis.Y.Length();
+                var scale = wanted / chosen.Height * spread;
+                var yaw = (float)rng.NextDouble() * MathF.Tau;
+                placed[chosen.Name].Add(new Transform3D(new Basis(Vector3.Up, yaw).Scaled(new Vector3(scale, scale, scale)), transform.Origin));
+            }
+            foreach (var impostor in Impostors)
+            {
+                var list = placed[impostor.Name];
+                if (list.Count == 0) continue;
+                var multi = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = impostor.Card, InstanceCount = list.Count };
+                for (var i = 0; i < list.Count; i++) multi.SetInstanceTransform(i, list[i]);
+                root.AddChild(new MultiMeshInstance3D
+                {
+                    Multimesh = multi,
+                    MaterialOverride = impostor.Material,
+                    Name = $"Wood-{(near ? "near" : "far")}-{impostor.Name}",
+                    CastShadow = near ? GeometryInstance3D.ShadowCastingSetting.On : GeometryInstance3D.ShadowCastingSetting.Off,
+                });
+            }
+        }
     }
 
     /// <summary>A tree of the wood: a tapered six-sided trunk and a canopy of leaf cards, as two surfaces (bark, leaves) of one mesh.</summary>
