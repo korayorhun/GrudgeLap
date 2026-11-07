@@ -2920,6 +2920,28 @@ a, b and c, 19, 14 and 14.5 m), a large broadleaf (`jacaranda_tree`, 19.5 m, gre
   The GPU time fell to 11.5 ms (12.4 with the card trees); the world takes 0.15 s longer to plant the wood.
 - **The 1989 look** draws the cards in a flat green; the export keeps the card trees for the Unreal version.
 
+### The structures' sound and the scanned grass (0.40.0)
+
+- **The echo under a deck** (`StructureAcoustics`): a car under a bridge is heard twice, the second time off the deck's
+  underside, with a short ring in the space between; until 0.40 the engine sounded the same there as in the open. The
+  engine's recordings and the tyres' bus now play on a bus of their own, `Car`, made before the tyres' bus (a bus sends
+  only to one before it) with a two-tap delay and a small reverb, both silent in the open. Every frame the decks (the
+  frames of the overpasses, ramps and loop, a few hundred after a quick reject) are looked through for one over the car
+  within its width and 1.5 m along it, 2.5 to 30 m up; the first tap's time is the way up to the underside (the slab
+  and the engine's height taken off) and back, the second twice that, their levels fall with the way as a reflection
+  spreads (2.5 / 2h: about -12 dB under a cutting's 5 m deck, -26 dB from the loop's top 25 m up), the reverb's wet the
+  same, and all of it rises and falls over a tenth of a second. The attract lap logs (`--pose-log`) the cutting's deck
+  4.9 m up with an 18 ms echo and the loop's top with 138 ms. None in the 1989 look or in the replay.
+- **The joints**: where a path's road passes onto a deck or off it, the expansion joint knocks under the front axle and
+  again a wheelbase later under the rear (the bump synthesiser's 48 Hz thump, stronger with speed).
+- **The audio dump** (`--audio-dump=<file.wav>`): an `AudioEffectRecord` at the end of the master bus from the first
+  frame, written at the quit: the sound checked by measurement on a machine that plays it silently.
+- **The grass clumps** (`tools/bake-grass.py`): the tufts' 4 x 2 atlas baked in Blender from Poly Haven's Grass Medium
+  01 and 02 (CC0), four to six clumps to a cell set in a row across the card's 1.2 m, turned and scaled at random so the
+  tallest blades stand 0.25 to 0.42 m, drawn from the side unlit with their alpha (the drawn blades of
+  `tools/make-foliage.py` until 0.40); the tuft shader takes the scans' own colours in dry weather (the tint over the dry
+  one otherwise). The verge's fringe on both sides and the band beyond it about twice as dense: 20 000 tufts.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

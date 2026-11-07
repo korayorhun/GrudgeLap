@@ -54,8 +54,9 @@ void fragment() {
 	vec2 p = instance_origin.xz;
 	float dry = smoothstep(0.50, 0.85, fbm(p * 0.008 + 7.7));
 	float lush = smoothstep(0.55, 0.85, fbm(p * 0.11 + 1.3));
-	// About the ground's own green (the blades' atlas is brighter and more saturated than the ground's photo).
-	vec3 c = t.rgb * COLOR.rgb * tint * vec3(1.25, 0.72, 1.4);
+	// The scanned clumps' own colours (0.40: the atlas is baked from Poly Haven's grass scans) in dry weather, the
+	// weather's tint relative to the dry one (WorldBuilder.DryGrass, linear) otherwise.
+	vec3 c = t.rgb * COLOR.rgb * tint / vec3(0.274, 0.393, 0.127);
 	c *= mix(vec3(1.0), vec3(1.25, 1.06, 0.58), dry * 0.8);
 	c *= mix(vec3(1.0), vec3(0.78, 0.92, 0.86), lush * 0.6);
 	// Darker at the root, where the blades shade each other (the atlas has two rows of cells, the root at a cell's foot).

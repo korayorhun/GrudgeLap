@@ -68,6 +68,8 @@ internal sealed partial class EngineAudio : Node
     private float _turboDt;
     private float[] _turboBlock = [];
     private float _thump, _thumpPhase;
+    private StructureAcoustics? _acoustics;
+    private GrudgeLap.Physics.Track.TrackGeometry? _acousticsTrack;
     private float _rainLp, _rainLp2;
     private float _lastLoad;
     private readonly float[] _lastCompression = new float[4];
@@ -287,6 +289,9 @@ internal sealed partial class EngineAudio : Node
         AddChild(player);
         player.Play();
         _playback = player.GetStreamPlayback() as AudioStreamGeneratorPlayback;
+        // The car's bus (0.40) before the engine's and the tyres' players: the tyres' bus sends to it, and a bus sends
+        // only to one made before it.
+        StructureAcoustics.EnsureBus();
         _sampled = new SampledEngine();
         AddChild(_sampled);
         _tyres = new TyreAudio();
@@ -411,6 +416,14 @@ internal sealed partial class EngineAudio : Node
     public void Update(RaceSession session, float dt)
     {
         var car = session.Car;
+        // The echo under a deck and the joints at its ends (0.40); none in 1989 mode, nor in the replay.
+        if (!ReferenceEquals(_acousticsTrack, session.Track))
+        {
+            _acoustics = new StructureAcoustics(session.Track);
+            _acousticsTrack = session.Track;
+        }
+        var joint = _acoustics!.Update(session, dt, silent: Retro || session.Phase == SessionPhase.Replay);
+        if (joint > 0f) _thump = MathF.Max(_thump, joint);
         var engine = car.Drivetrain.Engine;
         // The instant replay has no engine: the car stands wrecked while the crash is shown (the simulation holds
         // its last revs through the replay, which played on as a frozen note).

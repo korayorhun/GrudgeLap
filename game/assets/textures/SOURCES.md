@@ -22,7 +22,7 @@ verge's at 2K (0.36: they fill most of the screen).
 | `carpet_color.jpg`, `carpet_normal.jpg` | ambientCG **Carpet016** (1K-JPG) — the cabin floor (tinted dark) | https://ambientcg.com/view?id=Carpet016 | CC0 1.0 |
 | `fabric_color.jpg`, `fabric_normal.jpg` | ambientCG **Fabric030** (1K-JPG) — the roof lining | https://ambientcg.com/view?id=Fabric030 | CC0 1.0 |
 | `leaf_clusters.png` | composited by `tools/make-foliage.py` from the cutouts of ambientCG **LeafSet001** (1K-JPG colour sheet kept as `tools/leafset001.png`) | https://ambientcg.com/view?id=LeafSet001 | CC0 1.0 |
-| `grass_blades.png` | drawn by `tools/make-foliage.py` (no source material) | this repository | MIT |
+| `grass_blades.png` | baked by `tools/bake-grass.py` (0.40) from Poly Haven **Grass Medium 01** and **Grass Medium 02** (glTF, 1K): rows of the scanned clumps drawn from the side; until 0.40 drawn by `tools/make-foliage.py` | https://polyhaven.com/a/grass_medium_01, https://polyhaven.com/a/grass_medium_02 | CC0 1.0 |
 | `road_wear.png` | drawn by `tools/make-road-wear.py` (no source material): the road's wear sheet, tar snakes, patch seams and oil spots, multiplied into the asphalt over its second UV set | this repository | MIT |
 | `clouds.png` | drawn by `tools/make-clouds.py` (no source material): a tileable sheet of fair-weather cumulus, white with a grey underside on a transparent ground | this repository | MIT |
 | `sky.hdr` | Poly Haven **kloofendal_43d_clear_puresky** (2K HDR; the partly cloudy 48d sky of the same place was used before, its haze washed the plain out) | https://polyhaven.com/a/kloofendal_43d_clear_puresky | CC0 1.0 |

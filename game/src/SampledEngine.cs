@@ -40,6 +40,8 @@ internal sealed partial class SampledEngine : Node
         var player = new AudioStreamPlayer
         {
             Stream = new AudioStreamGenerator { MixRate = 44100, BufferLength = BufferSeconds },
+            // The car's bus (StructureAcoustics, 0.40): the echo under a bridge.
+            Bus = AudioServer.GetBusIndex(StructureAcoustics.BusName) >= 0 ? StructureAcoustics.BusName : "Master",
             Autoplay = true,
         };
         AddChild(player);

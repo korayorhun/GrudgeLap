@@ -128,6 +128,10 @@ public sealed partial class Bootstrap : Node3D
     /// <summary>--hold=path:from:to:speed (m/s; repeatable): the scripted driver holds a speed over a stretch of a path, for stunts taken wrong on purpose (0.34).</summary>
     private readonly List<(PathKind Path, float From, float To, float Speed)> _holds = [];
     private float _quitAfter = -1f;
+    // Automation (--audio-dump=<file.wav>, 0.40): the master bus recorded from the start and written at the quit, for
+    // checks of the sound by measurement (the echo under a bridge, a joint's knock) on a machine that plays it silently.
+    private string? _audioDump;
+    private AudioEffectRecord? _recorder;
     private float _elapsed;
     private bool _screenshotTaken;
     private TransmissionMode _attractMode = TransmissionMode.ManualAutoClutch;
@@ -397,7 +401,8 @@ public sealed partial class Bootstrap : Node3D
                 }
                 if (_screenshotAts.Count > 0) _screenshotAt = _screenshotAts[0];
             }
-            else if (arg == "--pose-log") _poseLog = true;
+            else if (arg == "--pose-log") { _poseLog = true; StructureAcoustics.Log = true; }
+            else if (arg.StartsWith("--audio-dump=", System.StringComparison.Ordinal)) _audioDump = arg["--audio-dump=".Length..];
             else if (arg.StartsWith("--ssao=", System.StringComparison.Ordinal)) WorldBuilder.SsaoOverride = arg["--ssao=".Length..] != "0";
             else if (arg.StartsWith("--ssr=", System.StringComparison.Ordinal)) WorldBuilder.SsrOverride = arg["--ssr=".Length..] != "0";
             else if (arg.StartsWith("--volfog=", System.StringComparison.Ordinal)) WorldBuilder.VolumetricFogOverride = arg["--volfog=".Length..] != "0";
@@ -763,6 +768,13 @@ public sealed partial class Bootstrap : Node3D
 
     public override void _Process(double delta)
     {
+        if (_audioDump is not null && _recorder is null)
+        {
+            // At the end of the master's chain, after the limiter the engine's sound puts there first.
+            _recorder = new AudioEffectRecord { Format = AudioStreamWav.FormatEnum.Format16Bits };
+            AudioServer.AddBusEffect(0, _recorder);
+            _recorder.SetRecordingActive(true);
+        }
         if (_leaving) return;
         if (_perfLog && !_firstFrameMarked)
         {
@@ -1003,6 +1015,12 @@ public sealed partial class Bootstrap : Node3D
     /// </summary>
     private void Shutdown()
     {
+        if (_recorder is not null && _audioDump is not null)
+        {
+            _recorder.SetRecordingActive(false);
+            var error = _recorder.GetRecording()?.SaveToWav(_audioDump);
+            GD.Print($"audio dump: {_audioDump} ({error})");
+        }
         WorldBuilder.ReleaseShared();
         SingleInstance.Release();
         System.GC.Collect();

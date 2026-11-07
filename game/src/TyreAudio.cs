@@ -48,6 +48,9 @@ internal sealed partial class TyreAudio : Node
             AudioServer.AddBus();
             AudioServer.SetBusName(AudioServer.BusCount - 1, BusName);
         }
+        // Into the car's bus (0.40) when it was made first: the tyres echo under a bridge with the engine.
+        var car = AudioServer.GetBusIndex(StructureAcoustics.BusName);
+        if (car >= 0 && car < AudioServer.GetBusIndex(BusName)) AudioServer.SetBusSend(AudioServer.GetBusIndex(BusName), StructureAcoustics.BusName);
         _road = Loop("road.wav");
         _squeal = Loop("squeal.wav");
         _howl = Loop("squeal_hard.wav");

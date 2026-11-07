@@ -225,13 +225,16 @@ internal static class FoliageBuilder
                 if (f.Surface != SurfaceType.Road) continue;
                 // Small tufts where the band of painted stones frays into the grass and just past it (0.36): the verge
                 // grows into the stones' outer edge instead of stopping at a ruled line.
-                if (rng.NextDouble() < 0.55)
+                // 0.40: the verge's fringe on both sides and twice as thick, and the band beyond it nearly twice as
+                // dense, now that the tufts are the scans' clumps rather than drawn blades (a sparse scatter of them
+                // read as dark specks on the plain).
+                foreach (var vergeSide in new[] { -1f, 1f })
                 {
-                    var vergeSide = rng.Next(2) == 0 ? -1f : 1f;
+                    if (rng.NextDouble() > 0.9) continue;
                     var vergeAt = f.Origin + f.Lateral * (vergeSide * (f.HalfWidth + 2.1f + (float)rng.NextDouble() * 2.4f));
                     Place(vergeAt.X, vergeAt.Z, 0.32f + 0.3f * (float)rng.NextDouble());
                 }
-                for (var k = 0; k < 5; k++)
+                for (var k = 0; k < 9; k++)
                 {
                     var side = rng.Next(2) == 0 ? -1f : 1f;
                     var lateral = f.HalfWidth + 4.5f + (float)rng.NextDouble() * 24f;
