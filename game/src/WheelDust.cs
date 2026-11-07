@@ -110,6 +110,8 @@ internal sealed partial class WheelDust : Node3D
             var smoke = live && w.InContact && w.Surface == SurfaceType.Road ? MathUtil.Clamp01((w.SlipIntensity - 0.55f) / 0.4f) * MathUtil.Clamp01(speed / 6f + 0.3f) : 0f;
             // On a wet road from 30 km/h, full at 120.
             var spray = live && w.InContact && w.Surface == SurfaceType.Road ? wet * MathUtil.Clamp01((speed - 8f) / 25f) : 0f;
+            // Through a puddle (0.56) the tyre throws up twice as much and more: the water it pushes aside (VehicleSim.Puddles).
+            spray *= 1f + 1.2f * MathUtil.Clamp01((w.WaterDepth - 1.5f) / 2.5f);
             Drive(_dust[i], at, dust);
             Drive(_smoke[i], at + Vector3.Up * 0.15f, smoke);
             Drive(_spray[i], at + Vector3.Up * 0.1f, spray * 0.45f);

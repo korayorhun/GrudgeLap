@@ -75,6 +75,7 @@ public sealed partial class Bootstrap : Node3D
     private bool _firstFrameMarked;
     private bool _holdBrake;          // automation: the brake held down all the time, for pictures of the brake lamps (--hold-brake)
     private bool _openMenu;           // automation: the pause menu opened a second in, for pictures of it (--menu, 0.55)
+    private bool _noPuddles;          // automation: no standing water under the tyres, for comparisons (--puddles=0, 0.56)
     private bool _dentTest;           // automation: a deep dent in the car's nose two seconds in, for pictures of it (--dent-test)
     private double _perfGpu, _perfCpu, _perfSince;
     private int _perfFrames;
@@ -483,6 +484,7 @@ public sealed partial class Bootstrap : Node3D
             else if (arg == "--dent-test") _dentTest = true;
             else if (arg == "--hold-brake") _holdBrake = true;
             else if (arg == "--menu") _openMenu = true;
+            else if (arg == "--puddles=0") _noPuddles = true;
             else if (arg.StartsWith("--ram-speed=", System.StringComparison.Ordinal)) float.TryParse(arg["--ram-speed=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _ramSpeed);
         }
     }
@@ -527,6 +529,8 @@ public sealed partial class Bootstrap : Node3D
         options = options with { Weather = _weather ?? (_weatherChoice == 4 ? WeatherModel.Draw(System.Random.Shared) : (Weather)_weatherChoice) };
         var spec = VehicleSpec.Catalogue[_carIndex];
         _session = new RaceSession(_track, spec, options);
+        // The puddles the view draws are where the tyres meet standing water (0.56).
+        if (!_noPuddles) _session.Car.Puddles = WorldBuilder.PuddleMap;
         // The road's rubber and the wheels' dust (0.42): a new session's road is clean.
         if (_skidMarks is null)
         {
@@ -1165,6 +1169,10 @@ public sealed partial class Bootstrap : Node3D
         var p = car.Position;
         var hit = car.BodyHit;
         var line = $"pose: t={_elapsed.ToString("0.0", c)} phase={_session.Phase} path={car.Cursor.Path.Kind} d={car.Cursor.Distance.ToString("0", c)} x={p.X.ToString("0.0", c)} y={p.Y.ToString("0.00", c)} z={p.Z.ToString("0.0", c)} v={(car.Speed * 3.6f).ToString("0", c)}km/h h={hit.Height.ToString("0.00", c)} {hit.Surface} air={(car.Airborne ? 1 : 0)} dmg={_session.Damage.ToString("0.00", c)} guard={car.GroundGuardLifts}";
+        // How far the tyres float on standing water (0.56), the most of the four.
+        var floating = 0f;
+        foreach (var w in car.Wheels) floating = MathF.Max(floating, w.Aquaplaning);
+        if (floating > 0.01f) line += $" aqua={floating.ToString("0.00", c)}";
         if (notable) line += $" events={string.Join("+", events)}";
         if (events.Contains(RaceEvent.Crashed)) line += $" crash={_session.LastCrash}";
         if (events.Contains(RaceEvent.Knocked)) line += $" knock={_session.LastKnock.Kind}@{(_session.LastKnock.Speed * 3.6f).ToString("0", c)}km/h";

@@ -204,11 +204,24 @@ void fragment() {
 		float halo = pow(facing, 24.0) * 0.5 + pow(facing, 5.0) * 0.12;
 		float dust = 0.55 + 0.45 * vnoise(g * 23.0) * vnoise(g * 61.0 + 4.0);
 		float arcs = 0.0;
+		// The scratches the blades leave (0.56): one every 1/90 of the view's height (some 12 px at 1080p), each of its
+		// own depth (most faint, a few deep), a pixel or two wide whatever the resolution, and only where a blade sweeps.
+		// Until 0.56 a line every 3 px aliased into loops like a map's contours over the glass, the side window's too.
 		for (int k = 0; k < 2; k++) {
 			vec2 pivot = k == 0 ? PIVOT_DRIVER : PIVOT_PASSENGER;
-			float r = length(g - pivot);
-			float ring = fract(r * 340.0 + vnoise(g * 9.0) * 3.0);
-			arcs += smoothstep(0.92, 1.0, ring) * step(BLADE_FROM, r) * step(r, k == 0 ? BLADE_TO_DRIVER : BLADE_TO_PASSENGER) * vnoise(g * 30.0 + float(k) * 11.0);
+			vec2 d = g - pivot;
+			float r = length(d);
+			float a = atan(d.y, d.x);
+			if (r < BLADE_FROM || r > (k == 0 ? BLADE_TO_DRIVER : BLADE_TO_PASSENGER) || a < PARKED || a > RAISED) {
+				continue;
+			}
+			float x = r * 90.0 + vnoise(g * 6.0) * 0.6;
+			float depth = hash12(vec2(floor(x), float(k) * 7.0 + 3.0));
+			// A pixel is 90 / height of x (r is in view heights): no derivatives, which this branch on the sun's place may not take.
+			float line = smoothstep(max(108.0 / VIEWPORT_SIZE.y, 0.02), 0.0, abs(fract(x) - 0.5));
+			// Faded over the sweep's last few degrees, as the blade's rest and its turn leave the glass less worn.
+			float edge = smoothstep(PARKED, PARKED + 0.1, a) * smoothstep(RAISED, RAISED - 0.1, a);
+			arcs += line * depth * depth * depth * 0.8 * edge;
 		}
 		colour += sun_colour * glare * halo * (dust + 1.6 * arcs);
 		}

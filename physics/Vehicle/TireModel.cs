@@ -65,6 +65,32 @@ public static class TireModel
         _ => 0f,
     };
 
+    /// <summary>
+    /// NASA's speed for a tyre's dynamic aquaplaning (Horne): 6.36 sqrt(p) km/h for an inflation of p kPa; at a road car's
+    /// 230 kPa, 96 km/h.
+    /// </summary>
+    public const float AquaplaningSpeed = 26.8f;
+
+    /// <summary>
+    /// How far a tyre floats on standing water, 0 to 1 (0.56): where the water stands deeper than the tread drains (from
+    /// a millimetre and a half, wholly at 4 mm) the wedge it drives ahead of the patch lifts the patch from 70 % of
+    /// <see cref="AquaplaningSpeed"/>, all of it by 115 %. A shallower film is the wet road's lower grip alone
+    /// (<see cref="WeatherModel.Grip"/>).
+    /// </summary>
+    public static float Aquaplaning(float speed, float waterMm)
+    {
+        var deep = MathUtil.Clamp01((waterMm - 1.5f) / 2.5f);
+        return deep <= 0f ? 0f : deep * MathUtil.SmoothStep((MathF.Abs(speed) - 0.7f * AquaplaningSpeed) / (0.45f * AquaplaningSpeed));
+    }
+
+    /// <summary>
+    /// The water a rolling tyre pushes aside (0.56), N: half the water's density times the tread's width by the depth
+    /// times the speed squared, a drag coefficient of 0.6; a floating tyre rides over half of it. A puddle under one
+    /// side's tyres pulls the car towards it, as at speed on a wet motorway.
+    /// </summary>
+    public static float WaterDrag(float speed, float waterMm, float aquaplaning, in TireSize tire) =>
+        0.5f * 1000f * tire.WidthMm * 0.001f * waterMm * 0.001f * speed * speed * 0.6f * (1f - 0.5f * aquaplaning);
+
     /// <summary>The 1980s sports car's 225/50 R16: the tyre of a caller that does not name one.</summary>
     public static readonly TireSize DefaultTire = new(225f, 50f, 16f);
 

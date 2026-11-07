@@ -24,7 +24,8 @@ public readonly record struct TyreContact(
     float SlideLateral,
     float GroundSpeed,
     float LoadShare,
-    float BrakePressure)
+    float BrakePressure,
+    float WaterMm = 0f)
 {
     /// <summary>
     /// A wheel from the simulation's own figures: the slip ratio gives the patch's sliding speed along the wheel (with
@@ -37,13 +38,13 @@ public readonly record struct TyreContact(
     /// tangent of the slip angle collapsed as a slide neared broadside (the speed along falls to nothing and the
     /// simulation fades the angle), so a tyre sliding at 85 degrees went quiet (0.19 review).
     /// </remarks>
-    public static TyreContact Of(TyreGround ground, float slipToPeak, float slipRatio, float lateralSpeed, float longitudinalSpeed, float loadShare, float brakePressure)
+    public static TyreContact Of(TyreGround ground, float slipToPeak, float slipRatio, float lateralSpeed, float longitudinalSpeed, float loadShare, float brakePressure, float waterMm = 0f)
     {
         var alongSpeed = MathF.Abs(longitudinalSpeed);
         var along = MathF.Abs(slipRatio) * MathF.Max(alongSpeed, 1.2f);
         var across = MathF.Abs(lateralSpeed);
         var travel = MathF.Sqrt(alongSpeed * alongSpeed + across * across);
-        return new TyreContact(ground, slipToPeak, along, across, travel, loadShare, brakePressure);
+        return new TyreContact(ground, slipToPeak, along, across, travel, loadShare, brakePressure, waterMm);
     }
 
     /// <summary>Speed of the rubber sliding over the road, m/s.</summary>
@@ -113,7 +114,7 @@ public sealed class TyreMix
     {
         wetness = Math.Clamp(wetness, 0f, 1f);
         float squeal = 0f, howl = 0f, scrub = 0f, squealSlip = 0f, howlSlide = 0f, scrubSlide = 0f;
-        float asphalt = 0f, loose = 0f, looseSpin = 0f, absDeficit = 0f, speed = 0f;
+        float asphalt = 0f, loose = 0f, looseSpin = 0f, absDeficit = 0f, speed = 0f, puddles = 0f;
         var count = Math.Max(wheels.Length, 1);
         foreach (var w in wheels)
         {
@@ -126,6 +127,7 @@ public sealed class TyreMix
                 continue;
             }
             asphalt += 1f;
+            puddles += Math.Clamp((w.WaterMm - 1.5f) / 2.5f, 0f, 1f);
             absDeficit = MathF.Max(absDeficit, 1f - w.BrakePressure);
             var load = MathF.Sqrt(Math.Clamp(w.LoadShare, 0f, 2.5f));
             var x = w.SlipToPeak;
@@ -175,7 +177,8 @@ public sealed class TyreMix
         // Past 216 km/h the roar grows no more, as the wind does not (BodyNoise): together they would bury the engine.
         var pace = MathF.Min(speed / RollReferenceSpeed, 2f);
         Follow(ref _roll, RollGain * MathF.Pow(pace, 1.5f) * asphalt / count, dt, 4f, 4f);
-        Follow(ref _spray, wetness * MathF.Min(MathF.Pow(pace, 1.5f), 2f) * asphalt / count * SmoothStep((speed - 1f) / 4f), dt, 4f, 4f);
+        // Through standing water (0.56) the hiss swells: the water each tyre pushes aside, from a puddle of 1.5 mm to one of 4.
+        Follow(ref _spray, wetness * MathF.Min(MathF.Pow(pace, 1.5f), 2f) * asphalt / count * SmoothStep((speed - 1f) / 4f) * (1f + 1.5f * puddles / count), dt, 4f, 4f);
 
         // Pitches: the squeal climbs as the slip deepens, the howl and the scrub with the speed of the sliding rubber.
         // Kept from the last frame that had the sound, so a fading loop does not slide in pitch as it dies.

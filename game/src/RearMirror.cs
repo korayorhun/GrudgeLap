@@ -58,7 +58,7 @@ internal sealed partial class RearMirror : Node3D
             RenderTargetUpdateMode = SubViewport.UpdateMode.Once,
         };
         AddChild(_viewport);
-        _camera = new Camera3D { Fov = 26f, Near = 2.7f, Far = 65000f, Current = true, Environment = WorldBuilder.MirrorEnvironment() };
+        _camera = new Camera3D { Fov = 26f, Near = 2.7f, Far = 65000f, Current = true, Environment = WorldBuilder.MirrorEnvironment(), CullMask = 0xFFFFFu & ~Windscreen.Layer };
         _viewport.AddChild(_camera);
 
         // A mirror shows the scene left-right reversed: the glass samples the camera picture with u flipped.

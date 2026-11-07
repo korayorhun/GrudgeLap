@@ -101,7 +101,8 @@ internal static class WorldBuilder
     private static NoiseTexture3D? _shapeNoise;
     private static NoiseTexture3D? _detailNoise;
     private static NoiseTexture2D? _weatherNoise;
-    private static NoiseTexture2D? _puddles;
+    private static Texture2D? _puddles;
+    private static PuddleMap? _puddleMap;
     private static readonly Color DryAsphalt = new(0.52f, 0.52f, 0.53f);
     private static readonly Color WetAsphalt = new(0.15f, 0.15f, 0.16f);
     private static readonly Color DryGrass = new(0.56f, 0.66f, 0.39f);
@@ -155,6 +156,7 @@ internal static class WorldBuilder
         _detailNoise = null;
         _weatherNoise = null;
         _puddles = null;
+        _puddleMap = null;
         _grass = null;
         _groundShader = null;
         _shoulderShader = null;
@@ -340,7 +342,8 @@ internal static class WorldBuilder
             Name = "CarReflections",
             UpdateMode = ReflectionProbe.UpdateModeEnum.Once,
             Size = new Vector3(90f, 50f, 90f),
-            CullMask = 0xFFFFFu & ~2u,
+            // Nor the windscreen's quad (Windscreen.Layer, 0.56), which would cover each face of the capture.
+            CullMask = 0xFFFFFu & ~2u & ~Windscreen.Layer,
             // The probe lights the player's car alone (its meshes are on layer 2, CarView.MarkPlayer), 0.36. Until then it
             // lit everything in its 90 m box: the road within 45 m of the car reflected the probe's dark capture of the
             // ground and the trees, the road beyond it the bright sky, so the far road was pale and darkened as the box
@@ -529,7 +532,50 @@ internal static class WorldBuilder
     /// The wet road's roughness map: a steep noise that leaves most of the asphalt at the material's roughness and
     /// drops the puddles (a fifth of the surface, with soft rims) to a mirror, mapped on the road's 5.5 m tile.
     /// </summary>
-    private static NoiseTexture2D Puddles => _puddles ??= Noise(0.9f, 2, new[] { (0f, new Color(0.12f, 0.12f, 0.12f)), (0.30f, new Color(0.12f, 0.12f, 0.12f)), (0.48f, new Color(0.75f, 0.75f, 0.75f)), (1f, new Color(1f, 1f, 1f)) }, seed: 101);
+    private static Texture2D Puddles => _puddles ??= MakePuddles();
+
+    /// <summary>The road's standing water for the simulation (0.56, VehicleSim.Puddles): the tile the asphalt's puddles are drawn from.</summary>
+    public static PuddleMap PuddleMap
+    {
+        get
+        {
+            _ = Puddles;
+            return _puddleMap!;
+        }
+    }
+
+    /// <summary>
+    /// The puddles' tile (0.56): the noise 0.12's NoiseTexture2D made (simplex, two octaves, 512 square, seamless), made
+    /// here at once so that the simulation takes the same tile: for the view the roughness ramp (0.12 in a puddle, 0.75 at
+    /// its rim, 1 where the road drains), for the tyres the depth, the water standing in the puddles' cores: none where
+    /// the noise is over 0.36, deepest under 0.20, so that a fifth of the asphalt holds enough to float a tyre at speed
+    /// and a tenth all of it (the mirror-flat cores are 15 %; with the whole rim counted, two fifths floated).
+    /// </summary>
+    private static Texture2D MakePuddles()
+    {
+        const int size = 512;
+        var noise = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth, Frequency = 0.009f, FractalOctaves = 2, Seed = 101 };
+        var grey = noise.GetSeamlessImage(size, size, false, false, 0.1f, true);
+        if (grey.GetFormat() != Image.Format.L8) grey.Convert(Image.Format.L8);
+        var values = grey.GetData();
+        var rgba = new byte[size * size * 4];
+        var depth = new float[size * size];
+        for (var i = 0; i < size * size; i++)
+        {
+            var n = values[i] / 255f;
+            var roughness = n <= 0.30f ? 0.12f : n <= 0.48f ? Mathf.Lerp(0.12f, 0.75f, (n - 0.30f) / 0.18f) : Mathf.Lerp(0.75f, 1f, (n - 0.48f) / 0.52f);
+            var b = (byte)Mathf.RoundToInt(roughness * 255f);
+            rgba[4 * i] = b;
+            rgba[4 * i + 1] = b;
+            rgba[4 * i + 2] = b;
+            rgba[4 * i + 3] = 255;
+            depth[i] = Mathf.Clamp((0.36f - n) / 0.16f, 0f, 1f);
+        }
+        var image = Image.CreateFromData(size, size, false, Image.Format.Rgba8, rgba);
+        image.GenerateMipmaps();
+        _puddleMap = new PuddleMap(depth, size);
+        return ImageTexture.CreateFromImage(image);
+    }
 
     /// <summary>
     /// The 1989 look: no textures, nearest filtering, no global illumination, ambient occlusion, reflections,

@@ -3281,6 +3281,35 @@ Every credit ran under one sun, 43 degrees up, the light of a summer's late morn
   wet road's mist trails from each wheel instead of showing as soft blocks over a dark road.
 - **Cost**: 12.0 ms a frame at sunrise against 11.6 by day (the longer shadows; an attract lap at 1080p).
 
+### Aquaplaning (0.56.0)
+
+The puddles were the view's alone: a mirror-flat patch on the asphalt, under the tyres the same wet road as everywhere.
+
+- **The water** (`PuddleMap`, `WorldBuilder.MakePuddles`): the puddles' tile is made at once from the noise 0.12's
+  NoiseTexture2D made (simplex, two octaves, 512 square, seamless), giving the view its roughness ramp as before (the
+  picture is the same) and the simulation a depth: the water standing in the puddles' cores, none where the noise is
+  over 0.36 and deepest under 0.20 (the mirror-flat cores are 15 % of the asphalt; with their rims counted two fifths of
+  the road floated a tyre and some wheel was half afloat 41 % of a rainy lap). Laid as the asphalt lays it, two tiles
+  across the road and one every 5.56 m along, from each wheel's place on the road (`SurfaceHit.Lateral`, the frame's
+  distance). `WeatherModel.WaterDepth`: in the rain a 0.5 mm film and 5 mm in a puddle, once it has stopped 0.2 and 2.8.
+- **The tyre** (`TireModel.Aquaplaning`, `TireModel.WaterDrag`): NASA's dynamic aquaplaning speed (Horne, 6.36 sqrt(p)
+  km/h: 96 km/h at 230 kPa); where the water stands deeper than the tread drains (from 1.5 mm, wholly at 4) the patch
+  lifts from 70 % of that speed and floats by 115 %, keeping 15 % of its grip; a film shallower is the wet grip alone.
+  The water it pushes aside drags it, half the water's density times the tread's width by the depth times the speed
+  squared (Cd 0.6, half of it once afloat): a puddle under one side pulls the car towards it, and a flooded road slows a
+  coasting car. Without a map (the tests' default) a wet road has no standing water.
+- **Measured** (`AquaplaningTests`, the hatchback in the rain on a road flooded from edge to edge): a stop from 120 km/h
+  takes 168 m against 78, from 90 47 against 45, from 50 the same; three seconds' coasting from 100 km/h loses 4 km/h
+  more. The scripted driver's rainy lap: no crash, 84.5 km/h on average against 85.3 without the puddles.
+- **Heard and seen**: the spray grows to more than twice through a puddle (`WheelDust`), and the tyres' hiss half again
+  as loud for each tyre in one (`TyreContact.WaterMm`, `TyreMix`).
+- **The windscreen** (`windscreen.gdshader`, `Windscreen.Layer`): the wipers' arcs, a line every 3 px since 0.46, aliased
+  into loops like a map's contours over the glass against a low sun; now one every 12 px, each of its own depth (most
+  faint), a pixel or two wide at any resolution and only in the blades' sweep, faded over its last tenth of a radian.
+  The glass's quad covers the view of whichever camera draws it, so the rear-view mirror showed the drops, the blades
+  and the arcs: it is on a layer of its own, which the mirror's camera and the car's probe leave out.
+- `--puddles=0` leaves the water out for comparisons; the pose log prints `aqua=` when a tyre floats.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

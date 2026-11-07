@@ -39,6 +39,18 @@ public static class WeatherModel
         _ => 0f,
     };
 
+    /// <summary>
+    /// The water standing on the road under this weather, mm (0.56), where the puddle map (<see cref="PuddleMap"/>) says
+    /// <paramref name="puddle"/>, 0 where the road drains to 1 at a puddle's deepest: a film over all of it in the rain
+    /// and 5 mm in its puddles, a thinner film and under 3 mm once it has stopped, none on a dry road.
+    /// </summary>
+    public static float WaterDepth(Weather weather, float puddle) => weather switch
+    {
+        Weather.Rain => 0.5f + 4.5f * puddle,
+        Weather.Wet => 0.2f + 2.6f * puddle,
+        _ => 0f,
+    };
+
     /// <summary>Whether it is raining: rain in the air and on the glass, the rain's sound.</summary>
     public static bool Raining(Weather weather) => weather == Weather.Rain;
 

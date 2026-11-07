@@ -131,6 +131,12 @@ public sealed class VehicleSim
     public Weather Weather { get; set; } = Weather.Dry;
 
     /// <summary>
+    /// Where water stands on the road (0.56): the view's puddle tile, so the tyres meet the puddles the driver sees. Null
+    /// (the tests' default) leaves a wet road without standing water: its lower grip alone.
+    /// </summary>
+    public PuddleMap? Puddles { get; set; }
+
+    /// <summary>
     /// Road-wheel lock (radians) available at a given speed. The lock shrinks with speed, which is the
     /// keyboard-friendly stand-in for the fine inputs a three-turn wheel allows at high speed.
     /// </summary>
@@ -335,6 +341,8 @@ public sealed class VehicleSim
             w.InContact = false;
             w.Surface = SurfaceType.None;
             w.Load = 0f;
+            w.WaterDepth = 0f;
+            w.Aquaplaning = 0f;
             if (!c.Hit.HasSurface) continue;
             var facing = Vector3.Dot(c.Hit.SurfaceNormal, rayDir);
             if (facing >= -0.2f) continue;
@@ -466,6 +474,13 @@ public sealed class VehicleSim
             var relax = MathUtil.Clamp01(dt * MathF.Max(MathF.Abs(vLong), 1.5f) / LateralRelaxationLength);
             w.SlipAngle += (TireModel.SlipAngle(vLat, vLong) - w.SlipAngle) * relax;
             w.Friction = TireModel.FrictionFor(hit.Surface) * _spec.TireGrip * WeatherModel.Grip(Weather, hit.Surface);
+            // Standing water (0.56): the puddle under the patch, as deep as the weather leaves it; at speed the tyre rides up
+            // on it and its grip goes (TireModel.Aquaplaning), and it pushes the water aside (the drag below).
+            w.WaterDepth = Puddles is { } puddles && hit.Surface == SurfaceType.Road
+                ? WeatherModel.WaterDepth(Weather, puddles.At(hit.Lateral, hit.Frame.HalfWidth, hit.Frame.Distance))
+                : 0f;
+            w.Aquaplaning = TireModel.Aquaplaning(vLong, w.WaterDepth);
+            w.Friction *= 1f - 0.85f * w.Aquaplaning;
             w.GroundSpeed = vLong;
             w.LateralSpeed = vLat;
             var tire = w.IsFront ? _spec.FrontTire : _spec.RearTire;
@@ -489,6 +504,7 @@ public sealed class VehicleSim
             // 0.16 with the grass grip raised from 0.55, players found the car hard to bring back) acts on the
             // body only. Feeding it back into the wheel spin would just make the wheel wind up to cancel it.
             var rolling = (hit.Surface == SurfaceType.Grass ? 0.11f : _spec.RollingResistance) * fs;
+            if (w.WaterDepth > 0f) rolling += TireModel.WaterDrag(vLong, w.WaterDepth, w.Aquaplaning, tire);
             var drag = MathF.Sign(vLong) * MathF.Min(rolling, MathF.Abs(vLong) * 400f);
 
             var tireForce = fwd * (fx - drag) + side * fy;
@@ -1232,6 +1248,10 @@ public sealed class WheelState
     public float BrakePressure = 1f;
     /// <summary>The brake disc's temperature, °C (0.49, <see cref="BrakeThermal"/>): heated by the braking, cooled by the air.</summary>
     public float BrakeTemperature = BrakeThermal.Ambient;
+    /// <summary>Water standing under the tyre, mm (0.56, <see cref="VehicleSim.Puddles"/>).</summary>
+    public float WaterDepth;
+    /// <summary>How far the tyre floats on that water, 0 to 1 (<see cref="TireModel.Aquaplaning"/>).</summary>
+    public float Aquaplaning;
     /// <summary>Brake torque (N m) the electronic differential holds this wheel with, besides the driver's brake; zero on a car without one.</summary>
     public float DifferentialBrake;
     /// <summary>Growth of the tyre's drag torque on the wheel with the wheel's speed this step, N m s/rad (never negative).</summary>
@@ -1258,6 +1278,8 @@ public sealed class WheelState
         LateralSpeed = 0f;
         BrakePressure = 1f;
         BrakeTemperature = BrakeThermal.Ambient;
+        WaterDepth = 0f;
+        Aquaplaning = 0f;
         DifferentialBrake = 0f;
         SpinStiffness = 0f;
         SteerAngle = 0f;

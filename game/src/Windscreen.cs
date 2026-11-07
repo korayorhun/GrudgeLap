@@ -31,6 +31,12 @@ internal sealed partial class Windscreen : MeshInstance3D
     /// </summary>
     public (bool On, float Clock, float Period) Wipers => (Visible && _wiping, _wiperClock, _wiperPeriod);
 
+    /// <summary>
+    /// The glass's own render layer (0.56): the quad covers the view of whatever camera draws it, so the rear-view mirror's
+    /// camera and the car's reflection probe leave this layer out; the mirror showed the drops, the blades and the arcs.
+    /// </summary>
+    public const uint Layer = 1u << 10;
+
     /// <summary>Automation (--windscreen=0): no glass drawn before the driver, for comparisons.</summary>
     public static bool Enabled { get; set; } = true;
 
@@ -46,6 +52,7 @@ internal sealed partial class Windscreen : MeshInstance3D
         Mesh = new QuadMesh { Size = Vector2.One };
         MaterialOverride = _material;
         CastShadow = ShadowCastingSetting.Off;
+        Layers = Layer;
         // The shader puts the quad over the whole view; its bounds must never let the culling drop it.
         CustomAabb = new Aabb(new Vector3(-1e4f, -1e4f, -1e4f), new Vector3(2e4f, 2e4f, 2e4f));
         Position = new Vector3(0f, 0f, -0.5f);
