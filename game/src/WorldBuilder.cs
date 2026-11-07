@@ -1771,6 +1771,12 @@ internal static class WorldBuilder
     /// <summary>The plain's colour seen from afar (the terrain shader's lawn under its tint), which the real land takes by the terrain's edge.</summary>
     private static readonly Color PlainFar = new(0.22f, 0.29f, 0.08f);
 
+    /// <summary>Automation (--motion-blur=0): the camera without its motion blur, for comparisons.</summary>
+    public static bool? MotionBlurOverride { get; set; }
+
+    /// <summary>The camera's motion blur (MotionBlur, 0.38): on at medium and high quality, off in the 1989 look.</summary>
+    public static bool CameraBlur => (MotionBlurOverride ?? true) && !_retro && _quality >= GraphicsQuality.Medium;
+
     /// <summary>Automation (--land=0): the old far ground and mountains instead of the real land, for comparisons.</summary>
     public static bool? LandOverride { get; set; }
 

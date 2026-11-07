@@ -2875,6 +2875,22 @@ of noise with vertex colours that under the haze read as a bank of cloud. 0.37 p
 - **The 1989 look** keeps the old far ground and ring (`ShowLand`); the export (`--export-world`) carries the land
   with its colour on a standard material and leaves the hidden ring behind.
 
+### The camera's motion blur and the road's patches (0.38.0)
+
+- **Motion blur** (`MotionBlur`, `assets/shaders/motion_blur.glsl`): a compositor effect on the main camera, after the
+  transparent pass, in linear light before glow and tone mapping. Each pixel is smeared along Godot's motion vectors
+  scaled by a fixed exposure over the frame's time (1/100 s: a camera's shutter on a bright day), so the smear is the
+  same at 30 and 90 frames a second, held to 3.5 % of the width, with 12 jittered samples; a sample counts only as far
+  as it moves at least as fast as the pixel, so the cabin, the mirror and the car the chase camera follows stay sharp
+  and do not bleed into the world behind them. The colour is blurred into a copy and written back. A colour resolved
+  from MSAA has neither storage nor copy-to usage, so multisampling is off while the blur is on
+  (`Bootstrap.ApplyGraphics`): TAA smooths the edges on its own, and the GPU time fell from 14.6 to 12.4 ms. On at
+  medium and high quality, off in the 1989 look and with `--motion-blur=0`. The sky gets no motion vectors and does
+  not smear as the camera turns.
+- **The road's patches** (`tools/make-road-wear.py`): cut and filled as road crews do, rectangles square to the road
+  with straight edges and a thin sealed joint, most darker (newer asphalt), a few lighter (old ones gone grey), a lane
+  wide, over a wheel track or a trench across the road. 0.36's rounded, jittered patches read as dark puddles of oil.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

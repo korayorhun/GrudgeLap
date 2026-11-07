@@ -406,6 +406,7 @@ public sealed partial class Bootstrap : Node3D
             else if (arg == "--probe-all") WorldBuilder.ProbeAffectsAll = true;
             else if (arg.StartsWith("--sdfgi=", System.StringComparison.Ordinal)) WorldBuilder.SdfgiOverride = arg["--sdfgi=".Length..] != "0";
             else if (arg.StartsWith("--land=", System.StringComparison.Ordinal)) WorldBuilder.LandOverride = arg["--land=".Length..] != "0";
+            else if (arg.StartsWith("--motion-blur=", System.StringComparison.Ordinal)) WorldBuilder.MotionBlurOverride = arg["--motion-blur=".Length..] != "0";
             else if (arg.StartsWith("--fsr2=", System.StringComparison.Ordinal)) float.TryParse(arg["--fsr2=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _fsr2Scale);
             else if (arg.StartsWith("--shake=", System.StringComparison.Ordinal)) _shake = arg["--shake=".Length..] != "0";
             else if (arg.StartsWith("--sun-shadow=", System.StringComparison.Ordinal)) WorldBuilder.SunShadowOverride = arg["--sun-shadow=".Length..] != "0";
@@ -1930,7 +1931,10 @@ public sealed partial class Bootstrap : Node3D
         var ceiling = height > 1200f ? 1080f / height : 1f;
         viewport.Scaling3DMode = ceiling < 1f ? Viewport.Scaling3DModeEnum.Fsr : Viewport.Scaling3DModeEnum.Bilinear;
         viewport.Scaling3DScale = (low ? 0.75f : 1f) * ceiling;
-        viewport.Msaa3D = low ? Viewport.Msaa.Disabled : Viewport.Msaa.Msaa2X;
+        // No multisampling under the motion blur (0.38): the effect cannot write a colour resolved from MSAA, and TAA
+        // smooths the edges as well on its own.
+        var blur = !low && WorldBuilder.MotionBlurOverride != false;
+        viewport.Msaa3D = low || blur ? Viewport.Msaa.Disabled : Viewport.Msaa.Msaa2X;
         viewport.ScreenSpaceAA = low ? Viewport.ScreenSpaceAAEnum.Fxaa : Viewport.ScreenSpaceAAEnum.Disabled;
         viewport.UseTaa = !low;
         if (_fsr2Scale > 0f)

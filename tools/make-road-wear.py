@@ -2,8 +2,8 @@
 its second UV set, 11 m across the road by 160 m along it (40 m until 0.13; four times as long now, so that the
 same tar snake does not come round every forty metres). Mostly white, with the marks of a road that has been
 used: tar snakes (sealed cracks, meandering along the road), repair patches, oil darkening the wheel tracks and a
-slow blotching of the tone. Since 0.36 the patches are filled (a newer, darker asphalt with a ragged sealed seam:
-until then they were rectangles outlined in a thin dark line, pencil marks on the road), the blotches and the
+slow blotching of the tone. Since 0.36 the patches are filled (until then they were rectangles outlined in a thin
+dark line, pencil marks on the road); since 0.38 they are square-cut again (0.36's ragged ones read as oil), the blotches and the
 wheel tracks are broad enough to be seen a hundred metres off, so the far road is not a flat grey that turns into a
 drawing as it comes near, and the tar snakes are a shade lighter. Deterministic; no source material.
 Usage: python make-road-wear.py [out.png]
@@ -59,35 +59,42 @@ for _ in range(36):
             draw.line((x0, y0, x1, y1), fill=tone, width=width)
         x, y = nx % W, ny % H
 
-# Repair patches: a newer, darker asphalt in a ragged outline (its corners rounded by the roller, its edges
-# wandering a little), sealed with a soft tar seam; some a lane wide, some a trench across the road.
-patches = Image.new("L", (W, H), 0)
+# Repair patches (0.38): cut and filled as road crews do, rectangles square to the road with straight saw-cut edges and
+# a thin sealed joint, most of them darker (newer asphalt), a few lighter (old patches gone grey); a lane wide or over
+# a wheel track, now and then a trench across the road. The 0.36 patches were rounded and jittered: from the car they
+# read as dark puddles of oil on the road.
+patches = Image.new("L", (W, H), 128)
 seams = Image.new("L", (W, H), 0)
 pd = ImageDraw.Draw(patches)
 sd2 = ImageDraw.Draw(seams)
-for _ in range(22):
-    across = rng.random() < 0.25
-    w = rng.randrange(380, 760) if across else rng.randrange(90, 260)
-    h = rng.randrange(40, 110) if across else rng.randrange(120, 420)
-    x = rng.randrange(W) if not across else rng.randrange(0, W - w)
+for _ in range(18):
+    across = rng.random() < 0.2
+    if across:
+        w = rng.choice((W, rng.randrange(420, 640)))
+        h = rng.randrange(28, 80)
+        x = 0 if w == W else rng.choice((0, W // 2 - w // 2, W - w))
+    else:
+        w = rng.randrange(120, 330)
+        h = rng.randrange(160, 620)
+        # Over a wheel track or a lane: the patch's centre near 0.19-0.31 or 0.69-0.81 of the width.
+        x = int(rng.choice((0.25, 0.75)) * W + rng.uniform(-0.08, 0.08) * W - w / 2)
     y = rng.randrange(H)
-    shade = rng.randrange(30, 70)
-    pts = []
-    for k in range(24):
-        a = k / 24 * 2 * math.pi
-        # A rounded rectangle, its edge jittered by a few pixels.
-        cx, cy = math.cos(a), math.sin(a)
-        px_ = x + w / 2 + (w / 2) * max(-1, min(1, cx * 1.25)) + rng.uniform(-4, 4)
-        py_ = y + h / 2 + (h / 2) * max(-1, min(1, cy * 1.25)) + rng.uniform(-4, 4)
-        pts.append((px_, py_))
-    for dx in (0, -W, W):
-        for dy in (0, -H, H):
-            moved = [(px_ + dx, py_ + dy) for px_, py_ in pts]
+    newer = rng.random() < 0.75
+    shade = 128 - rng.randrange(14, 34) if newer else 128 + rng.randrange(5, 12)
+    angle = rng.uniform(-0.012, 0.012)
+    cx, cy = x + w / 2, y + h / 2
+    corners = []
+    for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+        dx, dy = sx * w / 2, sy * h / 2
+        corners.append((cx + dx * math.cos(angle) - dy * math.sin(angle), cy + dx * math.sin(angle) + dy * math.cos(angle)))
+    for ox in (0, -W, W):
+        for oy in (0, -H, H):
+            moved = [(px_ + ox, py_ + oy) for px_, py_ in corners]
             pd.polygon(moved, fill=shade)
-            sd2.line(moved + [moved[0]], fill=rng.randrange(60, 110), width=3)
-patches = patches.filter(ImageFilter.GaussianBlur(1.5))
-seams = seams.filter(ImageFilter.GaussianBlur(1.2))
-arr = np.asarray(img, dtype=np.float32) - np.asarray(patches, dtype=np.float32) - np.asarray(seams, dtype=np.float32) * 0.5
+            sd2.line(moved + [moved[0]], fill=rng.randrange(40, 70), width=2)
+patches = patches.filter(ImageFilter.GaussianBlur(0.8))
+seams = seams.filter(ImageFilter.GaussianBlur(0.7))
+arr = np.asarray(img, dtype=np.float32) + (np.asarray(patches, dtype=np.float32) - 128.0) - np.asarray(seams, dtype=np.float32) * 0.5
 img = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
 draw = ImageDraw.Draw(img)
 

@@ -45,6 +45,7 @@ internal sealed partial class CameraRig : Node3D
     // whole cabin by a few pixels a frame and read as trembling shadows (the owner's 7 November report).
     private readonly FastNoiseLite _vibration = new() { NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth, Frequency = 1f, Seed = 3 };
     private float _vibrationTime;
+    private MotionBlur? _blur;
     private Vector3 _head;
     // A knock's jolt: an offset of the eye in the car's frame on a stiff, well-damped spring (Jolt).
     private Vector3 _jolt;
@@ -63,7 +64,17 @@ internal sealed partial class CameraRig : Node3D
     public override void _Ready()
     {
         _camera = new Camera3D { Fov = 72f, Near = 0.15f, Far = 65000f, Current = true };   // the real land and its skirt reach 60 km (0.37; 9 km for the old mountains)
+        // The motion blur (0.38) as the camera's compositor effect; switched with the quality and the 1989 look each frame.
+        _blur = new MotionBlur { Enabled = WorldBuilder.CameraBlur };
+        _camera.Compositor = new Compositor { CompositorEffects = [_blur] };
         AddChild(_camera);
+    }
+
+    public override void _Process(double delta)
+    {
+        if (_blur is null) return;
+        _blur.FrameSeconds = (float)delta;
+        _blur.Enabled = WorldBuilder.CameraBlur;
     }
 
     /// <summary>
