@@ -8,7 +8,7 @@ Yeni bir istek gelince buraya satır olarak eklenir. Bir sürüm bir isteği kar
 - **Durum:** `Tamam` karşılandı, `Kısmen` bir kısmı karşılandı, `Açık` henüz yapılmadı, `Karar` yön belirlendi, `Ertelendi` bilerek sonraya bırakıldı.
 - **Ayrıntı:** teknik gerekçeler [design.md](design.md)'de, sürüm notları GitHub Releases'te.
 
-Son güncelleme: 7 Kasım 2026 (sürüm 0.51.0).
+Son güncelleme: 8 Kasım 2026 (sürüm 0.52.0).
 
 ## 1. Hedef
 
@@ -161,6 +161,7 @@ Son güncelleme: 7 Kasım 2026 (sürüm 0.51.0).
 36. **Buck-and-rail çitler** (H2, 0.49.0): Tamam. Jackson Hole'un ve Wyoming çiftlik bölgesinin simgesi olan ahşap çitler yolların iki yanında, yaklaşık 30 m dışarıda uzanıyor: her 3 m'de iki direğin çaprazlandığı bir "X" (buck), çaprazın arasına oturan üst kalas ve bir bacağa çakılı iki alt kalas; güneş ve yağmurla grileşmiş çam direkler (Poly Haven "Brown Planks 03", CC0). Başka bir yol, bina, tarla, pist alanı ya da yarma yaklaşınca kesiliyor, arada bir de kapı aralığı bırakıyor. Yalnız görsel (araba 30 m dışarıda çitin içinden geçer); 1989 görünümünde yok.
 37. **Elektrik hattı** (H2, 0.50.0): Tamam. Her yolun bir yanında, yaklaşık 25 m dışarıda, 55 m'de bir ahşap elektrik direği (10 m, kreozotlu koyu ahşap, çapraz kol ve üç izolatör) ve aralarında 0,9 m sarkan üç tel; Wyoming'in kırsal yollarındaki dağıtım hatları gibi. Teller en az bir buçuk piksel kalınlığında çiziliyor, saydamlıkları gerçek inceliklerine göre azalıyor: uzakta kesik kesik titreşen çizgiler yerine ince, düzgün bir çizgi. Hat başka yollar, binalar, ağaçlar, tarlalar ve yarmalar yaklaşınca kesiliyor. Yalnız görsel; 1989 görünümünde yok. Çitler de artık hat üzerinde otlayan bir ineğin çevresinde açılıyor (0.49'da bir inek çitin tam ortasında duruyordu).
 38. **Gerçek inekler** (H2, 0.51.0): Tamam. Sürünün inekleri artık oyunda yapılmış gövde değil, gerçek bir Holstein'ın taranmış modeli ("Cow frame test", Nyilonelycompany, CC BY 4.0): gerçek boy ve gövde, kıllı deri dokusu, boynuzlar, meme; dörtayaklı iskeletiyle oyunun eskisi gibi pozladığı: otlarken boyun aşağıda ağız otlarda, başını kaldırınca etrafa bakıyor, kaçarken bacaklar çapraz çiftler halinde adım atıyor, kuyruk sinekleri kovuyor, çarpılınca sendeliyor. Her ikinci inek ayna simetriği ve boyları biraz farklı, sürü kopya gibi görünmüyor. Dışa aktarımda (Unreal) eski yapılmış inek kalıyor.
+39. **Çayırın sesi** (0.52.0): Tamam. Dünyanın kendi sesi var: çayırın kuşları, böcekleri ve uzun otların arasından esen rüzgâr, gerçek bir kayıttan (dsebeste, Freesound #351609, CC0; Kanada çayırında bir yaz günü). Her yerde aynı düzeyde çalıyor; koltuktan camın arkasından boğuk geliyor; araba durduğunda ya da yavaşken duyuluyor, hızlanınca motor ve yol sesi doğal olarak bastırıyor. Açık havada tam koro, kapalı havada daha az, ıslakta daha da az, yağmurda birkaç kuş; tekrar oynatmada (yalnız müzik) ve 1989 görünümünde yok. Kayıt 47 saniyelik dikişsiz bir döngüye çevrildi, kayıt cihazının tıkırtıları temizlendi (`tools/make-ambience.py`).
 
 ## 11. Çalışma kuralları
 

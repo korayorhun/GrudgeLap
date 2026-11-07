@@ -713,6 +713,16 @@ https://bigsoundbank.com/cow-moos-2-s2382.html, CC0 1.0), cut from the FLAC orig
 at 0.35 + 2.1. `WorldAudio` places them on the cows: loud when the car shoves one, softer now and then from one grazing
 within 70 m. 1989 mode keeps the cabinet's synthesised moo.
 
+## The prairie (`ambience/prairie.wav`)
+
+A warm summer's day on the Canadian prairie by the South Saskatchewan River, recorded by dsebeste (Freesound #351609
+"PrairieSummer_ambience", https://freesound.org/people/dsebeste/sounds/351609/, CC0 1.0): birds chirping, insects
+buzzing, the tall grass rustling in a light wind. Made into a 47-second loop by `tools/make-ambience.py` from the
+HQ preview (decoded to 44.1 kHz stereo, high-passed at 80 Hz, 2 s in, the last 3 s cross-faded into the first, the
+recorder's ticks patched with the sound a tenth of a second before, -30 dBFS RMS; the recording is -58 dBFS). `WorldAudio`
+plays it everywhere at one level through the world's bus (through the glass from the seat), full on a clear day, 0.6
+overcast, 0.45 wet, 0.2 in the rain, silent in the replay and the 1989 look.
+
 ## Instant replay music (`music/replay.ogg`, `music/replay.wav`)
 
 An original composition of this project, written for it in the style of late-1980s arcade music; it is not a

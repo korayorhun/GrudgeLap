@@ -3187,6 +3187,20 @@ The herd's cows were built in code (0.9.1: a lofted barrel, a neck, a head, four
   one. The clip that comes with the model (a mild idle) is not used: it never brings the muzzle down to graze.
 - The export keeps the built cow (the other engine dresses its own); so does a build without the model.
 
+### The prairie's sound (0.52.0)
+
+The world was silent but for the cars, the train and the cows: standing at the start, the engine idling, nothing else.
+
+- **The recording**: dsebeste's PrairieSummer_ambience (Freesound #351609, CC0), a warm day on the Canadian prairie,
+  birds, insects and the wind in the long grass; `tools/make-ambience.py` makes it a 47-second loop from the HQ preview:
+  44.1 kHz stereo, high-passed at 80 Hz, the last 3 s cross-faded (equal power) into the first, the recorder's ticks
+  (broadband clicks a few milliseconds long, found where the band over 6 kHz jumps over 4.5 times its running level, and
+  two by hand) patched with the sound a tenth of a second before, set to -30 dBFS RMS (the recording is -58).
+- **The mix** (`WorldAudio`): one player on the world's bus, everywhere at one level, so the glass takes its top off and
+  a few decibels from the seat as it does the rest of the world; full on a clear day, 0.6 overcast, 0.45 wet, 0.2 in the
+  rain; silent in the replay (which plays its tune alone) and the 1989 look. At speed the engine, the tyres and the wind
+  cover it as they would; standing, it is the sound of the place.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

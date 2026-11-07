@@ -29,6 +29,9 @@ internal sealed partial class WorldAudio : Node
     private AudioStreamPlayer3D? _steam;
     private AudioStreamPlayer3D? _whistle;
     private AudioStreamRandomizer? _moos;
+    // The prairie round the road (0.52): a bed of its birds, its insects and the wind in the long grass, everywhere at one
+    // level (assets/audio/ambience/prairie.wav, tools/make-ambience.py), through the glass from the seat like the rest.
+    private AudioStreamPlayer? _ambience;
     private readonly Dictionary<int, AudioStreamPlayer3D> _cows = new();
     private Train? _train;
     private int _blasts;
@@ -58,6 +61,12 @@ internal sealed partial class WorldAudio : Node
         _steamLoop = AudioClips.Loop("train/steam.wav");
         _whistleClip = AudioClips.OneShot("train/whistle.wav");
         _moos = AudioClips.Takes(1.07f, 2f, "cow/moo1.wav", "cow/moo2.wav", "cow/moo3.wav", "cow/moo4.wav", "cow/moo5.wav");
+        if (AudioClips.Loop("ambience/prairie.wav") is { } prairie)
+        {
+            _ambience = new AudioStreamPlayer { Stream = prairie, Bus = BusName, VolumeDb = -80f };
+            AddChild(_ambience);
+            _ambience.Play();
+        }
     }
 
     /// <summary>
@@ -134,6 +143,20 @@ internal sealed partial class WorldAudio : Node
         // The glass takes the top off and a few decibels with it; the cut-off slides on a log scale so the move is even.
         if (_glass is not null) _glass.CutoffHz = 20500f * MathF.Pow(1500f / 20500f, _glassMix);
         AudioServer.SetBusVolumeDb(_bus, Mathf.LinearToDb(MathF.Max(Volume, 0.001f)) - 7f * _glassMix);
+        if (_ambience is not null)
+        {
+            // The birds and the insects by the weather: a clear day's full chorus, quieter under cloud, a few in the rain;
+            // none in the replay, which plays its tune alone.
+            var chorus = session.Weather switch
+            {
+                Weather.Rain => 0.2f,
+                Weather.Wet => 0.45f,
+                Weather.Overcast => 0.6f,
+                _ => 1f,
+            };
+            if (session.Phase == SessionPhase.Replay) chorus = 0f;
+            _ambience.VolumeDb = Mathf.LinearToDb(MathF.Max(chorus, 0.0001f));
+        }
 
         // The drones and the train move only while the credit runs; on the title screen and in the replay they stand.
         var moving = session.Phase is SessionPhase.Driving or SessionPhase.StartEngine;
