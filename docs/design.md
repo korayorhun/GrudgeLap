@@ -3117,6 +3117,38 @@ drawn unlit from behind (0.45), and the meadow is back (`MeadowBuilder`, `assets
   bends them in the shared wind (`wind.gdshaderinc`).
 - Medium and high quality; not in the 1989 look nor the export; `--meadow=0` for comparisons.
 
+### The brakes' heat and fade (0.49.0)
+
+The model kept no brake temperature anywhere: the tenth hard stop in a row stopped as short as the first.
+
+- **The disc** (`BrakeThermal`, `WheelState.BrakeTemperature`): a lump of cast iron for each wheel, 8 kg at the front and
+  5 kg at the rear for a brake of 2700 N m and in proportion for others (460 J/(kg K)); heated by the brake's work while
+  the wheel turns against it (the brake's torque times the wheel's speed; a wheel it holds still heats its tyre, not the
+  disc), cooled by convection growing with the speed (a time constant of some eight minutes standing, a minute and a
+  quarter at 30 m/s), integrated exactly over each step for its constant power.
+- **The fade**: the pads hold the disc fully to 400 °C, lose a quarter of their friction at 700 °C and two fifths at
+  1000 °C and no more (`BrakeThermal.Fade`), the driver's brake and the electronic differential's alike, as the organic
+  and semi-metallic pads of road cars of the time did. A stop from 200 km/h puts some 170 °C into a hot hatch's front
+  disc; four in a row with nothing but the launch back up between them take the fronts past 400 °C and the fourth stop is
+  longer than the first (`HandlingTests.Hard_stops_in_a_row_heat_the_brakes_until_they_fade`); one stop from 100 km/h
+  leaves them under 200 °C, so every other stopping figure is a cool brake's.
+
+### Buck-and-rail fences (0.49.0)
+
+Jackson Hole's ranch roads run between buck-and-rail fences of weathered lodgepole; the plain here ran unfenced from the
+verge to the woods.
+
+- **The bay** (`FenceBuilder`): one mesh, a buck of two six-sided poles 12 cm across from feet 1.2 m apart across the line,
+  crossing about a metre up, the top rail in their crotch and two rails on the outer face of one leg at 0.70 and 0.38 m,
+  each rail 3.4 m so it overlaps the next bay; Poly Haven's Brown Planks 03 mapped along each pole within one plank's
+  grain (nine across the photo), a shade greyer.
+- **The lines**: both sides of every open road (not the loop, the ramps, the jump's gap or the overpasses) 32 m from the
+  centre line for a road 11 m wide, a bay every 3 m of road, each bay's instance sheared from its start to its end on the
+  ground so the legs stay upright on a slope; left out where another road's ground comes near (the terrain's road weight),
+  within 12 m and half its size of a building, a tower, a pier, a pump, the gantry or the train, in a field or on a pad,
+  over a step of more than 1.2 m, and two bays for a gate every 250 to 650 m. Chunks of 200 m of road drawn within 700 m.
+- Visual only: the simulation does not know them. Not in the 1989 look nor the export.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

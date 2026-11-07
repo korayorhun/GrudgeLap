@@ -15,6 +15,7 @@ verge's at 2K (0.36: they fill most of the screen).
 | `shoulder_color.jpg`, `shoulder_normal.jpg`, `shoulder_roughness.jpg` | ambientCG **Ground110** (1K-JPG: Color, NormalGL, Roughness) — the compacted gravel of the shoulders (0.10.0) | https://ambientcg.com/view?id=Ground110 | CC0 1.0 |
 | `bark_color.jpg`, `bark_normal.jpg`, `bark_roughness.jpg` | ambientCG **Bark012** (1K-JPG) — tree trunks and branches | https://ambientcg.com/view?id=Bark012 | CC0 1.0 |
 | `siding_color.jpg`, `siding_normal.jpg`, `siding_roughness.jpg` | ambientCG **WoodSiding009** (1K-JPG) — barn and houses | https://ambientcg.com/view?id=WoodSiding009 | CC0 1.0 |
+| `fence_color.jpg`, `fence_normal.jpg`, `fence_roughness.jpg` | Poly Haven **Brown Planks 03** by Rob Tuytel (1K-JPG; diffuse, OpenGL normal, roughness) — the buck-and-rail fences' weathered lodgepole (0.49) | https://polyhaven.com/a/brown_planks_03 | CC0 1.0 |
 | `roof_color.jpg`, `roof_normal.jpg`, `roof_roughness.jpg` | ambientCG **RoofingTiles003** (1K-JPG) — roofs | https://ambientcg.com/view?id=RoofingTiles003 | CC0 1.0 |
 | `bricks_color.jpg`, `bricks_normal.jpg`, `bricks_roughness.jpg` | ambientCG **Bricks078** (1K-JPG) — the hut, chimneys | https://ambientcg.com/view?id=Bricks078 | CC0 1.0 |
 | `metal_color.jpg`, `metal_normal.jpg`, `metal_roughness.jpg` | ambientCG **MetalPlates006** (1K-JPG) — shop roof and canopy, the train | https://ambientcg.com/view?id=MetalPlates006 | CC0 1.0 |

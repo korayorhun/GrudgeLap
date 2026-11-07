@@ -153,6 +153,7 @@ internal static class WorldBuilder
         _forest = null;
         _meadow = null;
         _textured.Clear();
+        FenceBuilder.ReleaseShared();
         _propMaterials.Clear();
         _weathered.Clear();
         FoliageBuilder.ReleaseShared();
@@ -216,6 +217,11 @@ internal static class WorldBuilder
         // The meadow by the roads (0.48, MeadowBuilder).
         _meadow = MeadowBuilder.Build(track);
         root.AddChild(_meadow);
+        // Buck-and-rail fences along the roads (0.49, FenceBuilder), gone in the 1989 look with the rest of the modern road.
+        var fences = FenceBuilder.Build(track);
+        fences.Visible = !_retro;
+        _modernRoad.Add(fences);
+        root.AddChild(fences);
         Stage("towers, pads, grass");
         var (minX, maxX, minZ, maxZ) = RoadBounds(track);
         // The wood fills the terrain out to its margin; beyond that lies the flat far ground.

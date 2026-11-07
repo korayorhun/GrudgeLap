@@ -408,6 +408,9 @@ public sealed class VehicleSim
             var brakeMax = (w.IsFront ? _spec.FrontBrakeTorque : _spec.RearBrakeTorque) * pedal * w.BrakePressure;
             // The electronic differential's brake works only while the driver's foot is off the pedal, so the two never add.
             if (_spec.ElectronicDifferential is not null) brakeMax += w.DifferentialBrake;
+            // A hot disc gives the pads less to grip (0.49, BrakeThermal): the driver's brake and the differential's alike.
+            brakeMax *= BrakeThermal.Fade(w.BrakeTemperature);
+            var brakeSize = w.IsFront ? _spec.FrontBrakeTorque : _spec.RearBrakeTorque;
 
             if (!w.InContact)
             {
@@ -422,6 +425,7 @@ public sealed class VehicleSim
                     torque += Vector3.Cross(c.Hub - _centreOfMass, barForce);
                 }
                 SpinFreeWheel(w, driveTorque, wheelInertia, brakeMax, dt);
+                w.BrakeTemperature = BrakeThermal.Step(w.BrakeTemperature, brakeMax * MathF.Abs(w.AngularVelocity), brakeSize, w.IsFront, speed, dt);
                 continue;
             }
 
@@ -466,6 +470,8 @@ public sealed class VehicleSim
             w.LateralSpeed = vLat;
             var tire = w.IsFront ? _spec.FrontTire : _spec.RearTire;
             var (fx, fy) = SpinGroundedWheel(w, driveTorque, wheelInertia, brakeMax, vLong, fs, tire, dt);
+            // The brake's work goes into its disc while the wheel turns against it; a wheel it holds still heats its tyre.
+            w.BrakeTemperature = BrakeThermal.Step(w.BrakeTemperature, brakeMax * MathF.Abs(w.AngularVelocity), brakeSize, w.IsFront, speed, dt);
             // Standing grip: where the slip angle fades out at a crawl, the tyre still holds the road sideways by static
             // friction. It takes a share of the patch's sideways speed off each step (as much force as stops a quarter
             // wheel's mass by that share), capped by the grip: without it a parked car nudged sideways slid on, and one
@@ -1224,6 +1230,8 @@ public sealed class WheelState
     public float LateralSpeed;
     /// <summary>Share of the driver's brake pressure the anti-lock modulator lets through, 1 without ABS.</summary>
     public float BrakePressure = 1f;
+    /// <summary>The brake disc's temperature, °C (0.49, <see cref="BrakeThermal"/>): heated by the braking, cooled by the air.</summary>
+    public float BrakeTemperature = BrakeThermal.Ambient;
     /// <summary>Brake torque (N m) the electronic differential holds this wheel with, besides the driver's brake; zero on a car without one.</summary>
     public float DifferentialBrake;
     /// <summary>Growth of the tyre's drag torque on the wheel with the wheel's speed this step, N m s/rad (never negative).</summary>
@@ -1249,6 +1257,7 @@ public sealed class WheelState
         GroundSpeed = 0f;
         LateralSpeed = 0f;
         BrakePressure = 1f;
+        BrakeTemperature = BrakeThermal.Ambient;
         DifferentialBrake = 0f;
         SpinStiffness = 0f;
         SteerAngle = 0f;

@@ -14,6 +14,47 @@ namespace GrudgeLap.Physics.Tests;
 public sealed class HandlingTests(ITestOutputHelper output)
 {
     /// <summary>
+    /// Brake fade (0.49, BrakeThermal): three stops in a row from 200 km/h with anti-lock brakes (the wheels keep turning,
+    /// so the brakes do the work; a locked wheel heats its tyre instead) take the five-cylinder hatch's front discs past
+    /// the point where the pads start to lose their grip, and the fourth stop is longer than the same car's with its discs
+    /// cooled before it, as road tests of the time found after repeated stops; one stop from 100 km/h leaves the discs well
+    /// short of it, so every other stopping figure is a cool brake's.
+    /// </summary>
+    [Fact]
+    public void Hard_stops_in_a_row_heat_the_brakes_until_they_fade()
+    {
+        static float StopFrom(VehicleSim car, float kmh)
+        {
+            car.LaunchAt(kmh / MathUtil.KmhPerMps);
+            var start = car.Position;
+            for (var t = 0f; car.Speed > 0.05f && t < 15f; t += HandlingRig.Dt) car.Step(new DriverInputs { Brake = 1f, Gear = 0 }, HandlingRig.Dt);
+            return Vector3.Distance(start, car.Position);
+        }
+        var hot = new VehicleSim(VehicleSpec.FiveHatch, HandlingRig.Proving(6000f));
+        var cooled = new VehicleSim(VehicleSpec.FiveHatch, HandlingRig.Proving(6000f));
+        var first = 0f;
+        for (var i = 0; i < 3; i++)
+        {
+            var d = StopFrom(hot, 200f);
+            if (i == 0) first = d;
+            StopFrom(cooled, 200f);
+        }
+        var discs = hot.Wheels.Where(w => w.IsFront).Max(w => w.BrakeTemperature);
+        foreach (var w in cooled.Wheels) w.BrakeTemperature = BrakeThermal.Ambient;
+        var faded = StopFrom(hot, 200f);
+        var fresh = StopFrom(cooled, 200f);
+        var once = new VehicleSim(VehicleSpec.FiveHatch, HandlingRig.Proving());
+        StopFrom(once, 100f);
+        var cool = once.Wheels.Where(w => w.IsFront).Max(w => w.BrakeTemperature);
+        output.WriteLine($"five hatch, stops from 200 km/h: first {first:F1} m; after three, front discs at {discs:F0} °C, the fourth {faded:F1} m against {fresh:F1} m with the discs cooled; one stop from 100 km/h: {cool:F0} °C");
+        Assert.True(discs > BrakeThermal.FadeFrom, "the front discs never got hot enough to fade");
+        Assert.True(faded > fresh * 1.03f, "the hot brakes stopped no longer than cooled ones");
+        Assert.True(cool < BrakeThermal.FadeFrom * 0.5f, "one stop from 100 km/h heated the discs halfway to fade");
+        Assert.Equal(1f, BrakeThermal.Fade(BrakeThermal.FadeFrom));
+        Assert.InRange(BrakeThermal.Fade(2000f), 0.6f, 0.6f);
+    }
+
+    /// <summary>
     /// 0-100 km/h and the stop from 100 km/h, dry and in the rain, pedal hard down. The sprint is a road test's
     /// standing start (<see cref="HandlingRig.Sprint(VehicleSpec, float, float)"/>: revs up on the brake, timed from its
     /// release); since 0.19 the assisted clutch launches at the engine's launch revs with the driven tyres just short of
