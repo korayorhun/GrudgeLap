@@ -105,9 +105,14 @@ public sealed class TerrainField
     /// </summary>
     public void AddFlat(Vector3 centre, float radius) => _flats.Add(new SkidPad(centre, radius));
 
-    /// <summary>Frames of roads built on earth; the ground is pulled to their edges.</summary>
+    /// <summary>
+    /// Frames of roads built on earth; the ground is pulled to their edges. The loop's first and last metres, where its
+    /// deck lies level on the ground, count too (0.34): left out, the ground fell away from the deck's foot and the
+    /// loop stood on a step.
+    /// </summary>
     public static bool IsEarthwork(in RoadFrame f) =>
-        f.Kind is SegmentKind.Straight or SegmentKind.Curve or SegmentKind.Hill or SegmentKind.Dip or SegmentKind.BankedCurve or SegmentKind.Spline
+        (f.Kind is SegmentKind.Straight or SegmentKind.Curve or SegmentKind.Hill or SegmentKind.Dip or SegmentKind.BankedCurve or SegmentKind.Spline
+         || f.Kind == SegmentKind.Loop && f.Normal.Y > 0.96f)
         && f.Surface == SurfaceType.Road;
 
     /// <summary>Ground height at a point.</summary>

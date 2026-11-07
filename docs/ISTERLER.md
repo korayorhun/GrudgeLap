@@ -4,18 +4,18 @@ Proje sahibinin bu oyun için istediği her şeyin tek listesi. Yeni bir thread 
 nasıl başlayacağı [DEVAM.md](DEVAM.md)'de yazar.
 Yeni bir istek gelince buraya satır olarak eklenir. Bir sürüm bir isteği karşılayınca o satırın durumu ve sürümü güncellenir.
 
-- **Kaynak:** sahibin 22 Ekim - 3 Kasım 2026 arasındaki iki geliştirme thread'inde yazdıkları. Kısa alıntılar sahibin kendi sözleri, tarihleri yanında.
+- **Kaynak:** sahibin 22 Ekim - 7 Kasım 2026 arasındaki geliştirme thread'lerinde yazdıkları. Kısa alıntılar sahibin kendi sözleri, tarihleri yanında.
 - **Durum:** `Tamam` karşılandı, `Kısmen` bir kısmı karşılandı, `Açık` henüz yapılmadı, `Karar` yön belirlendi, `Ertelendi` bilerek sonraya bırakıldı.
 - **Ayrıntı:** teknik gerekçeler [design.md](design.md)'de, sürüm notları GitHub Releases'te.
 
-Son güncelleme: 3 Kasım 2026 (sürüm 0.33.0).
+Son güncelleme: 7 Kasım 2026 (sürüm 0.34.0).
 
 ## 1. Hedef
 
 | No | İster | Kaynak | Durum |
 |---|---|---|---|
 | H1 | 1989 Hard Drivin' oyununa saygı duruşu. Lisansı temiz, olabildiğince fotogerçekçi, gerçek sesli bir oyun. | 22 Eki: "1989 Hard Drivin' saygı duruşu; lisans temiz, olabildiğince fotogerçekçi, gerçek sesli" | Sürekli hedef |
-| H2 | Hiper-gerçekçi görünüm: oyun gerçek hayat gibi görünsün. | 22 Eki: "hyperrealistic olmasını çok istiyorum"; 1 Kas: "gerçek hayat gibi görünmesini istiyorum" | Sürekli hedef (0.11-0.26 adım adım) |
+| H2 | Hiper-gerçekçi görünüm: oyun gerçek hayat gibi görünsün; ortamlar Unreal Engine demolarındaki gibi gerçek görünsün. | 22 Eki: "hyperrealistic olmasını çok istiyorum"; 1 Kas: "gerçek hayat gibi görünmesini istiyorum"; 7 Kas: "unreal engine demolarında gerçek gibi gözüküyor ortamlar, burada da öyle olsun" | Sürekli hedef (0.11-0.26 adım adım; 0.34'ten itibaren sahibin 7 Kasım listesi) |
 | H3 | Gerçek fizik kurallarıyla çalışan, gerçek otomobil dinamikleri olan bir oyun. Her turda daha gerçekçi. | 1 Kas (gece modu): "daha iyi otomobil dinamiklerinin olduğu gerçek fizik kuralları ile çalışan" | Sürekli hedef (0.18-0.24'te büyük adımlar) |
 | H4 | Gerekirse her şey baştan tasarlanabilir. Endüstrinin en iyi uygulamaları araştırılıp kullanılsın. | 1 Kas: "gerekiyorsa herşeyi baştan tasarlayabilirsin", "industry best practice'leri araştırıp uygulayabilirsin" | İlke |
 | H5 | Fotogerçekçilik için Unreal Engine sürümü de sürdürülsün. | 1 Kas, soru cevabı: "Unreal sürümü" | Kısmen: Unreal sürümü var, gerçek modeller ve hava eklendi; 458 ve BRZ orada hâlâ geçici gövdeli |
@@ -32,6 +32,12 @@ Son güncelleme: 3 Kasım 2026 (sürüm 0.33.0).
 | P6 | Evler, inekler ve yollar gerçekçi olsun. İneğin içinden geçilmesin, ineğin sesi olsun. | 29 Eki | Kısmen: inekler katı ve sesli (0.10.0); evler ve yollar gerçekçilik hedefinde sürüyor |
 | P7 | Kuru asfalt ıslakmış gibi yansıtmasın; yansıma yalnız ıslakta olsun. | 1 Kas: "kuru asfalttan yansıyor sanki ıslak gibi" | Tamam (0.11.0) |
 | P8 | Pistin genel görünümü 0.10'daki kadar gerçekçi kalsın; o günden sonra kötüleştiği söylendi. | 1 Kas: "pistin gerçeklik hissi bugüne başlamadan önce daha iyiydi" | Tamam (0.15.0'da 0.10 görünümüne dönüldü) |
+| P9 | Döngünün (360 rampa) çıkışı yolla çakışmasın. | 7 Kas: "360 rampanın çıkışı yolla çalışıyor" | Tamam (0.34.0): helisin yana kayması 11 m → 17,5 m; inen tabliye giriş yolunun banketinden 1,5 m dışarıda, halka ve ayaklar yolun dışında; döngünün dip metreleri zemine oturuyor (basamak yok) |
+| P10 | Köprülerin kalınlığı olsun. | 7 Kas: "köprülerin kalınlığı yok" | Tamam (0.34.0): köprü ve asma köprü rampaları 0,9 m derin beton tabliye + 0,45 m kaldırım, korkuluklar kaldırımın üstünde; döngü tabliyesi 0,5 m çelik kutu; tabliyelerde çakıl banket yok |
+| P11 | Sola yüksek deverli yolun düz yola bağlanması çok yumuşak olsun; böyle kontrol edilemiyor. | 7 Kas | Tamam (0.34.0): 180'lik virajın iki ucuna 75 m geçiş spirali: eğrilik ve dever birlikte artıp azalıyor (dever 25 m'de bitince araba 62 m yarıçapta yalnız lastikle 1,3 g istiyor ve dışarı savruluyordu); viraj 75 m uzadı, dönüş yolu kendi yarmasının üstünden geçmeye devam ediyor |
+| P12 | Yol kenarındaki toprak çok kötü; pistin her yeri çok daha gerçekçi olsun. Yol kenarındaki taşlar klasik oyundaki gibi turuncu olsun, boyanmış turuncu taşlar gibi. | 7 Kas | Açık (sıradaki iş) |
+| P13 | Pistin biraz uzak kısmı kötü görünüyor, yaklaştıkça değişiyor gibi oluyor: uzak yol açık görünüyor, yaklaşınca kararıyor. | 7 Kas: "uzak yol açık görünüyor, yaklaşınca kararıyor" | Açık (teşhis sürüyor) |
+| P14 | Çimenler gerçek gibi olsun: yer yer kusurlu, rastgele bir havası olan. | 7 Kas: "çimenler de pek gerçek değil" | Açık |
 
 ## 3. Hava
 
@@ -50,6 +56,8 @@ Son güncelleme: 3 Kasım 2026 (sürüm 0.33.0).
 | G4 | Araç içi gerçek gibi olsun: göstergeler yarım görünmesin, direksiyon, tavan, konsol, gövde gerçekçi olsun. | 28 Eki: "göstergeler yarım gözüküyor"; 29 Eki; 1 Kas: "direksiyon arabanın içeriden tavanı falan.. konsol gövde" | Kısmen: gerçek kabinler (0.16, 0.17, 0.20), göstergeler tam (0.8.1); direksiyonun arkasında kalan göstergeler (R12, E-Class, Delta, Golf) direksiyon açıklığına taşındı (0.30.0). Eksikler bölüm 10'da |
 | G5 | Kokpitte sol ön direk ince olsun. | 22 Eki: "kokpitte sol A-direği çok kalın ve baskın" | Tamam (0.4.0). 458'de aynı sorun yeniden var, bölüm 10 |
 | G6 | McLaren'in kokpitinden yol görünsün. | 2 Kas: "mclaren ile kokpitte kullanırken yolu göremiyoruz" | Tamam (0.25.0) |
+| G8 | Kokpit gölgeleri gerçekçi olsun; arabanın içindeki gölgelendirme sürekli hareket etmesin. | 7 Kas: "kokpit gölgeleri gerçekliği çok fena", "arabanın içindeki gölgelendirme çok kötü ve sürekli hareket ediyor" | Açık (teşhis sürüyor) |
+| G9 | Yeni eklenen arabalar gerçekçi görünsün; "düşük modellerle" yapılan sürümlerde gerçekçi görüntü resme döndü. | 7 Kas: "yeni eklenen arabaların gerçeklikle alakası yok" | Açık |
 | G7 | Bazı arabaların kokpitleri çok karanlık, hiçbir şey görünmüyor; hepsi kontrol edilsin. | 3 Kas: "bazı arabaların kokpitleri çok karanlık hiç görünmüyor.. hepsini kontrol et" | Tamam (0.28.0): gerçek modelle çizilen kabinlerde (Esprit, 570S, 205, Delta, SAAB, VAZ, W212, R12, 458 ve BRZ'nin ödünç kabinleri) kabin gün ışığı hiç kurulmuyordu, yalnız gökyüzünün ortam ışığıyla tavanın altında kalıyordu; artık her kabin kendi göz noktasından aydınlatılıyor (karanlık piksel payı W212 %55→%13, R12 %51→%45, 205 %48→%22, Delta %43→%9, 458 %35→%11, BRZ %46→%18) |
 
 ## 5. Araba seçimi ve yeni arabalar
@@ -74,6 +82,9 @@ Son güncelleme: 3 Kasım 2026 (sürüm 0.33.0).
 | F3 | Klavyeyle direksiyon biraz daha yavaş dönsün. | 1 Kas | Tamam (0.12.0) |
 | F4 | İkinci girişte araba olduğu yerde patinaj yapıp kımıldamasın. | 28 Eki | Tamam (0.8.1) |
 | F5 | Varsayılan birim metrik (km/h). | 1 Kas: "varsayılan ölçü birmi metrik olsun kmh" | Tamam (0.14.0) |
+| F6 | Araba çimenin ve asfaltın altına ASLA düşmesin. | 7 Kas: "araba çimenin ve asfaltın altına asla düşmesin bazen oluyor" | Tamam (0.34.0): zemin koruması: yüzeyin altında kalan tekerlek göbeği (sert iniş, dik şev, çarpma) eskiden "havada" sayılıyor ve araba dünyadan düşüyordu; artık tampon stopa oturur ve gövde aynı adımda yüzeyin üstüne çıkarılır, ağırlık merkezi yüzeyin altına inerse geri konur; köprü ve rampa tabliyelerinde kaldırım + korkuluk arabayı tutar (çarpma, düşme değil) |
+| F7 | Çarpışma ve hasar gerçekçi olsun: ufacık şeyde araba patlamasın; kaza olunca orijinaldeki gibi alev çıksın; çarpınca araba yolun altına girmesin. | 7 Kas: "ufacık birşeyde patlıyor", "araba çarpınca alevler çıkıyor onda, öyle olsun", "çarpınca araba yolun altına giriyor" | Açık (0.35 hedefi; F6'nın koruması tekrarda da geçerli) |
+| F8 | Instant replay'de diğer arabalar hareket etsin. | 7 Kas: "instant replayda diğer arabalar duruyor" | Açık (0.35 hedefi) |
 
 ## 7. Ses ve müzik
 
@@ -84,6 +95,7 @@ Son güncelleme: 3 Kasım 2026 (sürüm 0.33.0).
 | S2 | Instant replay müziği orijinal oyundaki gibi olsun (https://youtu.be/zY8_p5R_tHs). Telif sorunu olmadan, aynı seslerle, olabildiğince benzer. | 22-29 Eki; 1 Kas: "o çok önemli", "telife takılmadan mümkün olduğunca çok benzeyen, aynı sesler ile yapalım" | Kısmen: oyuna özel "Grudge Replay" (0.18.0). Sahip kendi dosyasını pencereye sürükleyebiliyor (0.15). **Sahibin onayı yok** |
 | S3 | Orijinal oyunun müzikleri olduğu gibi kullanılabilir mi? | 22 Eki | Karar: hayır; telifli, oyunla dağıtılmaz |
 | S4 | Pistin ve müziğin hissi orijinal videodaki gibi olsun. | 23 Eki: "müzikler, pist hissiyat aynı olsun istiyorum" | Kısmen (P1 ve S2'ye bağlı) |
+| S6 | Instant replay müziği orijinal oyunun müziği olsun; lisans sorunu şimdilik görmezden gelinsin, sonra bir yol düşünülecek. | 7 Kas: "lisans sorunu var biliyorum, şimdilik görmezden gelelim" | Açık: karar bölüm 10, madde 20 |
 
 ## 8. Kullanım ve arayüz
 
@@ -118,6 +130,14 @@ Son güncelleme: 3 Kasım 2026 (sürüm 0.33.0).
 10. **Bilinçli tasarım tercihleri, sahibe sorulacak:** Testarossa oyunun orijinalindeki gibi 4 vitesli (gerçeği 5); V8'in oyun içi adı "V8 GTB '12", çizilen araba ise 2015 McLaren 570S.
 11. **Unreal sürümü:** 458 ve BRZ orada geçici gövdeli; bu makinede derlenmedi.
 12. **Açılış süresi** (U3): ilk kare 3,0 s (0.31.0; `--perf-log` aşama damgalarını, arazinin alt aşamaları dahil, yazar); kalan: motorun açılışı ~1,1 s, dünya ~1,1 s (gökyüzü ve dağlar 0,24, arazi 0,32, yollar 0,27, orman ve çimen 0,17), ilk açılıştaki shader derlemesi (~58 s) motorun işi.
+13. **Yol kenarı ve pistin her yeri** (P12): banket, toprak, çimen (P14) gerçekçi değil; yol kenarına boyanmış turuncu taşlar istendi (orijinalde yolu turuncu-kahverengi toprak şeritleri çevreler). 0.36 hedefi.
+14. **Uzak görünüm** (P13): yaklaştıkça değişen görünüm (doku ayrıntısı, gölge kademesi, çimen tutamlarının 110-170 m'de solması, sis) teşhis ediliyor.
+15. **Kokpit gölgeleri** (G8): SSAO (1,5 m yarıçap) ve güneş gölgesi ayarları kabinde lekeli görünüyor; `--ssao=`, `--sun-shadow=`, `--shadow-filter=` anahtarlarıyla teşhis sürüyor.
+16. **Yeni arabalar** (G9): Bravo HGT, Bravo 1.6 ve Leon Cupra oyunun kendi gövdesiyle (loft) çiziliyor ve oyuncak gibi görünüyor; CC BY model iki aramada bulunamadı (A6). Seçenekler: loft'a panel çizgileri, cam çerçeveleri, far/ızgara ayrıntısı ve daha gerçekçi boya; ya da yeni bir model avı.
+17. **Çarpışma ve hasar** (F7): küçük çarpmada hurda (sawhorse ve pompa duvar gibi katı; iniş eşiği 10 m/s), kaza anında alev yok, tekrarda araba eğimli yolda zemine göre ±0,6 m sınırıyla yolun altına girebiliyor. 0.35 hedefi.
+18. **Tekrarda trafik** (F8): tekrar yalnız oyuncunun pozlarını kaydediyor; dronlar, tren ve inekler donuyor. 0.35 hedefi: dron pozları tekrarla birlikte kaydedilip oynatılacak.
+19. **Oyun içi test anahtarları** (0.34.0): `--at=t1,t2,...` (bir koşuda birçok ekran görüntüsü), `--pose-log` (yarım saniyede bir yer/hız/yüzey + olaylar), `--camera=x,y,z,tx,ty,tz[,fov]` (sabit kamera), `--hold=yol:başlangıç:bitiş:hız` (bir yol parçasında hız tutma: köprüye yavaş girme, döngüden düşme, deverli virajı tam gazla alma), `--ram=<prop türü>` (pier, barrier, pump, tower...), `--ssao=`, `--sun-shadow=`, `--shadow-filter=`. Sahibin "oyunu oyna, kaza yap" isteği bunlarla ve paralel oyuncu ajanlarıyla yürütülüyor.
+20. **Orijinal tekrar müziği** (S6): sahip 7 Kasım'da lisansı şimdilik görmezden gelmeyi söyledi. Karar: orijinal kaydın kendisi (Atari Games'in telifli kaydı) sürüme gömülmez, internetten indirilmez; bunun yerine ezgi, sahibin verdiği arcade videosundaki tekrar bölümünden nota nota çıkarılıp oyunun kendi 1989 sentezleyicisiyle yeniden çalınır (cover) ve THIRD_PARTY.md'de "Atari Games'in bestesi, lisanssız, sahibin kararı, değiştirilecek" diye açıkça yazılır; sahip isterse kendi kaydını `REPLAY MUSIC` klasörüne bırakır (0.15'ten beri çalışıyor). 0.37 hedefi.
 
 ## 11. Çalışma kuralları
 
@@ -129,3 +149,4 @@ Son güncelleme: 3 Kasım 2026 (sürüm 0.33.0).
 6. **Soru en aza iner:** sahip yokken karar verilir ve gerekçesi yazılır; yalnız gerçekten sahibin vereceği kararlar sorulur. (23 Eki: "bana sormadan, uygun bulduğun en doğru sıra ile bütün herşeyi yap")
 7. **Araç serbest:** gerekli araç (video çözümleme, Blender, ffmpeg) kurulabilir. (1 Kas: "istediğin tool'u indirip yükleyebilirsin")
 8. **Cevaplar:** Türkçe, kısa, madde madde. (22 Eki)
+9. **Oyun oynanarak test edilir:** sahibin isteğiyle (7 Kas: "oyunu oyna, kaza yap, türlü şeyler yap sorunları gör") her iş, bölüm 10 madde 19'daki anahtarlarla sürülen senaryolar ve ekran görüntüleriyle doğrulanır; görülen her sorun bu dosyaya ister olarak girer.

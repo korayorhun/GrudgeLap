@@ -112,6 +112,16 @@ public sealed partial class Bootstrap : Node3D
     private int _carIndex;
     private string? _screenshotPath;
     private float _screenshotAt = 4f;
+    /// <summary>--at=4,8,12: every time a picture is taken; one picture a time, named after the path with the time added (automation, 0.34).</summary>
+    private readonly List<float> _screenshotAts = [];
+    private int _screenshotsTaken;
+    /// <summary>--pose-log: the car's place on the course twice a second and every event, printed, so a hidden run can be read like a lap chart (0.34).</summary>
+    private bool _poseLog;
+    private float _poseLoggedAt = -1f;
+    /// <summary>--camera=x,y,z,tx,ty,tz[,fov]: a fixed camera (simulation axes: x east, y up, z north) for pictures of a place as the car passes (0.34).</summary>
+    private (Vector3 Eye, Vector3 Target, float Fov)? _fixedCamera;
+    /// <summary>--hold=path:from:to:speed (m/s; repeatable): the scripted driver holds a speed over a stretch of a path, for stunts taken wrong on purpose (0.34).</summary>
+    private readonly List<(PathKind Path, float From, float To, float Speed)> _holds = [];
     private float _quitAfter = -1f;
     private float _elapsed;
     private bool _screenshotTaken;
@@ -367,7 +377,45 @@ public sealed partial class Bootstrap : Node3D
             }
             else if (arg == "--speed-route") _scripted.PreferStunt = false;
             else if (arg.StartsWith("--screenshot=", System.StringComparison.Ordinal)) _screenshotPath = arg["--screenshot=".Length..];
-            else if (arg.StartsWith("--at=", System.StringComparison.Ordinal)) float.TryParse(arg["--at=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _screenshotAt);
+            else if (arg.StartsWith("--at=", System.StringComparison.Ordinal))
+            {
+                // One time, or a list of them: each a picture of its own.
+                _screenshotAts.Clear();
+                foreach (var part in arg["--at=".Length..].Split(','))
+                {
+                    if (float.TryParse(part, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var at)) _screenshotAts.Add(at);
+                }
+                if (_screenshotAts.Count > 0) _screenshotAt = _screenshotAts[0];
+            }
+            else if (arg == "--pose-log") _poseLog = true;
+            else if (arg.StartsWith("--ssao=", System.StringComparison.Ordinal)) WorldBuilder.SsaoOverride = arg["--ssao=".Length..] != "0";
+            else if (arg.StartsWith("--sun-shadow=", System.StringComparison.Ordinal)) WorldBuilder.SunShadowOverride = arg["--sun-shadow=".Length..] != "0";
+            else if (arg.StartsWith("--shadow-filter=", System.StringComparison.Ordinal) && int.TryParse(arg["--shadow-filter=".Length..], out var filter))
+            {
+                // The sun's shadow filter for this run: 0 hard, 1-5 soft from very low to ultra (the project's setting is 3).
+                RenderingServer.DirectionalSoftShadowFilterSetQuality((RenderingServer.ShadowQuality)System.Math.Clamp(filter, 0, 5));
+            }
+            else if (arg.StartsWith("--camera=", System.StringComparison.Ordinal))
+            {
+                var parts = arg["--camera=".Length..].Split(',');
+                var v = new float[parts.Length];
+                var ok = parts.Length >= 6;
+                for (var i = 0; ok && i < parts.Length; i++) ok = float.TryParse(parts[i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out v[i]);
+                if (ok) _fixedCamera = (Convert.ToGodot(new SN.Vector3(v[0], v[1], v[2])), Convert.ToGodot(new SN.Vector3(v[3], v[4], v[5])), parts.Length > 6 ? v[6] : 50f);
+                else GD.PrintErr($"{arg}: six or seven numbers wanted");
+            }
+            else if (arg.StartsWith("--hold=", System.StringComparison.Ordinal))
+            {
+                var parts = arg["--hold=".Length..].Split(':');
+                if (parts.Length == 4 && System.Enum.TryParse<PathKind>(parts[0], ignoreCase: true, out var kind)
+                    && float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var from)
+                    && float.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var to)
+                    && float.TryParse(parts[3], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var speed))
+                {
+                    _holds.Add((kind, from, to, speed));
+                }
+                else GD.PrintErr($"{arg}: path:from:to:speed wanted");
+            }
             else if (arg.StartsWith("--quit-after=", System.StringComparison.Ordinal)) float.TryParse(arg["--quit-after=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _quitAfter);
             else if (arg.StartsWith("--new-game-after=", System.StringComparison.Ordinal)) float.TryParse(arg["--new-game-after=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _newGameAt);
             else if (arg.StartsWith("--drop=", System.StringComparison.Ordinal)) _dropFile = arg["--drop=".Length..];
@@ -800,6 +848,7 @@ public sealed partial class Bootstrap : Node3D
 
         var input = _ram is not null ? RamInputs() : _park ? DriverInputs.Idle : _attract ? _scripted.Next(_session) : _keyboard.Sample(dt, _session.Car);
         if (_holdBrake) input.Brake = 1f;
+        ApplyHolds(ref input);
         _carView.Braking = input.Brake > 0.05f;
         if (!_attract && !_park && HandleMenuKeys()) input.Ignition = true;
 
@@ -807,6 +856,7 @@ public sealed partial class Bootstrap : Node3D
         else if (_session.Phase == SessionPhase.Driving && _session.OffRoad && Input.IsActionJustPressed(InputSetup.Abort)) _session.Abort();
 
         _session.Step(input, dt);
+        if (_poseLog) LogPose();
         if (_session.Events.Contains(RaceEvent.NewBestLap) && _session.BestLap is not null && (!_attract || _saveBest))
         {
             SaveBestLap(_session.BestLap);
@@ -866,7 +916,17 @@ public sealed partial class Bootstrap : Node3D
     /// </summary>
     private void AutomationAfterFrame()
     {
-        if (_screenshotPath is not null && !_screenshotTaken && _elapsed >= _screenshotAt)
+        if (_screenshotPath is not null && _screenshotAts.Count > 1)
+        {
+            // A list of times: each picture is the path with its time before the extension (shot.png -> shot-12.png).
+            if (_screenshotsTaken < _screenshotAts.Count && _elapsed >= _screenshotAts[_screenshotsTaken])
+            {
+                var at = _screenshotAts[_screenshotsTaken++];
+                var stem = System.IO.Path.ChangeExtension(_screenshotPath, null).TrimEnd('.');
+                CallDeferred(nameof(TakeScreenshot), $"{stem}-{at.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)}{System.IO.Path.GetExtension(_screenshotPath)}");
+            }
+        }
+        else if (_screenshotPath is not null && !_screenshotTaken && _elapsed >= _screenshotAt)
         {
             _screenshotTaken = true;
             CallDeferred(nameof(TakeScreenshot), _screenshotPath);
@@ -953,6 +1013,7 @@ public sealed partial class Bootstrap : Node3D
             if (_crash.StruckThisFrame) _audio.ReplayCrash();
             _carView.Transform = pose;
             _cameraRig.Replay(pose.Origin, _crash.ViewForward, _crash.CloseUp);
+            if (_fixedCamera is { } replayCamera) _cameraRig.Look(replayCamera.Eye, replayCamera.Target, replayCamera.Fov);
             return;
         }
         EndCrash();
@@ -964,6 +1025,48 @@ public sealed partial class Bootstrap : Node3D
         _cameraRig.Acceleration = new Vector2(car.LateralAcceleration, car.LongitudinalAcceleration);
         _cameraRig.FollowCar(_carView.GlobalTransform, MathF.Abs(car.Speed), dt);
         if (_look is not null) LookAtProp(_look);
+        if (_fixedCamera is { } fixedCamera) _cameraRig.Look(fixedCamera.Eye, fixedCamera.Target, fixedCamera.Fov);
+    }
+
+    /// <summary>
+    /// --hold=path:from:to:speed: over that stretch of the path the scripted driver holds the speed (m/s), flat out under
+    /// it and braking over it, as --ram-speed= does for a knock; so a hidden run can take the drawbridge too slowly, the
+    /// loop without the run-up or the banked 180 flat out, and the crash or the fall be looked at (0.34).
+    /// </summary>
+    private void ApplyHolds(ref DriverInputs input)
+    {
+        if (_holds.Count == 0 || _session.Phase != SessionPhase.Driving) return;
+        var car = _session.Car;
+        var kind = car.Cursor.Path.Kind;
+        var distance = car.Cursor.Distance;
+        foreach (var (path, from, to, speed) in _holds)
+        {
+            if (path != kind || distance < from || distance > to) continue;
+            var over = car.Speed - speed;
+            input.Throttle = over < 0f ? 1f : 0f;
+            input.Brake = over > 1f ? 0.6f : 0f;
+            return;
+        }
+    }
+
+    /// <summary>
+    /// --pose-log: twice a second the car's place (path, distance, position, speed, height over the surface, in the air
+    /// or not, damage) and on the frame they happen the session's events, printed as "pose:" lines (0.34).
+    /// </summary>
+    private void LogPose()
+    {
+        var car = _session.Car;
+        var events = _session.Events;
+        var due = _elapsed - _poseLoggedAt >= 0.5f;
+        var notable = events.Contains(RaceEvent.Crashed) || events.Contains(RaceEvent.Knocked) || events.Contains(RaceEvent.CowHit) || events.Contains(RaceEvent.SignHit);
+        if (!due && !notable) return;
+        _poseLoggedAt = _elapsed;
+        var c = System.Globalization.CultureInfo.InvariantCulture;
+        var p = car.Position;
+        var hit = car.BodyHit;
+        var line = $"pose: t={_elapsed.ToString("0.0", c)} phase={_session.Phase} path={car.Cursor.Path.Kind} d={car.Cursor.Distance.ToString("0", c)} x={p.X.ToString("0.0", c)} y={p.Y.ToString("0.00", c)} z={p.Z.ToString("0.0", c)} v={(car.Speed * 3.6f).ToString("0", c)}km/h h={hit.Height.ToString("0.00", c)} {hit.Surface} air={(car.Airborne ? 1 : 0)} dmg={_session.Damage.ToString("0.00", c)} guard={car.GroundGuardLifts}";
+        if (notable) line += $" events={string.Join("+", events)} crash={_session.LastCrash} knock={_session.LastKnock.Kind}@{(_session.LastKnock.Speed * 3.6f).ToString("0", c)}km/h";
+        GD.Print(line);
     }
 
     /// <summary>
@@ -1056,7 +1159,10 @@ public sealed partial class Bootstrap : Node3D
         {
             foreach (var prop in _session.Track.Props)
             {
-                if (prop.Solid && (_ram is "tree" or "test") == (prop.Kind == PropKind.Tree)) Consider(prop.Position);
+                // A kind by its name (pier, barrier, pump, tower...), "tree" (and the test's tree), or "building" for the rest.
+                var wanted = System.Enum.TryParse<PropKind>(_ram, ignoreCase: true, out var kind) ? prop.Kind == kind
+                    : (_ram is "tree" or "test") == (prop.Kind == PropKind.Tree);
+                if (prop.Solid && wanted) Consider(prop.Position);
             }
         }
         // Once a target is taken it is held (a drone's or a cow's is followed as it moves).

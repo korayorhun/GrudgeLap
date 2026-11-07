@@ -780,6 +780,56 @@ public sealed class VehicleTests
         Assert.True(minRpm > 1500f, $"rpm dipped to {minRpm:F0}");
     }
 
+    /// <summary>
+    /// The ground guard (0.34): a car whose hubs are under the road (here sunk half a metre by hand, as a hard landing or
+    /// a bank could sink it) is lifted back onto the road within a few steps and drives on; until 0.34 a hub under its
+    /// surface had no contact and the car fell through the world.
+    /// </summary>
+    [Fact]
+    public void A_car_under_the_road_is_lifted_back_onto_it()
+    {
+        var car = new VehicleSim(new VehicleSpec(), DragStrip());
+        car.LaunchAt(20f);
+        for (var i = 0; i < 60; i++) car.Step(Follow(car, 0.3f, 0f), Dt);
+        var before = car.Position.Y;
+        car.Displace(new Vector3(0f, -0.5f, 0f));
+        var lifts = car.GroundGuardLifts;
+        for (var i = 0; i < 60; i++) car.Step(Follow(car, 0.3f, 0f), Dt);
+        _out.WriteLine($"ground guard: y {before:F2} before, {car.Position.Y:F2} a second after being sunk half a metre, {car.GroundGuardLifts - lifts} lift(s), speed {car.Speed * 3.6f:F0} km/h, wheels down {car.Wheels.Count(w => w.InContact)}");
+        Assert.True(car.GroundGuardLifts > lifts, "the guard should have lifted the car");
+        Assert.InRange(car.Position.Y, before - 0.15f, before + 0.15f);
+        Assert.Equal(4, car.Wheels.Count(w => w.InContact));
+        Assert.True(car.Speed > 15f, "the car drives on");
+    }
+
+    /// <summary>A car steered at a drawbridge ramp's edge is held on the deck by its kerb and rail (0.34): a knock, no drop.</summary>
+    [Fact]
+    public void A_ramps_rail_holds_the_car_on_the_deck()
+    {
+        var track = WithFeature(b => b.Drawbridge(30f, 7f, 18f, 34f));
+        var session = new RaceSession(track, new VehicleSpec(), RaceOptions.MediumNoTraffic);
+        session.ChooseTransmission(TransmissionMode.Automatic);
+        session.Step(new DriverInputs { Ignition = true, Gear = DriverInputs.NoGearChange }, Dt);
+        var car = session.Car;
+        car.LaunchAt(22f);
+        var rampStart = track.Common.Frames.First(f => f.Kind == SegmentKind.RampUp).Distance;
+        var knocked = false;
+        var maxLateral = 0f;
+        for (var i = 0; i < 60 * 12; i++)
+        {
+            // Towards the right edge of the deck once on the ramp.
+            var steer = car.Cursor.Distance > rampStart - 20f ? 0.25f : FollowRoad(car);
+            session.Step(new DriverInputs { Steer = steer, Throttle = 0.5f, Gear = DriverInputs.NoGearChange }, Dt);
+            if (session.Phase != SessionPhase.Driving) break;
+            if (session.Events.Contains(RaceEvent.Knocked)) knocked = true;
+            if (car.BodyHit.Frame.Kind == SegmentKind.RampUp) maxLateral = MathF.Max(maxLateral, MathF.Abs(car.BodyHit.Lateral));
+            if (car.BodyHit.Frame.Kind is SegmentKind.Gap or SegmentKind.RampDown) break;
+        }
+        _out.WriteLine($"rail: knocked={knocked} ({session.LastKnock.Kind}), furthest from the centre on the ramp {maxLateral:F2} m (half width {track.Common.First.HalfWidth:F1}), phase {session.Phase}, crash {session.LastCrash}");
+        Assert.True(maxLateral < track.Common.First.HalfWidth + 0.2f - car.Spec.BodyHalfWidth + 0.35f, "held on the deck");
+        Assert.NotEqual(CrashReason.FellOffBridge, session.LastCrash);
+    }
+
     [Fact]
     public void Banked_180_holds_90_mph()
     {

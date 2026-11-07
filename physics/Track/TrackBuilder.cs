@@ -82,13 +82,28 @@ public sealed class TrackBuilder
 
     /// <summary>
     /// Arc. Positive angle turns right. Banking, if given, is applied toward the inside of the turn with eased
-    /// ends; an optional height change is applied with zero slope at both ends.
+    /// ends; an optional height change is applied with zero slope at both ends. With a <paramref name="transition"/>
+    /// the curve begins and ends with a spiral of that many metres, over which the curvature and the bank rise from
+    /// nothing to the arc's and fall back together, as a road's transition spiral and its superelevation runoff do.
     /// </summary>
-    public TrackBuilder Curve(float angleDeg, float radius, float bankDeg = 0f, float heightDelta = 0f)
+    /// <remarks>
+    /// The spirals matter on the banked 180 (0.34): until then the bank eased out over the last 25 m of the arc while
+    /// the curvature stayed that of the 62 m radius, so at 100 km/h the car was asked for 1.3 g from its tyres alone
+    /// on the flat tail of the bend (the bank had given half of it a second before) and understeered off the exit, the
+    /// owner's "the high-banked road's connection to the flat road cannot be controlled". With both tapering over 75 m
+    /// the lateral acceleration the bend asks and the lean that meets it fade together, a roll of 13 degrees a second
+    /// at 110 km/h instead of 40. The turn is still <paramref name="angleDeg"/> in all: each spiral turns half of what
+    /// an arc of its length would, and the arc between them turns the rest, so the curve is <paramref name="transition"/>
+    /// metres longer than the plain arc. A transition too long for the angle is shortened to what the angle allows.
+    /// Without a transition the geometry is the one every curve had before, to the bit.
+    /// </remarks>
+    public TrackBuilder Curve(float angleDeg, float radius, float bankDeg = 0f, float heightDelta = 0f, float transition = 0f)
     {
         _segmentIndex++;
         var kind = bankDeg > 0f ? SegmentKind.BankedCurve : SegmentKind.Curve;
-        var length = MathF.Abs(angleDeg) * MathUtil.Deg2Rad * radius;
+        var angle = MathF.Abs(angleDeg) * MathUtil.Deg2Rad;
+        transition = MathUtil.Clamp(transition, 0f, angle * radius);
+        var length = angle * radius + transition;
         var n = Math.Max(2, (int)MathF.Round(length / Step));
         var step = length / n;
         var dHeading = angleDeg * MathUtil.Deg2Rad / n;
@@ -96,11 +111,24 @@ public sealed class TrackBuilder
         var startBank = _bank;
         var startY = _pos.Y;
         var ease = MathF.Min(25f, length * 0.3f);
+        // The share of the arc's curvature and bank at a distance into the curve: along a spiral in proportion to the
+        // way along it, one on the arc between them.
+        float Spiral(float at) => at < transition ? at / transition : at > length - transition ? (length - at) / transition : 1f;
         for (var i = 0; i < n; i++)
         {
             var s = (i + 1) * step;
-            // Ease the bank in and out so the car is not kicked by a sudden tilt.
-            var w = MathF.Min(MathUtil.SmoothStep(s / ease), MathUtil.SmoothStep((length - s) / ease));
+            float w;
+            if (transition > 0f)
+            {
+                // The heading turns by the curvature integrated over the step (a trapezoid of its two ends).
+                dHeading = turnSign * 0.5f * (Spiral(s - step) + Spiral(s)) * step / radius;
+                w = Spiral(s);
+            }
+            else
+            {
+                // Ease the bank in and out so the car is not kicked by a sudden tilt.
+                w = MathF.Min(MathUtil.SmoothStep(s / ease), MathUtil.SmoothStep((length - s) / ease));
+            }
             _bank = MathUtil.Lerp(startBank, turnSign * bankDeg * MathUtil.Deg2Rad, w);
             _heading += dHeading * 0.5f;
             var next = _pos + MathUtil.HeadingDirection(_heading) * step;
@@ -180,6 +208,12 @@ public sealed class TrackBuilder
     /// Vertical loop. The road climbs the inside of a circle of <paramref name="radius"/> and shifts sideways by
     /// <paramref name="lateralShift"/> over the revolution so the exit clears the entry (a helix, like the real stunt).
     /// </summary>
+    /// <remarks>
+    /// The shift must clear the roads, not only their centre lines: with the 11 m of the circuit until 0.34 (one road
+    /// width) the descending half came down on the entry road's right shoulder, its deck's edge a hand's width over
+    /// the asphalt and the ring's legs standing in the gravel (the owner's "the loop's exit runs into the road"). The
+    /// circuit shifts 17.5 m: two road widths, both shoulders and the ring with a margin (<see cref="OriginalInspiredTrack"/>).
+    /// </remarks>
     public TrackBuilder Loop(float radius, float lateralShift)
     {
         _segmentIndex++;

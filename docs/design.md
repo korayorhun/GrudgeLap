@@ -2644,6 +2644,68 @@ materials corrected (Rouge Vif #B41F2C, silver hubcaps, dark steel wheels). The 
 wheelbase: 3.86 m long (Renault: 3773), tracks 1.366 m. Checked on hidden orbit shots from the front and rear
 quarters and the side, and from the seat (the dials in the wheel's opening, the dashboard against the shell).
 
+### The track's structures and the ground guard (0.34.0)
+
+The owner's play-through of 7 November 2026 (ISTERLER P9-P11, F6) found four faults in the course's geometry and
+one in the simulation. Each was photographed from a fixed camera before and after (`--camera=`, below) and is pinned
+by a test.
+
+- **The loop's exit ran into the entry road.** `TrackBuilder.Loop` is a helix: the deck shifts sideways by a given
+  distance over the revolution so the exit clears the entry. The circuit's 11 m was one road width, so the descending
+  half came down over the entry road's right shoulder (its deck's edge a hand's width over the asphalt, the ring's
+  legs standing in the gravel) and the exit road's shoulder lay on the entry road. The helix now shifts 17.5 m: two
+  road widths, both gravel shoulders, the ring 0.8 m outside the deck and half a metre between
+  (`TrackTests.Loop_exit_clears_the_entry_road`: the descending deck's edge 1.5 m outside the entry's shoulder at the
+  closest). The loop's first and last metres, where the deck lies level on the ground, now count as earthwork
+  (`TerrainField.IsEarthwork`), so the ground meets the deck's foot instead of falling away from it in a step.
+- **The bridges had no thickness.** The decks were the road ribbon alone, a sheet with no side or underside, and
+  the gravel shoulder of the earth roads ran up the loop and along the drawbridge. `WorldBuilder.DeckBox` now builds
+  the body of every deck between two frames: a kerb along each edge (0.45 m wide, 0.28 m tall; its top and its face
+  to the road), the deck's side from the kerb's outer edge down to the soffit, and the soffit closing the box. The
+  overpasses and the drawbridge ramps are 0.9 m deep concrete slabs with the railings on the kerbs; the loop's deck is
+  a 0.5 m steel box with a 0.3 m edge plate, so from outside the loop has a body and from inside no floor is
+  see-through. Decks have no gravel shoulders (`IsDeck`).
+- **The banked 180's exit could not be controlled.** The bank eased out over the last 25 m of the arc while the
+  curvature stayed that of the 62 m radius: at 100 km/h the bend asks 12.6 m/s^2 across the car, the 32-degree bank
+  gives 5.2 of it, and when the bank went the tyres alone were asked for 1.3 g on a flat 62 m radius, more than they
+  have, so the car understeered off the exit; the roll itself was 40 degrees a second. `TrackBuilder.Curve` takes a
+  `transition`: the curve begins and ends with a spiral of that many metres over which the curvature and the bank
+  rise from nothing to the arc's and fall back together, as a road's transition spiral and its superelevation runoff
+  do (both linear along the spiral, so the lateral acceleration the bend asks and the lean that meets it stay in
+  proportion). The heading still turns the whole angle: each spiral turns half of what an arc of its length would and
+  the arc between them turns the rest, so the curve is `transition` metres longer than the plain arc. The circuit's
+  180 takes 75 m at each end: a 269 m bend, the roll 13 degrees a second at 110 km/h, the exit a two-and-a-half-second
+  taper (`TrackTests.Banked_180_tapers_its_bank_with_its_curvature`: the bank's share and the curvature's share agree
+  to 0.00, the tapers 67 and 68 m). The return leg still bridges its own cutting
+  (`Return_leg_bridges_its_own_cutting`: 5 m from the cutting's bottom, 52 m into the 89 m overpass, 5.5 m of
+  headroom). Without a transition the geometry is bit for bit what every curve had before.
+- **The car fell under the grass and the asphalt.** A wheel's contact was found by a ray from its hub down the car's
+  axis to the surface the probe gave; a hub under its surface made the ray negative and the wheel was taken to be in
+  the air, so once a hard landing, a bank steeper than the wheel could follow or a knock had pushed a hub through the
+  road, nothing held the car up: it sank through the world until 6 m under the ground called a "fall off a bridge"
+  and the replay showed the car under the road. The ground guard (`VehicleSim.SubStep`) now puts such a hub on its
+  bump stop and, at the end of the step, lifts the body out along the surface's normal to where the hub's spring sits
+  on the stop, taking away the speed into the surface; the centre of gravity itself under a surface by more than a
+  decimetre is brought back to nine tenths of its ride height. `VehicleTests.A_car_under_the_road_is_lifted_back_onto_it`
+  sinks a car half a metre at 70 km/h: one lift, and a second later it is at its old height on four wheels. The guard
+  lifts only a hub a little under (0.6 m) a surface the car is the right way up on: a car arriving under the drawbridge's
+  landing deck still hits its edge or falls into the gap, and a car fallen outside the loop is not pulled onto its deck. The lifts are
+  counted (`GroundGuardLifts`, in the pose log) so a run that needs the guard can be found and its cause fixed.
+- **The decks' edges.** On a bridge or a ramp a car that reaches the deck's edge is now held by the kerb and the rail:
+  a knock off a wall running with the road (`RaceSession.Knocks`, a dent and sparks; a crash only at the crash speed),
+  never a drop off the side (`A_ramps_rail_holds_the_car_on_the_deck`). The loop has no rail; its deck holds the car
+  by itself.
+
+**Playing the game by hand, hidden.** The owner asked that the game be played and crashed to find such faults. Five
+switches make a hidden run drivable and readable (`Bootstrap.ParseArgs`): `--at=4,8,12` takes a picture at each time
+(named `<stem>-<t>.png`); `--pose-log` prints the car's place twice a second (path, distance, position, speed, height
+over its surface, in the air or not, damage, the guard's lifts) and every event on its frame; `--camera=x,y,z,tx,ty,tz[,fov]`
+is a fixed camera in simulation axes that stays through a replay; `--hold=path:from:to:speed` makes the scripted driver
+hold a speed over a stretch (the drawbridge at 12 m/s, the loop at 14, the banked 180 at 65); `--ram=` takes any
+solid prop kind by name (pier, barrier, pump, tower). `--ssao=`, `--sun-shadow=` and `--shadow-filter=` force one
+effect for a picture. A lap chart of the stunt route from the pose log (default car, attract speed): the drawbridge at
+28-32 s, the loop at 43.6-48 s, the banked 180 at 60-66 s, the merge at 101 s.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

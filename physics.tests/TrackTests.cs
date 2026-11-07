@@ -55,6 +55,93 @@ public sealed class TrackTests
         Assert.InRange(track.StuntLapLength, 1500f, 4000f);
     }
 
+    /// <summary>
+    /// The loop's descending half must clear the entry road and its shoulder (0.34: with an 11 m helix the deck came
+    /// down on the shoulder, the owner's "the loop's exit runs into the road"), and the exit road must run beside the
+    /// entry road with room for both shoulders.
+    /// </summary>
+    [Fact]
+    public void Loop_exit_clears_the_entry_road()
+    {
+        var track = OriginalInspiredTrack.Build();
+        var frames = track.Stunt.Frames;
+        var loop = frames.Where(f => f.Kind == SegmentKind.Loop).ToList();
+        var loopStart = loop.First().Distance;
+        var loopEnd = loop.Last().Distance;
+        var entry = frames.Where(f => f.Kind != SegmentKind.Loop && f.Distance > loopStart - 30f && f.Distance < loopStart).ToList();
+        const float shoulder = 2.6f;   // WorldBuilder.BuildShoulders
+        const float ring = 0.8f;       // the loop's steel ring outside the deck (WorldBuilder.BuildLoopFrame)
+        var closest = float.MaxValue;
+        foreach (var l in loop)
+        {
+            if (l.Distance < (loopStart + loopEnd) * 0.5f || l.Origin.Y > 3f) continue;   // the descending half, near the ground
+            foreach (var e in entry)
+            {
+                var rightEdge = e.Origin + e.Lateral * (e.HalfWidth + shoulder);
+                var deckEdge = l.Origin - l.Lateral * (l.HalfWidth + ring);
+                var d = new Vector2(deckEdge.X - rightEdge.X, deckEdge.Z - rightEdge.Z);
+                // Clearance across the entry road: the deck's edge measured along the entry's lateral.
+                var across = Vector2.Dot(d, new Vector2(e.Lateral.X, e.Lateral.Z));
+                closest = MathF.Min(closest, across);
+            }
+        }
+        _out.WriteLine($"loop: descending deck edge {closest:F2} m outside the entry road's shoulder at the closest");
+        Assert.True(closest > 0.3f, $"the loop's descending deck comes within {closest:F2} m of the entry road's shoulder");
+    }
+
+    /// <summary>
+    /// The stunt route's return leg bridges the cutting the route dug for itself (the "DIP" before the banked 180);
+    /// the bend's transition spirals of 0.34 made the bend longer, so this pins that the overpass still stands over
+    /// the cutting's bottom with headroom under it.
+    /// </summary>
+    [Fact]
+    public void Return_leg_bridges_its_own_cutting()
+    {
+        var track = OriginalInspiredTrack.Build();
+        var frames = track.Stunt.Frames;
+        var bottom = frames.Where(f => f.Kind == SegmentKind.Dip).OrderBy(f => f.Origin.Y).First();
+        var overpass = frames.Where(f => f.Kind == SegmentKind.Overpass).ToList();
+        var nearest = overpass.OrderBy(f => new Vector2(f.Origin.X - bottom.Origin.X, f.Origin.Z - bottom.Origin.Z).Length()).First();
+        var apart = new Vector2(nearest.Origin.X - bottom.Origin.X, nearest.Origin.Z - bottom.Origin.Z).Length();
+        _out.WriteLine($"cutting bottom at ({bottom.Origin.X:F0}, {bottom.Origin.Z:F0}) y {bottom.Origin.Y:F1}; nearest overpass frame {apart:F1} m away, y {nearest.Origin.Y:F1}, {nearest.Distance - overpass.First().Distance:F0} m into the overpass of {overpass.Last().Distance - overpass.First().Distance:F0}");
+        Assert.True(apart < 8f, $"the overpass passes {apart:F1} m from the cutting's bottom");
+        Assert.True(nearest.Origin.Y - bottom.Origin.Y > 4.5f, "headroom under the overpass");
+    }
+
+    /// <summary>
+    /// On the banked 180 the bank and the curvature taper together over the transition spirals (0.34): nowhere is the
+    /// bend sharp while the bank is gone, and the taper takes at least 60 m at each end.
+    /// </summary>
+    [Fact]
+    public void Banked_180_tapers_its_bank_with_its_curvature()
+    {
+        var track = OriginalInspiredTrack.Build();
+        var frames = track.Stunt.Frames;
+        var bend = frames.Where(f => f.Kind == SegmentKind.BankedCurve).ToList();
+        var maxBank = bend.Max(f => MathF.Acos(MathUtil.Clamp(f.Normal.Y, -1f, 1f)));
+        var curvatures = new float[bend.Count];
+        for (var i = 1; i < bend.Count - 1; i++)
+        {
+            var h0 = MathF.Atan2(bend[i - 1].Tangent.X, bend[i - 1].Tangent.Z);
+            var h1 = MathF.Atan2(bend[i + 1].Tangent.X, bend[i + 1].Tangent.Z);
+            curvatures[i] = MathF.Abs(MathUtil.WrapAngle(h1 - h0)) / MathF.Max(bend[i + 1].Distance - bend[i - 1].Distance, 1e-3f);
+        }
+        var maxCurvature = curvatures.Max();
+        var mismatch = 0f;
+        for (var i = 1; i < bend.Count - 1; i++)
+        {
+            var bank = MathF.Acos(MathUtil.Clamp(bend[i].Normal.Y, -1f, 1f)) / maxBank;
+            var curvature = curvatures[i] / maxCurvature;
+            mismatch = MathF.Max(mismatch, MathF.Abs(bank - curvature));
+        }
+        var taperIn = bend.First(f => MathF.Acos(MathUtil.Clamp(f.Normal.Y, -1f, 1f)) > 0.9f * maxBank).Distance - bend.First().Distance;
+        var taperOut = bend.Last().Distance - bend.Last(f => MathF.Acos(MathUtil.Clamp(f.Normal.Y, -1f, 1f)) > 0.9f * maxBank).Distance;
+        _out.WriteLine($"banked 180: {bend.Last().Distance - bend.First().Distance:F0} m, bank {maxBank * MathUtil.Rad2Deg:F1} deg, radius {1f / maxCurvature:F1} m, taper in {taperIn:F0} m, out {taperOut:F0} m, bank-curvature mismatch {mismatch:F2}");
+        Assert.InRange(maxBank * MathUtil.Rad2Deg, 30f, 34f);
+        Assert.True(mismatch < 0.12f, $"the bank and the curvature part by {mismatch:F2} of their full values");
+        Assert.True(taperIn >= 60f && taperOut >= 60f, "the taper at each end should be at least 60 m");
+    }
+
     [Fact]
     public void Solid_props_stay_clear_of_every_road()
     {

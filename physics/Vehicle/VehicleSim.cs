@@ -104,6 +104,8 @@ public sealed class VehicleSim
     public PathCursor Cursor;
     /// <summary>Probe at the centre of gravity during the last step.</summary>
     public SurfaceHit BodyHit { get; private set; }
+    /// <summary>Times the ground guard has lifted the car back over a surface it had gone through (0.34), for the tests and the pose log.</summary>
+    public int GroundGuardLifts { get; private set; }
     public bool Airborne { get; private set; }
     public float AirborneTime { get; private set; }
     /// <summary>Largest normal approach speed (m/s) at which a wheel regained contact during the last step; zero otherwise.</summary>
@@ -307,6 +309,17 @@ public sealed class VehicleSim
         var anyContact = false;
         var rayDir = -up;
         var maxLen = _spec.SuspensionRest + _spec.WheelRadius;
+        // The ground guard (0.34): how far the deepest hub sits under its surface this step, and that surface's normal.
+        // A hub under its surface got no contact at all until 0.34 (the ray to the surface came out negative), so nothing
+        // held the car up once a hard landing, a bank steeper than the wheel could follow or a knock had put a hub
+        // through the road, and the car sank through the asphalt or the grass and out of the world (the owner's "the car
+        // sometimes falls under the grass and the asphalt"; the replay of such a fall was the car "under the road"). Now
+        // such a hub rides its bump stop and the body is lifted back out along the normal at the end of the step.
+        var sunk = 0f;
+        var sunkNormal = up;
+        // A lifted hub ends with its spring on the bump stop, not with the tyre squashed to nothing: the bump stop's
+        // force at that squash threw the car a metre into the air.
+        var hubClearance = maxLen - _spec.MaxCompression;
 
         // First pass: where each wheel touches and how far its spring is compressed. The anti-roll bars need both
         // wheels of an axle before either wheel's load is known.
@@ -326,12 +339,28 @@ public sealed class VehicleSim
             var facing = Vector3.Dot(c.Hit.SurfaceNormal, rayDir);
             if (facing >= -0.2f) continue;
             var t = Vector3.Dot(c.Hit.SurfaceNormal, c.Hit.SurfacePoint - c.Hub) / facing;
-            if (t <= 0f || t >= maxLen) continue;
+            if (t >= maxLen) continue;
+            if (t <= 0f)
+            {
+                // The hub is under the surface: on the bump stop, and the body comes out by the depth below the plane.
+                // Only a hub a little under a surface the car is the right way up on: a car arriving under the
+                // drawbridge's landing deck hits its edge (RaceSession.HitBridgeEdge) or falls into the gap, as before,
+                // and a car that has fallen outside the loop is not pulled onto its deck.
+                var depth = Vector3.Dot(c.Hit.SurfaceNormal, c.Hit.SurfacePoint - c.Hub);
+                if (depth > 0.6f || Vector3.Dot(up, c.Hit.SurfaceNormal) < 0.3f || (c.Hit.Frame.Kind == SegmentKind.RampDown && depth > 0.1f)) continue;
+                if (depth + hubClearance > sunk)
+                {
+                    sunk = depth + hubClearance;
+                    sunkNormal = c.Hit.SurfaceNormal;
+                }
+                t = 0f;
+            }
             w.InContact = true;
             w.Surface = c.Hit.Surface;
             anyContact = true;
             c.Ray = t;
-            c.Compression = maxLen - t;
+            // A hub under the surface rides its bump stop, no deeper: the lift puts the car right, not a launch.
+            c.Compression = t > 0f ? maxLen - t : _spec.MaxCompression;
         }
 
         // Anti-roll bars: each axle's bar pushes its more compressed wheel down onto the road and lifts the other by the
@@ -468,11 +497,32 @@ public sealed class VehicleSim
         // Body touching the ground means a roll-over or a landing on the roof.
         BodyHit = Track.Probe(Position, ref Cursor, true);
         BodyGrounded = BodyHit.HasSurface && BodyHit.Height < 0.28f && Vector3.Dot(up, BodyHit.SurfaceNormal) < 0.55f;
+        // The centre of gravity itself under the surface (0.34): the whole car has gone through (a fall at speed onto
+        // a bank, a step it was set down into); it comes back to a hand's breadth over the surface.
+        if (BodyHit.HasSurface && BodyHit.Height < -0.1f && BodyHit.Height > -1.5f && Vector3.Dot(up, BodyHit.SurfaceNormal) > 0.2f)
+        {
+            var sag = _spec.MassKg * MathUtil.Gravity / 4f / _spec.SuspensionStiffness;
+            var rest = _spec.SuspensionRest + _spec.WheelRadius - sag - _spec.HubHeight;   // the centre of gravity's height at rest (Reset)
+            if (-BodyHit.Height + rest * 0.9f > sunk)
+            {
+                sunk = -BodyHit.Height + rest * 0.9f;
+                sunkNormal = BodyHit.SurfaceNormal;
+            }
+        }
 
         // Integrate the rigid body (semi-implicit Euler, body-frame inertia).
         var acceleration = force / _spec.MassKg;
         _massVelocity += acceleration * dt;
         _centreOfMass += _massVelocity * dt;
+        if (sunk > 0f)
+        {
+            // The ground guard's lift: out along the surface's normal, and the speed into the surface taken away (the
+            // springs and the bump stops have already slowed it; what is left would carry it through again).
+            _centreOfMass += sunkNormal * (sunk + 0.005f);
+            var into = Vector3.Dot(_massVelocity, sunkNormal);
+            if (into < 0f) _massVelocity -= sunkNormal * into;
+            GroundGuardLifts++;
+        }
 
         var inv = Quaternion.Inverse(Orientation);
         var omegaBody = Vector3.Transform(AngularVelocity, inv);

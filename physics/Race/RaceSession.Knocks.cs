@@ -59,6 +59,29 @@ public sealed partial class RaceSession
         var reach = MathF.Max(spec.BodyFront, spec.BodyRear) + 0.5f;
         Footprint Plan() => Footprint.Of(car.Position, car.Forward, spec.BodyFront, spec.BodyRear, spec.BodyHalfWidth);
 
+        // The decks' kerbs and railings (0.34): on a bridge or a drawbridge ramp a car that reaches the deck's edge is held
+        // by the kerb and the rail along it, a knock off a wall running with the road (a dent and sparks, a crash only at
+        // the crash speed), never a drop off the side of the deck. The loop has no rail: its deck holds the car by itself.
+        var bodyHit = car.BodyHit;
+        // At the deck's level (not under it on the road below, nor 18 m out on the grass by a pier), and on it or just over
+        // its edge.
+        if (bodyHit.HasSurface && bodyHit.Frame.Kind is SegmentKind.RampUp or SegmentKind.RampDown or SegmentKind.Overpass
+            && bodyHit.Height is > -0.5f and < 1.5f && MathF.Abs(bodyHit.Lateral) < bodyHit.Frame.HalfWidth + 1.5f)
+        {
+            const float kerb = 0.2f;   // the kerb's face stands this far outside the road's edge (WorldBuilder.DeckBox)
+            var over = MathF.Abs(bodyHit.Lateral) + spec.BodyHalfWidth - (bodyHit.Frame.HalfWidth + kerb);
+            if (over > 0f)
+            {
+                var side = MathF.Sign(bodyHit.Lateral);
+                var lateral = Vector2.Normalize(new Vector2(bodyHit.Frame.Lateral.X, bodyHit.Frame.Lateral.Z)) * side;
+                var at = new Vector2(car.Position.X, car.Position.Z) + lateral * (bodyHit.Frame.HalfWidth + kerb);
+                if (Knock(lateral, over, at, Vector3.Zero, 0f, 1f, Options.ImpactCrashSpeed, KnockKind.Rail, -1, out _, out _))
+                {
+                    return CrashReason.HitBuilding;
+                }
+            }
+        }
+
         var props = Track.Props;
         for (var i = 0; i < props.Count; i++)
         {
@@ -203,6 +226,8 @@ public enum KnockKind
     Cow,
     /// <summary>The ground, landing a jump hard: no index.</summary>
     Landing,
+    /// <summary>The kerb and the railing along a deck's edge (0.34): no index.</summary>
+    Rail,
 }
 
 /// <summary>

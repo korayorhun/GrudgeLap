@@ -252,12 +252,16 @@ internal static class WorldBuilder
         ApplyQuality();
     }
 
+    /// <summary>Automation (--ssao=, --sun-shadow=): one effect forced on or off whatever the quality says, to see what it does to a picture (0.34).</summary>
+    public static bool? SsaoOverride { get; set; }
+    public static bool? SunShadowOverride { get; set; }
+
     private static void ApplyQuality()
     {
         var retro = _retro;
         var high = !retro && _quality == GraphicsQuality.High;
         var medium = !retro && _quality >= GraphicsQuality.Medium;
-        if (_sun is not null) _sun.ShadowEnabled = medium;
+        if (_sun is not null) _sun.ShadowEnabled = SunShadowOverride ?? medium;
         if (_clouds is not null) _clouds.Visible = !retro;
         if (_carProbe is not null) _carProbe.Visible = medium;
         if (_forest is not null)
@@ -268,7 +272,7 @@ internal static class WorldBuilder
             }
         }
         if (_environment is null) return;
-        _environment.SsaoEnabled = medium;
+        _environment.SsaoEnabled = SsaoOverride ?? medium;
         _environment.SsilEnabled = high;
         _environment.SsrEnabled = high;
         _environment.GlowEnabled = medium;
@@ -1415,7 +1419,51 @@ internal static class WorldBuilder
         return new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = Asphalt, Name = $"Road-{path.Kind}" };
     }
 
-    private static bool IsStructure(in RoadFrame f) => f.Kind is SegmentKind.Loop or SegmentKind.RampUp or SegmentKind.RampDown or SegmentKind.Overpass or SegmentKind.BankedCurve;
+    /// <summary>A frame of a deck on a structure (a bridge, a drawbridge ramp, the loop): a slab with kerbs, no earth shoulders.</summary>
+    private static bool IsDeck(in RoadFrame f) => f.Kind is SegmentKind.Loop or SegmentKind.RampUp or SegmentKind.RampDown or SegmentKind.Overpass;
+
+    private const float KerbWidth = 0.45f;
+    private const float KerbHeight = 0.28f;
+    /// <summary>The bridge slabs' depth from the kerb's top to the soffit: the edge beams of a short concrete span.</summary>
+    private const float DeckDepth = 0.9f;
+
+    /// <summary>
+    /// The body of a deck between two frames (0.34, the owner's "the bridges have no thickness"): a kerb along each edge
+    /// (its top and its face to the road), the deck's side from the kerb's outer top edge down to the soffit, and the
+    /// soffit closing the box underneath. Each face is wound left to right across it as the shoulders are (the lateral
+    /// for a face looking up, and so round), so it lights from outside.
+    /// </summary>
+    private static void DeckBox(MeshBuilder st, in RoadFrame a, in RoadFrame b, float kerbWidth, float kerbHeight, float depth, Color colour)
+    {
+        var aUp = a.Normal * kerbHeight;
+        var bUp = b.Normal * kerbHeight;
+        var aDown = -a.Normal * depth;
+        var bDown = -b.Normal * depth;
+        foreach (var side in new[] { -1f, 1f })
+        {
+            var ao = a.Origin + a.Lateral * (side * a.HalfWidth);
+            var bo = b.Origin + b.Lateral * (side * b.HalfWidth);
+            var aOut = ao + a.Lateral * (side * kerbWidth);
+            var bOut = bo + b.Lateral * (side * kerbWidth);
+            if (side > 0)
+            {
+                Quad(st, ao + aUp, aOut + aUp, bo + bUp, bOut + bUp, a.Normal, b.Normal, colour, a.Distance, b.Distance);
+                Quad(st, ao, ao + aUp, bo, bo + bUp, -a.Lateral, -b.Lateral, colour, a.Distance, b.Distance);
+                Quad(st, aOut + aUp, aOut + aDown, bOut + bUp, bOut + bDown, a.Lateral, b.Lateral, colour, a.Distance, b.Distance);
+            }
+            else
+            {
+                Quad(st, aOut + aUp, ao + aUp, bOut + bUp, bo + bUp, a.Normal, b.Normal, colour, a.Distance, b.Distance);
+                Quad(st, ao + aUp, ao, bo + bUp, bo, a.Lateral, b.Lateral, colour, a.Distance, b.Distance);
+                Quad(st, aOut + aDown, aOut + aUp, bOut + bDown, bOut + bUp, -a.Lateral, -b.Lateral, colour, a.Distance, b.Distance);
+            }
+        }
+        var aRight = a.Origin + a.Lateral * (a.HalfWidth + kerbWidth) + aDown;
+        var aLeft = a.Origin - a.Lateral * (a.HalfWidth + kerbWidth) + aDown;
+        var bRight = b.Origin + b.Lateral * (b.HalfWidth + kerbWidth) + bDown;
+        var bLeft = b.Origin - b.Lateral * (b.HalfWidth + kerbWidth) + bDown;
+        Quad(st, aRight, aLeft, bRight, bLeft, -a.Normal, -b.Normal, colour, a.Distance, b.Distance);
+    }
 
     /// <summary>Metres from a fork or a merge over which the two branches still overlap and share one road.</summary>
     private const float BranchOverlap = 55f;
@@ -1471,6 +1519,9 @@ internal static class WorldBuilder
             var a = frames[i];
             var b = frames[i + 1];
             if (a.Surface == SurfaceType.Chasm || b.Surface == SurfaceType.Chasm) continue;
+            // The decks (the bridges, the ramps, the loop) have kerbs on a slab (BuildBridges, BuildLoopFrame), not gravel
+            // (0.34: until then the gravel ran up the loop and along the drawbridge).
+            if (IsDeck(a) || IsDeck(b)) continue;
             // Gravel is never one shade: every couple of metres the shoulder is a little paler or darker.
             var colour = Colors.White * (0.93f + 0.14f * (RoadWear.Hash((int)(a.Distance / 2f), 0, 23) - 0.5f));
             colour.A = 1f;
@@ -1645,13 +1696,19 @@ internal static class WorldBuilder
         return mesh;
     }
 
-    /// <summary>Overpass decks and drawbridge ramps get concrete pillars (down to the ground) and railings.</summary>
+    /// <summary>
+    /// Overpass decks and drawbridge ramps: a concrete slab with kerbs (0.34; until then the deck was the road ribbon
+    /// alone, a sheet with no side or underside), concrete pillars (down to the ground) and railings on the kerbs.
+    /// </summary>
     private static IEnumerable<Node3D> BuildBridges(TrackPath path)
     {
         var frames = path.Frames;
         var railings = new MeshBuilder();
+        var slab = new MeshBuilder();
         var grey = new Color(0.75f, 0.75f, 0.75f);
+        var concrete = new Color(0.86f, 0.85f, 0.82f);
         var anyRail = false;
+        var anySlab = false;
         var lastPost = -100f;
         var pillars = new Node3D { Name = $"Pillars-{path.Kind}" };
 
@@ -1659,14 +1716,18 @@ internal static class WorldBuilder
         {
             var a = frames[i];
             var b = frames[i + 1];
-            var bridge = a.Kind is SegmentKind.Overpass or SegmentKind.RampUp or SegmentKind.RampDown && a.Origin.Y > 0.4f;
-            if (!bridge) continue;
+            var deck = IsDeck(a) && a.Kind != SegmentKind.Loop && IsDeck(b) && b.Kind != SegmentKind.Loop;
+            if (!deck) continue;
+            // The slab runs the whole deck, the ramps' feet on into the ground: an abutment where the deck meets the road.
+            DeckBox(slab, a, b, KerbWidth, KerbHeight, DeckDepth, concrete);
+            anySlab = true;
+            if (a.Origin.Y <= 0.4f) continue;
 
-            // Steel guardrail: two thin rails on posts every six metres, not a wall.
+            // Steel guardrail on the kerbs: two thin rails on posts every six metres, not a wall.
             foreach (var side in new[] { -1f, 1f })
             {
-                var ao = a.Origin + a.Lateral * (side * (a.HalfWidth + 1.2f));
-                var bo = b.Origin + b.Lateral * (side * (b.HalfWidth + 1.2f));
+                var ao = a.Origin + a.Lateral * (side * (a.HalfWidth + KerbWidth * 0.5f)) + a.Normal * KerbHeight;
+                var bo = b.Origin + b.Lateral * (side * (b.HalfWidth + KerbWidth * 0.5f)) + b.Normal * KerbHeight;
                 foreach (var (lo, hi) in new[] { (0.72f, 0.88f), (0.36f, 0.46f) })
                 {
                     if (side > 0) Quad(railings, ao + a.Normal * lo, ao + a.Normal * hi, bo + b.Normal * lo, bo + b.Normal * hi, a.Lateral * side, b.Lateral * side, grey, a.Distance, b.Distance);
@@ -1692,6 +1753,7 @@ internal static class WorldBuilder
         }
 
         yield return pillars;
+        if (anySlab) yield return new MeshInstance3D { Mesh = slab.Commit(), MaterialOverride = Concrete, Name = $"Slab-{path.Kind}" };
         if (anyRail)
         {
             var material = new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 0.5f, Metallic = 0.4f, CullMode = BaseMaterial3D.CullModeEnum.Disabled };
@@ -1746,9 +1808,19 @@ internal static class WorldBuilder
     {
         var st = new MeshBuilder();
         var steel = new Color(0.58f, 0.60f, 0.63f);
+        var plate = new Color(0.46f, 0.47f, 0.50f);
         var any = false;
         var last = -100f;
         SN.Vector3[]? previousRing = null;
+        // The deck itself: a steel box under the road with a low kerb plate along each edge (0.34), so the loop has a
+        // body from outside and the car cannot look through its floor.
+        var frames = path.Frames;
+        for (var i = 0; i < frames.Count - 1; i++)
+        {
+            if (frames[i].Kind != SegmentKind.Loop || frames[i + 1].Kind != SegmentKind.Loop) continue;
+            DeckBox(st, frames[i], frames[i + 1], 0.3f, 0.2f, 0.5f, plate);
+            any = true;
+        }
         foreach (var f in path.Frames)
         {
             if (f.Kind != SegmentKind.Loop)

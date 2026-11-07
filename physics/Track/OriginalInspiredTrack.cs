@@ -111,7 +111,10 @@ public static class OriginalInspiredTrack
             .Straight(40f)
             .Mark(MarkerKind.Sign, "60")
             .Straight(25f)
-            .Loop(15f, 11f)
+            // A helix of 17.5 m: the exit road (5.5 m half width), its ring (0.8 m outside the deck) and the entry
+            // road with its 2.6 m gravel shoulder, and 0.5 m between (0.34; it was 11 m, one road width, and the
+            // descending deck came down over the entry road's shoulder).
+            .Loop(15f, 17.5f)
             .Mark(MarkerKind.ReturnPoint, "stunt-3")
             .Hill(60f, 2f)
             .Straight(60f)
@@ -125,7 +128,10 @@ public static class OriginalInspiredTrack
             .Curve(-25f, 150f)
             .Straight(40f)
             .Mark(MarkerKind.Sign, "90<")
-            .Curve(-180f, 62f, 32f)
+            // Transition spirals of 75 m either end (0.34): the bank and the curvature rise and fall together, so the
+            // exit onto the flat road is a two-and-a-half-second taper at 110 km/h, not a 25 m drop of the bank on a
+            // 62 m radius (see TrackBuilder.Curve). The bend is 75 m longer; the return leg still crosses its cutting.
+            .Curve(-180f, 62f, 32f, transition: 75f)
             .Mark(MarkerKind.ReturnPoint, "stunt-4")
             .Curve(-50f, 145f)
             .Straight(6.5f)
