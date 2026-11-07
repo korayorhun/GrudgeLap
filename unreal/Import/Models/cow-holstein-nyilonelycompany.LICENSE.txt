@@ -1,0 +1,18 @@
+Title:        Cow frame test
+Kind:         Holstein dairy cow, horned, on a quadruped metarig (191 bones) with one idle clip ("metarigAction") - the herd's cows
+Licence:      Creative Commons Attribution 4.0 International (CC BY 4.0)
+Licence URL:  https://creativecommons.org/licenses/by/4.0/
+Author:       Nyilonelycompany (Sketchfab user "Nyilonelycompany", https://sketchfab.com/Nyilonelycompany)
+Source URL:   https://sketchfab.com/3d-models/c5782e43dcf442718a25b49bed00f582  (original Sketchfab page; published 2021-08-13, still online on 2026-11-07 with "CC Attribution")
+Mirror:       Objaverse 1.0 dataset (allenai/objaverse on Hugging Face), object uid c5782e43dcf442718a25b49bed00f582
+Download URL: https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-099/c5782e43dcf442718a25b49bed00f582.glb
+Downloaded:   2026-11-07
+File:         cow-holstein-nyilonelycompany.glb (5,707,948 bytes, glTF 2.0 binary; 29,345 triangles, 15,609 vertices, one 1024 x 1024 base colour texture)
+
+Attribution text to show in the game credits (CC BY 4.0 requires attribution, a licence link and
+a note of any changes you make):
+  "Cow frame test" by Nyilonelycompany (https://sketchfab.com/3d-models/c5782e43dcf442718a25b49bed00f582) is licensed under Creative Commons Attribution 4.0 International (CC BY 4.0) (https://creativecommons.org/licenses/by/4.0/).
+  Obtained via the Objaverse dataset (Deitke et al., 2022). Modified for use in GrudgeLap (scaled to a Holstein's size, posed by the game's herd: grazing, walking, the tail, a stagger).
+
+Provenance: the same mesh appears on Sketchfab under at least eight accounts; this upload is the earliest of them and
+its author sells animal models commercially, so it is most likely their own work; the later copies are re-uploads.

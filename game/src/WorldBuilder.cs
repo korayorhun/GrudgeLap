@@ -159,6 +159,7 @@ internal static class WorldBuilder
         _weathered.Clear();
         FoliageBuilder.ReleaseShared();
         PropBuilder.ReleaseShared();
+        CowBuilder.ReleaseShared();
     }
 
     /// <summary>--perf-log: each stage of <see cref="Build"/> timed to the log (U3).</summary>

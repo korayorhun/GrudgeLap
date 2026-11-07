@@ -38,6 +38,8 @@ if (-not $SkipModels) {
     if ($LASTEXITCODE -ne 0) { throw "car model download failed (or pass -SkipModels for the lofted bodies)" }
     python "$root/tools/prepare_car_models.py"
     if ($LASTEXITCODE -ne 0) { throw "car model preparation failed (or pass -SkipModels for the lofted bodies)" }
+    # The herd's scanned cow (0.51) goes in as it comes: CowBuilder scales it and sets it down by its own bones.
+    Copy-Item "$root/unreal/Import/Models/cow-holstein-nyilonelycompany.glb" "$root/game/assets/models/cow_holstein.glb" -Force
 }
 # Import the assets (audio loops, car models) first; a fresh checkout has no .godot/imported cache and the export would ship nothing.
 & $Godot --headless --path "$root/game" --import 2>&1 | Out-Null

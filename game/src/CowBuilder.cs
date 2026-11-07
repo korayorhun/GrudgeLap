@@ -37,8 +37,85 @@ internal static class CowBuilder
     /// <summary>A tube as built, kept for painting its patch of the atlas.</summary>
     private sealed record Tube(Ring[] Rings, Rect2 Uv, Part Part, Vector3 Offset);
 
+    /// <summary>The scanned Holstein (0.51; credit in THIRD_PARTY.md), for every cow but the export's.</summary>
+    private const string ScannedPath = "res://assets/models/cow_holstein.glb";
+
+    private static PackedScene? _scanned;
+
+    /// <summary>Drops the scanned cow's scene (the game quits).</summary>
+    public static void ReleaseShared() => _scanned = null;
+
+    /// <summary>
+    /// A cow from the scanned Holstein (0.51): a real cow's shape and hide on a quadruped's skeleton, which
+    /// <see cref="CowRig.Pose"/> poses from the herd as it posed the built cow's pivots (grazing with the neck down,
+    /// the legs swinging in diagonal pairs, the tail at the flies, the stagger of a knock). Every other cow is mirrored and
+    /// each a little bigger or smaller, so the herd does not stand there as copies. Null for the export, which keeps the
+    /// built cow for the other engine to dress, or without the model.
+    /// </summary>
+    private static CowRig? BuildScanned(int seed)
+    {
+        if (WorldBuilder.ExportMode || !ResourceLoader.Exists(ScannedPath)) return null;
+        _scanned ??= GD.Load<PackedScene>(ScannedPath);
+        var scene = _scanned.Instantiate<Node3D>();
+        var skeleton = scene.FindChildren("*", "Skeleton3D", true, false).OfType<Skeleton3D>().FirstOrDefault();
+        var mesh = scene.FindChildren("*", "MeshInstance3D", true, false).OfType<MeshInstance3D>().FirstOrDefault();
+        if (skeleton is null || mesh is null)
+        {
+            scene.Free();
+            return null;
+        }
+        var random = new Random(seed * 7919 + 11);
+        var rig = new CowRig { Name = "Cow" };
+        var model = new Node3D { Name = "Model" };
+        rig.AddChild(model);
+        rig.Model = model;
+        // The scan stands with its head to +z and its hooves at the foot of its mesh's bounds (in the scene's own frame):
+        // turned so the head is +x, as the herd's cows face, and set down with the middle of its body over the origin.
+        var size = 0.94f + 0.12f * (float)random.NextDouble();
+        var mirror = (seed & 1) == 1 ? -1f : 1f;
+        var turn = new Node3D { Name = "Turn", Rotation = new Vector3(0f, Mathf.Pi / 2f, 0f), Scale = new Vector3(mirror * size, size, size) };
+        model.AddChild(turn);
+        // Where the hooves are, from the toes' bones in the scene's frame: a skinned mesh's bounds are in its bind frame,
+        // which the skeleton's own scale and turn move (set down by the bounds the cow stood a metre and a half under the
+        // ground). The hooves' soles a few centimetres under the toes' heads.
+        var skeletonToScene = Transform3D.Identity;
+        for (Node? node = skeleton; node is not null && node != scene; node = node.GetParent())
+        {
+            if (node is Node3D spatial) skeletonToScene = spatial.Transform * skeletonToScene;
+        }
+        var feet = new List<Vector3>();
+        for (var i = 0; i < skeleton.GetBoneCount(); i++)
+        {
+            var name = skeleton.GetBoneName(i);
+            if (name.StartsWith("front_toe.", StringComparison.Ordinal) || name.StartsWith("toe.", StringComparison.Ordinal)) feet.Add(skeletonToScene * skeleton.GetBoneGlobalRest(i).Origin);
+        }
+        if (feet.Count < 4)
+        {
+            scene.Free();
+            rig.Free();
+            return null;
+        }
+        var middle = feet.Aggregate(Vector3.Zero, (sum, f) => sum + f) / feet.Count;
+        var ground = feet.Min(f => f.Y) - 0.05f;
+        // Sized by the hips' height over the hooves, 1.42 m, a grown Holstein's: the file is in its author's units.
+        var hips = -1;
+        for (var i = 0; i < skeleton.GetBoneCount() && hips < 0; i++)
+        {
+            if (skeleton.GetBoneName(i).StartsWith("spine.004", StringComparison.Ordinal)) hips = i;
+        }
+        var hipHeight = hips >= 0 ? (skeletonToScene * skeleton.GetBoneGlobalRest(hips).Origin).Y - ground : 1.42f;
+        turn.Scale *= 1.42f / MathF.Max(hipHeight, 0.01f);
+        scene.Position = new Vector3(-middle.X, -ground, -middle.Z);
+        turn.AddChild(scene);
+        rig.Skeleton = skeleton;
+        rig.Phase = (float)random.NextDouble() * 14f;
+        rig.BindScanned();
+        return rig;
+    }
+
     public static CowRig Build(int seed)
     {
+        if (BuildScanned(seed) is { } scanned) return scanned;
         var random = new Random(seed * 7919 + 11);
         var rig = new CowRig { Name = "Cow" };
         var model = new Node3D { Name = "Model", Position = new Vector3(-Centre, 0f, 0f) };
@@ -426,6 +503,44 @@ internal sealed partial class CowRig : Node3D
     private float _neck;
     private float _head;
 
+    /// <summary>The scanned cow's skeleton (0.51, CowBuilder.BuildScanned), or null for the built cow and its pivots.</summary>
+    public Skeleton3D? Skeleton;
+    // The scan's bones (a quadruped's metarig): the neck's root, its two segments and the head; the tail's two
+    // segments nearest the body; the four thighs, front left, front right, hind left, hind right. -1 where missing.
+    private int _neckRoot = -1, _neckA = -1, _neckB = -1, _headBone = -1, _tailA = -1, _tailB = -1;
+    private int[] _thighs = [];
+    private Quaternion[] _rest = [];
+
+    /// <summary>Finds the scanned cow's bones by their names and keeps their rest orientations.</summary>
+    public void BindScanned()
+    {
+        var skeleton = Skeleton!;
+        int Bone(string prefix)
+        {
+            for (var i = 0; i < skeleton.GetBoneCount(); i++)
+            {
+                if (skeleton.GetBoneName(i).StartsWith(prefix, StringComparison.Ordinal)) return i;
+            }
+            return -1;
+        }
+        _neckRoot = Bone("spine.008");
+        _neckA = Bone("spine.009");
+        _neckB = Bone("spine.010");
+        _headBone = Bone("spine.011");
+        _tailA = Bone("spine.003");
+        _tailB = Bone("spine.002");
+        _thighs = [Bone("front_thigh.L"), Bone("front_thigh.R"), Bone("thigh.L"), Bone("thigh.R")];
+        _rest = new Quaternion[skeleton.GetBoneCount()];
+        for (var i = 0; i < _rest.Length; i++) _rest[i] = skeleton.GetBoneRest(i).Basis.GetRotationQuaternion();
+    }
+
+    /// <summary>A bone of the scanned cow turned from its rest by Euler angles about its own axes (x bends it down for the
+    /// neck and forward and back for a leg, z swings the tail from side to side).</summary>
+    private void Turn(int bone, Vector3 euler)
+    {
+        if (bone >= 0) Skeleton!.SetBonePoseRotation(bone, _rest[bone] * Quaternion.FromEuler(euler));
+    }
+
     /// <summary>Sets the cow where the herd has it and moves its joints for what it is doing.</summary>
     public void Pose(Cow cow, float time, float dt)
     {
@@ -437,10 +552,22 @@ internal sealed partial class CowRig : Node3D
         // A stride of about 1.6 m: the legs swing in diagonal pairs, further the faster it goes.
         _gait += dt * speed / 1.6f * Mathf.Tau;
         var swing = 0.38f * moving;
-        Legs[0].Rotation = new Vector3(0f, 0f, swing * MathF.Sin(_gait));
-        Legs[3].Rotation = new Vector3(0f, 0f, swing * MathF.Sin(_gait));
-        Legs[1].Rotation = new Vector3(0f, 0f, swing * MathF.Sin(_gait + Mathf.Pi));
-        Legs[2].Rotation = new Vector3(0f, 0f, swing * MathF.Sin(_gait + Mathf.Pi));
+        if (Skeleton is null)
+        {
+            Legs[0].Rotation = new Vector3(0f, 0f, swing * MathF.Sin(_gait));
+            Legs[3].Rotation = new Vector3(0f, 0f, swing * MathF.Sin(_gait));
+            Legs[1].Rotation = new Vector3(0f, 0f, swing * MathF.Sin(_gait + Mathf.Pi));
+            Legs[2].Rotation = new Vector3(0f, 0f, swing * MathF.Sin(_gait + Mathf.Pi));
+        }
+        else
+        {
+            // The scan's thighs in diagonal pairs: front left with hind right, front right with hind left.
+            var stride = swing * MathF.Sin(_gait);
+            Turn(_thighs[0], new Vector3(stride, 0f, 0f));
+            Turn(_thighs[3], new Vector3(stride, 0f, 0f));
+            Turn(_thighs[1], new Vector3(-stride, 0f, 0f));
+            Turn(_thighs[2], new Vector3(-stride, 0f, 0f));
+        }
 
         // Grazing: the neck down and the head turned up on it to bring the muzzle to the grass, eleven seconds in
         // fourteen; then up, chewing, looking about. Startled, shoved or on the move, the head comes up.
@@ -451,12 +578,36 @@ internal sealed partial class CowRig : Node3D
         var rate = Mathf.Clamp(dt * (grazing ? 1.2f : 3f), 0f, 1f);
         _neck += (neckTarget - _neck) * rate;
         _head += (headTarget - _head) * rate;
-        Neck.Rotation = new Vector3(0f, 0f, _neck);
-        Head.Rotation = new Vector3(0f, 0f, _head + (grazing ? 0f : 0.05f * MathF.Sin(time * 1.3f + Phase)));
+        var nod = grazing ? 0f : 0.05f * MathF.Sin(time * 1.3f + Phase);
+        if (Skeleton is null)
+        {
+            Neck.Rotation = new Vector3(0f, 0f, _neck);
+            Head.Rotation = new Vector3(0f, 0f, _head + nod);
+        }
+        else
+        {
+            // The scan's neck bent down along its bones to bring the muzzle to the grass (the built cow's neck angle,
+            // from up to grazing, as a share), and when it is up a slow look about.
+            var graze = Mathf.Clamp((_neck - 0.08f) / (-1.12f - 0.08f), 0f, 1f);
+            var look = grazing ? 0f : 0.15f * MathF.Sin(time * 0.6f + Phase);
+            Turn(_neckRoot, new Vector3(0.15f * graze, 0f, 0f));
+            Turn(_neckA, new Vector3(0.5f * graze, 0f, look));
+            Turn(_neckB, new Vector3(0.5f * graze, 0f, look));
+            Turn(_headBone, new Vector3(0.25f * graze + nod, 0f, 0f));
+        }
 
         // The tail swishes at the flies, harder once the cow is upset.
         var upset = cow.Startled > 0f || cow.Knocked > 0f ? 1f : 0f;
-        Tail.Rotation = new Vector3((0.18f + 0.3f * upset) * MathF.Sin(time * (1.7f + upset) + Phase), 0f, 0.1f * upset);
+        var swish = (0.18f + 0.3f * upset) * MathF.Sin(time * (1.7f + upset) + Phase);
+        if (Skeleton is null)
+        {
+            Tail.Rotation = new Vector3(swish, 0f, 0.1f * upset);
+        }
+        else
+        {
+            Turn(_tailA, new Vector3(0.15f * upset, 0f, 1.6f * swish));
+            Turn(_tailB, new Vector3(0f, 0f, swish));
+        }
 
         // A stagger after a knock: the cow rocks on its legs and sinks a little, dying away over a second and a half.
         var knocked = cow.Knocked;

@@ -39,6 +39,11 @@ public sealed class CarModelSourceTests
                 $"{entry.Groups[1].Value}'s LICENSE.txt does not name the SHA-256 fetch_models.py checks it against");
         }
         var game = DrawnFiles(Path.Combine(root, "tools/car_models.json"));
+        // And the models the build copies into the game as they come (0.51: the herd's scanned cow, CowBuilder).
+        foreach (Match copy in Regex.Matches(File.ReadAllText(Path.Combine(root, "tools/build.ps1")), @"unreal/Import/Models/([\w.-]+\.glb)"))
+        {
+            game.Add(copy.Groups[1].Value);
+        }
         var unreal = DrawnFiles(Path.Combine(models, "models.json"));
         var credits = File.ReadAllText(Path.Combine(root, "THIRD_PARTY.md"));
         _out.WriteLine($"{fetched.Count} fetched; the game draws {game.Count}, the Unreal level {unreal.Count}");

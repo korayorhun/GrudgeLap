@@ -23,6 +23,8 @@ MODELS = {
     # 0.17: the flat-twelve as the Testarossa it always was (the Esprit lends it its cabin), and three different hatches.
     "testarossa-liosh.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-141/762c958bd80f4cac8e4dc76f847fca49.glb",
     "lancia-delta-integrale-tarantula.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-140/85614131e0dc4613a948472aaa935fc7.glb",
+    # The herd's cows (0.51, game/src/CowBuilder.cs): a Holstein on a quadruped's skeleton.
+    "cow-holstein-nyilonelycompany.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-099/c5782e43dcf442718a25b49bed00f582.glb",
     "golf-r32-mk4.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-060/8171332b39be45e896a7fdf3c3e66354.glb",
     "renault-12-boitaloran.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-074/f8c26a68a3dd45b492d6d9a33cda6fcd.glb",
     # models13: the flat-plane V8 as a Ferrari 458 Italia (Antonis_zks; a shell without a cabin, like the Testarossa, so

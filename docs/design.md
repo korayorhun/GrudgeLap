@@ -3163,6 +3163,30 @@ verge to the woods.
   the car moves; as a hairline of the right weight it holds still.
 - Visual only; not in the 1989 look nor the export.
 
+### The scanned cows (0.51.0)
+
+The herd's cows were built in code (0.9.1: a lofted barrel, a neck, a head, four jointed legs, a painted hide): at
+5-50 m from the road they read as toys.
+
+- **The model**: "Cow frame test" by Nyilonelycompany (Sketchfab, CC BY 4.0, via the Objaverse mirror; credited in
+  THIRD_PARTY.md): a horned Holstein of 29 000 triangles with its hide in one texture, on a quadruped's metarig of 191
+  bones, fetched with the car models into `unreal/Import/Models` (`fetch_models.py`, its LICENSE.txt beside it) and
+  copied as it comes to `game/assets/models/cow_holstein.glb` by `tools/build.ps1` (build output, as the cars are);
+  sized at run time by its hips' height over its hooves, 1.42 m, a grown Holstein's. Found by a search of Sketchfab's and other free scans: no
+  CC0 or CC BY photoscan of a Holstein exists; a red-pied photoscan whose page is gone and a lighter static red-pied cow
+  were the others considered.
+- **Into the herd's frame** (`CowBuilder.BuildScanned`): the scene turned a quarter round (its head at +z to the herd's
+  +x) and set down by its toes' bones (the hooves' soles 5 cm under them), the middle of the four over the rig's origin:
+  a skinned mesh's bounds are in its bind frame, which the skeleton's own scale and turn move, and set down by them the
+  cow stood a metre and a half under the ground. Every other cow mirrored and each 0.94-1.06 times the size, so the
+  seven do not stand there as copies.
+- **Posed as before** (`CowRig.Pose`): the herd's grazing cycle bends the neck's root and its two segments and the head
+  about their x axes (0.15, 0.5, 0.5 and 0.25 rad at full graze, the muzzle in the grass), a slow look about turns the
+  neck about z while the head is up, the thighs swing in diagonal pairs about x as the cow walks or trots, the tail's two
+  segments swish about z, harder once it is upset, and the stagger of a knock rocks the whole model as it did the built
+  one. The clip that comes with the model (a mild idle) is not used: it never brings the muzzle down to graze.
+- The export keeps the built cow (the other engine dresses its own); so does a build without the model.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and
