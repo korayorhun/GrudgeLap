@@ -58,6 +58,12 @@ AGlpGame* AGlpHud::Game()
 void AGlpHud::DrawHUD()
 {
 	Super::DrawHUD();
+	// -GlpNoHud: pictures of the scene alone (the comparisons with the Godot version, whose --no-hud does the same).
+	static const bool bNoHud = FParse::Param(FCommandLine::Get(), TEXT("GlpNoHud"));
+	if (bNoHud)
+	{
+		return;
+	}
 	AGlpGame* G = Game();
 	if (!G || !G->HasSession() || !Canvas)
 	{

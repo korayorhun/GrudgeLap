@@ -19,3 +19,8 @@ Import/Models/*.glb
 __pycache__/
 Import/track_v8_ue.glb
 Import/car_v8.glb
+
+# NVIDIA's DLSS plugins, unzipped from NVIDIA's download (README, step 4): third-party, 280 MB, not versioned here
+Plugins/DLSS/
+Plugins/DLSSMoviePipelineSupport/
+Plugins/StreamlineNGXCommon/

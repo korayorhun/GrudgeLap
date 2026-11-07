@@ -29,6 +29,14 @@
 		{
 			"Name": "MovieRenderPipeline",
 			"Enabled": true
+		},
+		{
+			"Name": "DLSS",
+			"Enabled": true
+		},
+		{
+			"Name": "DLSSMoviePipelineSupport",
+			"Enabled": true
 		}
 	]
 }
