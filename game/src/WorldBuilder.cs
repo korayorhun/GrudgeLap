@@ -39,6 +39,14 @@ internal static class WorldBuilder
     private const float MacroTile = 90f;
 
     private static StandardMaterial3D? _grass;
+    // The ground, the verge and the tufts as drawn since 0.36 (assets/shaders): the standard materials above stay for the
+    // glTF export (ExportMode), which carries only those.
+    private static ShaderMaterial? _groundShader;
+    private static ShaderMaterial? _shoulderShader;
+    /// <summary>--export-world: the world built with the standard materials the glTF export carries (0.36).</summary>
+    public static bool ExportMode { get; set; }
+    /// <summary>The ground and the verge drawn by the shaders of 0.36; not for the export.</summary>
+    private static bool ShaderGround => !ExportMode;
     private static StandardMaterial3D? _asphalt;
     private static StandardMaterial3D? _concrete;
     private static StandardMaterial3D? _gravel;
@@ -52,6 +60,12 @@ internal static class WorldBuilder
     private static readonly Color OrangeEarth = new(0.86f, 0.50f, 0.27f);
     // The shoulders are compacted grey-brown gravel (0.15 again; 0.13's red earth, the arcade's, read as paint on the ground).
     private static readonly Color GravelTint = new(0.80f, 0.77f, 0.72f);
+    /// <summary>
+    /// The paint of the verge's stones (0.36): the arcade's burnt orange (its verges measure about 155, 85, 20 on the
+    /// screen in the attract video; the owner found 0.93, 0.42, 0.08 pink in the sun), faded and chipped unevenly.
+    /// </summary>
+    private static readonly Color StonePaint = new(0.60f, 0.30f, 0.02f);
+    private static readonly Color StoneFaded = new(0.60f, 0.40f, 0.16f);
     private static readonly Color SoilTint = new(0.72f, 0.58f, 0.46f);
     private static Godot.Environment? _environment;
     private static Godot.Environment? _mirrorEnvironment;
@@ -107,6 +121,8 @@ internal static class WorldBuilder
         _overcastSky = null;
         _puddles = null;
         _grass = null;
+        _groundShader = null;
+        _shoulderShader = null;
         _asphalt = null;
         _concrete = null;
         _gravel = null;
@@ -216,6 +232,12 @@ internal static class WorldBuilder
             UpdateMode = ReflectionProbe.UpdateModeEnum.Once,
             Size = new Vector3(90f, 50f, 90f),
             CullMask = 0xFFFFFu & ~2u,
+            // The probe lights the player's car alone (its meshes are on layer 2, CarView.MarkPlayer), 0.36. Until then it
+            // lit everything in its 90 m box: the road within 45 m of the car reflected the probe's dark capture of the
+            // ground and the trees, the road beyond it the bright sky, so the far road was pale and darkened as the box
+            // reached it, in a step every 12 m as the probe moved (the owner's "the far road looks light and darkens as
+            // you approach").
+            ReflectionMask = ProbeAffectsAll ? 0xFFFFFu : 2u,
             EnableShadows = false,
             Intensity = 1f,
         };
@@ -255,6 +277,14 @@ internal static class WorldBuilder
     /// <summary>Automation (--ssao=, --sun-shadow=): one effect forced on or off whatever the quality says, to see what it does to a picture (0.34).</summary>
     public static bool? SsaoOverride { get; set; }
     public static bool? SunShadowOverride { get; set; }
+    /// <summary>Automation (0.36): --ssr=, --volfog=, --fog=, --probe= force one more effect on or off; --probe-all=1 lets the car's probe light everything in its box again, as it did until 0.36.</summary>
+    public static bool? SsrOverride { get; set; }
+    public static bool? VolumetricFogOverride { get; set; }
+    public static bool? FogOverride { get; set; }
+    public static bool? ProbeOverride { get; set; }
+    /// <summary>--sdfgi=1: signed-distance-field global illumination on (0.36 experiment; off since 0.8 for its cost).</summary>
+    public static bool? SdfgiOverride { get; set; }
+    public static bool ProbeAffectsAll { get; set; }
 
     private static void ApplyQuality()
     {
@@ -263,7 +293,7 @@ internal static class WorldBuilder
         var medium = !retro && _quality >= GraphicsQuality.Medium;
         if (_sun is not null) _sun.ShadowEnabled = SunShadowOverride ?? medium;
         if (_clouds is not null) _clouds.Visible = !retro;
-        if (_carProbe is not null) _carProbe.Visible = medium;
+        if (_carProbe is not null) _carProbe.Visible = ProbeOverride ?? medium;
         if (_forest is not null)
         {
             foreach (var child in _forest.GetChildren())
@@ -274,9 +304,20 @@ internal static class WorldBuilder
         if (_environment is null) return;
         _environment.SsaoEnabled = SsaoOverride ?? medium;
         _environment.SsilEnabled = high;
-        _environment.SsrEnabled = high;
+        _environment.SsrEnabled = SsrOverride ?? high;
         _environment.GlowEnabled = medium;
-        _environment.VolumetricFogEnabled = medium;
+        _environment.VolumetricFogEnabled = VolumetricFogOverride ?? medium;
+        if (FogOverride is { } fog) _environment.FogEnabled = fog;
+        if (SdfgiOverride is { } sdfgi)
+        {
+            _environment.SdfgiEnabled = sdfgi;
+            _environment.SdfgiUseOcclusion = true;
+            _environment.SdfgiReadSkyLight = true;
+            _environment.SdfgiCascades = 4;
+            _environment.SdfgiMinCellSize = 0.25f;
+            _environment.SdfgiBounceFeedback = 0.5f;
+            _environment.SdfgiEnergy = 1f;
+        }
         ApplyWeather();
     }
 
@@ -300,7 +341,7 @@ internal static class WorldBuilder
         if (_asphalt is not null)
         {
             _asphalt.AlbedoColor = DryAsphalt.Lerp(WetAsphalt, wet);
-            _asphalt.Roughness = Mathf.Lerp(0.8f, 0.30f, wet);
+            _asphalt.Roughness = Mathf.Lerp(0.9f, 0.30f, wet);
             _asphalt.RoughnessTexture = wet > 0f ? Puddles : null;
         }
         if (_gravel is not null && !_retro)
@@ -313,6 +354,10 @@ internal static class WorldBuilder
             _grass.AlbedoColor = DryGrass.Lerp(WetGrass, wet);
             _grass.Roughness = Mathf.Lerp(1f, 0.8f, wet);
         }
+        _groundShader?.SetShaderParameter("tint", DryGrass.Lerp(WetGrass, wet));
+        _groundShader?.SetShaderParameter("wetness", wet);
+        _shoulderShader?.SetShaderParameter("wetness", wet);
+        FoliageBuilder.SetWeather(DryGrass.Lerp(WetGrass, wet), wet);
         if (_edgeLines is not null) _edgeLines.Roughness = Mathf.Lerp(0.65f, 0.25f, wet);
         if (_environment is null || _sun is null || _retro) return;
         var overcast = WeatherModel.Overcast(_weather);
@@ -324,15 +369,17 @@ internal static class WorldBuilder
         if (_clouds is not null) _clouds.Visible = !overcast;   // the grey sky is its own cloud
         _sun.LightEnergy = overcast ? 0.6f : SunEnergy;
         _sun.LightColor = overcast ? CloudSun : DrySun;
-        _sun.LightAngularDistance = overcast ? 10f : 0.5f;   // behind cloud the sun is a wide source: shadows all but gone
+        // Behind cloud the sun is a wide source: shadows all but gone. In clear weather a point (0.36: at 0.5 degrees the
+        // contact-hardening filter's noise crawled over the dashboard as the car moved, the owner's trembling cockpit shadows).
+        _sun.LightAngularDistance = overcast ? 10f : 0f;
         foreach (var environment in new[] { _environment, _mirrorEnvironment })
         {
             if (environment is null) continue;
             environment.AmbientLightSkyContribution = overcast ? 0.95f : SkyAmbientShare;
             environment.AmbientLightEnergy = overcast ? 1.1f : AmbientEnergy;
-            environment.FogLightColor = overcast ? new Color(0.70f, 0.72f, 0.76f) : new Color(0.72f, 0.80f, 0.94f);
-            environment.FogDensity = !overcast ? 0.00004f : WeatherModel.Raining(_weather) ? 0.00032f : 0.00016f;
-            environment.FogAerialPerspective = overcast ? 0.8f : 0.35f;
+            environment.FogLightColor = overcast ? new Color(0.70f, 0.72f, 0.76f) : ClearAir;
+            environment.FogDensity = !overcast ? ClearAirDensity : WeatherModel.Raining(_weather) ? 0.00032f : 0.00016f;
+            environment.FogAerialPerspective = overcast ? 0.8f : 0.55f;
             environment.VolumetricFogDensity = overcast ? 0.00035f : 0.00012f;
             environment.TonemapExposure = overcast ? 1.15f : 0.9f;
         }
@@ -376,6 +423,8 @@ internal static class WorldBuilder
         // The shoulders and the earthworks take the cabinet's orange back with the textures off; the edge lines and the
         // marker posts go.
         if (_gravel is not null) _gravel.AlbedoColor = retro ? OrangeShoulder : GravelTint;
+        _groundShader?.SetShaderParameter("retro", retro);
+        _shoulderShader?.SetShaderParameter("retro", retro);
         if (_earth is not null) _earth.AlbedoColor = retro ? OrangeEarth : SoilTint;
         foreach (var node in _modernRoad)
         {
@@ -458,7 +507,9 @@ internal static class WorldBuilder
                 // as if it had just rained (0.11). A dry road only shines at a grazing angle towards a low sun.
                 AlbedoColor = new Color(0.52f, 0.52f, 0.53f),
                 VertexColorUseAsAlbedo = true,
-                Roughness = 0.8f,
+                // Matter and less specular since 0.36 (0.8 and the default 0.5): a dry road shines only towards a low sun.
+                Roughness = 0.9f,
+                MetallicSpecular = 0.3f,
                 Uv1Scale = new Vector3(2f, 0.18f, 1f),      // u spans the 11 m width, v is metres along: a 5.5 m tile
                 // Both faces: on the bridges, the ramps and the loop this ribbon is the whole deck, seen from below too.
                 CullMode = BaseMaterial3D.CullModeEnum.Disabled,
@@ -651,7 +702,9 @@ internal static class WorldBuilder
             TonemapExposure = 0.9f,
             TonemapWhite = 6f,
             SsaoEnabled = true,
-            SsaoRadius = 1.5f,
+            // A metre (1.5 until 0.36): inside the cabin a radius of a metre and a half darkened broad smudges that
+            // slid about as the view moved.
+            SsaoRadius = 1.0f,
             SsaoIntensity = 1.5f,
             SsilEnabled = true,
             SsilRadius = 3f,
@@ -667,9 +720,9 @@ internal static class WorldBuilder
             // Clear, dry air: the mountains three kilometres out stay crisp and only pick up a little blue, as on the
             // plain of the 1989 game, where nothing faded. Denser fog washed everything past the next bend to grey.
             FogEnabled = true,
-            FogLightColor = new Color(0.72f, 0.80f, 0.94f),
-            FogDensity = 0.00004f,
-            FogAerialPerspective = 0.35f,
+            FogLightColor = ClearAir,
+            FogDensity = ClearAirDensity,
+            FogAerialPerspective = 0.55f,
             FogSkyAffect = 0.05f,
             // A trace of haze near the ground, so the sun still has something to light in the dips.
             VolumetricFogEnabled = true,
@@ -690,15 +743,20 @@ internal static class WorldBuilder
         {
             LightEnergy = 1.75f,
             LightColor = new Color(1f, 0.96f, 0.90f),
-            LightAngularDistance = 0.5f,
+            // Steady shadows in the cabin (0.36, the owner's "the cockpit's shadows tremble"): a point sun (0.5 degrees used
+            // the contact-hardening filter, whose noise crawled over the dashboard as the car moved), a bias the dashboard's
+            // grazing light needs (0.02 and 1.0 put a speckle of self-shadow on it), and the nearest cascade 10 m deep
+            // instead of 25 for finer texels in the cabin; shadows end at 350 m (500).
+            LightAngularDistance = 0f,
             ShadowEnabled = true,
             DirectionalShadowMode = DirectionalLight3D.ShadowMode.Parallel4Splits,
-            DirectionalShadowMaxDistance = 500f,
-            DirectionalShadowSplit1 = 0.05f,
-            DirectionalShadowSplit2 = 0.15f,
+            DirectionalShadowMaxDistance = 350f,
+            DirectionalShadowSplit1 = 0.03f,
+            DirectionalShadowSplit2 = 0.12f,
             DirectionalShadowSplit3 = 0.4f,
-            ShadowBias = 0.02f,
-            ShadowNormalBias = 1.0f,
+            ShadowBias = 0.05f,
+            ShadowNormalBias = 1.5f,
+            ShadowBlur = 1.3f,
             DirectionalShadowBlendSplits = true,
         };
         // Shine from where the HDRI's sun is, so shadows and the sky agree.
@@ -759,7 +817,7 @@ internal static class WorldBuilder
         Rectangle(-half, half, holeZ1, half);
         Rectangle(-half, holeX0, holeZ0, holeZ1);
         Rectangle(holeX1, half, holeZ0, holeZ1);
-        return new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = Grass, Position = new Vector3(0f, -0.06f, 0f), Name = "FarGround" };
+        return new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = GroundMaterial, Position = new Vector3(0f, -0.06f, 0f), Name = "FarGround" };
     }
 
     /// <summary>The ground the terrain mesh covers (simulation x and z): every road's extent and <see cref="TerrainMargin"/> round it.</summary>
@@ -853,7 +911,8 @@ internal static class WorldBuilder
         var st = new MeshBuilder();
         // Seen from the circuit only the upper slopes clear the plain's own hills, so those carry the colour: dark rock
         // with snow on the tips alone, or the whole range read as a bank of cloud.
-        var forest = new Color(0.12f, 0.21f, 0.10f);
+        // Darker and greyer than a field's green (0.12, 0.21, 0.10 until 0.36: under the haze it turned mint).
+        var forest = new Color(0.09f, 0.14f, 0.11f);
         var rock = new Color(0.22f, 0.19f, 0.17f);
         var scree = new Color(0.33f, 0.29f, 0.25f);
         var snow = new Color(0.93f, 0.94f, 0.97f);
@@ -1158,7 +1217,8 @@ internal static class WorldBuilder
             st.SetTangent((Vector3.Right - gNormal * gNormal.X).Normalized(), 1f);
             st.SetNormal(gNormal);
             st.SetUV(new Vector2(x / 5000f + 0.5f, z / 5000f + 0.5f));
-            st.SetUV2(new Vector2(x / MacroTile, z / MacroTile));
+            // The shader's ground (0.36) reads the bare earth and the road's weight here; the export's material its macro tile.
+            st.SetUV2(ShaderGround ? new Vector2(earth, vertexWeight[v]) : new Vector2(x / MacroTile, z / MacroTile));
             st.AddVertex(Convert.ToGodot(new SN.Vector3(x, h, z)));
         }
         Stage("  terrain: the vertices' colours, into the builder");
@@ -1214,7 +1274,8 @@ internal static class WorldBuilder
         for (var t = 0; t < indices.Count; t += 3)
         {
             var (a, b, c) = (indices[t], indices[t + 1], indices[t + 2]);
-            var earthCorners = (vertexEarth[a] >= 0.5f ? 1 : 0) + (vertexEarth[b] >= 0.5f ? 1 : 0) + (vertexEarth[c] >= 0.5f ? 1 : 0);
+            // The shader's ground draws the earth itself, blended (0.36): no second mesh, no hard contour.
+            var earthCorners = ShaderGround ? 0 : (vertexEarth[a] >= 0.5f ? 1 : 0) + (vertexEarth[b] >= 0.5f ? 1 : 0) + (vertexEarth[c] >= 0.5f ? 1 : 0);
             if (earthCorners == 0)
             {
                 st.AddIndex(a); st.AddIndex(b); st.AddIndex(c);
@@ -1248,7 +1309,7 @@ internal static class WorldBuilder
         }
         GD.Print($"terrain: {count} vertices, {indices.Count / 3} triangles, {refined} of {cellsX * cellsZ} cells refined along the roads, {earthTriangles} of earthworks, {crossings.Count} contour points");
         Stage("  terrain: the triangles sorted by the contour");
-        var ground = new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = Grass, Name = "Terrain" };
+        var ground = new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = GroundMaterial, Name = "Terrain" };
         Stage("  terrain: the mesh committed");
         if (earthTriangles > 0) ground.AddChild(new MeshInstance3D { Mesh = es.Commit(), MaterialOverride = Earth, Name = "TerrainEarth" });
         return ground;
@@ -1424,8 +1485,8 @@ internal static class WorldBuilder
 
     private const float KerbWidth = 0.45f;
     private const float KerbHeight = 0.28f;
-    /// <summary>The bridge slabs' depth from the kerb's top to the soffit: the edge beams of a short concrete span.</summary>
-    private const float DeckDepth = 0.9f;
+    /// <summary>The bridge slabs' depth from the road to the soffit: the edge beams of a short concrete span (0.9 m in 0.34).</summary>
+    private const float DeckDepth = 1.2f;
 
     /// <summary>
     /// The body of a deck between two frames (0.34, the owner's "the bridges have no thickness"): a kerb along each edge
@@ -1463,6 +1524,31 @@ internal static class WorldBuilder
         var bRight = b.Origin + b.Lateral * (b.HalfWidth + kerbWidth) + bDown;
         var bLeft = b.Origin - b.Lateral * (b.HalfWidth + kerbWidth) + bDown;
         Quad(st, aRight, aLeft, bRight, bLeft, -a.Normal, -b.Normal, colour, a.Distance, b.Distance);
+    }
+
+    /// <summary>
+    /// The end of a deck where it stops at the drawbridge's gap (0.36, the owner's "the bridge is a millimetre thick when
+    /// you jump"): the slab's face from the road down to the soffit, and the kerbs' ends, facing along the road
+    /// (<paramref name="facing"/> +1 ahead, -1 back). Until 0.36 the deck had sides and an underside but no end, so the
+    /// lip of the jump and the landing ramp's edge, seen across the gap, were the road ribbon's edge: a sheet.
+    /// </summary>
+    private static void DeckEnd(MeshBuilder st, RoadFrame f, float facing, float kerbWidth, float kerbHeight, float depth, Color colour)
+    {
+        var up = f.Normal;
+        var down = -f.Normal * depth;
+        var n = f.Tangent * facing;
+        // Wound as DeckBox's faces are (normal = (b row - a row) x (right - left), simulation axes): the a row at the
+        // foot, the b row at the top, left and right swapped with the facing.
+        void Face(float from, float to, float top)
+        {
+            var left = f.Origin + f.Lateral * from;
+            var right = f.Origin + f.Lateral * to;
+            var (l0, r0) = facing > 0f ? (right, left) : (left, right);
+            Quad(st, l0 + down, r0 + down, l0 + up * top, r0 + up * top, n, n, colour, 0f, 1f);
+        }
+        Face(-f.HalfWidth, f.HalfWidth, 0f);
+        Face(-f.HalfWidth - kerbWidth, -f.HalfWidth, kerbHeight);
+        Face(f.HalfWidth, f.HalfWidth + kerbWidth, kerbHeight);
     }
 
     /// <summary>Metres from a fork or a merge over which the two branches still overlap and share one road.</summary>
@@ -1533,12 +1619,13 @@ internal static class WorldBuilder
                 var bo = b.Origin + b.Lateral * (side * b.HalfWidth);
                 var ai = ao + a.Lateral * (side * width) - a.Normal * ShoulderDrop;
                 var bi = bo + b.Lateral * (side * width) - b.Normal * ShoulderDrop;
-                // Keep the winding left-to-right on both sides: back faces get their normal flipped and go dark.
+                // Keep the winding left-to-right on both sides: back faces get their normal flipped and go dark. u runs from
+                // the asphalt's edge (0) out (1) on both sides, for the verge's shader (0.36).
                 if (side > 0) Quad(st, ao, ai, bo, bi, a.Normal, b.Normal, colour, a.Distance, b.Distance);
-                else Quad(st, ai, ao, bi, bo, a.Normal, b.Normal, colour, a.Distance, b.Distance);
+                else Quad(st, ai, ao, bi, bo, a.Normal, b.Normal, colour, a.Distance, b.Distance, uLeft: 1f, uRight: 0f);
             }
         }
-        return new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = Gravel, Name = $"Shoulder-{path.Kind}" };
+        return new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = ShaderGround ? ShoulderMaterial : Gravel, Name = $"Shoulder-{path.Kind}" };
     }
 
     private static MeshInstance3D BuildCentreLine(TrackGeometry track, TrackPath path)
@@ -1649,6 +1736,46 @@ internal static class WorldBuilder
         return group;
     }
 
+    /// <summary>The air's colour and density on a clear day (0.36: 0.00004 and a paler blue let nothing fade with distance).</summary>
+    private static readonly Color ClearAir = new(0.66f, 0.74f, 0.86f);
+    private const float ClearAirDensity = 0.00009f;
+
+    /// <summary>The ground's shader (assets/shaders/terrain.gdshader), or the standard grass for the export.</summary>
+    private static Material GroundMaterial => ExportMode ? Grass : _groundShader ??= MakeGroundShader();
+
+    private static ShaderMaterial MakeGroundShader()
+    {
+        var material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/terrain.gdshader") };
+        material.SetShaderParameter("lawn", Photo("grass_color"));
+        material.SetShaderParameter("lawn_normal", Photo("grass_normal"));
+        material.SetShaderParameter("meadow", Photo("meadow_color"));
+        material.SetShaderParameter("meadow_normal", Photo("meadow_normal"));
+        material.SetShaderParameter("soil", Photo("soil_color"));
+        material.SetShaderParameter("soil_normal", Photo("soil_normal"));
+        material.SetShaderParameter("tint", DryGrass);
+        // The meadow photo (ambientCG Grass001) brought most of the way to the lawn's (Grass004) mean, a little greener.
+        material.SetShaderParameter("meadow_balance", new Vector3(1.7f, 1.3f, 1.35f));
+        material.SetShaderParameter("soil_tint", new Color(0.62f, 0.60f, 0.60f));
+        material.SetShaderParameter("retro", _retro);
+        return material;
+    }
+
+    /// <summary>The verge's painted stones (assets/shaders/shoulder.gdshader).</summary>
+    private static ShaderMaterial ShoulderMaterial => _shoulderShader ??= MakeShoulderShader();
+
+    private static ShaderMaterial MakeShoulderShader()
+    {
+        var material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/shoulder.gdshader") };
+        material.SetShaderParameter("stones", Photo("stones_color"));
+        material.SetShaderParameter("stones_normal", Photo("stones_normal"));
+        material.SetShaderParameter("stones_height", Photo("stones_height"));
+        material.SetShaderParameter("paint", StonePaint);
+        material.SetShaderParameter("faded", StoneFaded);
+        material.SetShaderParameter("retro_colour", OrangeShoulder);
+        material.SetShaderParameter("retro", _retro);
+        return material;
+    }
+
     /// <summary>
     /// A marker post: a white post 1.05 m tall, 10 cm by 12 cm, with a black band under its top; or, with
     /// <paramref name="reflector"/>, the reflector plate on the band's front (-z, Godot's forward), white for the
@@ -1750,6 +1877,23 @@ internal static class WorldBuilder
             // The piers under the deck are props of the track (TrackGeometry.AddBridgePiers), solid to the car and
             // drawn by PropBuilder.
 
+        }
+
+        // The slab's ends at the drawbridge's gap.
+        for (var i = 0; i < frames.Count; i++)
+        {
+            var f = frames[i];
+            if (!IsDeck(f) || f.Kind == SegmentKind.Loop || f.Surface == SurfaceType.Chasm) continue;
+            if (i + 1 < frames.Count && frames[i + 1].Surface == SurfaceType.Chasm)
+            {
+                DeckEnd(slab, f, 1f, KerbWidth, KerbHeight, DeckDepth, concrete);
+                anySlab = true;
+            }
+            if (i > 0 && frames[i - 1].Surface == SurfaceType.Chasm)
+            {
+                DeckEnd(slab, f, -1f, KerbWidth, KerbHeight, DeckDepth, concrete);
+                anySlab = true;
+            }
         }
 
         yield return pillars;

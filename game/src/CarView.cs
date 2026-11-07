@@ -255,7 +255,12 @@ internal sealed partial class CarView : Node3D
     /// </summary>
     public void MarkPlayer()
     {
-        foreach (var geometry in Descendants(this).OfType<GeometryInstance3D>()) geometry.Layers = 3;
+        foreach (var geometry in Descendants(this).OfType<GeometryInstance3D>())
+        {
+            geometry.Layers = 3;
+            // A moving car takes no part in the world's global illumination (it would be voxelised where it stood).
+            geometry.GIMode = GeometryInstance3D.GIModeEnum.Dynamic;
+        }
         if (_model is not null && _modelEye is { } eye) BuildCabinShade(eye);
         Aabb bounds;
         Vector3 centre;

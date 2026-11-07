@@ -1,10 +1,14 @@
 # Textures and sky
 
-All CC0 (public domain dedication); re-encoded here at 1K as JPEG to keep the repository small.
+All CC0 (public domain dedication); re-encoded here as JPEG at 1K to keep the repository small, the ground's and the
+verge's at 2K (0.36: they fill most of the screen).
 
 | File | Source | Author / site | License |
 |---|---|---|---|
-| `grass_color.jpg`, `grass_normal.jpg`, `grass_roughness.jpg` | ambientCG **Grass004** (1K-JPG: Color, NormalGL, Roughness) | https://ambientcg.com/view?id=Grass004 | CC0 1.0 |
+| `grass_color.jpg`, `grass_normal.jpg`, `grass_roughness.jpg` | ambientCG **Grass004** (Color and NormalGL at 2K since 0.36, Roughness 1K) — the lawn of the ground's shader, the standard grass of the export | https://ambientcg.com/view?id=Grass004 | CC0 1.0 |
+| `meadow_color.jpg`, `meadow_normal.jpg` | ambientCG **Grass001** (2K-JPG: Color, NormalGL) — the meadow with clover in the ground's shader (0.36) | https://ambientcg.com/view?id=Grass001 | CC0 1.0 |
+| `soil_color.jpg`, `soil_normal.jpg` | ambientCG **Ground067** (2K-JPG: Color, NormalGL) — bare soil: the trodden strip by the road, the bald patches, the cuttings (0.36) | https://ambientcg.com/view?id=Ground067 | CC0 1.0 |
+| `stones_color.jpg`, `stones_normal.jpg`, `stones_height.jpg` | ambientCG **Gravel020** (2K-JPG: Color, NormalGL, Displacement) — the verge's stones, painted orange by its shader (0.36) | https://ambientcg.com/view?id=Gravel020 | CC0 1.0 |
 | `asphalt_color.jpg`, `asphalt_normal.jpg`, `asphalt_roughness.jpg` | ambientCG **Asphalt004** (1K-JPG) | https://ambientcg.com/view?id=Asphalt004 | CC0 1.0 |
 | `concrete_color.jpg`, `concrete_normal.jpg`, `concrete_roughness.jpg` | ambientCG **Concrete034** (1K-JPG) | https://ambientcg.com/view?id=Concrete034 | CC0 1.0 |
 | `dirt_color.jpg`, `dirt_normal.jpg`, `dirt_roughness.jpg` | ambientCG **Ground037** (1K-JPG) — shoulders, ploughed fields, hay | https://ambientcg.com/view?id=Ground037 | CC0 1.0 |

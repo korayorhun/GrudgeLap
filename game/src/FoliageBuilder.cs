@@ -15,12 +15,14 @@ internal static class FoliageBuilder
 {
     private const int TuftVariants = 8;
     private static StandardMaterial3D? _tuft;
+    private static ShaderMaterial? _tuftShader;
     private static StandardMaterial3D? _leaf;
     private static StandardMaterial3D? _bark;
 
     public static void ReleaseShared()
     {
         _tuft = null;
+        _tuftShader = null;
         _leaf = null;
         _bark = null;
         _forestLeaf = null;
@@ -46,15 +48,36 @@ internal static class FoliageBuilder
         DistanceFadeMaxDistance = 170f,
     };
 
+    /// <summary>
+    /// The tufts as drawn since 0.36 (assets/shaders/tuft.gdshader): tinted like the ground under them, faded out from 70
+    /// to 120 m; the standard material above stays for the export.
+    /// </summary>
+    private static Material TuftMaterial => WorldBuilder.ExportMode ? Tuft : _tuftShader ??= MakeTuftShader();
+
+    private static ShaderMaterial MakeTuftShader()
+    {
+        var material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/tuft.gdshader") };
+        material.SetShaderParameter("blades", GD.Load<Texture2D>("res://assets/textures/grass_blades.png"));
+        return material;
+    }
+
+    /// <summary>The weather's grass tint and wetness for the tufts (WorldBuilder.ApplyWeather).</summary>
+    public static void SetWeather(Color tint, float wetness)
+    {
+        _tuftShader?.SetShaderParameter("tint", tint);
+        _tuftShader?.SetShaderParameter("wetness", wetness);
+    }
+
     private static StandardMaterial3D Leaf => _leaf ??= new StandardMaterial3D
     {
         AlbedoTexture = GD.Load<Texture2D>("res://assets/textures/leaf_clusters.png"),
         Transparency = BaseMaterial3D.TransparencyEnum.AlphaScissor,
         AlphaScissorThreshold = 0.5f,
-        // As for the tufts (0.11): softer card edges, and the sun through the canopy.
+        // As for the tufts (0.11): softer card edges, and the sun through the canopy, a little (0.28, 0.34, 0.14 until
+        // 0.36 lit the canopies from behind like lamps: from the circuit the trees read paler than the fields).
         AlphaAntialiasingMode = BaseMaterial3D.AlphaAntiAliasing.AlphaToCoverage,
         BacklightEnabled = true,
-        Backlight = new Color(0.28f, 0.34f, 0.14f),
+        Backlight = new Color(0.10f, 0.13f, 0.05f),
         CullMode = BaseMaterial3D.CullModeEnum.Disabled,
         VertexColorUseAsAlbedo = true,
         Roughness = 0.9f,
@@ -125,6 +148,14 @@ internal static class FoliageBuilder
                 var f = frames[i];
                 if (f.Kind is SegmentKind.Loop or SegmentKind.RampUp or SegmentKind.Gap or SegmentKind.RampDown or SegmentKind.Overpass) continue;
                 if (f.Surface != SurfaceType.Road) continue;
+                // Small tufts where the band of painted stones frays into the grass and just past it (0.36): the verge
+                // grows into the stones' outer edge instead of stopping at a ruled line.
+                if (rng.NextDouble() < 0.55)
+                {
+                    var vergeSide = rng.Next(2) == 0 ? -1f : 1f;
+                    var vergeAt = f.Origin + f.Lateral * (vergeSide * (f.HalfWidth + 2.1f + (float)rng.NextDouble() * 2.4f));
+                    Place(vergeAt.X, vergeAt.Z, 0.32f + 0.3f * (float)rng.NextDouble());
+                }
                 for (var k = 0; k < 5; k++)
                 {
                     var side = rng.Next(2) == 0 ? -1f : 1f;
@@ -171,7 +202,7 @@ internal static class FoliageBuilder
                 multi.SetInstanceTransform(i, transforms[v][i]);
                 multi.SetInstanceColor(i, colours[v][i]);
             }
-            root.AddChild(new MultiMeshInstance3D { Multimesh = multi, MaterialOverride = Tuft, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
+            root.AddChild(new MultiMeshInstance3D { Multimesh = multi, MaterialOverride = TuftMaterial, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
             total += transforms[v].Count;
         }
         GD.Print($"grass tufts: {total}");
@@ -246,7 +277,8 @@ internal static class FoliageBuilder
             var r = MathF.Sqrt(1f - u * u) * spread * (0.3f + 0.7f * (float)rng.NextDouble());
             var p = centre + new Vector3(Mathf.Cos(theta) * r, u * ry * (0.4f + 0.6f * (float)rng.NextDouble()), Mathf.Sin(theta) * r);
             var size = spread * (0.55f + 0.5f * (float)rng.NextDouble());
-            var tone = 0.72f + 0.38f * (float)rng.NextDouble();
+            // A canopy is darker than the field under it (0.72-1.10 until 0.36: pale lime blobs against the grass).
+            var tone = 0.48f + 0.30f * (float)rng.NextDouble();
             var colour = new Color(tone * (0.85f + 0.2f * (float)rng.NextDouble()), tone, tone * 0.85f);
             var cell = rng.Next(4);
             var basis = new Basis(Quaternion.FromEuler(new Vector3((float)rng.NextDouble() * 1.2f - 0.6f, (float)rng.NextDouble() * Mathf.Tau, (float)rng.NextDouble() * 1.2f - 0.6f)));
@@ -288,7 +320,7 @@ internal static class FoliageBuilder
         AlphaScissorThreshold = 0.35f,
         AlphaAntialiasingMode = BaseMaterial3D.AlphaAntiAliasing.AlphaToCoverage,
         BacklightEnabled = true,
-        Backlight = new Color(0.28f, 0.34f, 0.14f),
+        Backlight = new Color(0.08f, 0.10f, 0.04f),
         CullMode = BaseMaterial3D.CullModeEnum.Disabled,
         VertexColorUseAsAlbedo = true,
         Roughness = 0.9f,
@@ -442,7 +474,7 @@ internal static class FoliageBuilder
             var p = centre + new Vector3(MathF.Cos(theta) * r, u * ry * (0.5f + 0.5f * (float)rng.NextDouble()), MathF.Sin(theta) * r);
             var size = spread * (0.9f + 0.6f * (float)rng.NextDouble());
             // Darker than the roadside trees: the wood reads as the dark line it was on the 1989 horizon.
-            var tone = 0.42f + 0.3f * (float)rng.NextDouble();
+            var tone = 0.30f + 0.22f * (float)rng.NextDouble();
             var colour = new Color(tone * 0.8f, tone, tone * 0.75f);
             var basis = new Basis(Quaternion.FromEuler(new Vector3((float)rng.NextDouble() * 1.2f - 0.6f, (float)rng.NextDouble() * MathF.Tau, (float)rng.NextDouble() * 1.2f - 0.6f)));
             Card(canopy, p, basis, size, rng.Next(4), colour);

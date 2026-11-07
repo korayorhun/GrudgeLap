@@ -2762,6 +2762,74 @@ for the other cars to move in the replay. All three come from one change: the cr
   by the half width's rise, so the inner edge stays at grade and the outer edge is the embankment (banked about a
   centre line at ground level, the inside sat 2.9 m down in a ditch).
 
+### The ground, the verge and the far view (0.36.0)
+
+The owner's list after 0.35: the far road lighter and darkening as the car came near (ISTERLER P13), the verge's
+stones not orange and the same everywhere (P12), the grass far from real (P14), the cabin's shadows trembling (G8),
+and the drawbridge's deck "a millimetre thin" at the jump (P10).
+
+- **No mipmaps** (P13's main cause): every world texture was imported lossless and without mipmaps. Godot's importer
+  turns both on only when it sees the texture used in a 3D material (`detect_3d`), and the materials are made in
+  code, so it never saw one. Far off, each pixel took one texel of the photo: the asphalt's dark grains and pale chips
+  aliased into a light, shimmering grey that settled into the true, darker grey only as the car came near; the grass
+  and the gravel did the same. Every `*.import` under `assets/textures` now asks for VRAM compression (BC7 for
+  colour, roughness and the alpha atlases, BC5 for the normal maps) and mipmaps; the sky panorama keeps its own. A
+  texture added later needs the same parameters and `godot --headless --path game --import` run twice (the first run
+  writes the defaults).
+- **The car's reflection probe** lit everything inside its 90 m box with the car's surroundings, and the box moves
+  with the car: the road ahead changed colour as it came into the box. `ReflectionMask = 2`: the probe lights only
+  the player's car (`CarView.MarkPlayer` puts it on layers 1 and 2). `--probe-all` gives the old behaviour for
+  comparison, `--probe=0` takes the probe away.
+- **The asphalt's sheen**: dry roughness 0.8 to 0.9, specular 0.5 to 0.3; at a grazing angle the road far ahead
+  mirrored the pale sky.
+- **The wear sheet** (`tools/make-road-wear.py`, `road_wear.png`): a tar snake crossing the sheet's edge was drawn
+  from one wrapped end to the other, a ruled line across the whole sheet and so down the road; the patches were
+  outlines, frames lying on the road. Now a wrapping segment is skipped, the patches are filled ragged shapes with
+  soft seams, and the wheel tracks are bands.
+- **The ground** (`assets/shaders/terrain.gdshader`, `WorldBuilder.GroundMaterial`): two grass photos (ambientCG
+  Grass004, a short lawn, and Grass001, a meadow with clover, both 2K) mixed in patches of thirty to sixty metres, and
+  a soil photo (Ground067). Each is sampled with its tile broken up (Quilez's third technique: two lookups at offsets
+  picked by a smooth noise index, blended where the index steps, the seam following the picture's own detail), so no
+  pattern repeats; a coarser second lookup takes over between 20 and 90 m. The colour varies at three scales: dry,
+  straw-coloured stretches over a hundred metres and more, lusher hollows over a few, clumps over half a metre. Bare
+  soil shows on the trodden strip by the road (the terrain's road weight, UV2.y), in scattered bald patches and on the
+  cuttings' faces (UV2.x, so the terrain no longer splits its earth into a second mesh), with a ragged edge that opens
+  between the darkest blades first. A little relief (molehills, ruts) tilts the normal.
+- **The verge** (`assets/shaders/shoulder.gdshader`, `WorldBuilder.ShoulderMaterial`): a photographed bed of stones
+  (ambientCG Gravel020: colour, normal and height, 2K) painted the cabinet's burnt orange. The height tells the
+  stones' tops from the joints, which are dark soil; the paint keeps the stone's own shading under it, covers the
+  stones by the asphalt and thins outwards (UV.x runs from 0 at the asphalt to 1 at the band's outer edge, so
+  `BuildShoulders` reverses the left side's u), is faded unevenly along the road and chipped in flecks; unpainted
+  stones take the earth's colour; the outer edge frays into the grass (alpha scissor on a noise). The normal map bends
+  the world-space normal, so the stones' relief shows in the low sun. The colour was matched to the arcade video's
+  verge (155, 85, 20 measured; ours 165, 93, 32 in the same light): the first painted version was a pinkish orange,
+  partly from the stones' sheen taking the sky's blue (specular 0.2 now). The instanced roadside rocks of the first
+  version are gone: meshes of a few dozen triangles read as fake beside the photo.
+- **The tufts** (`assets/shaders/tuft.gdshader`): the blade atlas tinted to the ground's own green and to the
+  ground's dry and lush patches (by the instance's origin), darker at the root, the light through the blades kept
+  small (they were brighter than the ground and lit from behind like lamps), dithered out between 70 and 120 m, where
+  the ground's texture carries the plain. Small tufts where the verge frays (`FoliageBuilder`: 2.1 to 4.5 m past the
+  asphalt's edge, at 55 % of the road's frames). The trees' leaves let less light through.
+- **The cabin's shadows** (G8): the camera's vibration was white noise drawn every frame (`CameraRig`), so the cabin
+  and its shadows jumped to a new place every frame: the trembling. It is smooth noise now (`FastNoiseLite` at
+  11 Hz), growing with speed and the road's roughness (`--shake=0` turns it off). The sun is a point (at 0.5 degrees
+  the contact-hardening filter's noise crawled over the dashboard as the car moved); bias 0.05 and normal bias 1.5
+  (0.02 and 1.0 put a speckle of self-shadow on the grazing-lit dashboard), blur 1.3; the cascades end at 350 m
+  (500) with the nearest 10 m deep (25) for finer texels in the cabin. SSAO's radius is the cabin's scale (1.5 m to
+  1.0 m) at full resolution (`environment/ssao/half_size=false`, quality 3: at half size it shimmered on the dash).
+- **The air**: the clear day's fog 0.00004 to 0.00009 and a deeper blue (0.66, 0.74, 0.86), aerial perspective 0.35
+  to 0.55: nothing faded with distance, so the plain two kilometres out had the verge's contrast, a flat painting. The
+  far woods are darker and bluer.
+- **The drawbridge's ends** (P10): the slabs are 1.2 m deep (0.9), and their ends at the gap are closed
+  (`WorldBuilder.DeckEnd`: the deck's and both kerbs' end faces). The box was open there: from the take-off only the
+  asphalt's edge showed, the owner's millimetre.
+- **Measured and left off**: SDFGI (`--sdfgi=1`) added 4.6 ms a frame for no visible change on the open plain; FSR 2
+  (`--fsr2=<scale>`) gave nothing at full resolution. Godot has no DLSS: that, with Lumen and Nanite, is for the
+  Unreal version (ISTERLER H5, H6). The other switches of the diagnosis: `--ssr=`, `--volfog=`, `--fog=`,
+  `--probe=`, `--probe-all`.
+- **The export** (`--export-world`, for the Unreal version): glTF cannot carry Godot's shaders, so
+  `WorldBuilder.ExportMode` builds the ground and the verge with the standard materials, as before.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

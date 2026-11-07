@@ -26,6 +26,8 @@ internal sealed partial class CameraRig : Node3D
     public CameraMode Mode { get; set; } = CameraMode.Cockpit;
     /// <summary>The ground's height under a point (Godot space), for keeping the eye out of it (0.35).</summary>
     public Func<Vector3, float>? Ground { get; set; }
+    /// <summary>The seat's road vibration (automation can switch it off: --shake=0).</summary>
+    public bool Shake { get; set; } = true;
     /// <summary>Orbit view: yaw around the car (0 = from behind, 90 = from its right), pitch above the horizon, distance; degrees and metres.</summary>
     public Vector3 Orbit { get; set; } = new(35f, 18f, 7f);
     /// <summary>Height of the car node's origin (its centre of gravity) above the road at rest; offsets below are ground-relative.</summary>
@@ -39,6 +41,10 @@ internal sealed partial class CameraRig : Node3D
     /// <summary>The car's lateral and longitudinal acceleration, m/s², which the driver's head lags.</summary>
     public Vector2 Acceleration { get; set; }
     private readonly Random _rng = new(3);
+    // The seat's vibration (0.36): smooth noise at about 11 Hz, not a fresh random offset every frame, which shook the
+    // whole cabin by a few pixels a frame and read as trembling shadows (the owner's 7 November report).
+    private readonly FastNoiseLite _vibration = new() { NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth, Frequency = 1f, Seed = 3 };
+    private float _vibrationTime;
     private Vector3 _head;
     // A knock's jolt: an offset of the eye in the car's frame on a stiff, well-damped spring (Jolt).
     private Vector3 _jolt;
@@ -128,8 +134,9 @@ internal sealed partial class CameraRig : Node3D
             // lean at speed.
             var lean = MathUtil.Clamp01(speedMps / 60f) * 0.06f;
             // Road feel: a few millimetres of jitter that grow with speed and on rough ground, a touch more field of view at speed.
-            var jitter = (0.0012f + 0.0035f * MathUtil.Clamp01(speedMps / 60f) + 0.012f * Roughness) * MathUtil.Clamp01(speedMps / 4f);
-            var shake = new Vector3(Jitter() * jitter, Jitter() * jitter, 0f);
+            var jitter = (0.0006f + 0.0018f * MathUtil.Clamp01(speedMps / 60f) + 0.010f * Roughness) * MathUtil.Clamp01(speedMps / 4f);
+            _vibrationTime += dt;
+            var shake = Shake ? new Vector3(_vibration.GetNoise1D(_vibrationTime * 11f), _vibration.GetNoise1D(_vibrationTime * 11f + 57f), 0f) * jitter : Vector3.Zero;
             // The head on the neck lags the car: it sways out of a corner and nods forward under braking by a few
             // centimetres, then settles; the cabin seems to move around the eyes the way the 1989 cabinet slid its
             // painted dashboard (US 5,005,148).

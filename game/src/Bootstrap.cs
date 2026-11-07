@@ -118,6 +118,10 @@ public sealed partial class Bootstrap : Node3D
     private int _screenshotsTaken;
     /// <summary>--pose-log: the car's place on the course twice a second and every event, printed, so a hidden run can be read like a lap chart (0.34).</summary>
     private bool _poseLog;
+    /// <summary>--shake=0: the seat's road vibration off, to see what it does to the picture (0.36).</summary>
+    private bool _shake = true;
+    /// <summary>--fsr2=0.75: the 3D picture rendered at that share of the window and brought up with FSR 2 (0.36 experiment).</summary>
+    private float _fsr2Scale;
     private float _poseLoggedAt = -1f;
     /// <summary>--camera=x,y,z,tx,ty,tz[,fov]: a fixed camera (simulation axes: x east, y up, z north) for pictures of a place as the car passes (0.34).</summary>
     private (Vector3 Eye, Vector3 Target, float Fov)? _fixedCamera;
@@ -256,6 +260,7 @@ public sealed partial class Bootstrap : Node3D
         AddChild(WorldBuilder.BuildCarProbe());
         _cameraRig = new CameraRig { Mode = _orbit is not null ? CameraMode.Orbit : _startChase ? CameraMode.Chase : CameraMode.Cockpit };
         _cameraRig.Ground = p => _track.Terrain.Height(p.X, -p.Z);
+        _cameraRig.Shake = _shake;
         if (_orbit is { } orbit) _cameraRig.Orbit = orbit;
         _cameraRig.SeatLook = _seatLook;
         AddChild(_cameraRig);
@@ -394,6 +399,14 @@ public sealed partial class Bootstrap : Node3D
             }
             else if (arg == "--pose-log") _poseLog = true;
             else if (arg.StartsWith("--ssao=", System.StringComparison.Ordinal)) WorldBuilder.SsaoOverride = arg["--ssao=".Length..] != "0";
+            else if (arg.StartsWith("--ssr=", System.StringComparison.Ordinal)) WorldBuilder.SsrOverride = arg["--ssr=".Length..] != "0";
+            else if (arg.StartsWith("--volfog=", System.StringComparison.Ordinal)) WorldBuilder.VolumetricFogOverride = arg["--volfog=".Length..] != "0";
+            else if (arg.StartsWith("--fog=", System.StringComparison.Ordinal)) WorldBuilder.FogOverride = arg["--fog=".Length..] != "0";
+            else if (arg.StartsWith("--probe=", System.StringComparison.Ordinal)) WorldBuilder.ProbeOverride = arg["--probe=".Length..] != "0";
+            else if (arg == "--probe-all") WorldBuilder.ProbeAffectsAll = true;
+            else if (arg.StartsWith("--sdfgi=", System.StringComparison.Ordinal)) WorldBuilder.SdfgiOverride = arg["--sdfgi=".Length..] != "0";
+            else if (arg.StartsWith("--fsr2=", System.StringComparison.Ordinal)) float.TryParse(arg["--fsr2=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _fsr2Scale);
+            else if (arg.StartsWith("--shake=", System.StringComparison.Ordinal)) _shake = arg["--shake=".Length..] != "0";
             else if (arg.StartsWith("--sun-shadow=", System.StringComparison.Ordinal)) WorldBuilder.SunShadowOverride = arg["--sun-shadow=".Length..] != "0";
             else if (arg.StartsWith("--shadow-filter=", System.StringComparison.Ordinal) && int.TryParse(arg["--shadow-filter=".Length..], out var filter))
             {
@@ -432,6 +445,7 @@ public sealed partial class Bootstrap : Node3D
             else if (arg.StartsWith("--export-world=", System.StringComparison.Ordinal))
             {
                 _exportWorld = arg["--export-world=".Length..];
+                WorldBuilder.ExportMode = true;
                 // The Unreal level takes the lofted car and puts its own copy of the real model in its place
                 // (unreal/Scripts/prepare_car_model.py): the export keeps the lofted bodies.
                 CarView.UseModels = false;
@@ -928,7 +942,7 @@ public sealed partial class Bootstrap : Node3D
             {
                 var at = _screenshotAts[_screenshotsTaken++];
                 var stem = System.IO.Path.ChangeExtension(_screenshotPath, null).TrimEnd('.');
-                CallDeferred(nameof(TakeScreenshot), $"{stem}-{at.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)}{System.IO.Path.GetExtension(_screenshotPath)}");
+                CallDeferred(nameof(TakeScreenshot), $"{stem}-{at.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}{System.IO.Path.GetExtension(_screenshotPath)}");
             }
         }
         else if (_screenshotPath is not null && !_screenshotTaken && _elapsed >= _screenshotAt)
@@ -1918,6 +1932,14 @@ public sealed partial class Bootstrap : Node3D
         viewport.Msaa3D = low ? Viewport.Msaa.Disabled : Viewport.Msaa.Msaa2X;
         viewport.ScreenSpaceAA = low ? Viewport.ScreenSpaceAAEnum.Fxaa : Viewport.ScreenSpaceAAEnum.Disabled;
         viewport.UseTaa = !low;
+        if (_fsr2Scale > 0f)
+        {
+            // FSR 2 does its own temporal anti-aliasing, and takes no multisampling.
+            viewport.Scaling3DMode = Viewport.Scaling3DModeEnum.Fsr2;
+            viewport.Scaling3DScale = _fsr2Scale;
+            viewport.Msaa3D = Viewport.Msaa.Disabled;
+            viewport.UseTaa = false;
+        }
         WorldBuilder.SetQuality(_quality);
         _showroom?.ApplyGraphics(_quality, _retro);
     }
