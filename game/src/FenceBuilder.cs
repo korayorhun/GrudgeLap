@@ -96,6 +96,8 @@ internal static class FenceBuilder
         var obstacles = track.Props
             .Where(p => p.Kind is PropKind.Barn or PropKind.House or PropKind.Shop or PropKind.Hut or PropKind.Tower or PropKind.Pier or PropKind.Pump or PropKind.Gate or PropKind.Train)
             .Select(p => (At: new SN.Vector2(p.Position.X, p.Position.Z), Reach: 12f + 0.5f * MathF.Max(p.Size.X, p.Size.Z)))
+            // A cow standing where the line would run (some graze 30 m off the road): the fence opens round it (0.50).
+            .Concat(track.Props.Where(p => p.Kind == PropKind.Cow).Select(p => (At: new SN.Vector2(p.Position.X, p.Position.Z), Reach: 5f)))
             .ToArray();
         var fields = track.Props.Where(p => p.Kind == PropKind.Field).ToArray();
         bool Blocked(SN.Vector3 p)

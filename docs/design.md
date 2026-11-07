@@ -3149,6 +3149,20 @@ verge to the woods.
   over a step of more than 1.2 m, and two bays for a gate every 250 to 650 m. Chunks of 200 m of road drawn within 700 m.
 - Visual only: the simulation does not know them. Not in the 1989 look nor the export.
 
+### The power line (0.50.0)
+
+- **The poles** (`PowerLineBuilder`): one mesh, a post tapered from 30 to 22 cm, 10 m over the ground and 1.5 m in it, a
+  crossarm 2.4 m long 9.4 m up across the line and three insulators, in the fences' weathered wood darkened to creosote;
+  every 55 m on one side of each road (alternating from road to road) 25 m from the centre line for a road 11 m wide,
+  left out where the fences are (other roads, buildings, trees, fields, pads) and wherever the road is the loop, a ramp,
+  the jump's gap or an overpass.
+- **The wires** (`assets/shaders/wire.gdshader`): between consecutive poles, each of the three a parabola of 0.9 m sag in
+  16 segments, all of them one mesh; drawn as ribbons turned about the wire to face the camera, their width the wire's
+  own 2 cm or a pixel and a half at that distance, whichever is wider, and their opacity the wire's share of that width:
+  a 2 cm cylinder 300 m off is a twentieth of a pixel, and drawn as geometry it shows as a dotted line that crawls as
+  the car moves; as a hairline of the right weight it holds still.
+- Visual only; not in the 1989 look nor the export.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

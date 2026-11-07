@@ -154,6 +154,7 @@ internal static class WorldBuilder
         _meadow = null;
         _textured.Clear();
         FenceBuilder.ReleaseShared();
+        PowerLineBuilder.ReleaseShared();
         _propMaterials.Clear();
         _weathered.Clear();
         FoliageBuilder.ReleaseShared();
@@ -222,6 +223,11 @@ internal static class WorldBuilder
         fences.Visible = !_retro;
         _modernRoad.Add(fences);
         root.AddChild(fences);
+        // The power line beside the roads (0.50, PowerLineBuilder).
+        var lines = PowerLineBuilder.Build(track);
+        lines.Visible = !_retro;
+        _modernRoad.Add(lines);
+        root.AddChild(lines);
         Stage("towers, pads, grass");
         var (minX, maxX, minZ, maxZ) = RoadBounds(track);
         // The wood fills the terrain out to its margin; beyond that lies the flat far ground.
