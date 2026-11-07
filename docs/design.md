@@ -3099,6 +3099,24 @@ The car passed a post every 50 m, signs, trees and the barn's wall within a metr
   (47-51 fps on the development laptop) against 10-12 ms without them, and the cockpit and the road looked the same.
   The sun casts shadows under a clear sky only (`WorldBuilder.SunShadowsOn`; `--sun-shadow=` still forces them).
 
+### The meadow by the roads (0.48.0)
+
+From the seat the ground by the road read as a mown lawn: the lawn's photo with a scatter of tufts. 0.41 laid a meadow
+of the scanned clumps along every road and took it out again for the dark specks it scattered; they were the cards
+drawn unlit from behind (0.45), and the meadow is back (`MeadowBuilder`, `assets/shaders/meadow.gdshader`).
+
+- **Where**: from the verge's fray out to 24 m on either side of every road, the lateral distance drawn towards the
+  verge as the 2.2th power (densest near it, thinning out; at 14 m the meadow ended in a visible edge), about 28 cards a
+  metre of road, some 83 000 in all; not on the trodden strip by the road (the terrain's road weight over 0.9: a mown
+  strip a few metres wide), on a road or its stones, in a field or on a pad; not by the loop, the ramps, the jump's gap
+  or the overpasses.
+- **How**: crossed cards 0.9 m wide and 0.4 m tall, each instance's atlas cell and shade in its custom data; chunks of
+  60 m of road, each a multimesh drawn within 70 m of the camera and dithered out from 45 m, so a few thousand cards are
+  drawn; built path by path side by side on the CPU. The shader lights them as the ground (the world's up as the normal
+  on both sides), raises the thin blades' alpha with the mip level, tints them by the ground's dry and lush patches and
+  bends them in the shared wind (`wind.gdshaderinc`).
+- Medium and high quality; not in the 1989 look nor the export; `--meadow=0` for comparisons.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

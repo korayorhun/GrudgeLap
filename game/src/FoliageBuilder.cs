@@ -22,6 +22,7 @@ internal static class FoliageBuilder
     public static void ReleaseShared()
     {
         _impostors = null;
+        MeadowBuilder.ReleaseShared();
         _tuft = null;
         _tuftShader = null;
         _leaf = null;
@@ -68,6 +69,7 @@ internal static class FoliageBuilder
         _tuftShader?.SetShaderParameter("tint", tint);
         _tuftShader?.SetShaderParameter("wetness", wetness);
         foreach (var impostor in _impostors ?? []) impostor.Material.SetShaderParameter("wetness", wetness);
+        MeadowBuilder.SetWeather(tint, wetness);
     }
 
     /// <summary>The 1989 look: the trees as flat green silhouettes.</summary>

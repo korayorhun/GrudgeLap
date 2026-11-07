@@ -84,6 +84,8 @@ internal static class WorldBuilder
     private static StandardMaterial3D? _steel;
     private static MeshInstance3D? _clouds;
     private static Node3D? _forest;
+    /// <summary>The meadow by the roads (0.48): drawn at medium and high quality, not in the 1989 look.</summary>
+    private static Node3D? _meadow;
     /// <summary>The reflection probe that travels with the player's car (<see cref="BuildCarProbe"/>), and where and when it was last moved.</summary>
     private static ReflectionProbe? _carProbe;
     private static Vector3 _carProbeAt;
@@ -149,6 +151,7 @@ internal static class WorldBuilder
         _cloudShade = 1f;
         _sunEnergy = SunEnergy;
         _forest = null;
+        _meadow = null;
         _textured.Clear();
         _propMaterials.Clear();
         _weathered.Clear();
@@ -210,6 +213,9 @@ internal static class WorldBuilder
         if (BuildTowers(track) is { } towers) root.AddChild(towers);
         foreach (var pad in track.Pads) root.AddChild(BuildPad(pad));
         root.AddChild(FoliageBuilder.BuildGrass(track));
+        // The meadow by the roads (0.48, MeadowBuilder).
+        _meadow = MeadowBuilder.Build(track);
+        root.AddChild(_meadow);
         Stage("towers, pads, grass");
         var (minX, maxX, minZ, maxZ) = RoadBounds(track);
         // The wood fills the terrain out to its margin; beyond that lies the flat far ground.
@@ -353,6 +359,7 @@ internal static class WorldBuilder
         var high = !retro && _quality == GraphicsQuality.High;
         var medium = !retro && _quality >= GraphicsQuality.Medium;
         if (_sun is not null) _sun.ShadowEnabled = SunShadowsOn;
+        if (_meadow is not null && GodotObject.IsInstanceValid(_meadow)) _meadow.Visible = medium && MeadowOverride != false;
         if (_clouds is not null) _clouds.Visible = !retro && _volumetricSky is null;
         if (_carProbe is not null) _carProbe.Visible = ProbeOverride ?? medium;
         if (_forest is not null)
@@ -1925,6 +1932,9 @@ internal static class WorldBuilder
     private static bool SunShadowsOn => SunShadowOverride ?? (!_retro && _quality >= GraphicsQuality.Medium && !WeatherModel.Overcast(_weather));
 
     private static bool CloudShadowsOn => _volumetricSky is not null && !_retro && CloudShadowsOverride != false && !WeatherModel.Overcast(_weather);
+
+    /// <summary>Automation (--meadow=0): the roadside without the meadow's cards, for comparisons.</summary>
+    public static bool? MeadowOverride { get; set; }
 
     /// <summary>Automation (--motion-blur=0): the camera without its motion blur, for comparisons.</summary>
     public static bool? MotionBlurOverride { get; set; }
