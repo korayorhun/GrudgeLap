@@ -13,6 +13,10 @@ uniform vec3 tint : source_color = vec3(0.56, 0.66, 0.39);
 uniform float fade_start = 70.0;
 uniform float fade_end = 120.0;
 uniform float wetness : hint_range(0.0, 1.0) = 0.0;
+// How far the cards' normal leans from the ground's towards the eye (0.55, FoliageBuilder.SetStand): 0 by day, when the
+// grass is lit as the ground under it; up at sunrise, where blades standing in a sun 6 degrees up catch it as the flat
+// ground cannot (lit looking away from the sun, backlit looking into it), and the plain went dark under the ground's normal.
+uniform float stand : hint_range(0.0, 1.0) = 0.0;
 
 varying vec3 world_pos;
 varying vec3 instance_origin;
@@ -76,7 +80,10 @@ void fragment() {
 	c *= mix(1.0, 0.55, smoothstep(0.25, 0.5, cellv));
 	// Lit as the ground under it is, from either side: the card's normal is up, and Godot turns it down on the side
 	// seen from behind (the material is double-sided), which left half the tufts unlit, black specks over the plain.
-	NORMAL = normalize(mat3(VIEW_MATRIX) * vec3(0.0, 1.0, 0.0));
+	vec3 up = normalize(mat3(VIEW_MATRIX) * vec3(0.0, 1.0, 0.0));
+	vec3 facing = -normalize(VERTEX);
+	facing = normalize(facing - up * dot(facing, up) + up * 1e-4);
+	NORMAL = normalize(mix(up, facing, stand));
 	ALBEDO = c * mix(1.0, 0.72, wetness);
 	BACKLIGHT = c * 0.15;
 	ROUGHNESS = mix(0.9, 0.6, wetness);

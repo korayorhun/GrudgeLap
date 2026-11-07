@@ -27,6 +27,8 @@ internal sealed class PauseMenu
         Graphics,
         /// <summary>Clear, overcast, wet road, rain, or random for every credit (0.15); clear by default.</summary>
         Weather,
+        /// <summary>The hour: the day, the sunrise, or one of them for every credit (0.55); the day by default.</summary>
+        Light,
         Retro,
         Units,
         Fullscreen,
@@ -59,10 +61,9 @@ internal sealed class PauseMenu
         if (index >= 0 && index < Items.Length) Cursor = index;
     }
 
-    // Twelve lines since the CAR line (0.25) at a 44 px pitch, so the panel keeps about the height eleven lines at 48
-    // gave it (660 px against 690). Not for want of room: the canvas is 1600 x 900 stretched with "expand", never under
-    // 900 lines high whatever the window, so a taller panel would have fitted too.
-    public static Rect2 Panel(Vector2 size) => new(size.X * 0.5f - 340f, size.Y * 0.5f - 330f, 680f, 660f);
+    // Thirteen lines since the LIGHT line (0.55) at a 44 px pitch: 704 px, room for the hint under the last. The canvas is
+    // 1600 x 900 stretched with "expand", never under 900 lines high whatever the window.
+    public static Rect2 Panel(Vector2 size) => new(size.X * 0.5f - 340f, size.Y * 0.5f - 352f, 680f, 704f);
 
     public static Rect2 ItemRect(Vector2 size, int index)
     {

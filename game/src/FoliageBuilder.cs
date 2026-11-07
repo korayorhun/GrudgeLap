@@ -60,7 +60,18 @@ internal static class FoliageBuilder
     {
         var material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/tuft.gdshader") };
         material.SetShaderParameter("blades", GD.Load<Texture2D>("res://assets/textures/grass_blades.png"));
+        material.SetShaderParameter("stand", _stand);
         return material;
+    }
+
+    private static float _stand;
+
+    /// <summary>How far the grass cards' normal leans towards the eye, 0 by day (0.55, WorldBuilder: the sunrise's low sun).</summary>
+    public static void SetStand(float stand)
+    {
+        _stand = stand;
+        _tuftShader?.SetShaderParameter("stand", stand);
+        MeadowBuilder.SetStand(stand);
     }
 
     /// <summary>The weather's grass tint and wetness for the tufts and the trees (WorldBuilder.ApplyWeather).</summary>

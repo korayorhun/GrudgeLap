@@ -40,14 +40,15 @@ internal sealed partial class WheelDust : Node3D
             _dust[i] = Make(puff, new Color(0.58f, 0.53f, 0.46f), 1.6f, 0.6f, 2.2f);
             _smoke[i] = Make(puff, new Color(0.86f, 0.86f, 0.87f), 2.2f, 0.8f, 3.0f);
             // The spray: a fine pale mist, quick to grow and quick to thin.
-            _spray[i] = Make(puff, new Color(0.72f, 0.75f, 0.78f), 0.8f, 0.4f, 1.8f, 0.3f);
+            // Twice the puffs, smaller and fainter (0.55): a mist, where 0.53's fewer and larger showed as soft blocks over a dark road.
+            _spray[i] = Make(puff, new Color(0.72f, 0.75f, 0.78f), 0.8f, 0.35f, 1.3f, 0.2f, PerWheel * 2);
             AddChild(_dust[i]);
             AddChild(_smoke[i]);
             AddChild(_spray[i]);
         }
     }
 
-    private static GpuParticles3D Make(Texture2D puff, Color colour, float lifetime, float startSize, float endSize, float opacity = 0.9f)
+    private static GpuParticles3D Make(Texture2D puff, Color colour, float lifetime, float startSize, float endSize, float opacity = 0.9f, int amount = PerWheel)
     {
         var material = new StandardMaterial3D
         {
@@ -82,7 +83,7 @@ internal sealed partial class WheelDust : Node3D
         };
         return new GpuParticles3D
         {
-            Amount = PerWheel,
+            Amount = amount,
             Lifetime = lifetime,
             Emitting = false,
             LocalCoords = false,

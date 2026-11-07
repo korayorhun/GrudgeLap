@@ -10,6 +10,10 @@ render_mode blend_mix, depth_draw_opaque, cull_disabled, diffuse_burley, specula
 uniform sampler2D blades : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
 uniform vec3 tint : source_color = vec3(0.56, 0.66, 0.39);
 uniform float wetness : hint_range(0.0, 1.0) = 0.0;
+// How far the cards' normal leans from the ground's towards the eye (0.55, FoliageBuilder.SetStand): 0 by day, when the
+// grass is lit as the ground under it; up at sunrise, where blades standing in a sun 6 degrees up catch it as the flat
+// ground cannot (lit looking away from the sun, backlit looking into it), and the plain went dark under the ground's normal.
+uniform float stand : hint_range(0.0, 1.0) = 0.0;
 uniform float fade_start = 45.0;
 uniform float fade_end = 65.0;
 
@@ -78,7 +82,10 @@ void fragment() {
 	c *= mix(0.55, 1.0, smoothstep(0.55, 0.05, UV.y) * 0.6 + 0.4 * (1.0 - UV.y));
 	// Lit as the ground under it is, from either side: on a double-sided material Godot turns the card's up normal down
 	// on the side seen from behind, and those cards drew unlit (0.41's dark specks).
-	NORMAL = normalize(mat3(VIEW_MATRIX) * vec3(0.0, 1.0, 0.0));
+	vec3 up = normalize(mat3(VIEW_MATRIX) * vec3(0.0, 1.0, 0.0));
+	vec3 facing = -normalize(VERTEX);
+	facing = normalize(facing - up * dot(facing, up) + up * 1e-4);
+	NORMAL = normalize(mix(up, facing, stand));
 	ALBEDO = c * mix(1.0, 0.72, wetness);
 	BACKLIGHT = c * 0.15;
 	ROUGHNESS = mix(0.9, 0.6, wetness);

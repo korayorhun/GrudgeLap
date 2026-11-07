@@ -3250,6 +3250,37 @@ tyres' spray.
   110 km/h as the drops strike the glass faster, and gone under a deck (`StructureAcoustics.Covered`, the deck that also
   gives the echo). None in the replay, which plays its tune alone, or in the 1989 look.
 
+### The sunrise (0.55.0)
+
+Every credit ran under one sun, 43 degrees up, the light of a summer's late morning.
+
+- **The sky** (`tools/make-sunrise-sky.py`): Poly Haven's "Syferfontein 6d Clear (Pure Sky)" (Greg Zaal, sky edits Jarod
+  Guest, CC0), a clear sky with the sun 5.85 degrees up, its columns rolled (nothing resampled) so that its sun stands at
+  compass bearing 85 in the game's panorama (u = 0.5 + atan2(-x, -z) / 2 pi, +X west and +Z north): over the Gros
+  Ventre, whose ridge stands 3.5 to 4 degrees high from the circuit that way (measured from the land's heights), and
+  behind a driver on the start straight, so the low light falls on the Tetons' faces ahead. `WorldBuilder.SunriseDirection`
+  is that sun; the directional light turns to it, its colour about 3500 K (1, 0.66, 0.38), 2.1 (horizontal ground takes a
+  tenth of it), the sky's light 0.8 of the day's so the shadows' blue stands against the lit gold. Under the grey deck
+  the light stays high whatever the hour (a sunrise's 6 degrees lit the spray and the rain facing it over a road it
+  barely touched), and the morning is a dimmer grey (0.75 of the light).
+- **The land's shadows** (`tools/make-terrain.py`, grid version 2): a sun 6 degrees up throws the ranges' shadows across
+  the far land, half of which lies in them; the grid carries a second visibility, cast for the sunrise's sun the way the
+  day's is (`--from-bin` recasts both from a written grid without the rasters); `RealLand` puts it in the vertices' alpha
+  and `land.gdshader` takes the hour's. A version 1 grid lights the sunrise with the day's.
+- **The air and the clouds**: the haze takes the low sun's gold towards it (the fog's sun scatter, 0.35) over a paler
+  morning air, exposure 1.0; the volumetric clouds take the sun's colour and thin to 0.22 cover (fair-weather cumulus
+  grow with the day's heat, and through 15 km of their layer towards a sun 6 degrees up their shadows would have kept the
+  plain in shade, so the clouds' shadows are off at sunrise).
+- **The grass** (`tuft.gdshader`, `meadow.gdshader`, `stand`): by day the cards are lit as the ground under them (the
+  normal straight up); a sun 6 degrees up lights flat ground at a tenth of its strength, and blades stand in it, so at
+  sunrise the cards' normal leans half way towards the eye: bright looking away from the sun, backlit looking into it.
+- **The menu and the credit**: LIGHT (day, sunrise, or one of them drawn for every credit), kept in the settings like the
+  weather (the panel 704 px high for its thirteen lines); `--light=day|sunrise` for automated runs, `--menu` opens the
+  menu a second in for pictures of it.
+- **The spray** (`WheelDust`): twice the puffs, 1.3 m and a fifth opaque where 0.53's were 1.8 m and three tenths, so the
+  wet road's mist trails from each wheel instead of showing as soft blocks over a dark road.
+- **Cost**: 12.0 ms a frame at sunrise against 11.6 by day (the longer shadows; an attract lap at 1080p).
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

@@ -30,7 +30,17 @@ internal static class MeadowBuilder
     {
         var material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/meadow.gdshader") };
         material.SetShaderParameter("blades", GD.Load<Texture2D>("res://assets/textures/grass_blades.png"));
+        material.SetShaderParameter("stand", _stand);
         return material;
+    }
+
+    private static float _stand;
+
+    /// <summary>How far the cards' normal leans towards the eye (FoliageBuilder.SetStand).</summary>
+    public static void SetStand(float stand)
+    {
+        _stand = stand;
+        _material?.SetShaderParameter("stand", stand);
     }
 
     /// <summary>The weather's grass tint and wetness (FoliageBuilder.SetWeather).</summary>

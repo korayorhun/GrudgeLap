@@ -10,8 +10,8 @@
     <RootNamespace>GrudgeLap.Game</RootNamespace>
     <AssemblyName>GrudgeLap</AssemblyName>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <Version>0.54.0</Version>
-    <FileVersion>0.54.0.0</FileVersion>
+    <Version>0.55.0</Version>
+    <FileVersion>0.55.0.0</FileVersion>
     <Authors>Koray Orhun</Authors>
   </PropertyGroup>
 

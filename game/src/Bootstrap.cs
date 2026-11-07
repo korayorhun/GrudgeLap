@@ -74,6 +74,7 @@ public sealed partial class Bootstrap : Node3D
     private ulong _startMark;         // --perf-log: the engine's clock at the last start-up mark (StartMark)
     private bool _firstFrameMarked;
     private bool _holdBrake;          // automation: the brake held down all the time, for pictures of the brake lamps (--hold-brake)
+    private bool _openMenu;           // automation: the pause menu opened a second in, for pictures of it (--menu, 0.55)
     private bool _dentTest;           // automation: a deep dent in the car's nose two seconds in, for pictures of it (--dent-test)
     private double _perfGpu, _perfCpu, _perfSince;
     private int _perfFrames;
@@ -104,6 +105,8 @@ public sealed partial class Bootstrap : Node3D
     private bool _noTraffic;
     private Weather? _weather;   // --weather=: a fixed weather for automated runs; otherwise the menu's choice
     private int _weatherChoice;  // the menu's weather: 0-3 a fixed Weather, 4 random for every credit; kept in the settings
+    private int _lightChoice;    // the menu's hour (0.55): 0 the day, 1 the sunrise, 2 drawn for every credit; kept in the settings
+    private bool? _sunriseArg;   // automation: --light=day|sunrise
     private PaintBook _paints = null!;   // every car's paint (0.25: the showroom, the menu's PAINT line); kept in the settings
     private string? _paintArg;   // --paint=: the run's car in this paint, this run only
     private bool _repaintLofted; // a lofted car repainted during a crash's replay: built again in the new colour next credit
@@ -163,6 +166,7 @@ public sealed partial class Bootstrap : Node3D
         _quality = (GraphicsQuality)Math.Clamp(LoadChoice("quality", (int)GraphicsQuality.High), 0, 2);
         // The weather (0.15): clear by default; the menu chooses clear, overcast, wet road, rain or random, and keeps it.
         _weatherChoice = Math.Clamp(LoadChoice("weather", 0), 0, 4);
+        _lightChoice = Math.Clamp(LoadChoice("light", 0), 0, 2);
         ParseArgs();   // may override the saved car with --car= and the paint with --paint=
         // The paints (0.21, per car since 0.25): every car in its own colour by default; the showroom and the menu
         // choose another, and keep it. An automated run reads them but never writes the player's file.
@@ -378,6 +382,7 @@ public sealed partial class Bootstrap : Node3D
             else if (arg == "--no-ghost") _noGhost = true;       // pictures of the car without the best lap's ghost over it
             else if (arg == "--no-traffic") _noTraffic = true;
             else if (arg.StartsWith("--weather=", System.StringComparison.Ordinal)) _weather = WeatherModel.Parse(arg["--weather=".Length..]);
+            else if (arg.StartsWith("--light=", System.StringComparison.Ordinal)) _sunriseArg = arg["--light=".Length..] == "sunrise";
             else if (arg == "--no-hud") _noHud = true;
             else if (arg.StartsWith("--orbit=", System.StringComparison.Ordinal))
             {
@@ -477,6 +482,7 @@ public sealed partial class Bootstrap : Node3D
             else if (arg == "--perf-log") _perfLog = true;
             else if (arg == "--dent-test") _dentTest = true;
             else if (arg == "--hold-brake") _holdBrake = true;
+            else if (arg == "--menu") _openMenu = true;
             else if (arg.StartsWith("--ram-speed=", System.StringComparison.Ordinal)) float.TryParse(arg["--ram-speed=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _ramSpeed);
         }
     }
@@ -531,6 +537,8 @@ public sealed partial class Bootstrap : Node3D
         }
         _skidMarks.Clear();
         if (_perfLog) StartMark("  session: the race session");
+        // The credit's hour (0.55): --light= for an automated run, otherwise the menu's (the day by default, or drawn).
+        WorldBuilder.SetSunrise(_sunriseArg ?? (_lightChoice == 2 ? System.Random.Shared.Next(2) == 1 : _lightChoice == 1));
         WorldBuilder.SetWeather(_session.Weather);
         ApplyRain();
         EndCrash();
@@ -967,6 +975,11 @@ public sealed partial class Bootstrap : Node3D
     /// </summary>
     private void AutomationAfterFrame()
     {
+        if (_openMenu && _elapsed >= 1.0)
+        {
+            _openMenu = false;
+            ShowMenu(true);
+        }
         if (_screenshotPath is not null && _screenshotAts.Count > 1)
         {
             // A list of times: each picture is the path with its time before the extension (shot.png -> shot-12.png).
@@ -1606,6 +1619,19 @@ public sealed partial class Bootstrap : Node3D
     private string WeatherLabel() => _weatherChoice switch { 0 => "CLEAR", 1 => "OVERCAST", 2 => "WET ROAD", 3 => "RAIN", _ => "RANDOM" };
 
     /// <summary>
+    /// The menu's hour (0.55): left and right step through the day, the sunrise and random (a draw for every credit). A
+    /// fixed choice takes effect at once; the choice is kept.
+    /// </summary>
+    private void CycleLight(int step)
+    {
+        _lightChoice = (_lightChoice + step + 3) % 3;
+        SaveChoice("light", _lightChoice);
+        if (_lightChoice < 2) WorldBuilder.SetSunrise(_lightChoice == 1);
+    }
+
+    private string LightLabel() => _lightChoice switch { 0 => "DAY", 1 => "SUNRISE", _ => "RANDOM" };
+
+    /// <summary>
     /// Automation (--perf-log): the main view's measured GPU time and the frame's CPU time, averaged over five
     /// seconds, under the game's own frame cap (an uncapped run has crashed the development laptop's GPU).
     /// </summary>
@@ -1843,6 +1869,9 @@ public sealed partial class Bootstrap : Node3D
             case PauseMenu.Item.Weather:
                 CycleWeather(left ? -1 : 1);
                 break;
+            case PauseMenu.Item.Light:
+                CycleLight(left ? -1 : 1);
+                break;
             case PauseMenu.Item.Paint:
                 CyclePaint(left ? -1 : 1);
                 break;
@@ -1875,6 +1904,7 @@ public sealed partial class Bootstrap : Node3D
         labels[(int)PauseMenu.Item.Camera] = $"CAMERA:  {(_cameraRig.Mode == CameraMode.Cockpit ? "DRIVER'S SEAT" : "BEHIND THE CAR")}";
         labels[(int)PauseMenu.Item.Graphics] = $"GRAPHICS:  {_quality.ToString().ToUpperInvariant()}";
         labels[(int)PauseMenu.Item.Weather] = $"WEATHER:  {WeatherLabel()}";
+        labels[(int)PauseMenu.Item.Light] = $"LIGHT:  {LightLabel()}";
         labels[(int)PauseMenu.Item.Paint] = $"PAINT:  {_paints[_carIndex].Name}";
         labels[(int)PauseMenu.Item.Retro] = $"1989 MODE:  {(_retro ? "ON" : "OFF")}";
         // The player's own tune by name (without its extension); the built-in one with the hint that Enter opens the folder.

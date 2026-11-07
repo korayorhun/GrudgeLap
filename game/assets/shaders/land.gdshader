@@ -11,14 +11,17 @@ render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_lambert, specular_d
 uniform sampler2D albedo_tex : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
 uniform vec3 plain_colour : source_color = vec3(0.36, 0.45, 0.20);
 uniform float wetness : hint_range(0.0, 1.0) = 0.0;
+// The hour (0.55, WorldBuilder.SetSunrise): 1 at sunrise, whose sun's shadows the vertices carry in their alpha.
+uniform float sunrise : hint_range(0.0, 1.0) = 0.0;
 
-// COLOR: r the game's sun's visibility, g the sky's, b the weight of the image over the plain's colour.
+// COLOR: r the game's sun's visibility, g the sky's, b the weight of the image over the plain's colour, a the sunrise's
+// sun's visibility.
 varying float sun_vis;
 varying float cloud_ratio;
 varying vec3 world_pos;
 
 void vertex() {
-	sun_vis = COLOR.r;
+	sun_vis = mix(COLOR.r, COLOR.a, sunrise);
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	cloud_ratio = cloud_light_ratio(world_pos, length(world_pos - CAMERA_POSITION_WORLD));
 }

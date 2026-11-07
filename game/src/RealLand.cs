@@ -52,6 +52,8 @@ internal static class RealLand
         public float[] Height = [];
         public byte[] Sun = [];
         public byte[] Sky = [];
+        /// <summary>The sunrise's sun's visibility (version 2, 0.55); the day's in a version 1 file.</summary>
+        public byte[] SunriseSun = [];
 
         /// <summary>Bilinear sample at a point relative to the circuit's centre; outside the square, its nearest edge.</summary>
         public float Sample(float[] values, float rx, float rz)
@@ -158,7 +160,8 @@ internal static class RealLand
                     var rx = sx - grid.CentreX;
                     var rz = sz - grid.CentreZ;
                     var rim = MathUtil.SmoothStep(Outside(sx, sz) / RimBlendMetres);
-                    st.SetColor(new Color(grid.SampleByte(grid.Sun, rx, rz), grid.SampleByte(grid.Sky, rx, rz), rim));
+                    // r the day's sun, g the sky, b the image's weight, a the sunrise's sun (land.gdshader picks the hour's).
+                    st.SetColor(new Color(grid.SampleByte(grid.Sun, rx, rz), grid.SampleByte(grid.Sky, rx, rz), rim, grid.SampleByte(grid.SunriseSun, rx, rz)));
                     st.SetNormal(normal);
                     st.SetUV(new Vector2((rx + grid.Half) / side, (rz + grid.Half) / side));
                     st.AddVertex(new Vector3(x, y, z));
@@ -215,9 +218,10 @@ internal static class RealLand
         input.CopyTo(raw);
         var bytes = raw.GetBuffer();
         stage?.Invoke("  land: the file inflated");
-        if (raw.Length < 36 || bytes[0] != 'G' || bytes[1] != 'L' || bytes[2] != 'P' || bytes[3] != 'T' || BitConverter.ToUInt32(bytes, 4) != 1)
+        var version = raw.Length < 36 ? 0u : BitConverter.ToUInt32(bytes, 4);
+        if (raw.Length < 36 || bytes[0] != 'G' || bytes[1] != 'L' || bytes[2] != 'P' || bytes[3] != 'T' || version is not (1 or 2))
         {
-            GD.PushWarning("assets/terrain/jackson.bin is not a version 1 land grid; the old horizon stays");
+            GD.PushWarning("assets/terrain/jackson.bin is not a version 1 or 2 land grid; the old horizon stays");
             return null;
         }
         var grid = new Grid
@@ -236,6 +240,16 @@ internal static class RealLand
         Buffer.BlockCopy(bytes, 36 + 2 * count, grid.Sun, 0, count);
         grid.Sky = new byte[count];
         Buffer.BlockCopy(bytes, 36 + 3 * count, grid.Sky, 0, count);
+        // Version 2 (0.55) adds the sunrise's shadows; a version 1 grid lights the sunrise with the day's.
+        if (version >= 2 && raw.Length >= 36 + 5L * count)
+        {
+            grid.SunriseSun = new byte[count];
+            Buffer.BlockCopy(bytes, 36 + 4 * count, grid.SunriseSun, 0, count);
+        }
+        else
+        {
+            grid.SunriseSun = grid.Sun;
+        }
         return grid;
     }
 }

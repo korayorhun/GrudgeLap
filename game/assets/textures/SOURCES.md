@@ -27,6 +27,7 @@ verge's at 2K (0.36: they fill most of the screen).
 | `road_wear.png` | drawn by `tools/make-road-wear.py` (no source material): the road's wear sheet, tar snakes, patch seams and oil spots, multiplied into the asphalt over its second UV set | this repository | MIT |
 | `clouds.png` | drawn by `tools/make-clouds.py` (no source material): a tileable sheet of fair-weather cumulus, white with a grey underside on a transparent ground | this repository | MIT |
 | `sky.hdr` | Poly Haven **kloofendal_43d_clear_puresky** (2K HDR; the partly cloudy 48d sky of the same place was used before, its haze washed the plain out) | https://polyhaven.com/a/kloofendal_43d_clear_puresky | CC0 1.0 |
+| `sky_sunrise.hdr` | Poly Haven **syferfontein_6d_clear_puresky** (2K HDR; Greg Zaal, sky edits Jarod Guest): a clear sky with the sun 5.85 degrees up, turned by `tools/make-sunrise-sky.py` (its columns rolled, nothing resampled) so its sun stands at compass bearing 85 for the sunrise (0.55) | https://polyhaven.com/a/syferfontein_6d_clear_puresky | CC0 1.0 |
 
 ambientCG: https://ambientcg.com (assets dedicated to the public domain under CC0). Poly Haven:
 https://polyhaven.com (all assets CC0). The normal maps are OpenGL convention, as Godot expects. The sun's
