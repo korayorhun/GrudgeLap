@@ -146,6 +146,7 @@ internal static class WorldBuilder
         _forest = null;
         _textured.Clear();
         _propMaterials.Clear();
+        _weathered.Clear();
         FoliageBuilder.ReleaseShared();
         PropBuilder.ReleaseShared();
     }
@@ -380,6 +381,7 @@ internal static class WorldBuilder
         _groundShader?.SetShaderParameter("tint", DryGrass.Lerp(WetGrass, wet));
         _groundShader?.SetShaderParameter("wetness", wet);
         _landShader?.SetShaderParameter("wetness", wet);
+        foreach (var material in _weathered.Values) material.SetShaderParameter("wetness", wet);
         _shoulderShader?.SetShaderParameter("wetness", wet);
         FoliageBuilder.SetWeather(DryGrass.Lerp(WetGrass, wet), wet);
         if (_edgeLines is not null) _edgeLines.Roughness = Mathf.Lerp(0.65f, 0.25f, wet);
@@ -448,6 +450,7 @@ internal static class WorldBuilder
         // marker posts go.
         if (_gravel is not null) _gravel.AlbedoColor = retro ? OrangeShoulder : GravelTint;
         _groundShader?.SetShaderParameter("retro", retro);
+        foreach (var material in _weathered.Values) material.SetShaderParameter("retro", retro);
         FoliageBuilder.SetRetro(retro);
         _shoulderShader?.SetShaderParameter("retro", retro);
         if (_earth is not null) _earth.AlbedoColor = retro ? OrangeEarth : SoilTint;
@@ -652,6 +655,46 @@ internal static class WorldBuilder
         var albedo = Photo($"{texture}_color");
         if (albedo is not null) Textured(material, albedo, Photo($"{texture}_normal"), 0.6f, matte ? null : Photo($"{texture}_roughness"));
         _propMaterials[key] = material;
+        return material;
+    }
+
+    private static readonly Dictionary<string, ShaderMaterial> _weathered = new();
+    private static Shader? _buildingShader;
+
+    /// <summary>
+    /// A building's material weathered (assets/shaders/building.gdshader, 0.41): the photo of <paramref name="texture"/>
+    /// projected on the three axes as <see cref="PropMaterial"/>'s, or a flat colour when it is null, under grime along
+    /// the foot, rain streaks and fading (<paramref name="weathering"/> of it: walls 1, roofs and trim less). The export
+    /// takes the standard materials, the 1989 look the flat colours.
+    /// </summary>
+    public static Material Weathered(string? texture, Color tint, float uvScale, float roughness = 0.8f, float weathering = 1f)
+    {
+        if (ExportMode) return texture is null ? new StandardMaterial3D { AlbedoColor = tint, Roughness = roughness } : PropMaterial(texture, tint, uvScale);
+        var key = $"{texture}|{tint}|{uvScale}|{roughness}|{weathering}";
+        if (_weathered.TryGetValue(key, out var cached)) return cached;
+        _buildingShader ??= GD.Load<Shader>("res://assets/shaders/building.gdshader");
+        var material = new ShaderMaterial { Shader = _buildingShader };
+        material.SetShaderParameter("tint", tint);
+        material.SetShaderParameter("uv_scale", uvScale);
+        material.SetShaderParameter("roughness_value", roughness);
+        material.SetShaderParameter("weathering", weathering);
+        material.SetShaderParameter("retro", _retro);
+        if (texture is not null && Photo($"{texture}_color") is { } albedo)
+        {
+            material.SetShaderParameter("textured", true);
+            material.SetShaderParameter("albedo_tex", albedo);
+            if (Photo($"{texture}_normal") is { } normal)
+            {
+                material.SetShaderParameter("has_normal", true);
+                material.SetShaderParameter("normal_tex", normal);
+            }
+            if (Photo($"{texture}_roughness") is { } roughnessMap)
+            {
+                material.SetShaderParameter("has_roughness", true);
+                material.SetShaderParameter("roughness_tex", roughnessMap);
+            }
+        }
+        _weathered[key] = material;
         return material;
     }
 

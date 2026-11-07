@@ -2942,6 +2942,24 @@ a, b and c, 19, 14 and 14.5 m), a large broadleaf (`jacaranda_tree`, 19.5 m, gre
   `tools/make-foliage.py` until 0.40); the tuft shader takes the scans' own colours in dry weather (the tint over the dry
   one otherwise). The verge's fringe on both sides and the band beyond it about twice as dense: 20 000 tufts.
 
+### Weathered buildings and the tufts' coverage (0.41.0)
+
+- **Weathered** (`WorldBuilder.Weathered`, `assets/shaders/building.gdshader`): the barn, the houses and the shop were
+  clean computer models, the barn one even, saturated red, every wall meeting the grass like a model on a table. Their
+  walls, roofs, trim and plinths now take a shader that projects the photo on the three axes as the standard material's
+  triplanar did, turns the normal map into the world with the whiteout blend, and adds the weather: grime and damp
+  splashed up from the ground below a ragged line about knee-high (browner, darker, rougher), the rain's streaks down
+  the vertical faces from the eaves, the paint faded in broad patches and a little greyed; walls take all of it, roofs and
+  trim less. The ground's height comes from the building as an instance uniform on each part
+  (`BuildingBuilder.SetFoot`): the parts are boxes placed at their own centres. Barn red is now 0.50, 0.13, 0.10 (0.62,
+  0.12, 0.09). The 1989 look turns them flat, the weather wets them, the export takes the standard materials.
+- **The tufts' coverage** (`tuft.gdshader`): the scanned clumps' blades are thin, and a mip level averages a blade
+  with the air round it, so past a few metres the alpha cut took most of each clump: the plain read as a lawn with dark
+  specks. The alpha is raised with the mip level (1 + 0.7 a level), as the trees' is.
+- **Tried and taken out**: a dense meadow of the clumps' cards along every road (200 000 cards in chunks drawn within
+  70 m): from the seat it read as dark specks on the lawn, and it cost 0.6 s at the start. A meadow needs blades in the
+  thousands a square metre and their own lighting; left for later.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

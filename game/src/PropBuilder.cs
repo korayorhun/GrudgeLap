@@ -39,14 +39,17 @@ internal static class PropBuilder
         {
             case PropKind.Barn:
                 BuildingBuilder.Barn(node, prop, (parent, text, at, fontSize, colour, flip) => Label(parent, text, at, fontSize, colour, flip));
+                BuildingBuilder.SetFoot(node, prop.Position.Y);
                 break;
 
             case PropKind.House:
                 BuildingBuilder.House(node, prop);
+                BuildingBuilder.SetFoot(node, prop.Position.Y);
                 break;
 
             case PropKind.Shop:
                 BuildingBuilder.Shop(node, prop, (parent, text, at, fontSize, colour, flip) => Label(parent, text, at, fontSize, colour, flip));
+                BuildingBuilder.SetFoot(node, prop.Position.Y);
                 break;
 
             case PropKind.Pump:

@@ -25,10 +25,11 @@ internal static class BuildingBuilder
         var depth = size.Z;
         var orange = prop.Label == "orange";
         var wallTint = orange ? new Color(0.90f, 0.58f, 0.30f) : new Color(0.95f, 0.94f, 0.88f);
-        var siding = WorldBuilder.PropMaterial("siding", wallTint, 0.5f);
-        var trim = Plain(Trim, 0.6f);
-        var roofing = WorldBuilder.PropMaterial("roof", orange ? new Color(0.36f, 0.22f, 0.17f) : new Color(0.30f, 0.31f, 0.33f), 0.6f);
-        var concrete = WorldBuilder.PropMaterial("concrete", new Color(0.68f, 0.67f, 0.64f), 0.5f);
+        // Weathered (0.41): the grime at the foot, the rain's streaks, the paint faded (WorldBuilder.Weathered).
+        var siding = WorldBuilder.Weathered("siding", wallTint, 0.5f);
+        var trim = WorldBuilder.Weathered(null, Trim, 1f, 0.6f, 0.6f);
+        var roofing = WorldBuilder.Weathered("roof", orange ? new Color(0.36f, 0.22f, 0.17f) : new Color(0.30f, 0.31f, 0.33f), 0.6f, 0.8f, 0.5f);
+        var concrete = WorldBuilder.Weathered("concrete", new Color(0.68f, 0.67f, 0.64f), 0.5f);
         var shutters = Plain(orange ? new Color(0.22f, 0.30f, 0.20f) : new Color(0.13f, 0.24f, 0.18f), 0.6f);
 
         // A storey and a half: the walls to the eaves, the roof at 35 degrees over the depth to the ridge.
@@ -70,7 +71,7 @@ internal static class BuildingBuilder
         }
 
         // The chimney up the outside of one end wall, through the eaves, with its cap.
-        var bricks = WorldBuilder.PropMaterial("bricks", new Color(0.72f, 0.42f, 0.34f), 1f);
+        var bricks = WorldBuilder.Weathered("bricks", new Color(0.72f, 0.42f, 0.34f), 1f, 0.85f, 0.7f);
         var chimneyX = width * 0.5f + 0.45f;
         var chimneyTop = eaves + roofRise + 0.9f;
         Box(node, new Vector3(0.85f, chimneyTop, 1.0f), bricks, new Vector3(chimneyX, chimneyTop * 0.5f, depth * 0.18f));
@@ -84,10 +85,11 @@ internal static class BuildingBuilder
         var size = prop.Size;
         var width = size.X;
         var depth = size.Z;
-        var red = WorldBuilder.PropMaterial("siding", new Color(0.62f, 0.12f, 0.09f), 0.45f);
-        var trim = Plain(Trim, 0.6f);
-        var roofing = WorldBuilder.PropMaterial("roof", new Color(0.38f, 0.39f, 0.41f), 0.6f);
-        var concrete = WorldBuilder.PropMaterial("concrete", new Color(0.66f, 0.65f, 0.62f), 0.5f);
+        // Barn red as it is after some summers (0.41: 0.62, 0.12, 0.09 until then, a toy's red), weathered.
+        var red = WorldBuilder.Weathered("siding", new Color(0.50f, 0.13f, 0.10f), 0.45f);
+        var trim = WorldBuilder.Weathered(null, Trim, 1f, 0.6f, 0.6f);
+        var roofing = WorldBuilder.Weathered("roof", new Color(0.38f, 0.39f, 0.41f), 0.6f, 0.8f, 0.5f);
+        var concrete = WorldBuilder.Weathered("concrete", new Color(0.66f, 0.65f, 0.62f), 0.5f);
         var dark = Plain(new Color(0.08f, 0.07f, 0.07f), 0.9f);
 
         // The ridge runs front to back (z) on a barn: the gambrel's two slopes a side are across x.
@@ -123,7 +125,7 @@ internal static class BuildingBuilder
         var front = depth * 0.5f + 0.06f;
         var doorWidth = width * 0.36f;
         var doorHeight = MathF.Min(eaves * 0.86f, 4.2f);
-        BracedDoor(node, new Vector3(0f, plinth, front), doorWidth, doorHeight, Plain(new Color(0.55f, 0.11f, 0.08f), 0.7f), trim);
+        BracedDoor(node, new Vector3(0f, plinth, front), doorWidth, doorHeight, WorldBuilder.Weathered(null, new Color(0.45f, 0.12f, 0.09f), 1f, 0.7f), trim);
         var loft = new Vector3(0f, eaves + kneeRise * 0.25f, front);
         Box(node, new Vector3(1.6f, 1.5f, 0.1f), dark, loft + new Vector3(0f, 0.75f, 0f));
         Frame(node, loft + new Vector3(0f, 0.75f, 0.03f), 1.6f, 1.5f, 0.14f, trim);
@@ -164,7 +166,7 @@ internal static class BuildingBuilder
         var width = size.X;
         var depth = size.Z;
         var height = size.Y;
-        var walls = WorldBuilder.PropMaterial("concrete", new Color(0.90f, 0.88f, 0.84f), 0.5f);
+        var walls = WorldBuilder.Weathered("concrete", new Color(0.90f, 0.88f, 0.84f), 0.5f);
         var red = Plain(new Color(0.78f, 0.10f, 0.08f), 0.45f);
         var white = Plain(new Color(0.94f, 0.94f, 0.93f), 0.45f);
         var aluminium = Plain(new Color(0.70f, 0.71f, 0.73f), 0.35f);
@@ -465,6 +467,19 @@ internal static class BuildingBuilder
     }
 
     private static readonly Dictionary<(Color, float), StandardMaterial3D> Plains = new();
+
+    /// <summary>
+    /// Tells every part of a building where the ground is (the weathered shader's instance uniform "foot", 0.41): the
+    /// grime rises from it. Parts with other materials take no notice.
+    /// </summary>
+    public static void SetFoot(Node3D node, float foot)
+    {
+        foreach (var child in node.GetChildren())
+        {
+            if (child is GeometryInstance3D geometry && geometry.MaterialOverride is ShaderMaterial or null) geometry.SetInstanceShaderParameter("foot", foot);
+            if (child is Node3D inner) SetFoot(inner, foot);
+        }
+    }
 
     private static StandardMaterial3D Plain(Color colour, float roughness)
     {

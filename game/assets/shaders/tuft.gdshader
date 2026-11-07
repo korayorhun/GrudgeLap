@@ -46,6 +46,12 @@ float fbm(vec2 p) {
 
 void fragment() {
 	vec4 t = texture(blades, UV);
+	// The blades' coverage held at a distance (0.41, as the meadow's): the alpha raised with the mip level.
+	vec2 size = vec2(textureSize(blades, 0));
+	vec2 gx = dFdx(UV) * size;
+	vec2 gy = dFdy(UV) * size;
+	float lod = 0.5 * log2(max(max(dot(gx, gx), dot(gy, gy)), 1e-6));
+	t.a = clamp(t.a * (1.0 + 0.7 * max(lod, 0.0)), 0.0, 1.0);
 	float dist = length(world_pos - CAMERA_POSITION_WORLD);
 	float fade = 1.0 - smoothstep(fade_start, fade_end, dist);
 	float dither = fract(sin(dot(floor(FRAGCOORD.xy), vec2(12.9898, 78.233))) * 43758.5453);
