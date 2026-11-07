@@ -99,9 +99,7 @@ GPU ran flat out and its driver timed out. Runs with `-RenderOffScreen` (the scr
 
 For automated checks, `-GlpAudioDump=<file.wav>` records the sound mix and `-GlpMute` keeps the speakers silent.
 
-On an RTX card with the plugin (step 4) DLSS takes TSR's place (`r.NGX.DLSS.Enable` in `Config/DefaultEngine.ini`):
-DLAA while the frame is rendered at full resolution, DLSS's upscaling when dynamic resolution renders below it. The
-log says `LogDLSS: NVIDIA NGX DLSS supported 1`; `-ExecCmds="r.NGX.DLSS.Enable 0"` puts TSR back for a comparison.
+On an RTX card with the plugin (step 4) DLSS takes TSR's place (`r.NGX.DLSS.Enable` in `Config/DefaultEngine.ini`) in its Quality mode: the frame is rendered at a fixed 75 % of the window and upscaled. Dynamic resolution is off: the plugin picks its mode by the top of the dynamic range and took DLAA, which takes 99 to 100 % only, and the packaged game stopped on DLSS's assertion the first time a frame was rendered below that. The log says `LogDLSS: NVIDIA NGX DLSS supported 1`; `-ExecCmds="r.NGX.DLSS.Enable 0"` puts TSR back for a comparison.
 
 ## Packaging
 
@@ -112,7 +110,10 @@ A stand-alone build (`GrudgeLapUE.exe` with the cooked level, the simulation cor
 ```
 
 With an engine built from source, the first run compiles the whole engine for the game target (over an hour on
-the development laptop); later runs only cook what changed.
+the development laptop); later runs only cook what changed (five minutes). The release's preview
+(`GrudgeLapUE-Preview-<version>.zip`, since 0.44) is the archive's `Windows` folder without the debug symbols
+(`GrudgeLapUE.pdb`, 2.6 GB) or a `Saved` folder, with the repository's `THIRD_PARTY.md` and the car models'
+credits (`Import/Models/LICENSE.txt`) beside the executable.
 
 ## How the pieces fit
 
@@ -179,7 +180,7 @@ source and the credit line the licence asks for in the `LICENSE.txt` beside `mod
 
 | Catalogue car | Model | Author (Sketchfab) |
 | --- | --- | --- |
-| the flat-twelve | Lotus Esprit Turbo 1983 | Shogos_esprit |
+| the flat-twelve | Ferrari Testarossa | li_osh |
 | the V8 | Maserati GranTurismo MC Stradale | Marcos Gigena |
 | the three hatchbacks | Honda Civic Type R '98 | tiedtke |
 | the 1990s saloon | SAAB 9-5 sedan 1997-2001 | blendffnike |

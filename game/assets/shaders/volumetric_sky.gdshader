@@ -25,8 +25,10 @@ uniform vec3 ambient_bottom : source_color = vec3(0.34, 0.37, 0.42);
 uniform float ambient_strength = 1.0;
 uniform float max_distance = 40000.0;
 
-float hash(vec2 p) {
-	return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+// Interleaved gradient noise (Jimenez, 2014) for the steps' offsets from pixel to pixel: an even, fine grain where a
+// random hash blotched the far clouds (0.44).
+float ign(vec2 p) {
+	return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715))));
 }
 
 float cloud(vec3 p) {
@@ -40,7 +42,9 @@ float cloud(vec3 p) {
 	float cover = clamp(coverage + (weather - 0.5) * 0.9, 0.0, 1.0);
 	// A cumulus's profile: a flat, sharp base, rounded and thinning towards its top.
 	float profile = smoothstep(0.0, 0.08, h) * (1.0 - smoothstep(0.35 + 0.45 * cover, 1.0, h));
-	float shape = texture(shape_noise, q / 5200.0).r;
+	// The noise as fine up as across (its texture is half as tall as it is wide): until 0.44 it changed over twice the
+	// height, and the clouds stood as columns with flat walls.
+	float shape = texture(shape_noise, q / vec3(5200.0, 2600.0, 5200.0)).r;
 	float d = shape * profile - (1.0 - cover);
 	if (d <= 0.0) {
 		return 0.0;
@@ -63,9 +67,9 @@ void sky() {
 			float t0 = (cloud_bottom - POSITION.y) / dir.y;
 			float t1 = min((cloud_top - POSITION.y) / dir.y, max_distance);
 			if (t0 < t1) {
-				const int STEPS = 36;
+				const int STEPS = 48;
 				float step_len = (t1 - t0) / float(STEPS);
-				float t = t0 + step_len * hash(FRAGCOORD.xy);
+				float t = t0 + step_len * ign(FRAGCOORD.xy);
 				float transmittance = 1.0;
 				vec3 light = vec3(0.0);
 				vec3 sun = normalize(LIGHT0_DIRECTION);

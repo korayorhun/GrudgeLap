@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
 PackageIdentifier: KorayOrhun.GrudgeLap
-PackageVersion: 0.43.0
+PackageVersion: 0.44.0
 InstallerType: inno
 Scope: user
 InstallModes:
@@ -11,7 +11,7 @@ UpgradeBehavior: install
 ReleaseDate: 2026-11-07
 Installers:
 - Architecture: x64
-  InstallerUrl: https://github.com/korayorhun/GrudgeLap/releases/download/v0.43.0/GrudgeLap-Setup-0.43.0.exe
-  InstallerSha256: 6C2335292110B5A9EEB8AEB7C877828C137B5090D017E99F597550D42AD9DD43
+  InstallerUrl: https://github.com/korayorhun/GrudgeLap/releases/download/v0.44.0/GrudgeLap-Setup-0.44.0.exe
+  InstallerSha256: 7643E00417100C5B1861C8FE02892DDF736A4734B30EEFF034C13118C5B84C13
 ManifestType: installer
 ManifestVersion: 1.12.0

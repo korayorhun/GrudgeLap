@@ -1114,6 +1114,56 @@ def dress_car(car, materials):
         f"{shell} shell part(s) out of Lumen, mirror glass {'found' if glass else 'missing'}")
 
 
+def land_material():
+    """The real land round the circuit (the Godot version's RealLand, 0.37): Jackson Hole's satellite image on the mesh's
+    UV, turning to the plain's green by the export's rim weight (vertex colour B) where it meets the game's terrain,
+    the sky's share (G) as its ambient occlusion. The export's vertex colours are the land's light, not its paint:
+    multiplied in as the glTF parents do, they turned the mountains pink. The sun's visibility (R) stays out: the
+    virtual shadow maps cast the mountains' own shadows here, where the Godot version's shadow maps end at 350 m.
+    """
+    path = f"{GAME}/Materials/M_Land"
+    if eal.does_asset_exist(path):
+        eal.delete_asset(path)
+    material = asset_tools.create_asset("M_Land", f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    albedo = import_texture("GrudgeLap", "jackson_albedo", "colour",
+                            path=os.path.join(ROOT, "..", "game", "assets", "terrain", "jackson_albedo.jpg"))
+    # 5120 texels square: Unreal builds no mip chain for a texture that is not a power of two, and the far land then
+    # shimmered; stretched to 8192 it has one.
+    try:
+        albedo.set_editor_property("power_of_two_mode", unreal.TexturePowerOfTwoSetting.STRETCH_TO_POWER_OF_TWO)
+        eal.save_loaded_asset(albedo)
+    except Exception as error:  # an engine without the setting draws it without mips
+        log(f"land albedo: {error}")
+
+    def node(cls, x, y, **props):
+        made = mel.create_material_expression(material, cls, x, y)
+        for key, value in props.items():
+            made.set_editor_property(key, value)
+        return made
+
+    image = node(unreal.MaterialExpressionTextureSample, -900, -300, texture=albedo,
+                 sampler_type=unreal.MaterialSamplerType.SAMPLERTYPE_COLOR)
+    mel.connect_material_expressions(node(unreal.MaterialExpressionTextureCoordinate, -1100, -300), "", image, "UVs")
+    # M_Ground's meadow (the aerial scan under its tint) averages this linear colour.
+    plain = node(unreal.MaterialExpressionConstant3Vector, -900, -500, constant=unreal.LinearColor(0.09, 0.12, 0.03, 1.0))
+    vertex = linear_vertex_colour(material, -900, 0)
+    rim = node(unreal.MaterialExpressionComponentMask, -600, 0, r=False, g=False, b=True, a=False)
+    mel.connect_material_expressions(vertex, "", rim, "")
+    sky = node(unreal.MaterialExpressionComponentMask, -600, 150, r=False, g=True, b=False, a=False)
+    mel.connect_material_expressions(vertex, "", sky, "")
+    colour = node(unreal.MaterialExpressionLinearInterpolate, -300, -300)
+    mel.connect_material_expressions(plain, "", colour, "A")
+    mel.connect_material_expressions(image, "RGB", colour, "B")
+    mel.connect_material_expressions(rim, "", colour, "Alpha")
+    mel.connect_material_property(colour, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    mel.connect_material_property(node(unreal.MaterialExpressionConstant, -300, 0, r=0.95), "", unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.connect_material_property(node(unreal.MaterialExpressionConstant, -300, 100, r=0.3), "", unreal.MaterialProperty.MP_SPECULAR)
+    mel.connect_material_property(sky, "", unreal.MaterialProperty.MP_AMBIENT_OCCLUSION)
+    mel.recompile_material(material)
+    eal.save_loaded_asset(material)
+    return material
+
+
 def dress_track(actors):
     # Terrain UVs span the 5 km ground (world * 0.0002 + 0.5); road UVs run 0..1 across 11 m and in metres along;
     # shoulder strips run 0..1 across 2.2 m. Tile sizes are the scans' real ones (Poly Haven "dimensions").
@@ -1132,14 +1182,15 @@ def dress_track(actors):
     # The earthworks (the fork hill, the cuttings' walls) are bare earth in the game: its TerrainEarth mesh shares
     # the terrain's UVs (5 km across), so the mud scan tiles every 4 m there, tinted to the hill's red-brown.
     earth = surface_material("M_Earth", "brown_mud_dry", 5000 / 4.0, 5000 / 4.0, tint=(1.15, 0.78, 0.55))
+    land = land_material() if "Land" in actors else None
     for label, actor in actors.items():
-        material = ground if label == "Terrain" else earth if label == "TerrainEarth" else asphalt if label.startswith("Road-") else verge if label.startswith("Shoulder-") else None
+        material = ground if label == "Terrain" else earth if label == "TerrainEarth" else asphalt if label.startswith("Road-") else verge if label.startswith("Shoulder-") else land if label == "Land" else None
         if material is None:
             continue
         for component in mesh_components(actor):
             for slot in range(component.get_num_materials()):
                 component.set_material(slot, material)
-            if label in ("Terrain", "TerrainEarth"):
+            if label in ("Terrain", "TerrainEarth", "Land"):
                 # A mesh distance field spans at most a few hundred voxels, 25 to 50 m each across the 6 km terrain:
                 # Lumen's software tracing then saw the 1.4 m roadside ditches as inside the ground and left them
                 # black. The sun's shadows come from virtual shadow maps either way.

@@ -6,6 +6,7 @@
 // 0.36 one 4.3 m photo tile multiplied by a noise covered the whole plain: a printed carpet with dark stains.
 shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_schlick_ggx;
+#include "res://assets/shaders/cloud_shadow.gdshaderinc"
 
 uniform sampler2D lawn : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D lawn_normal : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -111,6 +112,8 @@ void fragment() {
 		float darkness = dot(g, vec3(0.333));
 		bare = clamp(bare * 1.4 - (darkness - 0.12) * 2.5 * (1.0 - bare), 0.0, 1.0);
 		vec3 albedo = mix(grass, s1 * soil_tint, bare) * shade;
+		// The clouds' shadows out on the plain (0.44); round the car the sun itself carries them.
+		albedo *= cloud_albedo_factor(world_pos, dist);
 		albedo *= mix(1.0, 0.70, wetness);
 		ALBEDO = albedo;
 		// A little relief: the plain is never billiard-smooth (molehills, ruts, tussocks), a metre or two across.

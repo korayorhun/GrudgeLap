@@ -115,6 +115,7 @@ internal static class FoliageBuilder
             material.SetShaderParameter("frame_metres", frame);
             material.SetShaderParameter("tree_fraction", (float)(meta["height"].AsDouble() / frame));
             material.SetShaderParameter("retro", false);
+            CloudShadows.Register(material);
             // The card is a metre square the shader sizes and turns; its bounds must hold the tree seen from any side,
             // or the culling would drop trees still in view.
             var card = new QuadMesh { Size = Vector2.One, CustomAabb = new Aabb(new Vector3(-frame * 0.5f, 0f, -frame * 0.5f), new Vector3(frame, frame, frame)) };

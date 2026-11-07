@@ -2999,6 +2999,31 @@ ceiling. 0.43 marches real ones through the sky (`assets/shaders/volumetric_sky.
   drift is a few metres kilometres away). Cost about 0.4 ms of GPU time. `--volumetric-clouds=0` shows the old sheet;
   the export keeps the panorama; overcast and the 1989 look are as before.
 
+### Cloud shadows and rounder clouds (0.44.0)
+
+The clouds of 0.43 drifted over a land they never shaded, and seen across the plain they stood as columns with flat
+walls, grained with blotches far off.
+
+- **The shadows** (`CloudShadows`, `assets/shaders/cloud_shadow.gdshaderinc`): the sun's share at a point through the
+  sky's own clouds, by the same noises and density (without the billowed edges: a shadow is soft anyway), four steps
+  towards the sun through the layer, Beer's law, 0.12 under a thick cloud for the light it scatters on. The land (per
+  vertex: soft shadows a kilometre across, the vertices tens of metres apart out there, into its own `light()`), the
+  plain's ground (per pixel, out of 500 m) and the trees' impostors (per tree, at its foot) take it; the road, the cars
+  and the props light by Godot's own lighting, so the sun itself carries the camera's share: the same function runs on
+  the CPU at the camera every frame (the shape noise and the weather map read back from their textures once generated,
+  sampled as the GPU samples them) and dims the sun's energy, and each shader lights a point by its own share over the
+  camera's, blended in from 500 m to 1.5 km. Driving into a cloud's shadow the road, the cabin and the car go into the
+  shade together, as they do under a real one a kilometre across; the error is near the shadow's edge a few hundred
+  metres off. The shadows take the sky's wind every frame (the sky every two seconds).
+- **The first view in the sun**: the start line lay under a cloud; once the noises are read back the clouds are moved on
+  along the wind, 400 m at a time, until the sun at the camera is full.
+- **Rounder clouds**: the shape noise was sampled on a 5.2 km tile up as across, but its texture is half as tall, so it
+  changed over twice the height and the clouds stood as columns with flat walls; now 2.6 km up. The steps' offsets are
+  interleaved gradient noise (an even, fine grain) in place of a random hash, which blotched the far clouds, and 48
+  steps instead of 36.
+- GPU time within the measurement's noise (11.6-12.0 ms against 11.4-11.9 ms over an attract lap). `--cloud-shadows=0`
+  turns them off; none in overcast weather or the 1989 look; `--pose-log` logs the camera's share as it changes.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

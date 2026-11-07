@@ -145,6 +145,9 @@ internal static class WorldBuilder
         _cloudOffset = Vector2.Zero;
         _volumetricSky = null;
         _skyWindClock = 0f;
+        CloudShadows.Clear();
+        _cloudShade = 1f;
+        _sunEnergy = SunEnergy;
         _forest = null;
         _textured.Clear();
         _propMaterials.Clear();
@@ -231,8 +234,8 @@ internal static class WorldBuilder
         return (minX, maxX, minZ, maxZ);
     }
 
-    /// <summary>Once a frame: the clouds drift.</summary>
-    public static void Tick(float dt)
+    /// <summary>Once a frame: the clouds drift, and their shadows with them; the sun dims while <paramref name="eye"/> is in one (0.44).</summary>
+    public static void Tick(float dt, Vector3 eye)
     {
         if (_clouds?.Mesh is PlaneMesh { Material: ShaderMaterial material })
         {
@@ -250,6 +253,26 @@ internal static class WorldBuilder
                 if (_clouds is null) _cloudOffset += CloudDrift * 2f;
                 _volumetricSky.SetShaderParameter("wind", _cloudOffset * 2f);
             }
+        }
+        // The shadows take the sky's wind every frame, where the sky moves every two seconds (CloudShadows).
+        var wind = (_clouds is null ? _cloudOffset + CloudDrift * _skyWindClock : _cloudOffset) * 2f;
+        var on = CloudShadowsOn;
+        if (on && !CloudShadows.Ready && CloudShadows.Capture())
+        {
+            // The first view opens in the sun: the clouds moved on along the wind until the sun is clear at the eye.
+            var extra = CloudShadows.Clearing(eye, wind, CloudDrift);
+            if (extra != Vector2.Zero)
+            {
+                _cloudOffset += extra * 0.5f;
+                wind += extra;
+                _volumetricSky?.SetShaderParameter("wind", _cloudOffset * 2f);
+            }
+        }
+        var shade = CloudShadows.Update(on, wind, eye);
+        if (_sun is not null && MathF.Abs(shade - _cloudShade) > 0.0005f)
+        {
+            _cloudShade = shade;
+            _sun.LightEnergy = _sunEnergy * shade;
         }
     }
 
@@ -407,7 +430,9 @@ internal static class WorldBuilder
             sky.SkyMaterial = overcast ? OvercastSky : _clearSky;
         }
         if (_clouds is not null) _clouds.Visible = !overcast && _volumetricSky is null;   // the grey sky is its own cloud
-        _sun.LightEnergy = overcast ? 0.6f : SunEnergy;
+        _sunEnergy = overcast ? 0.6f : SunEnergy;
+        if (overcast) _cloudShade = 1f;
+        _sun.LightEnergy = _sunEnergy * _cloudShade;
         _sun.LightColor = overcast ? CloudSun : DrySun;
         // Behind cloud the sun is a wide source: shadows all but gone. In clear weather a point (0.36: at 0.5 degrees the
         // contact-hardening filter's noise crawled over the dashboard as the car moved, the owner's trembling cockpit shadows).
@@ -1849,24 +1874,39 @@ internal static class WorldBuilder
     {
         var material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/volumetric_sky.gdshader") };
         material.SetShaderParameter("panorama", photo);
-        material.SetShaderParameter("shape_noise", new NoiseTexture3D
+        var shape = new NoiseTexture3D
         {
             Width = 96, Height = 48, Depth = 96, Seamless = true, Normalize = true,
             Noise = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.Perlin, FractalType = FastNoiseLite.FractalTypeEnum.Fbm, FractalOctaves = 4, Frequency = 0.035f, Seed = 1989 },
-        });
+        };
+        material.SetShaderParameter("shape_noise", shape);
         material.SetShaderParameter("detail_noise", new NoiseTexture3D
         {
             Width = 48, Height = 48, Depth = 48, Seamless = true, Normalize = true,
             Noise = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.Cellular, CellularReturnType = FastNoiseLite.CellularReturnTypeEnum.Distance, FractalType = FastNoiseLite.FractalTypeEnum.Fbm, FractalOctaves = 2, Frequency = 0.09f, Seed = 33 },
         });
-        material.SetShaderParameter("weather_map", new NoiseTexture2D
+        var weather = new NoiseTexture2D
         {
             Width = 256, Height = 256, Seamless = true, Normalize = true,
             Noise = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth, FractalOctaves = 3, Frequency = 0.012f, Seed = 7 },
-        });
+        };
+        material.SetShaderParameter("weather_map", weather);
+        // The same clouds' shadows on the ground (0.44).
+        CloudShadows.SetClouds(shape, weather, SunDirection);
         _volumetricSky = material;
         return material;
     }
+
+    /// <summary>Automation (--cloud-shadows=0): no clouds' shadows on the ground, the sun steady, for comparisons.</summary>
+    public static bool? CloudShadowsOverride { get; set; }
+
+    /// <summary>The camera's share of the sun through the clouds (CloudShadows), which the sun's energy carries.</summary>
+    private static float _cloudShade = 1f;
+
+    /// <summary>The sun's energy for the weather, before the clouds over the camera dim it.</summary>
+    private static float _sunEnergy = SunEnergy;
+
+    private static bool CloudShadowsOn => _volumetricSky is not null && !_retro && CloudShadowsOverride != false && !WeatherModel.Overcast(_weather);
 
     /// <summary>Automation (--motion-blur=0): the camera without its motion blur, for comparisons.</summary>
     public static bool? MotionBlurOverride { get; set; }
@@ -1895,6 +1935,7 @@ internal static class WorldBuilder
             _landShader = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/land.gdshader") };
             _landShader.SetShaderParameter("albedo_tex", albedo);
             _landShader.SetShaderParameter("plain_colour", PlainFar);
+            CloudShadows.Register(_landShader);
             material = _landShader;
         }
         // The terrain's bounds are the simulation's x and z; Godot's z is the simulation's turned round.
@@ -1929,6 +1970,7 @@ internal static class WorldBuilder
         material.SetShaderParameter("meadow_balance", new Vector3(1.7f, 1.3f, 1.35f));
         material.SetShaderParameter("soil_tint", new Color(0.62f, 0.60f, 0.60f));
         material.SetShaderParameter("retro", _retro);
+        CloudShadows.Register(material);
         return material;
     }
 

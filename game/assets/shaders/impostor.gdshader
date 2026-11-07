@@ -4,6 +4,7 @@
 // leaves and the trunk as the real tree's would. Until 0.39 the trees were crossed cards of a leaf-cluster photo.
 shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_disabled, diffuse_burley, specular_schlick_ggx;
+#include "res://assets/shaders/cloud_shadow.gdshaderinc"
 
 uniform sampler2D albedo_atlas : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
 uniform sampler2D normal_atlas : filter_linear_mipmap_anisotropic, repeat_disable;
@@ -22,6 +23,8 @@ varying flat float frame_a;
 varying flat float frame_b;
 varying flat float fade;
 varying flat vec3 shade;
+// The clouds' shadow over the tree (0.44): one for the whole tree, at its foot.
+varying flat float cloud_factor;
 
 
 void vertex() {
@@ -52,6 +55,7 @@ void vertex() {
 	// Each tree a little different in its greens.
 	float h = fract(sin(dot(origin.xz, vec2(12.9898, 78.233))) * 43758.5453);
 	shade = mix(vec3(0.86, 0.90, 0.86), vec3(1.08, 1.06, 1.0), h);
+	cloud_factor = cloud_albedo_factor(origin, distance);
 }
 
 void fragment() {
@@ -88,8 +92,8 @@ void fragment() {
 	// Darker low in the crown and under it, where the leaves shade each other: the bake is unlit.
 	float inner = mix(0.42, 1.0, smoothstep(0.05, 0.85, h));
 	vec3 albedo = retro ? retro_colour : c.rgb * tint * shade * inner;
-	ALBEDO = albedo * mix(1.0, 0.75, wetness);
-	BACKLIGHT = albedo * 0.12;
+	ALBEDO = albedo * mix(1.0, 0.75, wetness) * cloud_factor;
+	BACKLIGHT = albedo * 0.12 * cloud_factor;
 	ROUGHNESS = mix(0.85, 0.55, wetness);
 	SPECULAR = 0.25;
 }

@@ -403,7 +403,7 @@ public sealed partial class Bootstrap : Node3D
                 }
                 if (_screenshotAts.Count > 0) _screenshotAt = _screenshotAts[0];
             }
-            else if (arg == "--pose-log") { _poseLog = true; StructureAcoustics.Log = true; SkidMarks.Log = true; }
+            else if (arg == "--pose-log") { _poseLog = true; StructureAcoustics.Log = true; SkidMarks.Log = true; CloudShadows.Log = true; }
             else if (arg.StartsWith("--audio-dump=", System.StringComparison.Ordinal)) _audioDump = arg["--audio-dump=".Length..];
             else if (arg.StartsWith("--ssao=", System.StringComparison.Ordinal)) WorldBuilder.SsaoOverride = arg["--ssao=".Length..] != "0";
             else if (arg.StartsWith("--ssr=", System.StringComparison.Ordinal)) WorldBuilder.SsrOverride = arg["--ssr=".Length..] != "0";
@@ -415,6 +415,7 @@ public sealed partial class Bootstrap : Node3D
             else if (arg.StartsWith("--land=", System.StringComparison.Ordinal)) WorldBuilder.LandOverride = arg["--land=".Length..] != "0";
             else if (arg.StartsWith("--motion-blur=", System.StringComparison.Ordinal)) WorldBuilder.MotionBlurOverride = arg["--motion-blur=".Length..] != "0";
             else if (arg.StartsWith("--volumetric-clouds=", System.StringComparison.Ordinal)) WorldBuilder.VolumetricCloudsOverride = arg["--volumetric-clouds=".Length..] != "0";
+            else if (arg.StartsWith("--cloud-shadows=", System.StringComparison.Ordinal)) WorldBuilder.CloudShadowsOverride = arg["--cloud-shadows=".Length..] != "0";
             else if (arg.StartsWith("--fsr2=", System.StringComparison.Ordinal)) float.TryParse(arg["--fsr2=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _fsr2Scale);
             else if (arg.StartsWith("--shake=", System.StringComparison.Ordinal)) _shake = arg["--shake=".Length..] != "0";
             else if (arg.StartsWith("--sun-shadow=", System.StringComparison.Ordinal)) WorldBuilder.SunShadowOverride = arg["--sun-shadow=".Length..] != "0";
@@ -851,7 +852,7 @@ public sealed partial class Bootstrap : Node3D
             AutomationAfterFrame();
             return;
         }
-        WorldBuilder.Tick(dt);
+        WorldBuilder.Tick(dt, GetViewport().GetCamera3D()?.GlobalPosition ?? Vector3.Zero);
         if (_elapsed >= _frameCapCheckAt)
         {
             // The window may have moved to a screen with another refresh rate.
