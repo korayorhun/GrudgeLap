@@ -2960,6 +2960,24 @@ a, b and c, 19, 14 and 14.5 m), a large broadleaf (`jacaranda_tree`, 19.5 m, gre
   70 m): from the seat it read as dark specks on the lawn, and it cost 0.6 s at the start. A meadow needs blades in the
   thousands a square metre and their own lighting; left for later.
 
+### Skid marks, dust and tyre smoke (0.42.0)
+
+The simulation's tyres have slid, locked and spun since 0.18, and the road kept no trace of it; a car crossed the plain
+at 150 km/h without raising a grain.
+
+- **Skid marks** (`SkidMarks`): each wheel on the road whose slip intensity (the squeal's measure: the larger of 2.5
+  times the slip ratio and 4 times the slip angle, less 0.25) passes 0.32 lays a strip from its last contact to its
+  present one, 0.9 of its tyre's section wide, its alpha from 0.12 to 0.87 with the slide; a jump of more than 4 m
+  starts the strip again. One multimesh of unit quads in a ring of 6000 strips, 1.5 cm over the road, alpha blended,
+  a little glossy; cleared for a new session; laid through the wreck's slide after a crash as well (the replay itself
+  moves no wheel). The attract driver stays within its tyres' grip and leaves none; checked with the threshold at nought
+  (two dark tracks in the car's lane) and put back.
+- **Dust and tyre smoke** (`WheelDust`): a GPU particle system a wheel for each, in the world's space, its emitter at
+  the wheel's contact every frame and its amount turned with `AmountRatio`: dust off the grass and the verge from 5 m/s
+  (full at 30 m/s), pale tyre smoke on the road from a slip intensity of 0.55; soft round puffs, lit, that grow and thin
+  out over 1.6 and 2.2 s. Checked driving across the grass into the barn (`--ram=Barn`).
+- `--pose-log` logs every fiftieth strip. None of it in the 1989 look.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

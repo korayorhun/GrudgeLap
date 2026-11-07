@@ -30,6 +30,8 @@ public sealed partial class Bootstrap : Node3D
     private const string SettingsFile = "user://settings.cfg";
 
     private RaceSession _session = null!;
+    private SkidMarks? _skidMarks;
+    private WheelDust? _wheelDust;
     private TrackGeometry _track = null!;
     private CarView _carView = null!;
     private CrashScene? _crash;
@@ -401,7 +403,7 @@ public sealed partial class Bootstrap : Node3D
                 }
                 if (_screenshotAts.Count > 0) _screenshotAt = _screenshotAts[0];
             }
-            else if (arg == "--pose-log") { _poseLog = true; StructureAcoustics.Log = true; }
+            else if (arg == "--pose-log") { _poseLog = true; StructureAcoustics.Log = true; SkidMarks.Log = true; }
             else if (arg.StartsWith("--audio-dump=", System.StringComparison.Ordinal)) _audioDump = arg["--audio-dump=".Length..];
             else if (arg.StartsWith("--ssao=", System.StringComparison.Ordinal)) WorldBuilder.SsaoOverride = arg["--ssao=".Length..] != "0";
             else if (arg.StartsWith("--ssr=", System.StringComparison.Ordinal)) WorldBuilder.SsrOverride = arg["--ssr=".Length..] != "0";
@@ -515,6 +517,15 @@ public sealed partial class Bootstrap : Node3D
         options = options with { Weather = _weather ?? (_weatherChoice == 4 ? WeatherModel.Draw(System.Random.Shared) : (Weather)_weatherChoice) };
         var spec = VehicleSpec.Catalogue[_carIndex];
         _session = new RaceSession(_track, spec, options);
+        // The road's rubber and the wheels' dust (0.42): a new session's road is clean.
+        if (_skidMarks is null)
+        {
+            _skidMarks = new SkidMarks();
+            AddChild(_skidMarks);
+            _wheelDust = new WheelDust();
+            AddChild(_wheelDust);
+        }
+        _skidMarks.Clear();
         if (_perfLog) StartMark("  session: the race session");
         WorldBuilder.SetWeather(_session.Weather);
         ApplyRain();
@@ -1044,6 +1055,8 @@ public sealed partial class Bootstrap : Node3D
         SyncTraffic(dt);
         SyncCows(dt);
         SyncGhost();
+        _skidMarks?.Update(_session, _retro);
+        _wheelDust?.Update(_session, _retro);
         _trainView?.Sync();
         if (_session.Phase == SessionPhase.Replay && _session.Replay.Count > 1)
         {
