@@ -414,6 +414,7 @@ public sealed partial class Bootstrap : Node3D
             else if (arg.StartsWith("--sdfgi=", System.StringComparison.Ordinal)) WorldBuilder.SdfgiOverride = arg["--sdfgi=".Length..] != "0";
             else if (arg.StartsWith("--land=", System.StringComparison.Ordinal)) WorldBuilder.LandOverride = arg["--land=".Length..] != "0";
             else if (arg.StartsWith("--motion-blur=", System.StringComparison.Ordinal)) WorldBuilder.MotionBlurOverride = arg["--motion-blur=".Length..] != "0";
+            else if (arg.StartsWith("--volumetric-clouds=", System.StringComparison.Ordinal)) WorldBuilder.VolumetricCloudsOverride = arg["--volumetric-clouds=".Length..] != "0";
             else if (arg.StartsWith("--fsr2=", System.StringComparison.Ordinal)) float.TryParse(arg["--fsr2=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _fsr2Scale);
             else if (arg.StartsWith("--shake=", System.StringComparison.Ordinal)) _shake = arg["--shake=".Length..] != "0";
             else if (arg.StartsWith("--sun-shadow=", System.StringComparison.Ordinal)) WorldBuilder.SunShadowOverride = arg["--sun-shadow=".Length..] != "0";

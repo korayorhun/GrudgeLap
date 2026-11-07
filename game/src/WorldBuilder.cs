@@ -143,6 +143,8 @@ internal static class WorldBuilder
         _steel = null;
         _clouds = null;
         _cloudOffset = Vector2.Zero;
+        _volumetricSky = null;
+        _skyWindClock = 0f;
         _forest = null;
         _textured.Clear();
         _propMaterials.Clear();
@@ -237,6 +239,18 @@ internal static class WorldBuilder
             _cloudOffset += CloudDrift * dt;
             material.SetShaderParameter("drift", _cloudOffset);
         }
+        // The volumetric clouds drift with the same wind, moved every two seconds: a change of the sky's parameters
+        // re-renders its radiance map, and two seconds' drift is a few metres kilometres away.
+        if (_volumetricSky is not null)
+        {
+            _skyWindClock += dt;
+            if (_skyWindClock >= 2f)
+            {
+                _skyWindClock = 0f;
+                if (_clouds is null) _cloudOffset += CloudDrift * 2f;
+                _volumetricSky.SetShaderParameter("wind", _cloudOffset * 2f);
+            }
+        }
     }
 
     /// <summary>
@@ -315,7 +329,7 @@ internal static class WorldBuilder
         var high = !retro && _quality == GraphicsQuality.High;
         var medium = !retro && _quality >= GraphicsQuality.Medium;
         if (_sun is not null) _sun.ShadowEnabled = SunShadowOverride ?? medium;
-        if (_clouds is not null) _clouds.Visible = !retro;
+        if (_clouds is not null) _clouds.Visible = !retro && _volumetricSky is null;
         if (_carProbe is not null) _carProbe.Visible = ProbeOverride ?? medium;
         if (_forest is not null)
         {
@@ -392,7 +406,7 @@ internal static class WorldBuilder
             _clearSky ??= sky.SkyMaterial;
             sky.SkyMaterial = overcast ? OvercastSky : _clearSky;
         }
-        if (_clouds is not null) _clouds.Visible = !overcast;   // the grey sky is its own cloud
+        if (_clouds is not null) _clouds.Visible = !overcast && _volumetricSky is null;   // the grey sky is its own cloud
         _sun.LightEnergy = overcast ? 0.6f : SunEnergy;
         _sun.LightColor = overcast ? CloudSun : DrySun;
         // Behind cloud the sun is a wide source: shadows all but gone. In clear weather a point (0.36: at 0.5 degrees the
@@ -744,7 +758,10 @@ internal static class WorldBuilder
         Material sky;
         if (ResourceLoader.Exists("res://assets/textures/sky.hdr"))
         {
-            sky = new PanoramaSkyMaterial { Panorama = GD.Load<Texture2D>("res://assets/textures/sky.hdr"), EnergyMultiplier = 1.0f };
+            var photo = GD.Load<Texture2D>("res://assets/textures/sky.hdr");
+            // The photo with volumetric clouds marched through it (0.43, VolumetricSky); the plain panorama for the
+            // export and with --volumetric-clouds=0.
+            sky = !ExportMode && VolumetricCloudsOverride != false ? VolumetricSky(photo) : new PanoramaSkyMaterial { Panorama = photo, EnergyMultiplier = 1.0f };
         }
         else
         {
@@ -761,7 +778,8 @@ internal static class WorldBuilder
         _environment = new Godot.Environment
         {
             BackgroundMode = Godot.Environment.BGMode.Sky,
-            Sky = new Sky { SkyMaterial = sky, RadianceSize = Sky.RadianceSizeEnum.Size256 },
+            // Incremental: the clouds' drift re-renders the radiance map now and then (WorldBuilder.Tick), spread over frames.
+            Sky = new Sky { SkyMaterial = sky, RadianceSize = Sky.RadianceSizeEnum.Size256, ProcessMode = Sky.ProcessModeEnum.Incremental },
             AmbientLightSource = Godot.Environment.AmbientSource.Sky,
             AmbientLightSkyContribution = SkyAmbientShare,
             AmbientLightColor = GroundBounce,
@@ -1815,6 +1833,40 @@ internal static class WorldBuilder
 
     /// <summary>The plain's colour seen from afar (the terrain shader's lawn under its tint), which the real land takes by the terrain's edge.</summary>
     private static readonly Color PlainFar = new(0.22f, 0.29f, 0.08f);
+
+    /// <summary>Automation (--volumetric-clouds=0): the flat cloud sheet instead of the volumetric clouds, for comparisons.</summary>
+    public static bool? VolumetricCloudsOverride { get; set; }
+
+    private static ShaderMaterial? _volumetricSky;
+    private static float _skyWindClock;
+
+    /// <summary>
+    /// The clear sky with volumetric clouds (0.43, assets/shaders/volumetric_sky.gdshader): the HDRI as the panorama
+    /// material showed it, and cumulus marched through at a quarter of the resolution, shaped by two tiling 3D noises
+    /// (a fractal Perlin for the clouds, cellular for their billowed edges) and a 2D one for clear and cloudy stretches.
+    /// </summary>
+    private static ShaderMaterial VolumetricSky(Texture2D photo)
+    {
+        var material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/volumetric_sky.gdshader") };
+        material.SetShaderParameter("panorama", photo);
+        material.SetShaderParameter("shape_noise", new NoiseTexture3D
+        {
+            Width = 96, Height = 48, Depth = 96, Seamless = true, Normalize = true,
+            Noise = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.Perlin, FractalType = FastNoiseLite.FractalTypeEnum.Fbm, FractalOctaves = 4, Frequency = 0.035f, Seed = 1989 },
+        });
+        material.SetShaderParameter("detail_noise", new NoiseTexture3D
+        {
+            Width = 48, Height = 48, Depth = 48, Seamless = true, Normalize = true,
+            Noise = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.Cellular, CellularReturnType = FastNoiseLite.CellularReturnTypeEnum.Distance, FractalType = FastNoiseLite.FractalTypeEnum.Fbm, FractalOctaves = 2, Frequency = 0.09f, Seed = 33 },
+        });
+        material.SetShaderParameter("weather_map", new NoiseTexture2D
+        {
+            Width = 256, Height = 256, Seamless = true, Normalize = true,
+            Noise = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth, FractalOctaves = 3, Frequency = 0.012f, Seed = 7 },
+        });
+        _volumetricSky = material;
+        return material;
+    }
 
     /// <summary>Automation (--motion-blur=0): the camera without its motion blur, for comparisons.</summary>
     public static bool? MotionBlurOverride { get; set; }

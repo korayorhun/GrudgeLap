@@ -2978,6 +2978,27 @@ at 150 km/h without raising a grain.
   out over 1.6 and 2.2 s. Checked driving across the grass into the barn (`--ram=Barn`).
 - `--pose-log` logs every fiftieth strip. None of it in the 1989 look.
 
+### Volumetric clouds (0.43.0)
+
+The clouds were a flat sheet at 2.8 km (0.37) with a painted grey underside: from the seat they read as a pattern on a
+ceiling. 0.43 marches real ones through the sky (`assets/shaders/volumetric_sky.gdshader`, `WorldBuilder.VolumetricSky`).
+
+- **The sky**: a sky shader in place of the panorama material, showing the same HDRI by `SKY_COORDS` (the sun's place
+  and the light unchanged) and compositing over it the clouds of a quarter-resolution pass (`use_quarter_res_pass`).
+  The radiance map (the scene's ambient light and reflections) is the photo alone (`AT_CUBEMAP_PASS`), and the sky is
+  processed incrementally, so the drift does not cost a full radiance render.
+- **The clouds**: a slab from 1.7 to 3.2 km over the valley floor, entered and left along the eye's ray (to 40 km), 36
+  jittered steps; the density is a tiling fractal Perlin (`NoiseTexture3D`, 96 x 48 x 96, a 5.2 km tile) under a
+  cumulus's profile (a flat, sharp base, rounded and thinning towards a top that rises with the coverage), less the
+  coverage, eroded at its edges by a cellular noise (1.1 km), with clear and cloudy stretches from a 2D noise (26 km).
+  Coverage 0.41.
+- **The light**: the sun's through the cloud above each point (four steps of 160 m towards it, Beer's law, a little of the
+  powder effect at the edges), a two-lobed Henyey-Greenstein phase (forward 0.55, back -0.2: the bright rim towards the
+  sun), the sky's from above (blue on the tops, grey under the bases); the far clouds fade into the sky's own colour.
+- **Wind**: the drift moves every two seconds (a change of the sky's parameters re-renders its radiance; two seconds'
+  drift is a few metres kilometres away). Cost about 0.4 ms of GPU time. `--volumetric-clouds=0` shows the old sheet;
+  the export keeps the panorama; overcast and the 1989 look are as before.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and
