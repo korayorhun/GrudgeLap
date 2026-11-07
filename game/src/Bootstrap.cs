@@ -1058,6 +1058,8 @@ public sealed partial class Bootstrap : Node3D
         _hud.Cockpit = cockpit;
         _audio.Interior = cockpit;
         _world.Interior = cockpit;
+        _world.Wipers = _cameraRig.Wipers;
+        _world.Covered = _audio.Covered;
         _mirror?.SetActive(cockpit);
         SyncTraffic(dt);
         SyncCows(dt);

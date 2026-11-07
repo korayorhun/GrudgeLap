@@ -32,6 +32,14 @@ internal sealed partial class WorldAudio : Node
     // The prairie round the road (0.52): a bed of its birds, its insects and the wind in the long grass, everywhere at one
     // level (assets/audio/ambience/prairie.wav, tools/make-ambience.py), through the glass from the seat like the rest.
     private AudioStreamPlayer? _ambience;
+    // The rain (0.54, assets/audio/ambience, tools/make-rain.py): round the car on the world's bus, so through the glass
+    // from the seat; and from the seat the drumming on the roof and the wipers, which are the cabin's own and so play on
+    // the master bus, past the glass.
+    private AudioStreamPlayer? _rainOutside;
+    private AudioStreamPlayer? _rainRoof;
+    private AudioStreamPlayer? _wipers;
+    private float _roofMix;
+    private float _wiperRate;   // the wipers' sound's steady speed against the game's clock, learnt (UpdateRain)
     private readonly Dictionary<int, AudioStreamPlayer3D> _cows = new();
     private Train? _train;
     private int _blasts;
@@ -45,6 +53,17 @@ internal sealed partial class WorldAudio : Node
     public bool Interior { get; set; }
     /// <summary>1989 mode: the placed sounds are muted.</summary>
     public bool Retro { get; set; }
+    /// <summary>The wipers before the driver (<see cref="CameraRig.Wipers"/>): whether they run, their clock and their period, seconds.</summary>
+    public (bool On, float Clock, float Period) Wipers { get; set; }
+    /// <summary>How far the car is under a bridge's deck, 0 to 1 (<see cref="EngineAudio.Covered"/>): no rain on its roof there.</summary>
+    public float Covered { get; set; }
+
+    /// <summary>The wipers' loop (tools/make-rain.py): the thump of a blade parking this far into each of its sweeps.</summary>
+    private const float WiperPark = 0.06f;
+    /// <summary>The drumming on the roof against its recording (-24 dBFS RMS), standing: a few decibels over the idling engine.</summary>
+    private const float RoofTrimDb = -2f;
+    /// <summary>The wipers against their recording (-24 dBFS RMS): under the roof's drumming, as in a car.</summary>
+    private const float WiperTrimDb = -8f;
 
     public override void _Ready()
     {
@@ -67,6 +86,24 @@ internal sealed partial class WorldAudio : Node
             AddChild(_ambience);
             _ambience.Play();
         }
+        // The rain's beds run silent until it rains, each from a random point.
+        _rainOutside = Bed("ambience/rain-outside.wav", BusName);
+        _rainRoof = Bed("ambience/rain-roof.wav", "Master");
+        if (AudioClips.Loop("ambience/wipers.wav") is { } wipers)
+        {
+            _wipers = new AudioStreamPlayer { Stream = wipers, Bus = "Master", VolumeDb = -80f };
+            AddChild(_wipers);
+        }
+    }
+
+    /// <summary>A loop playing from a random point at no level, for its level to be set once a frame; null when the file is missing.</summary>
+    private AudioStreamPlayer? Bed(string file, string bus)
+    {
+        if (AudioClips.Loop(file) is not { } loop) return null;
+        var player = new AudioStreamPlayer { Stream = loop, Bus = bus, VolumeDb = -80f };
+        AddChild(player);
+        player.Play((float)(_random.NextDouble() * loop.GetLength()));
+        return player;
     }
 
     /// <summary>
@@ -117,6 +154,54 @@ internal sealed partial class WorldAudio : Node
         }
     }
 
+    /// <summary>
+    /// The rain's sounds (0.54): round the car on the world's bus, fainter under a bridge's deck; from the seat the drumming
+    /// on the roof, harder at speed as the drops strike the glass faster, and gone under a deck; and the wipers, the loop
+    /// cut to <see cref="Windscreen.WiperSweep"/> and kept on the blades, each thump on a reversal (pulled in by its
+    /// speed, see below). None in the replay, which plays its tune alone, or in the 1989 look.
+    /// </summary>
+    private void UpdateRain(RaceSession session, float dt)
+    {
+        var raining = WeatherModel.Raining(session.Weather) && session.Phase != SessionPhase.Replay && !Retro ? 1f : 0f;
+        var open = 1f - Math.Clamp(Covered, 0f, 1f);
+        if (_rainOutside is not null) _rainOutside.VolumeDb = Mathf.LinearToDb(MathF.Max(raining * (0.55f + 0.45f * open), 0.0001f));
+        // The roof is the cabin's: heard from the seat only, at the world's volume, half as loud again at 110 km/h.
+        var roof = raining * open * _glassMix * (1f + 0.5f * MathUtil.Clamp01(MathF.Abs(session.Car.Speed) / 30f));
+        _roofMix += (roof - _roofMix) * MathUtil.Clamp01(dt * 6f);
+        if (_rainRoof is not null) _rainRoof.VolumeDb = Mathf.LinearToDb(MathF.Max(_roofMix * Volume, 0.0001f)) + RoofTrimDb;
+        if (_wipers?.Stream is not { } loop) return;
+        var (on, clock, period) = Wipers;
+        var sweep = Windscreen.WiperSweep;
+        var inPeriod = clock % period;
+        if (!on || raining == 0f || _glassMix < 0.5f || inPeriod >= sweep)
+        {
+            if (_wipers.Playing) _wipers.Stop();
+            return;
+        }
+        // Where the loop should be: one of its cycles for each sweep, the park's thump WiperPark into it, ahead by the
+        // output's latency so the thump is heard as the blade turns.
+        var length = (float)loop.GetLength();
+        var target = (MathF.Floor(clock / period) * sweep + inPeriod + WiperPark + (float)AudioServer.GetOutputLatency()) % length;
+        var error = target - (_wipers.GetPlaybackPosition() + (float)AudioServer.GetTimeSinceLastMix());
+        error -= length * MathF.Round(error / length);
+        // Far off (the wipers just started, a hitch in the frames, a pause) the loop jumps to its place; nearer, it is
+        // drawn in by playing up to 3 % fast or slow, which no ear hears on a wiper: jumping every time it drifted 50 ms
+        // (the game's clock and the sound card's part by that much every few seconds) clicked every second or so.
+        if (!_wipers.Playing || MathF.Abs(error) > 0.15f)
+        {
+            _wipers.PitchScale = 1f;
+            _wipers.Play(target);
+        }
+        else
+        {
+            // The two clocks part at a steady rate (1.5 % on the development laptop), which the integral takes up so
+            // the thump lands on the blade's turn rather than a steady 30 ms behind it.
+            _wiperRate = Math.Clamp(_wiperRate + error * dt * 0.2f, -0.03f, 0.03f);
+            _wipers.PitchScale = 1f + Math.Clamp(_wiperRate + error * 0.5f, -0.03f, 0.03f);
+        }
+        _wipers.VolumeDb = Mathf.LinearToDb(MathF.Max(_glassMix * Volume, 0.0001f)) + WiperTrimDb;
+    }
+
     /// <summary>A source in the world: inverse-distance attenuation from <paramref name="unitSize"/> metres out; its Doppler shift is set in <see cref="Update"/>.</summary>
     private static AudioStreamPlayer3D Placed(AudioStream stream, float unitSize, float maxDb, float maxDistance, Vector3 position) => new()
     {
@@ -157,6 +242,7 @@ internal sealed partial class WorldAudio : Node
             if (session.Phase == SessionPhase.Replay) chorus = 0f;
             _ambience.VolumeDb = Mathf.LinearToDb(MathF.Max(chorus, 0.0001f));
         }
+        UpdateRain(session, dt);
 
         // The drones and the train move only while the credit runs; on the title screen and in the replay they stand.
         var moving = session.Phase is SessionPhase.Driving or SessionPhase.StartEngine;

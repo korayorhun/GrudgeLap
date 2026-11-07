@@ -723,6 +723,25 @@ recorder's ticks patched with the sound a tenth of a second before, -30 dBFS RMS
 plays it everywhere at one level through the world's bus (through the glass from the seat), full on a clear day, 0.6
 overcast, 0.45 wet, 0.2 in the rain, silent in the replay and the 1989 look.
 
+## The rain (`ambience/rain-roof.wav`, `ambience/rain-outside.wav`, `ambience/wipers.wav`)
+
+Three recordings on Freesound, all CC0 1.0, made into loops by `tools/make-rain.py` from their HQ previews (decoded to
+44.1 kHz stereo):
+
+- `rain-roof.wav`: ondrosik, "rain-outside-the-car.flac" (#332856, https://freesound.org/people/ondrosik/sounds/332856/):
+  rain falling on a car's roof, recorded inside the car with a Zoom H1. 45 s from 3 s in, high-passed at 50 Hz, the last
+  3 s cross-faded into the first, -24 dBFS RMS.
+- `rain-outside.wav`: klangfabrik, "mediumrain.wav" (#160699, https://freesound.org/people/klangfabrik/sounds/160699/):
+  medium rain on concrete, grass and broad-leafed plants, wide. 45 s from 4 s in, high-passed at 100 Hz, cross-faded the
+  same way, -26 dBFS RMS.
+- `wipers.wav`: BeeProductive, "Windscreen wipers.wav" (#395608, https://freesound.org/people/BeeProductive/sounds/395608/):
+  a car's wipers from inside. Four cycles from 2.5 s in, each stroke shortened from about 0.765 s to 0.55 s by cutting
+  out its middle (60 ms cross-fades), so that a cycle lasts the game's 1.1 s sweep with the thumps and the pitch
+  untouched; the loop starts 0.06 s before a park reversal; -24 dBFS RMS.
+
+`WorldAudio` plays them while it rains: the outside bed on the world's bus, the roof and the wipers from the seat only,
+the wipers kept on the blades.
+
 ## Instant replay music (`music/replay.ogg`, `music/replay.wav`)
 
 An original composition of this project, written for it in the style of late-1980s arcade music; it is not a

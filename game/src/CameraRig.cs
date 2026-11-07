@@ -148,6 +148,9 @@ internal sealed partial class CameraRig : Node3D
         _windscreen.Wet = wet;
     }
 
+    /// <summary>The wipers on the glass before the driver, for their sound (0.54, <see cref="Windscreen.Wipers"/>).</summary>
+    public (bool On, float Clock, float Period) Wipers => _windscreen?.Wipers ?? (false, 0f, Windscreen.WiperSweep);
+
     public void FollowCar(Transform3D car, float speedMps, float dt)
     {
         // The jolt's spring, sub-stepped: at 20 fps (1989 mode) one step of it would overshoot.

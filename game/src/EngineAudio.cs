@@ -70,6 +70,9 @@ internal sealed partial class EngineAudio : Node
     private float _thump, _thumpPhase;
     private StructureAcoustics? _acoustics;
     private GrudgeLap.Physics.Track.TrackGeometry? _acousticsTrack;
+
+    /// <summary>How far the car is under a bridge's deck (<see cref="StructureAcoustics.Covered"/>): the rain stops drumming on its roof there (0.54).</summary>
+    public float Covered => _acoustics?.Covered ?? 0f;
     private float _rainLp, _rainLp2;
     private float _lastLoad;
     private readonly float[] _lastCompression = new float[4];

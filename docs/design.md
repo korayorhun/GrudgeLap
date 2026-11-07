@@ -3226,6 +3226,30 @@ The world was silent but for the cars, the train and the cows: standing at the s
   a metre away was a streak thirty pixels wide, which no eye or camera sees in focus, and from the seat the drops fell
   inside the cabin.
 
+### The rain's sounds (0.54.0)
+
+The rain fell without a sound: on the glass the drops and the wipers moved in silence, and outside there was only the
+tyres' spray.
+
+- **The recordings** (`tools/make-rain.py`, all CC0 on Freesound): the drumming on a car's roof from inside (ondrosik
+  #332856, a Zoom H1 in the cabin), medium rain on concrete, grass and leaves for outside (klangfabrik #160699, wide),
+  and a car's wipers from inside (BeeProductive #395608, a cycle every 1.53 s). The two beds are 42-second loops
+  (high-passed, the last 3 s cross-faded into the first, -24 and -26 dBFS RMS).
+- **The wipers**: the recording's blades reverse every 0.765 s, a thump each time, the rubber's swish loudest between;
+  the game's sweep up and back takes 1.1 s (`Windscreen.WiperSweep`), so each stroke is shortened to 0.55 s by cutting
+  out its middle, the swish, cross-faded over 60 ms: the thumps stay as they were, and so does the pitch (resampling
+  would have raised the motor six semitones). Four cycles make the loop. `WorldAudio` keeps it on the blades from the
+  windscreen's own clock (`Windscreen.Wipers`), the park's thump 0.06 s into each sweep and the output's latency ahead.
+  Far off (the wipers just started, a hitch, a pause) the loop jumps to its place; nearer it is drawn in by playing up
+  to 3 % fast or slow, the steady difference between the game's clock and the sound card's learnt (1.5 % on the
+  development laptop), so it stays within 10 ms of the blades. Jumping whenever it drifted 50 ms clicked every second
+  or two.
+- **The mix** (`WorldAudio.UpdateRain`): outside, the rain on the world's bus, so from the seat it comes through the glass
+  like the rest of the world, and at 0.55 under a bridge's deck. From the seat, the roof's drumming and the wipers on the
+  master bus, the cabin's own: the drumming a few decibels over the idling engine standing, half as loud again at
+  110 km/h as the drops strike the glass faster, and gone under a deck (`StructureAcoustics.Covered`, the deck that also
+  gives the echo). None in the replay, which plays its tune alone, or in the 1989 look.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

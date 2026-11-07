@@ -42,6 +42,9 @@ internal sealed class StructureAcoustics
     /// <summary>Automation (--pose-log): the decks entered and left and the joints knocked, in the log.</summary>
     public static bool Log { get; set; }
 
+    /// <summary>How far the car is under a deck, smoothed: 0 in the open, 1 beneath one (0.54: no rain on the roof there).</summary>
+    public float Covered => _amount;
+
     public StructureAcoustics(TrackGeometry track)
     {
         foreach (var path in track.Paths)

@@ -19,6 +19,17 @@ internal sealed partial class Windscreen : MeshInstance3D
     private ShaderMaterial _material = null!;
     private float _wiperClock;
     private bool _wiping;
+    private float _wiperPeriod = WiperSweep;
+
+    /// <summary>A blade's sweep up and back, seconds; the wipers' sound (WorldAudio, tools/make-rain.py) is cut to it.</summary>
+    public const float WiperSweep = 1.1f;
+
+    /// <summary>
+    /// The wipers now, for their sound (0.54, WorldAudio): whether they run before the driver, seconds since they started,
+    /// and seconds from one sweep's start to the next. Off whenever the glass is not drawn (the chase and replay views,
+    /// the 1989 look).
+    /// </summary>
+    public (bool On, float Clock, float Period) Wipers => (Visible && _wiping, _wiperClock, _wiperPeriod);
 
     /// <summary>Automation (--windscreen=0): no glass drawn before the driver, for comparisons.</summary>
     public static bool Enabled { get; set; } = true;
@@ -57,8 +68,9 @@ internal sealed partial class Windscreen : MeshInstance3D
         if (wiping && !_wiping) _wiperClock = 0f;
         _wiping = wiping;
         if (wiping) _wiperClock += dt;
-        const float sweep = 1.1f;
+        const float sweep = WiperSweep;
         var period = Rain >= 0.6f ? sweep : Mathf.Lerp(4.5f, sweep, Rain / 0.6f);
+        _wiperPeriod = period;
         _material.SetShaderParameter("rain", Rain);
         _material.SetShaderParameter("wet", Wet);
         // Most of the glass beads in the rain; a wet day leaves a few drops of spray.
