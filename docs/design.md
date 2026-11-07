@@ -3077,6 +3077,28 @@ dry, and the sun ahead lit nothing between the driver and the road.
 - **The sun through a cloud**: a cloud the sky's march gave up in (3 % of the light through) is opaque now; the photo's
   sun, thousands of times the sky's brightness, shone through a thick cumulus as a white point.
 
+### The roadside going by (0.47.0)
+
+The car passed a post every 50 m, signs, trees and the barn's wall within a metre or two, and heard none of them.
+
+- **The reflectors** (`RoadsideEchoes`): the marker posts (the view places them, so `WorldBuilder.BuildMarkerPosts`
+  hands over their feet), the signs, the trees by the road, the piers, towers, pumps, gantries and sawhorses, the
+  buildings; each a circle on the ground with a size for how much it throws back (a post 0.5, a tree 0.8, a wall 1.3),
+  in a grid of 20 m cells. Once a frame the strongest within 14 m of the car: strongest abeam, over a window along the
+  road the object's length and a bit, falling as the gap's 1.3th power (gentler than a point scatterer's square: the
+  posts stand 4 to 5 m off a car in its lane, and at the square their whoosh was lost under the wind).
+- **The echo** (`BodyNoise`, `BodyState.Passing` and `PassingGap`): the direct roar comes from the recordings; this adds
+  its reflection: band-passed noise of the roar's band (700 Hz) combed with itself delayed by the way to the object and
+  back (2 x gap / 343 m/s, 6 to 30 ms, glided across the block through a 4096-sample line), so the comb's teeth sweep as
+  the gap opens and closes: the whoosh of a post at speed, the long roar of a wall. Its level grows as the square of the
+  speed, like the roar's (`PassGain` 0.08 RMS at the roll's reference speed, at most 0.2), a little less in the cabin; the echo draws
+  its noise from a stream of its own, so the wind's gusts do not change when something passes. Silent in the
+  1989 look; `--pose-log` logs each object as the car passes it.
+- **No sun shadows under an overcast sky**: behind cloud the sun is a wide source (10 degrees) and its shadows are all
+  but gone, but the soft filter for so wide a source cost 7 ms a frame: in the rain the attract lap ran at 17-19 ms
+  (47-51 fps on the development laptop) against 10-12 ms without them, and the cockpit and the road looked the same.
+  The sun casts shadows under a clear sky only (`WorldBuilder.SunShadowsOn`; `--sun-shadow=` still forces them).
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

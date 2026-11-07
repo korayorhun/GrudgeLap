@@ -36,6 +36,9 @@ internal sealed partial class TyreAudio : Node
     private readonly float[] _block = new float[Chunk];
     private readonly Vector2[] _frames = new Vector2[Chunk];
     private float _peakTorque = 500f;
+    // What stands beside the road (0.47): made at the first update, once the world and its props are built.
+    private RoadsideEchoes? _echoes;
+    private TrackGeometry? _echoesTrack;
 
     public float Volume { get; set; } = 0.9f;
     /// <summary>Heard from the driver's seat: the wind at the pillars, the gears through the tunnel, the anti-lock pump through the pedal.</summary>
@@ -115,6 +118,11 @@ internal sealed partial class TyreAudio : Node
         Set(_howl, gain * _mix.Howl.Level * 0.9f, _mix.Howl.Pitch);
         Set(_skid, gain * _mix.Scrub.Level * 0.9f, _mix.Scrub.Pitch);
         Set(_gravel, gain * _mix.Gravel.Level, _mix.Gravel.Pitch);
+        if (_echoesTrack != session.Track)
+        {
+            _echoes = new RoadsideEchoes(session.Track);
+            _echoesTrack = session.Track;
+        }
         FillBody(car, muted, running);
     }
 
@@ -131,6 +139,7 @@ internal sealed partial class TyreAudio : Node
         var outputHz = wheelSpeed * spec.FinalDrive / MathF.Tau;
         // The teeth carry the engine's torque only with the clutch closed; on the overrun they are loaded the other way.
         var torque = running && drivetrain.ClutchLocked ? MathF.Abs(drivetrain.Engine.LastTorque) / _peakTorque : 0f;
+        var (passing, gap) = muted || _echoes is null ? (0f, 2f) : _echoes.Passing(car.Position, car.Forward);
         var state = new BodyState(
             Speed: muted ? 0f : MathF.Abs(car.Speed),
             Interior: Interior,
@@ -139,7 +148,9 @@ internal sealed partial class TyreAudio : Node
             AbsCycle: _mix.AbsCycle,
             GearRatio: muted ? 0f : spec.RatioForGear(drivetrain.Gear),
             OutputShaftHz: outputHz,
-            Torque: torque);
+            Torque: torque,
+            Passing: passing,
+            PassingGap: gap);
         var gain = muted ? 0f : Volume;
         // Whole chunks only: the same two arrays every time, and what is left over waits for the next frame.
         while (_body.GetFramesAvailable() >= Chunk)

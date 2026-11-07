@@ -112,6 +112,27 @@ public class BodyNoiseTests(ITestOutputHelper output)
         Assert.InRange(pump, 44, 46);
     }
 
+    /// <summary>
+    /// The roadside going by (0.47): the car's noise thrown back off what it passes; nothing with nothing beside the car,
+    /// more for a bigger object, as the square of the speed, and nothing standing still.
+    /// </summary>
+    [Fact]
+    public void The_roadside_echo_follows_the_speed_and_what_is_passed()
+    {
+        static BodyState Passing(float speed, float strength, float gap) => new(speed, false, 0f, 0f, 0f, 0f, 0f, 0f, strength, gap);
+        var open = Spectrum.Rms(Tail(Render(Passing(30f, 0f, 2f))));
+        var post = Spectrum.Rms(Tail(Render(Passing(30f, 0.35f, 1.5f))));
+        var wall = Spectrum.Rms(Tail(Render(Passing(30f, 1.3f, 1.5f))));
+        output.WriteLine($"RMS at 30 m/s: open {open:0.0000}, a post 1.5 m off {post:0.0000}, a wall {wall:0.0000}");
+        Assert.True(post > open * 1.03, "a post going by adds nothing");
+        Assert.True(wall > post, "a wall throws back no more than a post");
+        Assert.InRange(BodyNoise.PassLevel(Passing(30f, 1f, 1.5f)) / BodyNoise.PassLevel(Passing(15f, 1f, 1.5f)), 3.9, 4.1);
+        Assert.Equal(0f, Render(Passing(0f, 1f, 1.5f)).Max(MathF.Abs));
+        var x = Render(Passing(55f, 1.5f, 0.5f), 2f);
+        Assert.All(x, v => Assert.True(float.IsFinite(v)));
+        Assert.True(x.Max(MathF.Abs) < 0.95f, $"peak {x.Max(MathF.Abs):0.00}");
+    }
+
     [Fact]
     public void Nothing_runs_away_at_the_extremes()
     {

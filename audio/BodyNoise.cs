@@ -4,7 +4,8 @@ namespace GrudgeLap.Audio;
 /// The state of the car that its synthesised noises follow, once a frame: road speed, where the listener is, the
 /// tyres' spray and the anti-lock modulator (<see cref="TyreMix"/>), and the gearbox: the ratio of the gear in (signed,
 /// negative in reverse, 0 in neutral), the speed of its output shaft (the wheels' revolutions a second times the final
-/// drive) and the share of the engine's peak torque going through the gears either way (driving or on the overrun).
+/// drive) and the share of the engine's peak torque going through the gears either way (driving or on the overrun);
+/// and what the car is passing close by (0.47): how strongly its noise comes back off it, 0 to 1, and the gap to it, m.
 /// </summary>
 public readonly record struct BodyState(
     float Speed,
@@ -14,7 +15,9 @@ public readonly record struct BodyState(
     float AbsCycle,
     float GearRatio,
     float OutputShaftHz,
-    float Torque);
+    float Torque,
+    float Passing = 0f,
+    float PassingGap = 2f);
 
 /// <summary>
 /// The car's noises that no recording carries, synthesised per sample (0.19): the wind, the spray of a wet road, the
@@ -40,6 +43,13 @@ public readonly record struct BodyState(
 /// runout. Through the transmission tunnel the cabin hears them better than the outside.
 /// </para>
 /// <para>
+/// The roadside going by (0.47): a post, a sign, a tree or a wall passing close beside the car throws the car's own
+/// noise back. The direct roar comes from the recordings; this adds its echo: band-passed noise of the roar's band
+/// combed with itself delayed by the way to the object and back (2 x gap / 343 m/s, 6 to 30 ms), the comb's teeth
+/// sweeping as the gap opens and closes, which is the whoosh a row of posts makes at speed. Its level grows with the
+/// square of the speed, as the roar's does, and with how close and how big the object is; muffled in the cabin.
+/// </para>
+/// <para>
 /// The anti-lock pump: while the modulator holds pressure back its return pump's motor runs, a growl of pressure pulses
 /// at about 45 Hz rich in harmonics, pulsing with the valves' cycle; heard and felt in the cabin, little outside.
 /// </para>
@@ -54,6 +64,8 @@ public sealed class BodyNoise
     public const float WhineGain = 0.016f;
     /// <summary>The final drive's whine at full torque, high speed, in the cabin, peak.</summary>
     public const float FinalDriveGain = 0.006f;
+    /// <summary>The roadside's echo at <see cref="TyreMix.RollReferenceSpeed"/> passing a post close by, RMS.</summary>
+    public const float PassGain = 0.08f;
     /// <summary>The anti-lock pump's growl in the cabin, peak.</summary>
     public const float AbsGain = 0.05f;
     /// <summary>Teeth of the input shaft's constant-mesh gear and of a gear pair together (see the remarks).</summary>
@@ -65,7 +77,14 @@ public sealed class BodyNoise
 
     private readonly float _rate;
     private uint _noise = 0x9E3779B9u;
-    private Biquad _windBand, _windLow, _spray, _absTone;
+    private Biquad _windBand, _windLow, _spray, _absTone, _passBand;
+    // The echo's delay line: 64 ms at the highest rate it runs at.
+    private readonly float[] _passLine = new float[4096];
+    private int _passWrite;
+    // The echo's own noise, apart from the wind's: the wind's gusts draw from the other stream, and do not change when
+    // something passes.
+    private uint _passNoise = 0x2545F491u;
+    private float _passLevel, _passDelay;
     private float _gust = 1f, _gustTarget = 1f;
     private int _gustCountdown;
     private double _pairPhase, _meshPhase, _finalPhase, _shaftPhase, _pumpPhase;
@@ -79,6 +98,7 @@ public sealed class BodyNoise
         _windLow.SetLowPass(140f, 0.7f, _rate);
         _absTone.SetLowPass(900f, 0.7f, _rate);
         _windBand.SetBandPass(WindBase, 0.6f, _rate);
+        _passBand.SetBandPass(700f, 0.5f, _rate);
     }
 
     public int SampleRate => (int)_rate;
@@ -109,6 +129,10 @@ public sealed class BodyNoise
         var centreTo = WindBase + WindPerMps * MathF.Min(MathF.Abs(state.Speed), WindTopSpeed);
         var centreFrom = _windCentre;
         var nyquist = 0.45f * _rate;
+        var passFrom = _passLevel;
+        var passTo = PassLevel(state);
+        var delayTo = Math.Clamp(2f * state.PassingGap / 343f * _rate, 1f, _passLine.Length - 2f);
+        var delayFrom = _passDelay == 0f ? delayTo : _passDelay;
 
         for (var i = 0; i < n; i++)
         {
@@ -160,6 +184,21 @@ public sealed class BodyNoise
                 if (finalHz < nyquist) sample += MathF.Sin(MathF.Tau * (float)_finalPhase) * finalLevel * runout;
             }
 
+            var pass = passFrom + (passTo - passFrom) * t;
+            if (pass > 1e-5f || passFrom > 1e-5f)
+            {
+                // The roar's band into the line, and out of it again after the way there and back.
+                var roar = _passBand.Process(PassNoise()) * 2.4f;
+                _passLine[_passWrite] = roar;
+                var delay = delayFrom + (delayTo - delayFrom) * t;
+                var back = _passWrite - delay;
+                if (back < 0f) back += _passLine.Length;
+                var i0 = (int)back;
+                var frac = back - i0;
+                var echo = _passLine[i0] + (_passLine[(i0 + 1) % _passLine.Length] - _passLine[i0]) * frac;
+                _passWrite = (_passWrite + 1) % _passLine.Length;
+                sample += (roar + echo) * 0.5f * pass;
+            }
             var abs = absFrom + (absTo - absFrom) * t;
             if (abs > 1e-5f)
             {
@@ -180,6 +219,16 @@ public sealed class BodyNoise
         _finalHz = finalHzTo;
         _shaftHz = shaftTo;
         _abs = absTo;
+        _passLevel = passTo;
+        _passDelay = delayTo;
+    }
+
+    /// <summary>The roadside's echo level for a state: the speed's square, the object's nearness and size, a little less in the cabin.</summary>
+    public static float PassLevel(in BodyState state)
+    {
+        var pace = MathF.Min(MathF.Abs(state.Speed), WindTopSpeed) / TyreMix.RollReferenceSpeed;
+        // At most a fifth: a wall a hand's breadth off at 200 km/h would otherwise clip the mix.
+        return MathF.Min(PassGain * pace * pace * Math.Clamp(state.Passing, 0f, 1.5f), 0.2f) * (state.Interior ? 0.7f : 1f);
     }
 
     /// <summary>The wind's RMS level at the state's speed: as v squared up to <see cref="WindTopSpeed"/>; a little less from outside.</summary>
@@ -213,6 +262,15 @@ public sealed class BodyNoise
 
     /// <summary>White noise of unit RMS (uniform on ±√3), xorshift: cheap and the same on every run.</summary>
     private float Noise() => (Uniform() * 2f - 1f) * 1.7320508f;
+
+    /// <summary>White noise of unit RMS for the roadside's echo, from its own stream (xorshift).</summary>
+    private float PassNoise()
+    {
+        _passNoise ^= _passNoise << 13;
+        _passNoise ^= _passNoise >> 17;
+        _passNoise ^= _passNoise << 5;
+        return ((_passNoise >> 8) * (1f / 16777216f) * 2f - 1f) * 1.7320508f;
+    }
 
     private float Uniform()
     {

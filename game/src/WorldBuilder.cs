@@ -172,6 +172,7 @@ internal static class WorldBuilder
     {
         _stageWatch = null;
         Stage("");
+        RoadsideEchoes.Posts.Clear();
         root.AddChild(BuildEnvironment());
         root.AddChild(BuildSun());
         var farGround = BuildFarGround(track);
@@ -351,7 +352,7 @@ internal static class WorldBuilder
         var retro = _retro;
         var high = !retro && _quality == GraphicsQuality.High;
         var medium = !retro && _quality >= GraphicsQuality.Medium;
-        if (_sun is not null) _sun.ShadowEnabled = SunShadowOverride ?? medium;
+        if (_sun is not null) _sun.ShadowEnabled = SunShadowsOn;
         if (_clouds is not null) _clouds.Visible = !retro && _volumetricSky is null;
         if (_carProbe is not null) _carProbe.Visible = ProbeOverride ?? medium;
         if (_forest is not null)
@@ -437,6 +438,9 @@ internal static class WorldBuilder
         // Behind cloud the sun is a wide source: shadows all but gone. In clear weather a point (0.36: at 0.5 degrees the
         // contact-hardening filter's noise crawled over the dashboard as the car moved, the owner's trembling cockpit shadows).
         _sun.LightAngularDistance = overcast ? 10f : 0f;
+        // Behind cloud the sun casts no shadow to speak of, and the wide source's soft filter cost 7 ms a frame in the
+        // rain (0.47: 17-19 ms against 10-12 ms over an attract lap; the cockpit and the road looked the same).
+        _sun.ShadowEnabled = SunShadowsOn;
         foreach (var environment in new[] { _environment, _mirrorEnvironment })
         {
             if (environment is null) continue;
@@ -1830,6 +1834,8 @@ internal static class WorldBuilder
                 facing.Y = 0f;
                 var basis = Basis.LookingAt(facing.Normalized(), Vector3.Up);
                 placements.Add((new Transform3D(basis, Convert.ToGodot(foot with { Y = ground })), side > 0));
+                // The car's noise comes back off it as the car goes by (0.47, RoadsideEchoes).
+                RoadsideEchoes.Posts.Add(foot with { Y = ground });
             }
         }
         if (placements.Count == 0) return null;
@@ -1914,6 +1920,9 @@ internal static class WorldBuilder
 
     /// <summary>How much of the sun reaches the camera: none overcast or in the 1989 look, the clouds' share otherwise (CloudShadows).</summary>
     public static float SunShare => _retro || WeatherModel.Overcast(_weather) ? 0f : _cloudShade;
+
+    /// <summary>The sun casts shadows at medium and high quality under a clear sky (--sun-shadow= forces it), not overcast (0.47).</summary>
+    private static bool SunShadowsOn => SunShadowOverride ?? (!_retro && _quality >= GraphicsQuality.Medium && !WeatherModel.Overcast(_weather));
 
     private static bool CloudShadowsOn => _volumetricSky is not null && !_retro && CloudShadowsOverride != false && !WeatherModel.Overcast(_weather);
 
