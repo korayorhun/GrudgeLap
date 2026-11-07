@@ -2,9 +2,11 @@
 // same dry and lush patches the ground has (terrain.gdshader), so a tuft in a dry stretch is straw and one in a lush
 // hollow dark green, not the same bright speck everywhere; the light through the blades kept small; faded out
 // between fade_start and fade_end metres, dithered, so the far plain is the ground's texture and not a pepper of
-// cards. Until 0.36 the tufts were brighter than the ground and lit from behind like lamps.
+// cards. Until 0.36 the tufts were brighter than the ground and lit from behind like lamps. Since 0.45 they lean and
+// flutter in the wind (wind.gdshaderinc).
 shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_disabled, diffuse_burley, specular_schlick_ggx;
+#include "res://assets/shaders/wind.gdshaderinc"
 
 uniform sampler2D blades : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
 uniform vec3 tint : source_color = vec3(0.56, 0.66, 0.39);
@@ -16,8 +18,12 @@ varying vec3 world_pos;
 varying vec3 instance_origin;
 
 void vertex() {
-	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	instance_origin = MODEL_MATRIX[3].xyz;
+	// The blades lean downwind, their tips most (the card is 0.45 m tall, FoliageBuilder.TuftMesh), a tuft at a time.
+	float tip = clamp(VERTEX.y / 0.45, 0.0, 1.0);
+	vec3 lean = wind_lean(instance_origin.xz, TIME, 1.0) * tip * tip * 0.45 * length(MODEL_MATRIX[1].xyz);
+	VERTEX += (inverse(MODEL_MATRIX) * vec4(lean, 0.0)).xyz;
+	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
 float hash12(vec2 p) {
@@ -68,6 +74,9 @@ void fragment() {
 	// Darker at the root, where the blades shade each other (the atlas has two rows of cells, the root at a cell's foot).
 	float cellv = UV.y - floor(UV.y * 2.0) * 0.5;
 	c *= mix(1.0, 0.55, smoothstep(0.25, 0.5, cellv));
+	// Lit as the ground under it is, from either side: the card's normal is up, and Godot turns it down on the side
+	// seen from behind (the material is double-sided), which left half the tufts unlit, black specks over the plain.
+	NORMAL = normalize(mat3(VIEW_MATRIX) * vec3(0.0, 1.0, 0.0));
 	ALBEDO = c * mix(1.0, 0.72, wetness);
 	BACKLIGHT = c * 0.15;
 	ROUGHNESS = mix(0.9, 0.6, wetness);

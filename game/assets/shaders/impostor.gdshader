@@ -4,6 +4,7 @@
 // leaves and the trunk as the real tree's would. Until 0.39 the trees were crossed cards of a leaf-cluster photo.
 shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_disabled, diffuse_burley, specular_schlick_ggx;
+#include "res://assets/shaders/wind.gdshaderinc"
 #include "res://assets/shaders/cloud_shadow.gdshaderinc"
 
 uniform sampler2D albedo_atlas : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
@@ -39,6 +40,11 @@ void vertex() {
 	to_cam = distance > 0.001 ? to_cam / distance : vec3(0.0, 0.0, 1.0);
 	vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), to_cam));
 	vec3 world = origin + right * (UV.x - 0.5) * frame_metres * sx + vec3(0.0, (1.0 - UV.y) * frame_metres * sy, 0.0);
+	// The crown sways downwind in the wind (0.45, wind.gdshaderinc), more in a gust; the foot stays put.
+	if (!retro) {
+		float up = 1.0 - UV.y;
+		world += wind_lean(origin.xz, TIME, 9.0) * up * up * frame_metres * sy;
+	}
 	// The camera's bearing in the tree's own frame picks the frames (bearing 0 looks from the tree's -z side, as Blender
 	// rendered view 0 from its +y).
 	mat3 basis = mat3(MODEL_MATRIX[0].xyz / sx, MODEL_MATRIX[1].xyz / sy, MODEL_MATRIX[2].xyz / sz);

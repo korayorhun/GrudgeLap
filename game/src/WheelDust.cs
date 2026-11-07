@@ -64,7 +64,9 @@ internal sealed partial class WheelDust : Node3D
             Spread = 70f,
             InitialVelocityMin = 0.4f,
             InitialVelocityMax = 1.6f,
-            Gravity = new Vector3(0f, 0.25f, 0f),
+            // Rising a little, and carried downwind (0.45: the wind of assets/shaders/wind.gdshaderinc, to Godot's -x
+            // and -z; the damping holds it to a drift of a few metres a second).
+            Gravity = new Vector3(-0.944f * 4f, 0.25f, -0.330f * 4f),
             DampingMin = 1.5f,
             DampingMax = 3f,
             ScaleCurve = new CurveTexture { Curve = scale },

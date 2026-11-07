@@ -25,11 +25,6 @@ uniform vec3 ambient_bottom : source_color = vec3(0.34, 0.37, 0.42);
 uniform float ambient_strength = 1.0;
 uniform float max_distance = 40000.0;
 
-// Interleaved gradient noise (Jimenez, 2014) for the steps' offsets from pixel to pixel: an even, fine grain where a
-// random hash blotched the far clouds (0.44).
-float ign(vec2 p) {
-	return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715))));
-}
 
 float cloud(vec3 p) {
 	float h = (p.y - cloud_bottom) / (cloud_top - cloud_bottom);
@@ -67,9 +62,13 @@ void sky() {
 			float t0 = (cloud_bottom - POSITION.y) / dir.y;
 			float t1 = min((cloud_top - POSITION.y) / dir.y, max_distance);
 			if (t0 < t1) {
-				const int STEPS = 48;
+				const int STEPS = 64;
 				float step_len = (t1 - t0) / float(STEPS);
-				float t = t0 + step_len * ign(FRAGCOORD.xy);
+				// The steps at the middles of equal parts, the same for every pixel (0.45): any offset varied from pixel to pixel
+				// showed as a pattern on the clouds (blotches from a random hash until 0.44, diagonal streaks from interleaved
+				// gradient noise; the view's temporal anti-aliasing does not reach the quarter-resolution pass to average a
+				// changing one), and 64 steps keep the bands this leaves faint.
+				float t = t0 + step_len * 0.5;
 				float transmittance = 1.0;
 				vec3 light = vec3(0.0);
 				vec3 sun = normalize(LIGHT0_DIRECTION);

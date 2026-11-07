@@ -6,6 +6,7 @@
 // 0.36 one 4.3 m photo tile multiplied by a noise covered the whole plain: a printed carpet with dark stains.
 shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_schlick_ggx;
+#include "res://assets/shaders/wind.gdshaderinc"
 #include "res://assets/shaders/cloud_shadow.gdshaderinc"
 
 uniform sampler2D lawn : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -114,6 +115,10 @@ void fragment() {
 		vec3 albedo = mix(grass, s1 * soil_tint, bare) * shade;
 		// The clouds' shadows out on the plain (0.44); round the car the sun itself carries them.
 		albedo *= cloud_albedo_factor(world_pos, dist);
+		// The wind running over the meadow (0.45): a gust bends the blades and shows their paler sides, in patches that
+		// run downwind; within half a kilometre, where the grass is seen as grass.
+		float gust = wind_gust(p, TIME) * (1.0 - smoothstep(200.0, 500.0, dist)) * (1.0 - bare);
+		albedo *= mix(vec3(1.0), vec3(1.13, 1.12, 1.03), gust);
 		albedo *= mix(1.0, 0.70, wetness);
 		ALBEDO = albedo;
 		// A little relief: the plain is never billiard-smooth (molehills, ruts, tussocks), a metre or two across.

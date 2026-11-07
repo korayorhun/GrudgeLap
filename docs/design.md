@@ -3024,6 +3024,32 @@ walls, grained with blotches far off.
 - GPU time within the measurement's noise (11.6-12.0 ms against 11.4-11.9 ms over an attract lap). `--cloud-shadows=0`
   turns them off; none in overcast weather or the 1989 look; `--pose-log` logs the camera's share as it changes.
 
+### The wind (0.45.0)
+
+The clouds drifted and their shadows ran over the plain while every blade and leaf stood as if under glass.
+
+- **One wind** (`assets/shaders/wind.gdshaderinc`): the clouds' own direction (the sky's clouds move to Godot's -x and
+  -z), 4.5 m/s at the grass; gusts from two octaves of value noise stretched across the wind (fronts tens of metres
+  wide, a few deep), running downwind at 1.3 times the breeze; `wind_lean` gives a plant's lean per metre of height: a
+  steady 0.06, up to 0.28 in a gust, with a quick flutter (6.3 rad/s) over it.
+- **The grass** (`tuft.gdshader`): each tuft's card sheared downwind by its height squared (the card is 0.45 m), the
+  whole tuft at once; in a gust a tip moves some 13 cm.
+- **The trees** (`impostor.gdshader`): the card's top swayed the same way, nine times stiffer (a 13 m tree's crown
+  moves 10 to 40 cm); the foot stays put; not in the 1989 look.
+- **The meadow** (`terrain.gdshader`): where a gust runs, the grass within 500 m is up to an eighth paler, the blades'
+  undersides turned up, so the gusts are seen running over the plain.
+- **The dust** (`WheelDust`): the particles' gravity carries them downwind at 4 m/s² against their damping, so a car's
+  dust and smoke drift off to one side.
+- **The black specks**: half the grass tufts drew unlit, dark specks over the whole plain (the dense meadow of 0.41 was
+  taken out for them): the cards' normal is up, and on a double-sided material Godot turns it down on the side seen
+  from behind. The tuft shader now sets the world's up as the normal on both sides, so a tuft is lit as the ground
+  under it is.
+- **The clouds' streaks**: the steps' offsets varied from pixel to pixel showed as a pattern on the clouds (blotches from
+  a random hash until 0.44, diagonal streaks from interleaved gradient noise), and a per-frame offset did not help: the
+  view's temporal anti-aliasing does not reach the sky's quarter-resolution pass. The steps now sit at the middles of
+  equal parts for every pixel, 64 of them (48 in 0.44), and the bands this leaves are faint; GPU time unchanged within
+  the measurement's noise.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and
