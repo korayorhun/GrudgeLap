@@ -54,6 +54,9 @@ public:
 
 	AActor* Root() const { return RootActor.Get(); }
 
+	/** A wheel's hub (its pivot) in the world, for the tyre marks (0.76). */
+	FVector WheelHub(int32 Index) const;
+
 	/** The actor of this car tagged Tag (the binnacle's dials, the mirror glass), or null. */
 	AActor* Find(const TCHAR* Tag) const;
 

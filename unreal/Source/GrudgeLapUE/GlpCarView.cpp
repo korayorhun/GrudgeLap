@@ -243,6 +243,12 @@ void FGlpCarView::TakeBrakeLamps(UStaticMeshComponent* Mesh)
 	}
 }
 
+FVector FGlpCarView::WheelHub(int32 Index) const
+{
+	const USceneComponent* Wheel = Wheels.IsValidIndex(Index) ? Wheels[Index].Get() : nullptr;
+	return Wheel ? Wheel->GetComponentLocation() : FVector::ZeroVector;
+}
+
 void FGlpCarView::SetBraking(float Glow)
 {
 	if (FMath::IsNearlyEqual(Glow, BrakeGlow))

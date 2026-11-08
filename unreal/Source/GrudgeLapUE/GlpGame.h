@@ -52,6 +52,10 @@ public:
 	UPROPERTY(EditAnywhere, Category = "GrudgeLap")
 	TSoftObjectPtr<UMaterialInterface> MirrorMaterial;
 
+	/** M_SkidMark: the tyre marks' strips, darkening the road beneath them (0.76). */
+	UPROPERTY(EditAnywhere, Category = "GrudgeLap")
+	TSoftObjectPtr<UMaterialInterface> SkidMaterial;
+
 	// What the HUD shows.
 	bool HasSession() const { return Session != 0; }
 	const glp_state& State() const { return Current; }
@@ -117,6 +121,14 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<USceneCaptureComponent2D> Mirror;
+
+	/** The tyre marks (0.76): strips from each sliding wheel's last contact to its present one, in a ring of instances. */
+	UPROPERTY()
+	TObjectPtr<class UInstancedStaticMeshComponent> Skids;
+	TOptional<FVector> SkidLast[4];
+	int32 SkidNext = 0;
+	void LaySkidMarks();
+	void ClearSkidMarks();
 
 	/** The outside mirrors of the player's car: their own polished glass from outside, the mirror's view from the seat. */
 	TArray<TWeakObjectPtr<UStaticMeshComponent>> SideMirrors;

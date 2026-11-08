@@ -5,6 +5,7 @@
 #include "Components/ExponentialHeightFogComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "Components/VolumetricCloudComponent.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/ExponentialHeightFog.h"
@@ -213,6 +214,22 @@ void AGlpGame::BeginPlay()
 	Mirror->bCaptureOnMovement = false;
 	Mirror->RegisterComponent();
 
+	// The tyre marks (0.76): unit planes in world space, stretched along each strip.
+	Skids = NewObject<UInstancedStaticMeshComponent>(this, TEXT("Skids"));
+	Skids->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane")));
+	if (UMaterialInterface* SkidBase = SkidMaterial.LoadSynchronous())
+	{
+		Skids->SetMaterial(0, SkidBase);
+	}
+	Skids->SetCastShadow(false);
+	Skids->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Skids->SetUsingAbsoluteLocation(true);
+	Skids->SetUsingAbsoluteRotation(true);
+	Skids->SetUsingAbsoluteScale(true);
+	Skids->SetupAttachment(GetRootComponent());
+	Skids->RegisterComponent();
+	Skids->SetWorldTransform(FTransform::Identity);
+
 	LoadSettings();
 	// -GlpCar=<catalogue index> drives that car (automation: the off-screen shots of each car, 0.74).
 	FParse::Value(FCommandLine::Get(), TEXT("GlpCar="), CarIndex);
@@ -398,6 +415,73 @@ void AGlpGame::CloseSession(bool bDestroyCopies)
 	}
 }
 
+void AGlpGame::ClearSkidMarks()
+{
+	if (Skids)
+	{
+		Skids->ClearInstances();
+	}
+	SkidNext = 0;
+	for (TOptional<FVector>& Last : SkidLast)
+	{
+		Last.Reset();
+	}
+}
+
+void AGlpGame::LaySkidMarks()
+{
+	// As the Godot version's SkidMarks: a wheel on the road marks it from 0.32 of its slip intensity (the squeal's measure,
+	// VehicleSim.SlipIntensity), so a tyre at the edge of its grip squeals before it marks; a strip from its last contact
+	// to the present one, 1.5 cm over the road, 21 cm wide; 6000 strips, the oldest giving way.
+	constexpr int32 Capacity = 6000;
+	FGlpCarView* Car = PlayerCar();
+	if (!Skids || !Car || !Car->Root() || Current.phase != GLP_PHASE_DRIVING)
+	{
+		for (TOptional<FVector>& Last : SkidLast)
+		{
+			Last.Reset();
+		}
+		return;
+	}
+	const FVector Up = Car->Root()->GetActorUpVector();
+	for (int32 w = 0; w < 4; w++)
+	{
+		const float Intensity = FMath::Clamp(FMath::Max(FMath::Abs(Current.wheel_slip_ratio[w]) * 2.5f, FMath::Abs(Current.wheel_slip_angle[w]) * 4.f) - 0.25f, 0.f, 1.f);
+		if (!Current.wheel_contact[w] || Current.wheel_surface[w] != GLP_SURFACE_ROAD || Intensity < 0.32f)
+		{
+			SkidLast[w].Reset();
+			continue;
+		}
+		const FVector Contact = Car->WheelHub(w) - Up * (CarSpec.wheel_radius * 100.f - 1.5f);
+		if (!SkidLast[w].IsSet())
+		{
+			SkidLast[w] = Contact;
+			continue;
+		}
+		const FVector From = SkidLast[w].GetValue();
+		const FVector Along = Contact - From;
+		const double Length = Along.Size();
+		if (Length < 20.0)
+		{
+			continue;
+		}
+		if (Length < 300.0)
+		{
+			const FTransform Strip(FRotationMatrix::MakeFromXZ(Along, Up).ToQuat(), (From + Contact) * 0.5, FVector(Length / 100.0, 0.21, 1.0));
+			if (Skids->GetInstanceCount() < Capacity)
+			{
+				Skids->AddInstance(Strip, true);
+			}
+			else
+			{
+				Skids->UpdateInstanceTransform(SkidNext, Strip, true, true);
+			}
+			SkidNext = (SkidNext + 1) % Capacity;
+		}
+		SkidLast[w] = Contact;
+	}
+}
+
 void AGlpGame::NewSession()
 {
 	Scores.Dismiss();
@@ -425,6 +509,7 @@ void AGlpGame::NewSession()
 		}
 	}
 	bInsideShown = false;
+	ClearSkidMarks();
 	const FEyePoint& Eye = EyePoints[FMath::Clamp(CarSpec.style, 0, (int32)UE_ARRAY_COUNT(EyePoints) - 1)];
 	Rig.Eye = FVector3f(-0.38f, Eye.Height - CarSpec.cg_height, Eye.Back);
 	// A prepared model's own eye (GLP.Eye, build_scene.py), as CarView takes the model's Eye node (0.74): the cockpit
@@ -990,6 +1075,7 @@ void AGlpGame::SyncViews(float DeltaSeconds)
 	Camera->SetFieldOfView(Shot.HorizontalFov);
 
 	SyncTrafficAndTrain(DeltaSeconds);
+	LaySkidMarks();
 	if (Ghost)
 	{
 		const bool bVisible = Current.ghost_visible && Current.phase == GLP_PHASE_DRIVING;

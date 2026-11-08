@@ -779,6 +779,7 @@ def place_game(car, materials):
     game.set_folder_path("GrudgeLap")
     for prop, name in (("ghost_material", "M_Ghost"), ("instruments_material", "M_Instruments"), ("mirror_material", "M_MirrorView")):
         game.set_editor_property(prop, materials[name])
+    game.set_editor_property("skid_material", skid_material())
     log("game placed")
 
 
@@ -915,6 +916,28 @@ def paint_textured_material():
     mel.recompile_material(material)
     eal.save_loaded_asset(material)
     return material
+
+
+def skid_material():
+    """The tyre marks' strips (0.76): a modulating material, so a strip darkens the road beneath it whatever the light, to
+    0.45 of its shade in the middle and fading to nothing at its sides (UV.y across the strip), unlit, both faces."""
+    m = asset_tools.create_asset("M_SkidMark", f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    m.set_editor_property("blend_mode", unreal.BlendMode.BLEND_MODULATE)
+    m.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    m.set_editor_property("two_sided", True)
+    custom = mel.create_material_expression(m, unreal.MaterialExpressionCustom, -400, 0)
+    custom.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT3)
+    custom.set_editor_property("description", "GrudgeLap tyre mark")
+    custom.set_editor_property("code", "float across = abs(UV.y - 0.5) * 2.0; float v = lerp(0.45, 1.0, smoothstep(0.55, 1.0, across)); return float3(v, v, v);")
+    entry = unreal.CustomInput()
+    entry.set_editor_property("input_name", "UV")
+    custom.set_editor_property("inputs", [entry])
+    uv = mel.create_material_expression(m, unreal.MaterialExpressionTextureCoordinate, -700, 0)
+    mel.connect_material_expressions(uv, "", custom, "UV")
+    mel.connect_material_property(custom, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    mel.recompile_material(m)
+    eal.save_loaded_asset(m)
+    return m
 
 
 def brake_lamp_material():
