@@ -52,22 +52,27 @@ void fragment() {
 		// Worn through to the tar in the hollows, more in some stretches than others; about a tenth to a fifth of it.
 		float wear = 0.10 + 0.20 * vnoise(vec2(UV.y / 9.0, 3.0)) + 0.10 * vnoise(world_pos.xz * 0.7);
 		float exposed = smoothstep(wear - 0.04, wear + 0.04, 1.0 - h);
-		// The tar as the road shows it (its albedo colour 0.52 times the photo).
-		vec3 colour = mix(paint, tar * 0.52, exposed);
+		// The tar as the road shows it: its albedo colour times the photo, 0.52 dry and 0.15 wet (0.68: the specks kept
+		// the dry tar's grey in the rain, three times the wet road's).
+		vec3 colour = mix(paint, tar * mix(0.52, 0.15, wetness), exposed);
 		if (outer_grey) {
 			colour *= mix(1.0, 0.88, clamp(UV.x, 0.0, 1.0));
 		}
 		ALBEDO = colour;
-		// The edges, a sprayed line's: a few millimetres ragged, smoothed away where a pixel spans more than that (far off,
-		// where it would only shimmer).
-		float near = 1.0 - smoothstep(0.1, 0.3, fwidth(UV.x));
+		// The edges, a sprayed line's: a few millimetres ragged, smoothed away where a pixel spans more than that across the
+		// line (6 mm) or along it (the raggedness's 4 cm cells), where it would only shimmer (0.68: the fade began at a
+		// tenth of the line's width and only across it, and the edges fizzed from a few metres out on Low, without TAA).
+		// The noise's input wraps every 164 m: a sine hash fed thousands loses its precision and turns periodic.
+		float near = (1.0 - smoothstep(0.003, 0.006, fwidth(UV.x) * line_width)) * (1.0 - smoothstep(0.02, 0.04, fwidth(UV.y)));
 		float across = min(UV.x, 1.0 - UV.x) * line_width;
 		float side = UV.x > 0.5 ? 7.0 : 0.0;
-		float keep = step(0.006 * vnoise(vec2(UV.y * 25.0, side)) * near, across);
+		float keep = step(0.006 * vnoise(vec2(mod(UV.y * 25.0, 4096.0), side)) * near, across);
 		if (dashed) {
+			// The dash's ends ragged by up to 2 cm (the mesh cuts it at 9k and 9k + 3 m exactly).
 			float along = mod(UV.y, 9.0);
 			float to_end = min(along, 3.0 - along);
-			keep *= step(0.02 * vnoise(vec2(UV.x * 6.0, floor(UV.y / 9.0))) * near, to_end);
+			float near_end = 1.0 - smoothstep(0.01, 0.03, fwidth(UV.y));
+			keep *= step(0.02 * vnoise(vec2(UV.x * 6.0, mod(floor(UV.y / 9.0), 512.0))) * near_end, to_end);
 		}
 		ALPHA = keep;
 		NORMAL_MAP = texture(asphalt_normal, tuv).rgb;

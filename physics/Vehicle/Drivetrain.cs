@@ -110,16 +110,27 @@ public sealed class Drivetrain
             var kmh = MathF.Abs(groundSpeed) * MathUtil.KmhPerMps;
             throttle = MathF.Min(throttle, MathUtil.Clamp01((_spec.SpeedLimiterKmh + 3f - kmh) / 3f));
         }
-        if (Mode != TransmissionMode.ManualClutch && _shiftTimer > 0f) throttle = 0f; // lift fully during assisted shifts
+        var shaftRpm = MathF.Abs(axleSpeed * Ratio) * EngineModel.RpmPerRadPerSec;
+        var matchRpm = MathF.Min(shaftRpm, 0.98f * Engine.Spec.RedlineRpm);
+        if (Mode != TransmissionMode.ManualClutch && _shiftTimer > 0f)
+        {
+            // An assisted change lifts the throttle; a change down blips it with the clutch open, so the engine meets the
+            // lower gear's shaft speed before the clutch takes up (0.68): the heel and toe a driver does under braking.
+            // Without it the clutch dragged the engine up through the driven tyres, a snatch on tyres already braking,
+            // and the change down was silent.
+            throttle = Gear >= 1 && Engine.Running && shaftRpm > Engine.Rpm + 150f ? RevMatch(matchRpm) : 0f;
+        }
         if (Launching || PreRevving) throttle = MathF.Min(throttle, LaunchGovernor(input.Throttle));
         else if (Synchronising)
         {
             // Taking up the next gear: the engine is brought down to the input shaft's speed with the throttle eased (the
-            // driver's lifted foot, a dual-clutch box's ignition cut) instead of being fought by the clutch.
-            var shaftRpm = MathF.Abs(axleSpeed * Ratio) * EngineModel.RpmPerRadPerSec;
-            // Aimed a little under the shaft's speed: held at or above it, the engine only balanced the clutch there, a few
-            // rpm short of the shaft, and the clutch never locked.
-            throttle = MathF.Min(throttle, MathUtil.Clamp01(1f - (Engine.Rpm - shaftRpm + 100f) / 200f));
+            // driver's lifted foot, a dual-clutch box's ignition cut) instead of being fought by the clutch; aimed a little
+            // under the shaft's speed, since held at or above it the engine only balanced the clutch there, a few rpm
+            // short of the shaft, and the clutch never locked. Below the shaft (a change down still catching up, or a
+            // dual-clutch change over before the blip has done its work) the blip goes on (0.68).
+            throttle = Engine.Rpm < shaftRpm
+                ? MathF.Max(throttle, RevMatch(matchRpm))
+                : MathF.Min(throttle, MathUtil.Clamp01(1f - (Engine.Rpm - shaftRpm + 100f) / 200f));
         }
         var engineTorque = Engine.Torque(throttle);
         var ratio = Ratio;
@@ -212,6 +223,12 @@ public sealed class Drivetrain
         var lower = Engine.Spec.CurveTorque(lowerRpm) * _spec.RatioForGear(Gear - 1);
         return lower > now * 1.05f;
     }
+
+    /// <summary>
+    /// The blip's throttle (0.68): a proportional governor aimed just under <paramref name="targetRpm"/>, full 310 rpm short of
+    /// it and closed 60 rpm short, as the upshift's take-up aims just under the shaft.
+    /// </summary>
+    private float RevMatch(float targetRpm) => MathUtil.Clamp01((targetRpm - 60f - Engine.Rpm) / 250f);
 
     private void HandleIgnition(in DriverInputs input)
     {

@@ -3530,6 +3530,32 @@ The puddles were the view's alone: a mirror-flat patch on the asphalt, under the
 - The edge lines' left side now runs u from the road's side (0) to the verge's (1) as the right side does
   (`Quad(..., uLeft: 1, uRight: 0)`), for the greying.
 
+### Rev-matched downshifts (0.68.0)
+
+- **The blip** (`physics/Vehicle/Drivetrain.cs`, `RevMatch`): in the assisted modes (the automatic and the assisted
+  clutch) a shift lifted the throttle to zero, and on a change down nothing raised the revs: once the shift's open-clutch
+  time was over, the clutch took the engine up to the lower gear's shaft speed through the driven tyres, which were
+  already braking. Now, while the shift's clutch is open, a change down blips the throttle when the lower gear's shaft
+  is more than 150 rpm above the engine, with a proportional governor aimed just under the shaft's speed (full 310 rpm
+  short, closed 60 short, capped at 0.98 of the redline), and the take-up keeps blipping while the engine is still below
+  the shaft (a dual-clutch change ends before the blip has done its work). A change up still lifts; the manual clutch is
+  untouched. The engine's throttle carries the blip to the voice and the rev counter.
+- Measured (the 205 at 100 km/h under half braking, third to second): before, the axle's torque peaked at 2892 N m and
+  the clutch had not locked after 1.2 s; now 197 N m, locked after 0.28 s with the engine 27 rpm from the shaft. The
+  Testarossa at 120 km/h, third to second: the lower gear is past the redline, and it is unchanged (2394 N m).
+  `physics.tests/DownshiftTests.cs` (the change down blips and locks close to the shaft; it fails without the blip;
+  a change up still lifts).
+
+### The road paint's review (0.68.0)
+
+- The centre line's dashes are built to exactly 9k and 9k + 3 m (`RoadFrame.Lerp` at the dash's ends): the mesh began
+  each dash at the first frame inside it, up to a metre late, and 0.67's shader cut its end at 3 m, so the dashes ran 2
+  to 3 m, square at the start and ragged at the end. The fray now fades by the pixel's footprint across the line (6 mm)
+  and along it (the 4 cm cells), not at a tenth of the line's width across it only (the edges fizzed on Low, without
+  TAA); the worn specks take the wet road's 0.15 in the rain, not the dry 0.52; the fray noise's input wraps every 164 m
+  (a sine hash fed thousands of units turns periodic). The night beads still draw the whole quads: their few-millimetre
+  slivers past the fray were left.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

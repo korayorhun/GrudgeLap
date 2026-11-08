@@ -1942,13 +1942,22 @@ internal static class WorldBuilder
             // own measure (0.13's 4.5 m every 12 m, the arcade's, read as oversized; 0.15). Paint wears: every dash is a
             // little brighter or duller than the next, a few are gone. Where the branches share the road, only the one
             // on the right paints the centre line.
-            var dash = (int)MathF.Floor(a.Distance / 9f);
-            var dashTone = 0.55f + 0.45f * RoadWear.Hash(dash, (int)path.Kind, 41);
-            if (a.Distance % 9f < 3f && shared != 1 && RoadWear.Hash(dash, (int)path.Kind, 42) > 0.08f)
+            var span = b.Distance - a.Distance;
+            if (shared == 1 || span <= 1e-4f) continue;
+            // The part of this step that lies on a dash, cut at the dash's ends exactly (0.68): a dash began at the first
+            // frame inside it, up to a metre late, and once the paint's shader cut its end at 3 m (0.67) the dashes ran
+            // 2 to 3 m, square at the start and ragged at the end.
+            for (var dash = (int)MathF.Floor(a.Distance / 9f); dash * 9f < b.Distance; dash++)
             {
-                Quad(st, a.Origin - a.Lateral * 0.08f + a.Normal * 0.012f, a.Origin + a.Lateral * 0.08f + a.Normal * 0.012f,
-                    b.Origin - b.Lateral * 0.08f + b.Normal * 0.012f, b.Origin + b.Lateral * 0.08f + b.Normal * 0.012f,
-                    a.Normal, b.Normal, (yellow * dashTone) with { A = 1f }, a.Distance, b.Distance);
+                var from = MathF.Max(a.Distance, dash * 9f);
+                var to = MathF.Min(b.Distance, dash * 9f + 3f);
+                if (to <= from || RoadWear.Hash(dash, (int)path.Kind, 42) <= 0.08f) continue;
+                var dashTone = 0.55f + 0.45f * RoadWear.Hash(dash, (int)path.Kind, 41);
+                var p = RoadFrame.Lerp(a, b, (from - a.Distance) / span);
+                var q = RoadFrame.Lerp(a, b, (to - a.Distance) / span);
+                Quad(st, p.Origin - p.Lateral * 0.08f + p.Normal * 0.012f, p.Origin + p.Lateral * 0.08f + p.Normal * 0.012f,
+                    q.Origin - q.Lateral * 0.08f + q.Normal * 0.012f, q.Origin + q.Lateral * 0.08f + q.Normal * 0.012f,
+                    p.Normal, q.Normal, (yellow * dashTone) with { A = 1f }, p.Distance, q.Distance);
             }
         }
         Material material;
