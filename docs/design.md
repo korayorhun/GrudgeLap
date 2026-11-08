@@ -3393,6 +3393,21 @@ The puddles were the view's alone: a mirror-flat patch on the asphalt, under the
 - **The menu**: LIGHT steps day, sunrise, dusk, night, random (a draw of the four); the dusk is stored as 4.
 - **Cost**: 12.5 ms a frame (an attract lap at 1080p).
 
+### The wind on the car (0.61.0)
+
+- **The air** (`VehicleSim.Wind`): the drag is now the car's velocity through the air, so a headwind adds to it and a
+  tailwind takes from it; a crosswind pushes on the side, half the air's density times the side's area and cross-flow
+  coefficient (`VehicleSpec.SideForceArea`, 4 m^2: a saloon's 5 m^2 side at about 0.8) times the air's sideways speed past
+  the car times its whole speed, at the centre of pressure 0.35 m ahead of the centre of mass (`SideForceAhead`), so the
+  nose turns downwind as the car is pushed across the road. Still air by default (the tests as they were).
+- **The prairie's wind** (`Bootstrap.PrairieWind`): the way the grass leans (`wind.gdshaderinc`), 6 m/s on average (a
+  Wyoming day's), gusting from a third of that to half again over seconds (three slow waves); still in the 1989 look.
+- **Measured** (`CrosswindTests`, the hatchback coasting from 100 km/h, the wheel held): a 10 m/s crosswind moves it
+  2.8 m across in 3 s and turns its nose 4 degrees downwind (6 m/s: 1.6 m); after 5 s a 10 m/s headwind has it at 90.0
+  km/h, a tailwind at 95.8, still air at 93.3. The scripted laps, dry and wet, run as before without a crash.
+- **Heard** (`BodyState.AirSpeed`): the wind's roar follows the air's speed past the car, not the road's: a headwind
+  raises it and the gusts swell it; the roadside's echo keeps the car's speed.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

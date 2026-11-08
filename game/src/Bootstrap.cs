@@ -918,6 +918,7 @@ public sealed partial class Bootstrap : Node3D
         if (_session.Phase == SessionPhase.Replay && Input.IsActionJustPressed(InputSetup.Abort)) _session.Abort();
         else if (_session.Phase == SessionPhase.Driving && _session.OffRoad && Input.IsActionJustPressed(InputSetup.Abort)) _session.Abort();
 
+        _session.Car.Wind = PrairieWind(dt);
         _session.Step(input, dt);
         if (_poseLog) LogPose();
         if (_session.Events.Contains(RaceEvent.NewBestLap) && _session.BestLap is not null && (!_attract || _saveBest))
@@ -1660,6 +1661,22 @@ public sealed partial class Bootstrap : Node3D
     };
 
     private string LightLabel() => _lightChoice switch { 0 => "DAY", 1 => "SUNRISE", 3 => "NIGHT", 4 => "DUSK", _ => "RANDOM" };
+
+    private float _windClock;
+
+    /// <summary>
+    /// The prairie's wind on the car (0.61, VehicleSim.Wind): the way the grass leans (assets/shaders/wind.gdshaderinc,
+    /// towards Godot's -x and -z), 6 m/s on average, a Wyoming day's, gusting from a third of that to half again over
+    /// seconds (three slow waves, none a multiple of another); still in the 1989 look, whose cabinet knew no wind.
+    /// </summary>
+    private SN.Vector3 PrairieWind(float dt)
+    {
+        _windClock += dt;
+        var t = _windClock;
+        var gust = 1f + 0.35f * MathF.Sin(t * 0.9f) + 0.2f * MathF.Sin(t * 2.3f + 1f) + 0.15f * MathF.Sin(t * 0.37f + 2f);
+        var speed = _retro ? 0f : 6f * MathF.Max(gust, 0.3f);
+        return Convert.ToSim(new Vector3(-0.944f, 0f, -0.330f) * speed);
+    }
 
     /// <summary>
     /// Automation (--perf-log): the main view's measured GPU time and the frame's CPU time, averaged over five

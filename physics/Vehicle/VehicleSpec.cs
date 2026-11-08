@@ -66,6 +66,18 @@ public sealed record VehicleSpec
     /// </summary>
     public float FrontLiftArea { get; init; } = 0.12f;
     public float RearLiftArea { get; init; } = 0.06f;
+    /// <summary>
+    /// The side's area times its cross-flow coefficient, m^2 (0.61): what a crosswind pushes on, with half the air's
+    /// density times the air's sideways speed past the car times its whole speed. A saloon's side is some 5 m^2 and a
+    /// bluff body's coefficient across the flow near 0.8 (Hucho, ch. 4): a 10 m/s crosswind at 100 km/h pushes a
+    /// ton of car with some 700 N.
+    /// </summary>
+    public float SideForceArea { get; init; } = 4f;
+    /// <summary>
+    /// Where the side force acts, metres ahead of the centre of mass (0.61): a car's centre of pressure sideways lies
+    /// forward of its centre of mass, so a gust turns its nose away from the wind as it pushes it across the road.
+    /// </summary>
+    public float SideForceAhead { get; init; } = 0.35f;
     public float RollingResistance { get; init; } = 0.015f;
     /// <summary>Multiplier on the surface friction: modern tyres grip harder than 1984's.</summary>
     public float TireGrip { get; init; } = 1.0f;

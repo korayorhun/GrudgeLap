@@ -131,6 +131,13 @@ public sealed class VehicleSim
     public Weather Weather { get; set; } = Weather.Dry;
 
     /// <summary>
+    /// The wind the car drives through, m/s along the ground (0.61): the air's own velocity, so a headwind adds to the
+    /// drag, a tailwind takes from it and a crosswind pushes the car sideways and turns its nose away (the view sets it
+    /// from the prairie's wind, gusting). Still air by default.
+    /// </summary>
+    public Vector3 Wind { get; set; }
+
+    /// <summary>
     /// Where water stands on the road (0.56): the view's puddle tile, so the tyres meet the puddles the driver sees. Null
     /// (the tests' default) leaves a wet road without standing water: its lower grip alone.
     /// </summary>
@@ -292,11 +299,23 @@ public sealed class VehicleSim
         var force = new Vector3(0f, -_spec.MassKg * MathUtil.Gravity, 0f);
         var torque = Vector3.Zero;
 
-        // Aerodynamic drag.
-        var vLen = _massVelocity.Length();
+        // Aerodynamic drag, in the air as it moves (0.61: still air until then): the car's velocity through it.
+        var airVelocity = _massVelocity - Wind;
+        var vLen = airVelocity.Length();
         if (vLen > 0.01f)
         {
-            force -= _massVelocity * (0.5f * AirDensity * _spec.DragCoefficient * _spec.FrontalArea * vLen);
+            force -= airVelocity * (0.5f * AirDensity * _spec.DragCoefficient * _spec.FrontalArea * vLen);
+            // A crosswind's push on the car's side, at the centre of pressure ahead of the centre of mass (0.61): the air's
+            // sideways speed past the car times its whole speed, over the side's area. The drag above is the frontal's.
+            var side = Vector3.Transform(Vector3.UnitX, Orientation);
+            var across = Vector3.Dot(airVelocity, side);
+            if (MathF.Abs(across) > 0.01f && Wind != Vector3.Zero)
+            {
+                var push = -side * (0.5f * AirDensity * _spec.SideForceArea * across * vLen);
+                var at = _centreOfMass + forward * _spec.SideForceAhead;
+                force += push;
+                torque += Vector3.Cross(at - _centreOfMass, push);
+            }
         }
 
         // Aerodynamic lift (or downforce) over each axle, from the dynamic pressure of the air along the car.

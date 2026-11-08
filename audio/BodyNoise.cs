@@ -17,7 +17,8 @@ public readonly record struct BodyState(
     float OutputShaftHz,
     float Torque,
     float Passing = 0f,
-    float PassingGap = 2f);
+    float PassingGap = 2f,
+    float AirSpeed = float.NaN);
 
 /// <summary>
 /// The car's noises that no recording carries, synthesised per sample (0.19): the wind, the spray of a wet road, the
@@ -126,7 +127,7 @@ public sealed class BodyNoise
         var shaftFrom = _shaftHz == 0f ? shaftTo : _shaftHz;
         var absFrom = _abs;
         var absTo = AbsGain * state.Abs * (0.55f + 0.45f * state.AbsCycle) * (state.Interior ? 1f : 0.35f);
-        var centreTo = WindBase + WindPerMps * MathF.Min(MathF.Abs(state.Speed), WindTopSpeed);
+        var centreTo = WindBase + WindPerMps * MathF.Min(WindSpeed(state), WindTopSpeed);
         var centreFrom = _windCentre;
         var nyquist = 0.45f * _rate;
         var passFrom = _passLevel;
@@ -231,10 +232,16 @@ public sealed class BodyNoise
         return MathF.Min(PassGain * pace * pace * Math.Clamp(state.Passing, 0f, 1.5f), 0.2f) * (state.Interior ? 0.7f : 1f);
     }
 
-    /// <summary>The wind's RMS level at the state's speed: as v squared up to <see cref="WindTopSpeed"/>; a little less from outside.</summary>
+    /// <summary>
+    /// The air's speed past the car (0.61): the state's own when the game gives it (a headwind adds to the car's speed, a
+    /// gust swells it), the car's speed otherwise.
+    /// </summary>
+    public static float WindSpeed(in BodyState state) => float.IsNaN(state.AirSpeed) ? MathF.Abs(state.Speed) : state.AirSpeed;
+
+    /// <summary>The wind's RMS level at the air's speed past the car: as v squared up to <see cref="WindTopSpeed"/>; a little less from outside.</summary>
     public static float WindLevel(in BodyState state)
     {
-        var pace = MathF.Min(MathF.Abs(state.Speed), WindTopSpeed) / TyreMix.RollReferenceSpeed;
+        var pace = MathF.Min(WindSpeed(state), WindTopSpeed) / TyreMix.RollReferenceSpeed;
         return WindGain * pace * pace * (state.Interior ? 1f : 0.7f);
     }
 

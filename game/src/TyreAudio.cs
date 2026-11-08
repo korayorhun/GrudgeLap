@@ -150,7 +150,9 @@ internal sealed partial class TyreAudio : Node
             OutputShaftHz: outputHz,
             Torque: torque,
             Passing: passing,
-            PassingGap: gap);
+            PassingGap: gap,
+            // The wind's roar from the air's speed past the car (0.61, VehicleSim.Wind): a headwind and the gusts in it.
+            AirSpeed: muted ? 0f : (car.Velocity - car.Wind).Length());
         var gain = muted ? 0f : Volume;
         // Whole chunks only: the same two arrays every time, and what is left over waits for the next frame.
         while (_body.GetFramesAvailable() >= Chunk)
