@@ -1079,7 +1079,8 @@ public sealed partial class Bootstrap : Node3D
         _world.Wipers = _cameraRig.Wipers;
         // The lamps at night (0.57); the 1989 cabinet knew no night.
         var night = WorldBuilder.LampsLit;
-        _carView.Headlights = night;
+        // The cars' lamps are on in the rain too (0.62), as drivers have them in the wet whatever the hour.
+        _carView.Headlights = WorldBuilder.CarLampsLit;
         // The other lamps of the night (0.58): the farms' yard lamps and the train's.
         NightLamps.Night = night;
         if (_trainView is not null) _trainView.Night = night;
@@ -1091,6 +1092,7 @@ public sealed partial class Bootstrap : Node3D
         SyncGhost();
         _skidMarks?.Update(_session, _retro);
         _wheelDust?.Update(_session, _retro);
+        if (_session.Traffic is not null) _wheelDust?.UpdateTraffic(_droneViews, _session.Traffic.Cars, _session.Weather, _retro);
         _trainView?.Sync();
         if (_session.Phase == SessionPhase.Replay && _session.Replay.Count > 1)
         {
@@ -1362,7 +1364,7 @@ public sealed partial class Bootstrap : Node3D
         for (var i = 0; i < cars.Count && i < _droneViews.Count; i++)
         {
             _droneViews[i].SetTrafficPose(cars[i].Position, cars[i].Orientation);
-            _droneViews[i].Headlights = WorldBuilder.LampsLit;
+            _droneViews[i].Headlights = WorldBuilder.CarLampsLit;
             if (_session.Phase is SessionPhase.Driving or SessionPhase.StartEngine || (_session.Phase == SessionPhase.Replay && !_session.ReplayPlaying)) _droneViews[i].AdvanceWheels(cars[i].Speed * dt, 0f);
         }
     }

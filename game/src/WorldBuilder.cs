@@ -2160,6 +2160,9 @@ internal static class WorldBuilder
     /// <summary>The lamps are lit (the cars', the train's, the yards'): at night and at dusk (0.60), dusk-to-dawn as they are.</summary>
     public static bool LampsLit => !_retro && _hour is Hour.Night or Hour.Dusk;
 
+    /// <summary>The cars' lamps are lit: dusk to dawn, and in the rain whatever the hour (0.62).</summary>
+    public static bool CarLampsLit => LampsLit || (!_retro && WeatherModel.Raining(_weather));
+
     /// <summary>
     /// The hour on the clear sky and the land (0.55): the day's photo or the sunrise's, the clouds lit by the low sun's
     /// colour and fewer of them (fair-weather cumulus grow with the day's heat; at dawn the sky is mostly clear, and

@@ -23,6 +23,8 @@ internal sealed partial class WorldAudio : Node
     private AudioEffectLowPassFilter? _glass;
     private int _bus = -1;
     private readonly List<(AudioStreamPlayer3D Player, TrafficCar Car, float Tune)> _drones = new();
+    // Each drone's spray on a wet road (0.62): the rain's hiss placed on it, brighter, as loud as its speed throws water.
+    private readonly List<AudioStreamPlayer3D> _droneSprays = new();
     private AudioStreamWav? _droneLoop;
     private AudioStreamWav? _steamLoop;
     private AudioStreamWav? _whistleClip;
@@ -132,13 +134,25 @@ internal sealed partial class WorldAudio : Node
         view.AddChild(player);
         player.Play((float)(_random.NextDouble() * _droneLoop.GetLength()));
         _drones.Add((player, car, 0.94f + 0.12f * (float)_random.NextDouble()));
+        if (_rainOutside?.Stream is { } hiss)
+        {
+            var spray = Placed(hiss, unitSize: 4f, maxDb: 0f, maxDistance: 90f, new Vector3(0f, 0.3f, 1.3f));
+            spray.VolumeDb = -80f;
+            view.AddChild(spray);
+            spray.Play((float)(_random.NextDouble() * hiss.GetLength()));
+            _droneSprays.Add(spray);
+        }
     }
 
     /// <summary>
     /// Forgets the drones of the last credit: their views, and the players on them, are freed with the session. Kept
     /// (until 0.8.1), the next update touched a disposed player and threw every frame from then on.
     /// </summary>
-    public void DetachDrones() => _drones.Clear();
+    public void DetachDrones()
+    {
+        _drones.Clear();
+        _droneSprays.Clear();
+    }
 
     /// <summary>Puts the locomotive's running sound and its whistle on the locomotive's node.</summary>
     public void AttachTrain(Node3D locomotive, Train train)
@@ -267,6 +281,17 @@ internal sealed partial class WorldAudio : Node
             var velocity = moving ? Convert.ToGodot(car.Forward * car.Speed) : Vector3.Zero;
             player.PitchScale = tune * (0.9f + 0.2f * MathUtil.Clamp01((car.Speed - 18f) / 10f)) * Doppler(player.GlobalPosition, velocity, listener, listenerVelocity);
             player.VolumeDb = moving ? -3f : -80f;
+        }
+        // The drones' tyres on a wet road (0.62): the hiss as loud as their speed throws water, shifted as they pass.
+        var wet = Retro || session.Phase == SessionPhase.Replay ? 0f : WeatherModel.Wetness(session.Weather);
+        for (var i = 0; i < _droneSprays.Count && i < _drones.Count; i++)
+        {
+            var spray = _droneSprays[i];
+            if (!IsInstanceValid(spray)) continue;
+            var car = _drones[i].Car;
+            var level = moving ? wet * MathUtil.Clamp01((car.Speed - 8f) / 25f) : 0f;
+            spray.VolumeDb = Mathf.LinearToDb(MathF.Max(level * 0.8f, 0.0001f));
+            spray.PitchScale = 1.35f * Doppler(spray.GlobalPosition, moving ? Convert.ToGodot(car.Forward * car.Speed) : Vector3.Zero, listener, listenerVelocity);
         }
         UpdateTrain(moving, listener, listenerVelocity);
         // The cows: a loud moo from one the car shoves, a quieter one now and then from one that is just grazing.

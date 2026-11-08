@@ -22,11 +22,14 @@ internal sealed partial class WheelDust : Node3D
     private readonly GpuParticles3D[] _dust = new GpuParticles3D[4];
     private readonly GpuParticles3D[] _smoke = new GpuParticles3D[4];
     private readonly GpuParticles3D[] _spray = new GpuParticles3D[4];
+    // The traffic's spray (0.62): two emitters behind each drone's rear wheels, made as the drones first need them.
+    private readonly List<(GpuParticles3D Left, GpuParticles3D Right)> _trafficSpray = [];
+    private readonly Texture2D _puff;
 
     public WheelDust()
     {
         Name = "WheelDust";
-        var puff = new GradientTexture2D
+        var puff = _puff = new GradientTexture2D
         {
             Width = 64,
             Height = 64,
@@ -115,6 +118,33 @@ internal sealed partial class WheelDust : Node3D
             Drive(_dust[i], at, dust);
             Drive(_smoke[i], at + Vector3.Up * 0.15f, smoke);
             Drive(_spray[i], at + Vector3.Up * 0.1f, spray * 0.45f);
+        }
+    }
+
+    /// <summary>
+    /// The other cars' spray on a wet road (0.62): behind each drone's rear wheels (0.75 m out from its centre, 1.3 m
+    /// back, at the road), as the player's from 30 km/h, full at 120, by the road's wetness. The drones have no wheels
+    /// in the simulation; their views' frames place the spray.
+    /// </summary>
+    public void UpdateTraffic(IReadOnlyList<CarView> views, IReadOnlyList<GrudgeLap.Physics.Race.TrafficCar> cars, Weather weather, bool retro)
+    {
+        var wet = retro ? 0f : WeatherModel.Wetness(weather);
+        for (var i = 0; i < views.Count && i < cars.Count; i++)
+        {
+            if (i >= _trafficSpray.Count)
+            {
+                if (wet <= 0f) break;
+                var left = Make(_puff, new Color(0.72f, 0.75f, 0.78f), 0.8f, 0.35f, 1.3f, 0.2f, PerWheel * 2);
+                var right = Make(_puff, new Color(0.72f, 0.75f, 0.78f), 0.8f, 0.35f, 1.3f, 0.2f, PerWheel * 2);
+                AddChild(left);
+                AddChild(right);
+                _trafficSpray.Add((left, right));
+            }
+            var (l, r) = _trafficSpray[i];
+            var frame = views[i].GlobalTransform;
+            var spray = wet * MathUtil.Clamp01((MathF.Abs(cars[i].Speed) - 8f) / 25f) * 0.45f;
+            Drive(l, frame * new Vector3(-0.75f, -0.5f, 1.3f), spray);
+            Drive(r, frame * new Vector3(0.75f, -0.5f, 1.3f), spray);
         }
     }
 

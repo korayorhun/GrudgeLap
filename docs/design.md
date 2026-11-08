@@ -3408,6 +3408,17 @@ The puddles were the view's alone: a mirror-flat patch on the asphalt, under the
 - **Heard** (`BodyState.AirSpeed`): the wind's roar follows the air's speed past the car, not the road's: a headwind
   raises it and the gusts swell it; the roadside's echo keeps the car's speed.
 
+### The traffic in the rain (0.62.0)
+
+- **Spray** (`WheelDust.UpdateTraffic`): the drones have no wheels in the simulation, so their views' frames place two
+  spray emitters behind each one's rear wheels (0.75 m out, 1.3 m back, at the road), driven as the player's from
+  30 km/h to full at 120 by the road's wetness; made as the drones first need them.
+- **Hiss** (`WorldAudio`): each drone carries the rain's hiss (`ambience/rain-outside.wav`) placed on it a third of an
+  octave up, as loud as its speed throws water, shifted by the Doppler effect as it passes; silent on a dry road, in the
+  replay and the 1989 look.
+- **Lamps** (`WorldBuilder.CarLampsLit`): the cars' lamps are on in the rain whatever the hour, as drivers have them in
+  the wet; the yards' and the train's keep to dusk and night.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and
