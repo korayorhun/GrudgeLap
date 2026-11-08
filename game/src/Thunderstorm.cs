@@ -27,6 +27,7 @@ internal sealed partial class Thunderstorm : Node
     private float _distance;
     private Vector3 _strikeTop;
     private bool _boltDrawn;
+    private bool _wasStorm;
     private float _boltEnergy;
     private MeshInstance3D? _bolt;
     private ShaderMaterial? _boltMaterial;
@@ -50,6 +51,7 @@ internal sealed partial class Thunderstorm : Node
             OmniRange = 16000f,
             OmniAttenuation = 2f,
             ShadowEnabled = false,
+            LightCullMask = 0xFFFFFu & ~WorldBuilder.ReflectorLayer,
             Visible = false,
         };
         AddChild(_light);
@@ -63,7 +65,13 @@ internal sealed partial class Thunderstorm : Node
     {
         _clock += dt;
         var storm = WeatherModel.Raining(weather) && !retro && phase != SessionPhase.Replay;
-        if (storm && _clock >= _nextStrike)
+        // The clock runs on through dry credits, so a strike falls due long before the rain: the first one comes a few
+        // seconds into it, not on its first frame (0.66).
+        if (storm && !_wasStorm) _nextStrike = MathF.Max(_nextStrike, _clock + 6f + 10f * (float)_random.NextDouble());
+        _wasStorm = storm;
+        // Never on a stopped clock (the pause menu's dt of 0): its first stroke would hold, the light at full, for as long
+        // as the menu stays open.
+        if (storm && dt > 0f && _clock >= _nextStrike)
         {
             _distance = 900f + 7100f * MathF.Pow((float)_random.NextDouble(), 1.5f);
             _flashAt = _clock;

@@ -567,6 +567,8 @@ internal static class WorldBuilder
             // The lit air veils the sky behind it as well as the land (0.65): with the day's tenth the beams' glow lay over
             // the far mountains and not over the sky above them, and they stood pale against it.
             environment.VolumetricFogSkyAffect = WeatherModel.Raining(_weather) && _night ? 1f : 0.1f;
+            // The main view's own grading; the mirror's picture is graded by it in turn (0.66).
+            if (environment == _mirrorEnvironment) continue;
             // The night's camera opens up (0.57): the moonlit land and the sky stay dark, the lamps bright.
             environment.TonemapExposure = _night ? 1.35f : _dusk ? 0.95f : overcast ? 1.15f : _sunrise ? 1.0f : 0.9f;
             // The lamps bloom more in the dark (0.58): an oncoming car's lamps are haloed points, as an eye sees them at night.
@@ -681,7 +683,7 @@ internal static class WorldBuilder
         environment.AmbientLightSource = retro ? Godot.Environment.AmbientSource.Color : Godot.Environment.AmbientSource.Sky;
         environment.AmbientLightColor = retro ? new Color(0.55f, 0.6f, 0.7f) : GroundBounce;
         environment.AmbientLightEnergy = retro ? 0.9f : AmbientEnergy;
-        environment.TonemapMode = retro ? Godot.Environment.ToneMapper.Linear : Godot.Environment.ToneMapper.Agx;
+        environment.TonemapMode = retro || environment == _mirrorEnvironment ? Godot.Environment.ToneMapper.Linear : Godot.Environment.ToneMapper.Agx;
     }
 
     /// <summary>
@@ -700,6 +702,13 @@ internal static class WorldBuilder
             _mirrorEnvironment.SsrEnabled = false;
             _mirrorEnvironment.GlowEnabled = false;
             _mirrorEnvironment.VolumetricFogEnabled = false;
+            // Graded once (0.66): the mirror's picture is drawn in the main view, which tone-maps, exposes and colours it
+            // again. With the main environment's AgX, exposure and colour adjustment it was graded twice, its darks
+            // lifted twice, and at night the mirror was the brightest thing in view. Its picture is the scene's light as
+            // it is now (clipped at white); the weather, the 1989 look and the flash leave its tones alone.
+            _mirrorEnvironment.TonemapMode = Godot.Environment.ToneMapper.Linear;
+            _mirrorEnvironment.TonemapExposure = 1f;
+            _mirrorEnvironment.AdjustmentEnabled = false;
         }
         return _mirrorEnvironment;
     }
@@ -2018,7 +2027,9 @@ internal static class WorldBuilder
             reflectors.SetInstanceColor(i, placements[i].Right ? new Color(1f, 0.55f, 0.08f) : new Color(0.95f, 0.95f, 0.95f));
         }
         group.AddChild(new MultiMeshInstance3D { Multimesh = posts, Name = "Posts" });
-        group.AddChild(new MultiMeshInstance3D { Multimesh = reflectors, Name = "Reflectors" });
+        // On a layer of their own (0.66), which every camera and probe draws and the lightning's light leaves out: their
+        // lobe sends a lamp's light back to it, and a strike behind the car made every post opposite it flare like a lamp.
+        group.AddChild(new MultiMeshInstance3D { Multimesh = reflectors, Name = "Reflectors", Layers = ReflectorLayer });
         _modernRoad.Add(group);
         return group;
     }
@@ -2181,6 +2192,9 @@ internal static class WorldBuilder
     /// all but drowns a stroke (by day at the night's 1.2 the sky went white).</summary>
     private static float FlashGain => _night ? 1.2f : _dusk ? 0.8f : _sunrise ? 0.5f : 0.35f;
 
+    /// <summary>The marker posts' reflectors' render layer (0.66): lit by every light but the lightning's (Thunderstorm).</summary>
+    public const uint ReflectorLayer = 1u << 11;
+
     /// <summary>The rain's volumetric air at night (0.65), per metre: the beams' cones in it.</summary>
     private const float RainNightAir = 0.0012f;
 
@@ -2208,11 +2222,11 @@ internal static class WorldBuilder
         // to edge while one at five lit a patch, so the near ones are held down and the far ones kept.
         _overcastDeck?.SetShaderParameter("flash", stroke * MathF.Sqrt(strength) * FlashGain * 0.4f);
         _overcastDeck?.SetShaderParameter("flash_at", at);
-        foreach (var environment in new[] { _environment, _mirrorEnvironment })
+        // The main view only: the mirror's picture is lifted with it (0.66).
+        if (_environment is not null)
         {
-            if (environment is null) continue;
-            environment.AdjustmentEnabled = true;
-            environment.AdjustmentBrightness = 1f + level * FlashGain * 0.35f;
+            _environment.AdjustmentEnabled = true;
+            _environment.AdjustmentBrightness = 1f + level * FlashGain * 0.35f;
         }
     }
 

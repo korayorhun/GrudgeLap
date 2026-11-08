@@ -3488,6 +3488,33 @@ The puddles were the view's alone: a mirror-flat patch on the asphalt, under the
   directional light first tried lit them as brightly as the road; at 330 m up the ground under it was a hot spot).
 - Night rain on an attract lap: 11.1 to 11.6 ms of GPU time a frame, 60 frames a second.
 
+### Night from the seat (0.66.0)
+
+- **The mirror graded once** (`WorldBuilder.MirrorEnvironment`): the rear-view mirror's picture is drawn in the main view,
+  which tone-maps, exposes and colours it again; its environment was a copy of the main one with AgX, the night's
+  exposure of 1.35 and the colour adjustment, so the picture was graded twice, its darks lifted twice, and at night the
+  mirror was the brightest thing in view. Its environment is linear now, exposure 1, no colour adjustment, and the
+  weather's exposure, the 1989 look's tone mapper and the lightning's lift leave it alone (the main view's grading lifts
+  the mirror's picture with everything else). By day the mirror reads about the same (60 against 58 of 255 on the same
+  frame); on a clear night its sky reads 6 to 11 against 8 to 17 through the windscreen. Highlights clip at white in its
+  8-bit picture.
+- **The tail lamps' red** (`CarView.BuildLamps`): a spot aimed back and down (70 degrees, 4 m, energy 0.6) instead of
+  an omni light 3.5 m round, which lit the cabin red through the rear window, the seats and the pillars glowing at
+  night; the road behind keeps its red pool.
+- **The wiper blades** (`windscreen.gdshader` `cabin_light`, `WorldBuilder.CabinLight`): their unlit day grey scaled by
+  the cabin's light, so at night they are black against the sky and not light-grey bars lifted by the night's exposure.
+- **Review fixes for 0.65** (a two-lens review workflow with adversarial checks): the lightning's light set off the
+  marker posts' retroreflector lobe (gain 400, power 100, made for lamps beside the eye), and every post opposite a
+  strike flared like a lamp out to the horizon; the reflectors are on a layer of their own (`WorldBuilder.ReflectorLayer`)
+  that the lightning's light leaves out. A strike could start on the pause menu's stopped clock (the clock runs on
+  through dry credits, so one was overdue the moment WEATHER went to rain) and hold its first stroke and its light at
+  full behind the menu; no strike starts with a dt of 0 now, and the first of a rain comes 6 to 16 s into it. The rain
+  shader's billboard and lobe passed.
+- The design review that picked these (a four-angle proposal workflow and a judge reading the code) also ranked, for later:
+  lamps blooming on the wet glass, road paint that reads as paint, a true-size mirror and live door mirrors, every lamp
+  streaking in the wet road, rev-matched downshifts, grounded trees beyond the shadows, per-car traffic engines, and
+  range-land colour on the far plain.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

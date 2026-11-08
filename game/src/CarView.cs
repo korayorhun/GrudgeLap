@@ -421,13 +421,19 @@ internal sealed partial class CarView : Node3D
             };
             AddLamp(lamp);
         }
-        AddLamp(new OmniLight3D
+        // The tail lamps' red on the road behind: a spot aimed back and down (0.66). An omni light lit the cabin red
+        // through the rear window, the seats and the pillars glowing at night.
+        AddLamp(new SpotLight3D
         {
             Name = "TailGlow",
             Position = new Vector3(_lampCentre.X, ground + 0.75f, _lampCentre.Z + bounds.Size.Z * 0.5f + 0.25f),
+            RotationDegrees = new Vector3(-20f, 180f, 0f),
             LightColor = new Color(1f, 0.08f, 0.04f),
-            LightEnergy = 0.35f,
-            OmniRange = 3.5f,
+            LightEnergy = 0.6f,
+            SpotRange = 4f,
+            SpotAngle = 70f,
+            SpotAttenuation = 1f,
+            ShadowEnabled = false,
         });
     }
 

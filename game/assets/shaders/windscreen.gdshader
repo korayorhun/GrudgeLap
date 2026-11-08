@@ -29,6 +29,9 @@ uniform float glare = 0.0;
 // The sky's glint in each drop by the hour (0.63, WorldBuilder.GlassGlint): at night the drops caught a daylight sky's
 // glint and stood on the glass like snowflakes.
 uniform float glint = 1.0;
+// The cabin's light (0.66, WorldBuilder.CabinLight): the wiper blades are lit by it; at night their day grey stood out
+// light against a black sky once the night's exposure had lifted it.
+uniform float cabin_light = 1.0;
 // Metres from the eye beyond which a pixel is seen through glass: the windscreen is 0.6 to 0.9 m off, the far end of the
 // dashboard 1.5 m, the bonnet from 1.7 m.
 uniform float glass_from = 1.7;
@@ -193,7 +196,7 @@ void fragment() {
 			float off = abs(d.x * along.y - d.y * along.x);
 			if (t > BLADE_FROM && t < reach && wipers) {
 				float blade = 1.0 - smoothstep(0.0085, 0.0105, off);
-				colour = vec3(0.02) * blade + colour * (1.0 - blade);
+				colour = vec3(0.02) * cabin_light * blade + colour * (1.0 - blade);
 				alpha = blade + alpha * (1.0 - blade);
 			}
 		}
