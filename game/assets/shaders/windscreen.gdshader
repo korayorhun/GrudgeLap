@@ -26,6 +26,9 @@ uniform float speed = 0.0;
 uniform vec3 sun_view = vec3(0.0, 0.0, -1.0);
 uniform vec3 sun_colour : source_color = vec3(1.0, 0.95, 0.88);
 uniform float glare = 0.0;
+// The sky's glint in each drop by the hour (0.63, WorldBuilder.GlassGlint): at night the drops caught a daylight sky's
+// glint and stood on the glass like snowflakes.
+uniform float glint = 1.0;
 // Metres from the eye beyond which a pixel is seen through glass: the windscreen is 0.6 to 0.9 m off, the far end of the
 // dashboard 1.5 m, the bonnet from 1.7 m.
 uniform float glass_from = 1.7;
@@ -175,7 +178,7 @@ void fragment() {
 			vec3 lens = textureLod(screen_texture, clamp(at, vec2(0.001), vec2(0.999)), 0.5).rgb;
 			// Darker at the rim, where the light bends off; a glint of the sky near the top.
 			lens *= mix(1.0, 0.65, drop.w);
-			lens += vec3(0.25) * (1.0 - drop.w) * smoothstep(0.6, 0.0, length(vec2(drop.x, drop.y) - vec2(-0.004, 0.006)) * 120.0);
+			lens += vec3(0.25) * glint * (1.0 - drop.w) * smoothstep(0.6, 0.0, length(vec2(drop.x, drop.y) - vec2(-0.004, 0.006)) * 120.0);
 			colour = lens * drop.z + colour * (1.0 - drop.z);
 			alpha = drop.z + alpha * (1.0 - drop.z);
 		}

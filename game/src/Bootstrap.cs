@@ -59,6 +59,7 @@ public sealed partial class Bootstrap : Node3D
     private RearMirror? _mirror;
     private EngineAudio _audio = null!;
     private WorldAudio _world = null!;
+    private Thunderstorm _thunder = null!;   // the rain's lightning and thunder (0.63)
     private Updater _updater = null!;
     private readonly KeyboardDriver _keyboard = new();
     private readonly ScriptedDriver _scripted = new();
@@ -226,6 +227,8 @@ public sealed partial class Bootstrap : Node3D
         // Before the train and the drones: they hand their nodes to it for their sounds.
         _world = new WorldAudio();
         AddChild(_world);
+        _thunder = new Thunderstorm();
+        AddChild(_thunder);
         var propTimes = _perfLog ? new Dictionary<PropKind, (double Ms, int Count)>() : null;
         for (var i = 0; i < _track.Props.Count; i++)
         {
@@ -967,6 +970,7 @@ public sealed partial class Bootstrap : Node3D
         {
             _audio.Update(_session, dt);
             _world.Update(_session, _cameraRig.Listener, dt);
+            _thunder.Update(_session.Weather, _session.Phase, _retro, dt);
         }
         catch (System.Exception e)
         {

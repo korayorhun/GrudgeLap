@@ -3419,6 +3419,22 @@ The puddles were the view's alone: a mirror-flat patch on the asphalt, under the
 - **Lamps** (`WorldBuilder.CarLampsLit`): the cars' lamps are on in the rain whatever the hour, as drivers have them in
   the wet; the yards' and the train's keep to dusk and night.
 
+### The thunderstorm (0.63.0)
+
+- **Strikes** (`Thunderstorm`): while it rains, every 18 to 53 seconds a strike somewhere round the plain, 0.9 to 8 km off
+  (900 + 7100 u^1.5 m: more often far than near); the flash at once, three strokes in a third of a second (bright, a dark
+  gap, fainter, again, fainter still) through the colour adjustment's brightness (`WorldBuilder.SetFlash`), lifting the
+  image by the strike's nearness times the hour's gain (`FlashGain`: 1.2 at night, 0.8 at dusk, 0.5 at sunrise, 0.35
+  by day, when the night's whole turned the grey sky white); the thunder a second for every 343 metres later.
+- **Thunder** (`assets/audio/thunder`, `tools/make-thunder.py`): near under 2 km (BlueDelta's heavy strike, #446753),
+  middling under 4.5 km (BlueDelta's lightning and rolling thunder, #367702), far beyond (richwise's distant thunder,
+  #361401), all CC0, played 6 dB quieter for each doubling of the distance past a kilometre on the world's bus, so from
+  the seat they come through the glass. Never in the replay or the 1989 look; a clap under way when the rain stops plays
+  out.
+- **The drops at night** (`windscreen.gdshader` `glint`, `WorldBuilder.GlassGlint`): each drop's glint of the sky was a
+  day's at every hour, and at night the drops stood on the glass like snowflakes; it is the hour's now (0.06 at night,
+  half at dusk).
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

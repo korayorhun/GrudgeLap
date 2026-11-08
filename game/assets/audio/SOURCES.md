@@ -750,6 +750,22 @@ into a 56-second loop by `tools/make-night.py` from the HQ preview (44.1 kHz ste
 in, the last 4 s cross-faded into the first, -30 dBFS RMS). `WorldAudio` plays it at night in place of the day's prairie,
 through the glass from the seat.
 
+## The thunder (`thunder/near.wav`, `thunder/mid.wav`, `thunder/far.wav`)
+
+Three claps cut by `tools/make-thunder.py` from the HQ previews of CC0 1.0 recordings on Freesound (44.1 kHz stereo,
+high-passed at 25 Hz, 30 ms fade in):
+
+- `near.wav`: BlueDelta, "Heavy Thunder Strike - no Rain - QUADRO.wav" (#446753,
+  https://freesound.org/people/BlueDelta/sounds/446753/): a sudden heavy strike on a hot summer afternoon, recorded without
+  distortion or compression; 26 s from 0.8 s in, the last 5 s faded, peak -1 dBFS.
+- `mid.wav`: BlueDelta, "THUNDER long rumbling - no Rain - 4-CHANNEL" (#367702,
+  https://freesound.org/people/BlueDelta/sounds/367702/): a lightning and its rolling thunder; 24 s from the start, the last
+  5 s faded, peak -2 dBFS.
+- `far.wav`: richwise, "Distant Thunder" (#361401, https://freesound.org/people/richwise/sounds/361401/): distant thunder
+  rumbling, Zoom H1; 14 s from 16.5 s in, the last 4 s faded, peak -3 dBFS.
+
+`Thunderstorm` plays them in the rain by the strike's distance.
+
 ## Instant replay music (`music/replay.ogg`, `music/replay.wav`)
 
 An original composition of this project, written for it in the style of late-1980s arcade music; it is not a

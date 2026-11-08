@@ -2154,6 +2154,28 @@ internal static class WorldBuilder
     /// <summary>The credit's hour (<see cref="SetHour"/>).</summary>
     public static Hour CurrentHour => _hour;
 
+    private static float _flash;
+
+    /// <summary>How far a flash lifts the image by the hour: the whole of it at night, a third by day, when the grey's own light
+    /// all but drowns a stroke (by day at the night's 1.2 the sky went white).</summary>
+    private static float FlashGain => _night ? 1.2f : _dusk ? 0.8f : _sunrise ? 0.5f : 0.35f;
+
+    /// <summary>
+    /// A lightning flash over the image (0.63, Thunderstorm): 0 none, about 1.6 for a strike under 2 km; the colour
+    /// adjustment's brightness carries it, so the clouds, the land and the cabin light up together for the stroke.
+    /// </summary>
+    public static void SetFlash(float level)
+    {
+        if (MathF.Abs(level - _flash) < 0.001f) return;
+        _flash = level;
+        foreach (var environment in new[] { _environment, _mirrorEnvironment })
+        {
+            if (environment is null) continue;
+            environment.AdjustmentEnabled = true;
+            environment.AdjustmentBrightness = 1f + level * FlashGain;
+        }
+    }
+
     /// <summary>A closed cabin's ambient light against the day's (CarView.CabinLight): the night sky's share at night.</summary>
     public static float CabinLight => _retro ? 1f : _night ? NightSkyEnergy * 1.5f : _dusk ? 0.45f : 1f;
 
@@ -2162,6 +2184,9 @@ internal static class WorldBuilder
 
     /// <summary>The cars' lamps are lit: dusk to dawn, and in the rain whatever the hour (0.62).</summary>
     public static bool CarLampsLit => LampsLit || (!_retro && WeatherModel.Raining(_weather));
+
+    /// <summary>The sky's glint in the windscreen's drops by the hour (0.63): a day's whole, a dusk's half, a night's almost none.</summary>
+    public static float GlassGlint => _night ? 0.06f : _dusk ? 0.5f : 1f;
 
     /// <summary>
     /// The hour on the clear sky and the land (0.55): the day's photo or the sunrise's, the clouds lit by the low sun's

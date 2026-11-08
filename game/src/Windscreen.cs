@@ -89,5 +89,6 @@ internal sealed partial class Windscreen : MeshInstance3D
         _material.SetShaderParameter("speed", speed);
         _material.SetShaderParameter("sun_view", sunInView);
         _material.SetShaderParameter("glare", glare);
+        _material.SetShaderParameter("glint", WorldBuilder.GlassGlint);
     }
 }
