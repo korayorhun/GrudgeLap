@@ -3515,6 +3515,21 @@ The puddles were the view's alone: a mirror-flat patch on the asphalt, under the
   streaking in the wet road, rev-matched downshifts, grounded trees beyond the shadows, per-car traffic engines, and
   range-land colour on the far plain.
 
+### Road paint (0.67.0)
+
+- **The paint's shader** (`assets/shaders/road_paint.gdshader`, `WorldBuilder.PaintShader`): the centre and edge lines were
+  StandardMaterial3Ds of their vertex colour, flat quads with ruler-straight edges, the decal look. Two shared shader
+  materials now (the centre line dashed, 0.16 m; the edge lines 0.15 m, greyer towards the verge), when the ground's
+  shaders are on and the asphalt's photos are there (the export keeps the flat paint): the asphalt photo on its 5.5 m
+  tile in world space gives the paint the stones' relief (0.85 to 1.04 of its colour by a texel's brightness against the
+  tile's mean, its last mip) and wears it through to the tar (the photo times the road's 0.52) in the hollows, a tenth to
+  a fifth of it by stretch; a sprayed line's edges, ragged by up to 6 mm by alpha scissor, smoothed away where a pixel
+  spans more than that; the centre dashes cut to exactly 3 m every 9 m (the mesh's ends fall on its frames) with ends
+  ragged by up to 2 cm; the asphalt's normal map at 0.7; roughness 0.62 dry to 0.25 in the rain (only the edge lines
+  followed the wetness before). The night's glass beads stay a next pass over them; the 1989 look keeps the flat paint.
+- The edge lines' left side now runs u from the road's side (0) to the verge's (1) as the right side does
+  (`Quad(..., uLeft: 1, uRight: 0)`), for the greying.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

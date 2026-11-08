@@ -57,9 +57,10 @@ internal static class WorldBuilder
     private static readonly List<Node3D> _retroLand = [];
     private static Node3D? _land;
     private static ShaderMaterial? _landShader;
-    private static StandardMaterial3D? _edgeLines;
+    private static Material? _edgeLines;
+    private static ShaderMaterial? _centrePaint;
     // The road's paint, the centre lines' and the edge lines', for the beads' pass at night (0.59, ApplyHour).
-    private static readonly List<StandardMaterial3D> _paint = [];
+    private static readonly List<Material> _paint = [];
     private static ShaderMaterial? _paintBeads;
     // 1989 mode's orange for the shoulders and the earthworks; otherwise the shoulders are grey-brown gravel and the
     // cuttings' earth a natural brown (0.9.1; before, the orange of the original was kept in both).
@@ -206,6 +207,7 @@ internal static class WorldBuilder
         _gravel = null;
         _earth = null;
         _edgeLines = null;
+        _centrePaint = null;
         _paint.Clear();
         _paintBeads = null;
         _modernRoad.Clear();
@@ -520,7 +522,11 @@ internal static class WorldBuilder
         foreach (var material in _weathered.Values) material.SetShaderParameter("wetness", wet);
         _shoulderShader?.SetShaderParameter("wetness", wet);
         FoliageBuilder.SetWeather(DryGrass.Lerp(WetGrass, wet), wet);
-        if (_edgeLines is not null) _edgeLines.Roughness = Mathf.Lerp(0.65f, 0.25f, wet);
+        if (_edgeLines is StandardMaterial3D edges) edges.Roughness = Mathf.Lerp(0.65f, 0.25f, wet);
+        foreach (var paint in _paint)
+        {
+            if (paint is ShaderMaterial shader) shader.SetShaderParameter("wetness", wet);
+        }
         if (_environment is null || _sun is null || _retro) return;
         var overcast = WeatherModel.Overcast(_weather);
         if (_environment.Sky is { } sky)
@@ -661,6 +667,10 @@ internal static class WorldBuilder
         foreach (var material in _weathered.Values) material.SetShaderParameter("retro", retro);
         FoliageBuilder.SetRetro(retro);
         _shoulderShader?.SetShaderParameter("retro", retro);
+        foreach (var paint in _paint)
+        {
+            if (paint is ShaderMaterial shader) shader.SetShaderParameter("retro", retro);
+        }
         if (_earth is not null) _earth.AlbedoColor = retro ? OrangeEarth : SoilTint;
         foreach (var node in _modernRoad)
         {
@@ -1941,9 +1951,37 @@ internal static class WorldBuilder
                     a.Normal, b.Normal, (yellow * dashTone) with { A = 1f }, a.Distance, b.Distance);
             }
         }
-        var material = new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 0.7f, CullMode = BaseMaterial3D.CullModeEnum.Back };
-        _paint.Add(material);
+        Material material;
+        if (ShaderGround && (_centrePaint ??= PaintShader(dashed: true, width: 0.16f)) is { } shader)
+        {
+            material = shader;
+            if (!_paint.Contains(shader)) _paint.Add(shader);
+        }
+        else
+        {
+            material = new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 0.7f, CullMode = BaseMaterial3D.CullModeEnum.Back };
+            _paint.Add(material);
+        }
         return new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = material, Name = $"Lines-{path.Kind}" };
+    }
+
+    /// <summary>
+    /// The road paint's shader (0.67, assets/shaders/road_paint.gdshader): the asphalt's photo through the paint, wear to the
+    /// tar, ragged edges, the dashes cut to 3 m, the rain's sheen. Null without the photos (the flat paint stays).
+    /// </summary>
+    private static ShaderMaterial? PaintShader(bool dashed, float width)
+    {
+        var colour = Photo("asphalt_color");
+        var normal = Photo("asphalt_normal");
+        if (colour is null || normal is null) return null;
+        var material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/road_paint.gdshader") };
+        material.SetShaderParameter("asphalt_color", colour);
+        material.SetShaderParameter("asphalt_normal", normal);
+        material.SetShaderParameter("line_width", width);
+        material.SetShaderParameter("dashed", dashed);
+        material.SetShaderParameter("outer_grey", !dashed);
+        material.SetShaderParameter("retro", _retro);
+        return material;
     }
 
     /// <summary>
@@ -1971,13 +2009,15 @@ internal static class WorldBuilder
                 var bOut = b.Origin + b.Lateral * (side * (b.HalfWidth - 0.25f)) + b.Normal * 0.012f;
                 var aIn = aOut - a.Lateral * (side * 0.15f);
                 var bIn = bOut - b.Lateral * (side * 0.15f);
+                // u runs from the road's side (0) to the verge's (1) on both sides, for the paint's shader (0.67).
                 if (side > 0) Quad(st, aIn, aOut, bIn, bOut, a.Normal, b.Normal, white, a.Distance, b.Distance);
-                else Quad(st, aOut, aIn, bOut, bIn, a.Normal, b.Normal, white, a.Distance, b.Distance);
+                else Quad(st, aOut, aIn, bOut, bIn, a.Normal, b.Normal, white, a.Distance, b.Distance, uLeft: 1f, uRight: 0f);
             }
         }
         if (_edgeLines is null)
         {
-            _edgeLines = new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 0.65f, CullMode = BaseMaterial3D.CullModeEnum.Back };
+            _edgeLines = (Material?)(ShaderGround ? PaintShader(dashed: false, width: 0.15f) : null)
+                ?? new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 0.65f, CullMode = BaseMaterial3D.CullModeEnum.Back };
             _paint.Add(_edgeLines);
         }
         var lines = new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = _edgeLines, Name = $"EdgeLines-{path.Kind}", Visible = !_retro };
