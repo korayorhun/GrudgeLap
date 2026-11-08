@@ -28,6 +28,9 @@
 #include "HAL/PlatformMisc.h"
 #include "Misc/App.h"
 #include "Misc/CommandLine.h"
+#if WITH_GLP_DLSS
+#include "DLSSLibrary.h"
+#endif
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "UnrealClient.h"
@@ -36,9 +39,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogGlpGame, Log, All);
 
 namespace
 {
-	// The drones are the period cars of the original whatever the player drives, in these paints
-	// (CarView.DronePaints, sRGB).
-	const FColor DronePaints[] = { FColor(31, 64, 179), FColor(224, 224, 214), FColor(230, 184, 26) };
 
 	// The driver's eye height over the road and distance behind the centre of gravity, per body style
 	// (CarView.BodyStyle.EyeH / EyeZ); the driver sits 0.38 m left of the centre line (CarView.DriverX).
@@ -49,6 +49,14 @@ namespace
 	};
 	const FEyePoint EyePoints[] = { { 0.98f, 0.15f }, { 1.02f, 0.12f }, { 1.14f, 0.42f }, { 1.13f, 0.55f }, { 1.17f, 0.45f },
 		{ 1.18f, 0.22f }, { 1.16f, 0.50f }, { 1.17f, 0.48f } };
+
+	// The cars the title screen offers, as the Godot game's line-up (Lineup.cs): the 1970s saloon, the two Bravos and
+	// the Leon Cupra drive in the traffic only, at the owner's word of 8 November 2026 (the saloon out of the cars to
+	// drive; the Bravos and the Cupra looked "drawn by a child"). Their catalogue indices (VehicleSpec.Catalogue).
+	bool IsDrivable(int32 Index)
+	{
+		return Index != 5 && Index != 9 && Index != 10 && Index != 11;
+	}
 
 	void HideTree(AActor* Actor, bool bHidden)
 	{
@@ -95,6 +103,34 @@ AGlpGame::AGlpGame()
 	Audio->SetupAttachment(Camera);
 }
 
+void AGlpGame::EnableRayReconstruction()
+{
+#if WITH_GLP_DLSS
+	// DLSS Ray Reconstruction (0.74): on an RTX card with hardware ray tracing one trained denoiser takes the place of
+	// Lumen's reflection denoisers and the shadow denoiser, which keeps the hit-lit reflections sharp where those
+	// smeared them. The plugin's switch turns those denoisers off itself; the bilateral filter of Lumen's reflections
+	// is NVIDIA's further recommendation (safe to change at run time since 5.4). Any other card keeps every
+	// built-in denoiser, as DefaultEngine.ini leaves them. -GlpNoRR keeps them on an RTX card too, for a comparison.
+	if (FParse::Param(FCommandLine::Get(), TEXT("GlpNoRR")))
+	{
+		UE_LOG(LogGlpGame, Log, TEXT("DLSS Ray Reconstruction: off (-GlpNoRR)"));
+		return;
+	}
+	if (!UDLSSLibrary::IsDLSSRRSupported() || !UDLSSLibrary::IsRayTracingAvailable())
+	{
+		UE_LOG(LogGlpGame, Log, TEXT("DLSS Ray Reconstruction: not available (RR %d, ray tracing %d)"),
+			UDLSSLibrary::IsDLSSRRSupported() ? 1 : 0, UDLSSLibrary::IsRayTracingAvailable() ? 1 : 0);
+		return;
+	}
+	UDLSSLibrary::EnableDLSSRR(true);
+	if (IConsoleVariable* Bilateral = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Lumen.Reflections.BilateralFilter")))
+	{
+		Bilateral->Set(0, ECVF_SetByGameSetting);
+	}
+	UE_LOG(LogGlpGame, Log, TEXT("DLSS Ray Reconstruction: %s"), UDLSSLibrary::IsDLSSRREnabled() ? TEXT("on") : TEXT("requested, not enabled"));
+#endif
+}
+
 void AGlpGame::BeginPlay()
 {
 	Super::BeginPlay();
@@ -117,6 +153,7 @@ void AGlpGame::BeginPlay()
 		FrameCapBefore = GEngine->GetMaxFPS();
 		ApplyFrameCap();
 	}
+	EnableRayReconstruction();
 	bAttract = FParse::Param(FCommandLine::Get(), TEXT("GlpAttract"));
 	LoadScores();
 	bTraffic = !FParse::Param(FCommandLine::Get(), TEXT("GlpNoTraffic"));
@@ -177,7 +214,7 @@ void AGlpGame::BeginPlay()
 	Mirror->RegisterComponent();
 
 	LoadSettings();
-	if (!Cars.IsValidIndex(CarIndex) || !Cars[CarIndex])
+	if (!Cars.IsValidIndex(CarIndex) || !Cars[CarIndex] || !IsDrivable(CarIndex))
 	{
 		CarIndex = 0;
 	}
@@ -388,6 +425,17 @@ void AGlpGame::NewSession()
 	bInsideShown = false;
 	const FEyePoint& Eye = EyePoints[FMath::Clamp(CarSpec.style, 0, (int32)UE_ARRAY_COUNT(EyePoints) - 1)];
 	Rig.Eye = FVector3f(-0.38f, Eye.Height - CarSpec.cg_height, Eye.Back);
+	// A prepared model's own eye (GLP.Eye, build_scene.py), as CarView takes the model's Eye node (0.74): the cockpit
+	// is then the model's own cabin seen from its driver's seat. The table above is the lofted cars'.
+	if (const FGlpCarView* Car = PlayerCar(); Car && Car->Root())
+	{
+		if (const AActor* EyeActor = Car->Find(TEXT("GLP.Eye")))
+		{
+			// The car's Unreal frame in centimetres; Unreal's (x, y, z) there is Godot's (x, z, y) (GlpSpace).
+			const FVector Local = Car->Root()->GetActorTransform().InverseTransformPosition(EyeActor->GetActorLocation()) / 100.0;
+			Rig.Eye = FVector3f(static_cast<float>(Local.X), static_cast<float>(Local.Z), static_cast<float>(Local.Y));
+		}
+	}
 	Rig.CgHeight = CarSpec.cg_height;
 	Rig.Reset();
 	Input.Reset();
@@ -409,27 +457,25 @@ void AGlpGame::NewSession()
 		}
 	}
 
-	// The drones: copies of the period car's exterior in the original's paints.
+	// The drones (0.74), as the Godot version's since 0.70 (Bootstrap.TrafficCars, CarView.TrafficPaints): every car with
+	// a model in turn, the everyday ones between the sports cars, each in the next of the road's twelve colours, counting
+	// on from the last credit's, so no two drones of a credit look alike; the Ferraris (the flat-twelve and the 458)
+	// keep their own red. Until 0.73 only the three everyday saloons drove here, in the original's three paints.
+	static const int32 Traffic[] = { 5, 2, 6, 8, 7, 13, 12, 4, 3, 0, 1 };
+	static const FColor TrafficPaints[] = { FColor(224, 224, 217), FColor(15, 28, 77), FColor(158, 15, 15), FColor(158, 156, 158),
+		FColor(18, 56, 33), FColor(194, 173, 133), FColor(9, 9, 10), FColor(107, 148, 189), FColor(84, 13, 18), FColor(204, 153, 41),
+		FColor(84, 87, 89), FColor(71, 46, 28) };
 	const int32 Drones = Library->Traffic(Session, nullptr, 0);
 	Bodies.SetNum(FMath::Max(Drones, 1));
 	Library->Traffic(Session, Bodies.GetData(), Bodies.Num());
 	for (int32 i = 0; i < Drones; i++)
 	{
-		const FLinearColor Colour(DronePaints[Bodies[i].colour % UE_ARRAY_COUNT(DronePaints)]);
-		// The traffic is the everyday cars of the road when the level has them (0.13, as the Godot version since
-		// 0.9.1: the saloon, the estate and the fleet saloon in turn), the period car otherwise.
-		FGlpCarView* Source = Cars[0].Get();
-		static const int32 Everyday[] = { 5, 6, 7 };
-		for (int32 k = 0; k < UE_ARRAY_COUNT(Everyday); k++)
-		{
-			const int32 Index = Everyday[(i + k) % UE_ARRAY_COUNT(Everyday)];
-			if (Cars.IsValidIndex(Index) && Cars[Index])
-			{
-				Source = Cars[Index].Get();
-				break;
-			}
-		}
-		if (TUniquePtr<FGlpCarView> Copy = Source->Clone(GetWorld(), FString::Printf(TEXT("Drone%d"), i), &Colour, nullptr))
+		const int32 Serial = DroneSerial++ % (UE_ARRAY_COUNT(Traffic) * UE_ARRAY_COUNT(TrafficPaints));
+		const int32 Index = Traffic[Serial % UE_ARRAY_COUNT(Traffic)];
+		FGlpCarView* Source = Cars.IsValidIndex(Index) && Cars[Index] ? Cars[Index].Get() : Cars[0].Get();
+		const FLinearColor Colour(TrafficPaints[Serial % UE_ARRAY_COUNT(TrafficPaints)]);
+		const bool bOwnPaint = Index == 0 || Index == 8;
+		if (TUniquePtr<FGlpCarView> Copy = Source->Clone(GetWorld(), FString::Printf(TEXT("Drone%d"), i), bOwnPaint ? nullptr : &Colour, nullptr))
 		{
 			Copy->Root()->Tags.Add(TEXT("GLP.Copy"));
 			TrafficCars.Add(MoveTemp(Copy));
@@ -745,7 +791,7 @@ bool AGlpGame::HandleMenu()
 		for (int32 i = 1; i < Cars.Num(); i++)
 		{
 			const int32 Candidate = (CarIndex + (bLeft ? -i : i) + Cars.Num() * i) % Cars.Num();
-			if (Cars[Candidate])
+			if (Cars[Candidate] && IsDrivable(Candidate))
 			{
 				CarIndex = Candidate;
 				break;
@@ -1136,6 +1182,13 @@ void AGlpGame::SaveScores() const
 	FFileHelper::SaveStringToFile(Scores.Serialize(), *SavedFile(TEXT("scores.txt")));
 }
 
+FString AGlpGame::BestLapFile() const
+{
+	// Each car its own best lap, as the Godot version keeps them since 0.73 (bestlap-<style>.bin): one file for every
+	// car had the ghost of one car's lap race in the shape of another. The old best_lap.bin, of an unknown car, is left.
+	return FString::Printf(TEXT("best_lap_%d.bin"), CarIndex);
+}
+
 void AGlpGame::SaveBestLap()
 {
 	const int32 Size = Library->BestLap(Session, nullptr, 0);
@@ -1146,7 +1199,7 @@ void AGlpGame::SaveBestLap()
 	TArray<uint8> Bytes;
 	Bytes.SetNum(Size);
 	Library->BestLap(Session, Bytes.GetData(), Size);
-	if (FFileHelper::SaveArrayToFile(Bytes, *SavedFile(TEXT("best_lap.bin"))))
+	if (FFileHelper::SaveArrayToFile(Bytes, *SavedFile(*BestLapFile())))
 	{
 		UE_LOG(LogGlpGame, Log, TEXT("best lap saved: %.2f s"), Current.best_lap_time);
 	}
@@ -1155,7 +1208,7 @@ void AGlpGame::SaveBestLap()
 bool AGlpGame::LoadBestLap()
 {
 	TArray<uint8> Bytes;
-	if (!FFileHelper::LoadFileToArray(Bytes, *SavedFile(TEXT("best_lap.bin")), FILEREAD_Silent))
+	if (!FFileHelper::LoadFileToArray(Bytes, *SavedFile(*BestLapFile()), FILEREAD_Silent))
 	{
 		return false;
 	}

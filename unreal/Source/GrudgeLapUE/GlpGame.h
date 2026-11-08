@@ -97,6 +97,10 @@ private:
 	FString SavedFile(const TCHAR* Name) const;
 	FGlpCarView* PlayerCar() const;
 	void FitOutCockpit();
+	/** DLSS Ray Reconstruction where the card and the plugin support it (0.74). */
+	void EnableRayReconstruction();
+	/** The chosen car's best-lap file in Saved/GrudgeLap (0.74: one per car). */
+	FString BestLapFile() const;
 	void ShowSideMirrors(bool bInside);
 	void ApplyFrameCap();
 	/** The credit's weather (glp_state.weather) on the level: the sun, the fog, the clouds, the exposure, MPC_Weather and the rain. */
@@ -132,6 +136,7 @@ private:
 	/** The imported car of each catalogue entry (the level may hold only some). */
 	TArray<TUniquePtr<FGlpCarView>> Cars;
 	TArray<TUniquePtr<FGlpCarView>> TrafficCars;
+	int32 DroneSerial = 0;   // the next drone's car and colour (0.74, as Bootstrap._droneSerial)
 	TUniquePtr<FGlpCarView> Ghost;
 	TArray<TWeakObjectPtr<AActor>> TrainCars;
 	TArray<glp_body> TrainBodies;

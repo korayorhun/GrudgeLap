@@ -15,5 +15,8 @@ if "%QUIT%"=="" set QUIT=16
 set DRIVER=-GlpAttract
 if not "%~4"=="" set DRIVER=-GlpKeys=%~4
 if /i "%~4"=="title" set DRIVER=-GlpTitleShots
+rem Held to 60 fps: off screen the game sets no cap of its own, and this laptop's GPU has dropped out under an uncapped
+rem loop. The editor's on-screen notes (shader and distance field builds) stay out of the shots; GLP_EXEC adds console
+rem commands, each after a comma (e.g. set GLP_EXEC=,r.NGX.DLSS.Enable 0).
 if not defined DRIVE_LOG set DRIVE_LOG=%TEMP%\grudgelap-ue-drive.log
-"%UE_ROOT%\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "%~dp0..\GrudgeLapUE.uproject" /Game/Maps/Feasibility -game -RenderOffScreen -unattended -nosplash -NoSound -ResX=1920 -ResY=1080 %DRIVER% -GlpView=%VIEW% -GlpShots=%SHOTS% -GlpQuitAfter=%QUIT% -abslog="%DRIVE_LOG%"
+"%UE_ROOT%\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "%~dp0..\GrudgeLapUE.uproject" /Game/Maps/Feasibility -game -RenderOffScreen -unattended -nosplash -NoSound -ResX=1920 -ResY=1080 %DRIVER% -GlpView=%VIEW% -GlpShots=%SHOTS% -GlpQuitAfter=%QUIT% -ExecCmds="DisableAllScreenMessages,t.MaxFPS 60%GLP_EXEC%" -abslog="%DRIVE_LOG%"

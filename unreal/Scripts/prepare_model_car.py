@@ -1,0 +1,491 @@
+"""Puts the game's own prepared car model, cabin and all, in place of the export's lofted car (0.74).
+
+Usage: python prepare_model_car.py <in.glb> <out.glb> <car name> [<models folder>]
+
+The Godot game draws every car from a prepared model (tools/prepare_car_models.py writes game/assets/models/<key>.glb:
+the body with its own cabin, the four wheels on the simulation's hubs, the steering wheel, the driver's eye, the place
+and size of the dials and of the rear-view mirror's glass). The world export (--export-world) still carries the lofted
+stand-in, which the level replaced on the outside only (prepare_car_model.py, an older set of models), so the Unreal
+cockpit was the lofted cabin: a flat brown dashboard round two dials. This takes the very file the game draws, so both
+versions show the same car inside and out:
+
+- PlayerCar keeps its root (the car's place at the start, its origin the car's reference point, as CarView's) and
+  loses everything under it.
+- ModelBody: the body and its cabin (build_scene.py tags it GLP.Exterior; unlike a lofted car's shell it stays in view
+  from the seat, since the cabin is part of it).
+- Wheel0..3, each with a Spin child holding that wheel's meshes (the simulation's order: front left, front right, rear
+  left, rear right), the pivot on the prepared hub.
+- Steering with its Spin: the steering wheel, which the game turns about the Spin's local y, as CarView does.
+- Eye: the driver's eye; the game's cockpit camera starts there (AGlpGame).
+- Dials: a quad as wide as the prepared node's x scale and as tall as the instrument panel's 1024 x 400 gives, facing
+  the driver (+z), with the texture coordinates of Godot's QuadMesh, on which the game shows its instrument panel.
+- RearMirror: the glass (MirrorGlass) on the prepared Mirror node, sized by its x and y scale (RearMirror.FitGlass);
+  where the game hangs its own mirror (MirrorHung, the model's is missing or out of view) a housing and a stalk too,
+  as RearMirror.cs builds them.
+
+Mesh nodes are named Mdl_<n> (Mdl_Wheel_<n>, Mdl_Steer_<n>), so the level's checks for a lofted car's parts (the side
+mirrors found by their polished material, the cabin's triplanar photos) leave them alone; build_scene.py gives the
+model's GLP_Paint, GLP_Glass and GLP_Lens materials the level's clear-coated paint and clear glass. A car without a
+prepared model passes through unchanged and keeps whatever it had.
+"""
+import json
+import os
+import site
+import struct
+import sys
+
+sys.path.append(site.getusersitepackages())
+import numpy as np
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from prepare_car_model import COMPONENTS, SPECS, TYPES, find_node, load, mesh_bounds, merge, save, world_matrices  # noqa: E402
+
+# The prepared models a car is drawn with, its own first (CarView.ModelKeys): another car's model is fitted to this
+# car's tyres. The keys are the file names tools/prepare_car_models.py writes.
+MODEL_KEYS = {
+    "flat12": ["flat12"], "v8": ["v8"], "hothatch": ["hothatch"], "five": ["five", "hothatch"],
+    "turbohatch": ["turbohatch", "hothatch"], "saloon": ["saloon"], "estate": ["estate"], "fleet": ["fleet"],
+    "458": ["458"], "bravohgt": ["bravohgt"], "bravo16": ["bravo16"], "leoncupra": ["leoncupra"], "brz": ["brz"],
+    "clio": ["clio"],
+}
+
+PANEL = (1024.0, 400.0)                 # InstrumentCluster.PanelSize, GlpInstruments' PanelWidth and PanelHeight
+MIRROR_GLASS = (0.21, 0.21 * 144 / 512)  # RearMirror.GlassWidth and its 512 x 144 picture
+MIRROR_OFFSET = 0.016                    # the glass 16 mm ahead of RearMirror's origin (CarView.MountMirror)
+
+
+def orthonormal(matrix):
+    """The matrix without its scale (Basis.Orthonormalized: the prepared nodes carry sizes in their scale)."""
+    m = matrix.copy()
+    for c in range(3):
+        length = np.linalg.norm(m[:3, c])
+        if length > 1e-9:
+            m[:3, c] /= length
+    return m
+
+
+def translation(x, y, z):
+    m = np.eye(4)
+    m[:3, 3] = (x, y, z)
+    return m
+
+
+class Builder:
+    """Appends nodes, meshes, accessors and materials to a glTF document and its binary chunk."""
+
+    def __init__(self, doc, blob):
+        self.doc = doc
+        self.blob = blob
+
+    def node(self, name, matrix=None, mesh=None, children=None):
+        node = {"name": name}
+        if matrix is not None and not np.allclose(matrix, np.eye(4)):
+            node["matrix"] = [float(v) for v in matrix.T.flatten()]
+        if mesh is not None:
+            node["mesh"] = mesh
+        if children:
+            node["children"] = list(children)
+        self.doc["nodes"].append(node)
+        return len(self.doc["nodes"]) - 1
+
+    def _view(self, data, target):
+        self.blob += b"\0" * (-len(self.blob) % 4)
+        offset = len(self.blob)
+        self.blob += data.tobytes()
+        self.doc.setdefault("bufferViews", []).append({"buffer": 0, "byteOffset": offset, "byteLength": data.nbytes, "target": target})
+        return len(self.doc["bufferViews"]) - 1
+
+    def accessor(self, data, kind, component, target, bounds=False):
+        return self._accessor(data, kind, component, target, bounds)
+
+    def _accessor(self, data, kind, component, target, bounds=False):
+        accessor = {"bufferView": self._view(data, target), "componentType": component, "count": int(data.shape[0]), "type": kind}
+        if bounds:
+            accessor["min"] = [float(v) for v in data.min(axis=0)]
+            accessor["max"] = [float(v) for v in data.max(axis=0)]
+        self.doc.setdefault("accessors", []).append(accessor)
+        return len(self.doc["accessors"]) - 1
+
+    def material(self, name, colour, metallic=0.0, roughness=0.5):
+        self.doc.setdefault("materials", []).append({
+            "name": name,
+            "pbrMetallicRoughness": {"baseColorFactor": [*colour, 1.0], "metallicFactor": metallic, "roughnessFactor": roughness},
+        })
+        return len(self.doc["materials"]) - 1
+
+    def mesh(self, name, positions, normals, uvs, indices, material):
+        primitive = {
+            "attributes": {
+                "POSITION": self._accessor(np.asarray(positions, dtype=np.float32), "VEC3", 5126, 34962, bounds=True),
+                "NORMAL": self._accessor(np.asarray(normals, dtype=np.float32), "VEC3", 5126, 34962),
+                "TEXCOORD_0": self._accessor(np.asarray(uvs, dtype=np.float32), "VEC2", 5126, 34962),
+            },
+            "indices": self._accessor(np.asarray(indices, dtype=np.uint16), "SCALAR", 5123, 34963),
+            "material": material,
+        }
+        self.doc.setdefault("meshes", []).append({"name": name, "primitives": [primitive]})
+        return len(self.doc["meshes"]) - 1
+
+    def quad(self, name, width, height, material):
+        """Godot's QuadMesh: in the xy plane facing +z, v down the face (the top edge at v = 0)."""
+        w, h = width / 2.0, height / 2.0
+        positions = [(-w, h, 0.0), (w, h, 0.0), (w, -h, 0.0), (-w, -h, 0.0)]
+        uvs = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
+        return self.mesh(name, positions, [(0.0, 0.0, 1.0)] * 4, uvs, [0, 3, 2, 0, 2, 1], material)
+
+    def box(self, name, size, material):
+        sx, sy, sz = (s / 2.0 for s in size)
+        positions, normals, uvs, indices = [], [], [], []
+        for axis in range(3):
+            for sign in (1.0, -1.0):
+                normal = np.zeros(3)
+                normal[axis] = sign
+                u = np.zeros(3)
+                u[(axis + 1) % 3] = 1.0
+                v = np.cross(normal, u)
+                base = len(positions)
+                for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+                    p = normal + a * u + b * v
+                    positions.append((p[0] * sx, p[1] * sy, p[2] * sz))
+                    normals.append(tuple(normal))
+                    uvs.append(((a + 1) / 2.0, (b + 1) / 2.0))
+                indices += [base, base + 1, base + 2, base, base + 2, base + 3]
+        return self.mesh(name, positions, normals, uvs, indices, material)
+
+
+def model_path(folder, car):
+    for key in MODEL_KEYS.get(car, [car]):
+        path = os.path.join(folder, f"{key}.glb")
+        if os.path.exists(path):
+            return key, path
+    return None, None
+
+
+def mesh_nodes(doc, index):
+    """The mesh-bearing nodes of a subtree, the subtree's root included."""
+    out = []
+    stack = [index]
+    while stack:
+        i = stack.pop()
+        if "mesh" in doc["nodes"][i]:
+            out.append(i)
+        stack.extend(doc["nodes"][i].get("children", []))
+    return out
+
+
+def is_glass(model, mesh_index):
+    names = [(model["materials"][p["material"]].get("name") or "") if "material" in p else "" for p in model["meshes"][mesh_index]["primitives"]]
+    return bool(names) and all(n.startswith(("GLP_Glass", "GLP_Lens")) for n in names)
+
+
+def glassy(material):
+    """Drawn translucent in the level: the game's glass and lenses, and anything the model blends."""
+    return (material.get("name") or "").startswith(("GLP_Glass", "GLP_Lens")) or material.get("alphaMode") == "BLEND"
+
+
+def read_accessor(doc, blob, index):
+    """An accessor's elements as float32, normalised integers scaled to their range; shape (count, components)."""
+    accessor = doc["accessors"][index]
+    components = COMPONENTS[accessor["type"]]
+    count = accessor["count"]
+    dtype = np.dtype(TYPES[accessor["componentType"]])
+    if "bufferView" not in accessor:
+        return np.zeros((count, components), dtype=np.float32)
+    view = doc["bufferViews"][accessor["bufferView"]]
+    offset = view.get("byteOffset", 0) + accessor.get("byteOffset", 0)
+    item = dtype.itemsize * components
+    stride = view.get("byteStride", item)
+    raw = np.frombuffer(blob, dtype=np.uint8, count=stride * (count - 1) + item, offset=offset)
+    rows = np.lib.stride_tricks.as_strided(raw, shape=(count, item), strides=(stride, 1)) if stride != item else raw.reshape(count, item)
+    data = np.frombuffer(np.ascontiguousarray(rows).tobytes(), dtype=dtype).reshape(count, components).astype(np.float32)
+    if accessor.get("normalized"):
+        limits = {np.dtype(np.uint8): 255.0, np.dtype(np.uint16): 65535.0, np.dtype(np.int8): 127.0, np.dtype(np.int16): 32767.0}
+        if dtype in limits:
+            data = np.maximum(data / limits[dtype], -1.0)
+    return data
+
+
+class Merger:
+    """Bakes a group of the model's mesh nodes into one mesh with a primitive per material (0.74): the nodes' transforms go
+    into the vertices (mirrored nodes keep their faces' facing by reversing the winding), the tangents are left for the
+    importer to compute. A 205 came in as 160 actors, each a draw and a ray-tracing instance of its own, and with eight
+    drones the render thread took 19 ms a frame; a car is now a handful."""
+
+    def __init__(self, model, blob):
+        self.model = model
+        self.blob = blob
+        self.buckets = {}
+
+    def add(self, mesh_index, matrix):
+        linear = matrix[:3, :3]
+        flip = np.linalg.det(linear) < 0
+        normal_matrix = np.linalg.inv(linear).T
+        for primitive in self.model["meshes"][mesh_index]["primitives"]:
+            attributes = primitive["attributes"]
+            if primitive.get("mode", 4) != 4 or "POSITION" not in attributes:
+                continue
+            position = read_accessor(self.model, self.blob, attributes["POSITION"])
+            count = len(position)
+            normal = None
+            if "NORMAL" in attributes:
+                normal = read_accessor(self.model, self.blob, attributes["NORMAL"]) @ normal_matrix.T
+                normal /= np.maximum(np.linalg.norm(normal, axis=1, keepdims=True), 1e-12)
+            uv0 = read_accessor(self.model, self.blob, attributes["TEXCOORD_0"]) if "TEXCOORD_0" in attributes else np.zeros((count, 2), np.float32)
+            uv1 = read_accessor(self.model, self.blob, attributes["TEXCOORD_1"]) if "TEXCOORD_1" in attributes else None
+            colour = None
+            if "COLOR_0" in attributes:
+                colour = read_accessor(self.model, self.blob, attributes["COLOR_0"])
+                if colour.shape[1] == 3:
+                    colour = np.hstack([colour, np.ones((count, 1), np.float32)])
+            indices = read_accessor(self.model, self.blob, primitive["indices"]).astype(np.uint32).ravel() if "indices" in primitive else np.arange(count, dtype=np.uint32)
+            indices = indices[: len(indices) // 3 * 3]
+            if flip:
+                indices = indices.reshape(-1, 3)[:, ::-1].ravel()
+            bucket = self.buckets.setdefault(primitive.get("material", -1), {
+                "position": [], "normal": [], "uv0": [], "uv1": [], "colour": [], "indices": [], "count": 0,
+                "normals": True, "uv1s": True, "colours": False})
+            bucket["position"].append((position @ linear.T + matrix[:3, 3]).astype(np.float32))
+            bucket["normal"].append(normal if normal is not None else np.zeros((count, 3), np.float32))
+            bucket["uv0"].append(uv0)
+            bucket["uv1"].append(uv1 if uv1 is not None else np.zeros((count, 2), np.float32))
+            bucket["colour"].append(colour if colour is not None else np.ones((count, 4), np.float32))
+            bucket["indices"].append(indices + bucket["count"])
+            bucket["count"] += count
+            bucket["normals"] &= normal is not None
+            bucket["uv1s"] &= uv1 is not None
+            bucket["colours"] |= colour is not None
+
+    def build(self, builder, name, material_offset):
+        """The baked mesh's index in the builder's document, or None when the group drew nothing."""
+        primitives = []
+        for material, bucket in self.buckets.items():
+            attributes = {"POSITION": builder.accessor(np.vstack(bucket["position"]), "VEC3", 5126, 34962, bounds=True)}
+            if bucket["normals"]:
+                attributes["NORMAL"] = builder.accessor(np.vstack(bucket["normal"]).astype(np.float32), "VEC3", 5126, 34962)
+            attributes["TEXCOORD_0"] = builder.accessor(np.vstack(bucket["uv0"]).astype(np.float32), "VEC2", 5126, 34962)
+            if bucket["uv1s"]:
+                attributes["TEXCOORD_1"] = builder.accessor(np.vstack(bucket["uv1"]).astype(np.float32), "VEC2", 5126, 34962)
+            if bucket["colours"]:
+                attributes["COLOR_0"] = builder.accessor(np.vstack(bucket["colour"]).astype(np.float32), "VEC4", 5126, 34962)
+            primitive = {"attributes": attributes, "indices": builder.accessor(np.concatenate(bucket["indices"]).astype(np.uint32).reshape(-1, 1), "SCALAR", 5125, 34963)}
+            if material >= 0:
+                primitive["material"] = material + material_offset
+            primitives.append(primitive)
+        if not primitives:
+            return None
+        self.builder_doc = builder.doc
+        builder.doc.setdefault("meshes", []).append({"name": name, "primitives": primitives})
+        return len(builder.doc["meshes"]) - 1
+
+
+def compact(doc, blob):
+    """The binary chunk with only what the remaining meshes and images use: the model's own meshes, baked into new ones,
+    would otherwise travel in the file a second time (a 205 went from 46 to 110 MB)."""
+    used = set()
+    for mesh in doc.get("meshes", []):
+        for primitive in mesh["primitives"]:
+            used.update(primitive["attributes"].values())
+            if "indices" in primitive:
+                used.add(primitive["indices"])
+            for target in primitive.get("targets", []):
+                used.update(target.values())
+    for skin in doc.get("skins", []):
+        if "inverseBindMatrices" in skin:
+            used.add(skin["inverseBindMatrices"])
+    accessor_map = {old: new for new, old in enumerate(sorted(used))}
+    accessors = [doc["accessors"][old] for old in sorted(used)]
+    views = {a["bufferView"] for a in accessors if "bufferView" in a} | {i["bufferView"] for i in doc.get("images", []) if "bufferView" in i}
+    view_map = {}
+    packed = bytearray()
+    new_views = []
+    for old in sorted(views):
+        view = dict(doc["bufferViews"][old])
+        start = view.get("byteOffset", 0)
+        packed += b"\0" * (-len(packed) % 8)
+        data = blob[start:start + view["byteLength"]]
+        view["byteOffset"] = len(packed)
+        view["buffer"] = 0
+        packed += data
+        view_map[old] = len(new_views)
+        new_views.append(view)
+    for accessor in accessors:
+        if "bufferView" in accessor:
+            accessor["bufferView"] = view_map[accessor["bufferView"]]
+    for image in doc.get("images", []):
+        if "bufferView" in image:
+            image["bufferView"] = view_map[image["bufferView"]]
+    for mesh in doc.get("meshes", []):
+        for primitive in mesh["primitives"]:
+            primitive["attributes"] = {k: accessor_map[v] for k, v in primitive["attributes"].items()}
+            if "indices" in primitive:
+                primitive["indices"] = accessor_map[primitive["indices"]]
+            if "targets" in primitive:
+                primitive["targets"] = [{k: accessor_map[v] for k, v in t.items()} for t in primitive["targets"]]
+    for skin in doc.get("skins", []):
+        if "inverseBindMatrices" in skin:
+            skin["inverseBindMatrices"] = accessor_map[skin["inverseBindMatrices"]]
+    doc["accessors"] = accessors
+    doc["bufferViews"] = new_views
+    return packed
+
+
+def prune(doc):
+    """Drops the nodes no scene reaches (the lofted car taken off PlayerCar) and the meshes no node draws, re-indexing
+    the rest. Left in the file, the importer still reads them: their names (Wheel0, Spin, Dials, RearMirror) made it
+    give the model's nodes of the same names a unique suffix, and the level found no wheels and no dials (0.74)."""
+    reachable = []
+    stack = [n for scene in doc.get("scenes", []) for n in scene.get("nodes", [])]
+    seen = set()
+    while stack:
+        i = stack.pop()
+        if i in seen:
+            continue
+        seen.add(i)
+        reachable.append(i)
+        stack.extend(doc["nodes"][i].get("children", []))
+    node_map = {old: new for new, old in enumerate(sorted(reachable))}
+    nodes = []
+    for old in sorted(reachable):
+        node = doc["nodes"][old]
+        if "children" in node:
+            node["children"] = [node_map[c] for c in node["children"]]
+        nodes.append(node)
+    doc["nodes"] = nodes
+    for scene in doc.get("scenes", []):
+        scene["nodes"] = [node_map[n] for n in scene.get("nodes", [])]
+    for skin in doc.get("skins", []):
+        skin["joints"] = [node_map[j] for j in skin.get("joints", []) if j in node_map]
+        if "skeleton" in skin:
+            skin["skeleton"] = node_map.get(skin["skeleton"], skin["joints"][0] if skin["joints"] else 0)
+    if doc.get("animations"):
+        doc.pop("animations")   # the export has none; a stale target would point at a removed node
+    used_meshes = sorted({n["mesh"] for n in nodes if "mesh" in n})
+    mesh_map = {old: new for new, old in enumerate(used_meshes)}
+    doc["meshes"] = [doc["meshes"][old] for old in used_meshes]
+    for node in nodes:
+        if "mesh" in node:
+            node["mesh"] = mesh_map[node["mesh"]]
+    return len(seen), len(used_meshes)
+
+
+def main():
+    source, target, car = sys.argv[1:4]
+    folder = sys.argv[4] if len(sys.argv) > 4 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "game", "assets", "models")
+    doc, blob = load(source)
+    key, path = model_path(folder, car)
+    if path is None:
+        if source != target:
+            save(target, doc, blob)
+        print(f"{car}: no prepared model in {folder}, the car stays as it was")
+        return
+    model, model_blob = load(path)
+    worlds, _ = world_matrices(model)
+    names = {i: n.get("name", "") for i, n in enumerate(model["nodes"])}
+    car_model = next((i for i, n in names.items() if n == "CarModel"), None)
+    if car_model is None:
+        sys.exit(f"{path}: no CarModel node (not a prepared car model)")
+    top = {names[c]: c for c in model["nodes"][car_model].get("children", [])}
+    for required in ("Wheel0", "Wheel1", "Wheel2", "Wheel3"):
+        if required not in top:
+            sys.exit(f"{path}: no {required}")
+
+    root = find_node(doc, "PlayerCar")
+    doc["nodes"][root]["children"] = []
+    offsets = merge(doc, blob, model, model_blob)
+    # The level paints a flat GLP_Paint in the model's colour and lays a clear coat over a textured one (a livery or a
+    # colour atlas); the imported material always carries a texture parameter, so the name says which it is.
+    for material in doc["materials"][offsets["materials"]:]:
+        if material.get("name") == "GLP_Paint":
+            textured = "baseColorTexture" in material.get("pbrMetallicRoughness", {})
+            material["name"] = "GLP_PaintTex" if textured else "GLP_PaintFlat"
+    b = Builder(doc, blob)
+    count = {"body": 0, "glass": 0}
+    glass_materials = {i for i, m in enumerate(model.get("materials", [])) if glassy(m)}
+
+    def baked(label, items):
+        """One node per kind of surface: the opaque parts (Nanite) and the glass (translucent, which Nanite cannot draw)."""
+        opaque, glass = Merger(model, model_blob), Merger(model, model_blob)
+        for i, matrix in items:
+            mesh = model["meshes"][model["nodes"][i]["mesh"]]
+            solid = [p for p in mesh["primitives"] if p.get("material", -1) not in glass_materials]
+            clear = [p for p in mesh["primitives"] if p.get("material", -1) in glass_materials]
+            for target, primitives in ((opaque, solid), (glass, clear)):
+                if primitives:
+                    model["meshes"].append({"primitives": primitives})
+                    target.add(len(model["meshes"]) - 1, matrix)
+                    model["meshes"].pop()
+        nodes = []
+        for prefix, merger in (("Mdl_", opaque), ("Mdl_Glass_", glass)):
+            mesh = merger.build(b, prefix + label, offsets["materials"])
+            if mesh is not None:
+                nodes.append(b.node(prefix + label, None, mesh))
+                count["glass" if prefix == "Mdl_Glass_" else "body"] += 1
+        return nodes
+
+    special = {"Wheel0", "Wheel1", "Wheel2", "Wheel3", "Steering", "Eye", "Dials", "Mirror", "MirrorHung"}
+    children = []
+
+    # The body, its cabin and whatever else hangs on it (arch liners, the plate), baked in the car's frame.
+    body = baked("Body", [(i, worlds[i]) for name, c in top.items() if name not in special for i in mesh_nodes(model, c)])
+    children.append(b.node("ModelBody", None, None, body))
+
+    # The wheels on their hubs, each spinning in a Spin node of its own; another car's model is fitted to these tyres.
+    spec = SPECS.get(car)
+    for w in range(4):
+        hub = worlds[top[f"Wheel{w}"]][:3, 3]
+        recentre = translation(*(-hub))
+        parts = baked(f"Wheel{w}", [(i, recentre @ worlds[i]) for i in mesh_nodes(model, top[f"Wheel{w}"])])
+        spin_matrix = None
+        if key != car and spec is not None:
+            radius = 0.0
+            for i in mesh_nodes(model, top[f"Wheel{w}"]):
+                low, high = mesh_bounds(model, model["nodes"][i]["mesh"], worlds[i])
+                radius = max(radius, max(high[1] - low[1], high[2] - low[2]) / 2.0)
+            if radius > 0.1:
+                spin_matrix = np.diag([*([float(np.clip(spec["radius"] / radius, 0.85, 1.15))] * 3), 1.0])
+        spin = b.node("Spin", spin_matrix, None, parts)
+        children.append(b.node(f"Wheel{w}", translation(*hub), None, [spin]))
+
+    # The steering wheel: CarView turns Steering/Spin about its local y.
+    if "Steering" in top:
+        steering = top["Steering"]
+        spin_index = next((c for c in model["nodes"][steering].get("children", []) if names[c] == "Spin"), None)
+        if spin_index is not None:
+            parts = baked("Steer", [(i, np.linalg.inv(worlds[spin_index]) @ worlds[i]) for i in mesh_nodes(model, spin_index)])
+            spin = b.node("Spin", np.linalg.inv(worlds[steering]) @ worlds[spin_index], None, parts)
+            children.append(b.node("Steering", worlds[steering], None, [spin]))
+
+    if "Eye" in top:
+        children.append(b.node("Eye", translation(*worlds[top["Eye"]][:3, 3])))
+
+    # The instrument panel's face, as CarView.MountModelDials hangs it.
+    if "Dials" in top:
+        frame = worlds[top["Dials"]]
+        width = float(np.linalg.norm(frame[:3, 0]))
+        face = b.material("GLP_DialsFace", (0.035, 0.035, 0.04), 0.0, 0.85)
+        children.append(b.node("Dials", orthonormal(frame), b.quad("DialsFace", width, width * PANEL[1] / PANEL[0], face)))
+
+    # The rear-view mirror's glass on the prepared node (the game's housing and stalk too where it hangs its own).
+    mirror_key = "Mirror" if "Mirror" in top else "MirrorHung" if "MirrorHung" in top else None
+    if mirror_key is not None:
+        frame = worlds[top[mirror_key]]
+        sx, sy = float(np.linalg.norm(frame[:3, 0])), float(np.linalg.norm(frame[:3, 1]))
+        glass_w, glass_h = (sx, sy) if abs(sx - 1.0) > 0.001 and sx > 0.01 and sy > 0.005 else MIRROR_GLASS
+        dark = b.material("GLP_MirrorGlass", (0.02, 0.02, 0.022), 0.0, 0.35)
+        parts = [b.node("MirrorGlass", translation(0.0, 0.0, MIRROR_OFFSET), b.quad("MirrorGlass", glass_w, glass_h, dark))]
+        if mirror_key == "MirrorHung":
+            housing = b.material("GLP_MirrorHousing", (0.03, 0.03, 0.032), 0.0, 0.55)
+            parts.insert(0, b.node("MirrorStalk", translation(0.0, 0.045, -0.01), b.box("MirrorStalk", (0.016, 0.07, 0.016), housing)))
+            parts.insert(1, b.node("MirrorHousing", None, b.box("MirrorHousing", (glass_w + 0.02, glass_h + 0.02, 0.03), housing)))
+        children.append(b.node("RearMirror", orthonormal(frame) @ translation(0.0, 0.0, -MIRROR_OFFSET), None, parts))
+
+    doc["nodes"][root]["children"] = children
+    prune(doc)
+    save(target, doc, compact(doc, b.blob))
+    print(f"{car}: {os.path.basename(path)}{' (fitted to this car)' if key != car else ''}: {count['body']} body mesh node(s), "
+          f"{count['glass']} glass, steering {'yes' if 'Steering' in top else 'no'}, eye {'yes' if 'Eye' in top else 'no'}, "
+          f"dials {'yes' if 'Dials' in top else 'no'}, mirror {mirror_key or 'none'} -> {target}")
+
+
+if __name__ == "__main__":
+    main()

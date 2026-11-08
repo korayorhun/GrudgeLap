@@ -7,7 +7,6 @@ GitHub takes 2 GB a file) and without a Saved folder (a test run's logs, screens
 repository's THIRD_PARTY.md and the credits of the car models the level draws (the CC BY licence asks for them with
 every copy) beside the executable.
 """
-import json
 import os
 import sys
 import zipfile
@@ -18,18 +17,17 @@ REPOSITORY = os.path.dirname(UNREAL)
 
 
 def credits():
-    """The licence notes of the models models.json puts in the level, one after another."""
-    models = os.path.join(UNREAL, "Import", "Models")
-    catalogue = json.load(open(os.path.join(models, "models.json"), encoding="utf-8"))
-    files = sorted({entry["file"] for key, entry in catalogue.items() if isinstance(entry, dict) and "file" in entry})
+    """The credits of the car models the level draws: since 0.74 the Godot game's own prepared models (prepare_model_car.py),
+    each a row of THIRD_PARTY.md with its author, source and changes, which the CC BY licence asks for with every copy."""
+    rows = [line for line in open(os.path.join(REPOSITORY, "THIRD_PARTY.md"), encoding="utf-8").read().splitlines()
+            if line.startswith("| ") and "sketchfab.com/3d-models" in line]
     notes = []
-    for name in files:
-        stem = os.path.splitext(name)[0]
-        path = os.path.join(models, stem + ".LICENSE.txt")
-        if os.path.exists(path):
-            notes.append(open(path, encoding="utf-8").read().strip())
-    return ("The car models drawn by the Unreal Engine version (CC BY 4.0; the makes are the authors' subjects):\n\n"
-            + "\n\n".join(notes) + "\n")
+    for row in rows:
+        cells = [c.strip() for c in row.strip("|").split("|")]
+        if len(cells) >= 3:
+            notes.append(f"{cells[0]}\n  used for: {cells[1]}\n  licence: {cells[2]}")
+    return ("The car models drawn by the Unreal Engine version are the Godot version's (CC BY 4.0; the makes are the "
+            "authors' subjects):\n\n" + "\n\n".join(notes) + "\n")
 
 
 def main(source, target):

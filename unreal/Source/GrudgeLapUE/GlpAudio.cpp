@@ -6,6 +6,9 @@
 #include "Misc/CommandLine.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "AudioDecompress.h"
+#include "Decoders/VorbisAudioInfo.h"
+#include "Interfaces/IAudioFormat.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGlpAudio, Log, All);
 
@@ -190,6 +193,49 @@ bool UGlpAudio::LoadClip(const FString& File, FClip& Clip)
 	return false;
 }
 
+bool UGlpAudio::LoadOggClip(const FString& File, FClip& Clip)
+{
+	// The Godot version stores the tune the player chose as music/replay.ogg (0.70), whatever it was given; this version
+	// looked for replay.wav only and played its own tune instead (the engine review, 8 November 2026). The engine's own
+	// Vorbis decoder reads the file; the mix here is mono, so the channels are averaged rather than the first one kept.
+	TArray<uint8> Bytes;
+	if (!FFileHelper::LoadFileToArray(Bytes, *File, FILEREAD_Silent) || Bytes.Num() < 4 || FMemory::Memcmp(Bytes.GetData(), "OggS", 4) != 0)
+	{
+		return false;
+	}
+#if WITH_OGGVORBIS
+	LoadVorbisLibraries();
+	FVorbisAudioInfo Vorbis;
+	FSoundQualityInfo Quality = {};
+	if (!Vorbis.ReadCompressedInfo(Bytes.GetData(), static_cast<uint32>(Bytes.Num()), &Quality) || Quality.NumChannels == 0 || Quality.SampleDataSize == 0)
+	{
+		UE_LOG(LogGlpAudio, Warning, TEXT("not a readable Ogg Vorbis file: %s"), *File);
+		return false;
+	}
+	TArray<uint8> Pcm;
+	Pcm.SetNumZeroed(Quality.SampleDataSize);
+	Vorbis.ExpandFile(Pcm.GetData(), &Quality);
+	const int32 Channels = static_cast<int32>(Quality.NumChannels);
+	const int32 Frames = Pcm.Num() / (static_cast<int32>(sizeof(int16)) * Channels);
+	const int16* Samples = reinterpret_cast<const int16*>(Pcm.GetData());
+	Clip.Rate = static_cast<float>(Quality.SampleRate);
+	Clip.Samples.SetNumUninitialized(Frames);
+	for (int32 i = 0; i < Frames; i++)
+	{
+		float Sum = 0.f;
+		for (int32 c = 0; c < Channels; c++)
+		{
+			Sum += Samples[i * Channels + c];
+		}
+		Clip.Samples[i] = Sum / (32768.f * Channels);
+	}
+	return Frames > 1;
+#else
+	UE_LOG(LogGlpAudio, Warning, TEXT("no Ogg Vorbis decoder in this build: %s"), *File);
+	return false;
+#endif
+}
+
 UGlpAudio::FClips::~FClips()
 {
 	if (Engine != 0)
@@ -220,7 +266,10 @@ void UGlpAudio::SetCar(int32 Style)
 	struct FEngineBank { const TCHAR* Folder; int32 Cylinders; };
 	static const FEngineBank EngineBanks[] = { { TEXT("flat12"), 12 }, { TEXT("v8"), 8 }, { TEXT("hothatch"), 4 }, { TEXT("turbohatch"), 4 }, { TEXT("v6"), 6 },
 		{ TEXT("saloon"), 4 }, { TEXT("estate"), 4 }, { TEXT("diesel4"), 4 },
-		{ TEXT("v8flat"), 8 }, { TEXT("inline5"), 5 }, { TEXT("four16v"), 4 }, { TEXT("tsi4"), 4 }, { TEXT("boxer4"), 4 } };
+		{ TEXT("v8flat"), 8 }, { TEXT("inline5"), 5 }, { TEXT("four16v"), 4 }, { TEXT("tsi4"), 4 }, { TEXT("boxer4"), 4 },
+		// The Clio II 1.6 16V (0.33.0): the Bravo 1.6's sixteen-valve four banks until a recording of its K4M is found
+		// (EngineSpec.ClioSixteen); without this row the clamp gave it the BRZ's boxer.
+		{ TEXT("four16v"), 4 } };
 	const int32 Car = FMath::Clamp(Style, 0, (int32)UE_ARRAY_COUNT(EngineBanks) - 1);
 	const FEngineBank& Bank = EngineBanks[Car];
 	if (const FGlpLibrary* Library = FGlpLibrary::Get())
@@ -268,11 +317,15 @@ void UGlpAudio::SetCar(int32 Style)
 	// The instant replay's music (as the Godot version's EngineAudio): the player's own replay.wav first, from this
 	// version's music folder or the Godot version's (one file serves both), else the game's own tune. Only the first
 	// channel of a WAV file is read (PCM 16-bit or float), as for every recording here.
-	const FString Godot = FPaths::Combine(FPlatformMisc::GetEnvironmentVariable(TEXT("APPDATA")), TEXT("Godot"), TEXT("app_userdata"), TEXT("GrudgeLap"), TEXT("music"), TEXT("replay.wav"));
+	// The Godot version keeps the player's tune as replay.ogg since 0.70 (replay.wav before), so both are looked for.
+	const FString GodotMusic = FPaths::Combine(FPlatformMisc::GetEnvironmentVariable(TEXT("APPDATA")), TEXT("Godot"), TEXT("app_userdata"), TEXT("GrudgeLap"), TEXT("music"));
 	const FString Repository = FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectDir(), TEXT(".."), TEXT("game"), TEXT("assets"), TEXT("audio"), TEXT("music"), TEXT("replay.wav")));
-	for (const FString& File : { FPaths::Combine(MusicFolder(), TEXT("replay.wav")), Godot, FPaths::Combine(Directory, TEXT("music"), TEXT("replay.wav")), Repository })
+	for (const FString& File : { FPaths::Combine(MusicFolder(), TEXT("replay.wav")), FPaths::Combine(MusicFolder(), TEXT("replay.ogg")),
+		FPaths::Combine(GodotMusic, TEXT("replay.wav")), FPaths::Combine(GodotMusic, TEXT("replay.ogg")),
+		FPaths::Combine(Directory, TEXT("music"), TEXT("replay.wav")), Repository })
 	{
-		if (IFileManager::Get().FileExists(*File) && LoadClip(File, Loaded->Music))
+		const bool bOgg = File.EndsWith(TEXT(".ogg"));
+		if (IFileManager::Get().FileExists(*File) && (bOgg ? LoadOggClip(File, Loaded->Music) : LoadClip(File, Loaded->Music)))
 		{
 			UE_LOG(LogGlpAudio, Log, TEXT("replay music: %s (%.1f s)"), *File, Loaded->Music.Samples.Num() / FMath::Max(Loaded->Music.Rate, 1.f));
 			break;

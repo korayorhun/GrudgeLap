@@ -288,4 +288,5 @@ def main():
     print(f"-> {target}")
 
 
-main()
+if __name__ == "__main__":
+    main()

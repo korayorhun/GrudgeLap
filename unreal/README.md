@@ -98,6 +98,24 @@ on a 144 Hz panel) and 30 in the background, and logs each change (`frame cap:`)
 GPU ran flat out and its driver timed out. Runs with `-RenderOffScreen` (the scripts below) set their own.
 
 For automated checks, `-GlpAudioDump=<file.wav>` records the sound mix and `-GlpMute` keeps the speakers silent.
+`drive.cmd` holds its runs to 60 fps (`t.MaxFPS`: off screen the game sets no cap of its own, and the development laptop's
+GPU has dropped out under an uncapped loop), keeps the editor's on-screen notes out of the shots
+(`DisableAllScreenMessages`) and passes further console commands from `GLP_EXEC` (each after a comma, e.g.
+`set GLP_EXEC=,r.NGX.DLSS.Enable 0`).
+
+The title screen offers the Godot version's line-up (`IsDrivable`: the 1970s saloon, the two Bravos and the Leon Cupra
+drive in the traffic only), and the traffic is every car with a model in turn, in the road's twelve colours, as the Godot
+version's since 0.70 (the Ferraris keep their red). Each car keeps its own best lap (`best_lap_<car>.bin`). The instant
+replay plays the player's own tune: `replay.wav` or `replay.ogg` from this version's music folder or the Godot
+version's (which keeps the tune it is given as `replay.ogg`), decoded by the engine's Vorbis decoder, else the game's own.
+
+**Hardware ray tracing (0.74).** `r.RayTracing` is on: Lumen traces the scene's geometry instead of its distance
+fields, and reflections are lit where the ray lands (`r.Lumen.HardwareRayTracing.LightingMode` 2), so the paint, the glass
+and the wet road mirror their surroundings. The grass tufts and the bushes stay out of the ray-tracing scene (a quarter of
+a million instances; Lumen warns above 100 000). A card without ray tracing keeps software Lumen. On an RTX card with the
+DLSS plugin the game also turns on **DLSS Ray Reconstruction** (`AGlpGame::EnableRayReconstruction`, through the plugin's
+`UDLSSLibrary`): one trained denoiser takes the place of Lumen's reflection denoisers and the shadow denoiser; the log says
+`DLSS Ray Reconstruction: on`, and `-GlpNoRR` keeps the built-in denoisers for a comparison.
 
 On an RTX card with the plugin (step 4) DLSS takes TSR's place (`r.NGX.DLSS.Enable` in `Config/DefaultEngine.ini`) in its Quality mode: the frame is rendered at a fixed 75 % of the window and upscaled. Dynamic resolution is off: the plugin picks its mode by the top of the dynamic range and took DLAA, which takes 99 to 100 % only, and the packaged game stopped on DLSS's assertion the first time a frame was rendered below that. The log says `LogDLSS: NVIDIA NGX DLSS supported 1`; `-ExecCmds="r.NGX.DLSS.Enable 0"` puts TSR back for a comparison.
 
@@ -166,7 +184,23 @@ credits (`Import/Models/LICENSE.txt`) beside the executable.
     touch more bloom and motion blur in the post-process volume; the chase camera a 54 degree lens from 7.4 m, as
     the Godot version's since 0.11.
 
-## Real car models (0.13)
+## Real car models (0.74: the Godot version's own, cabins included)
+
+Since 0.74 every car with a prepared model in the Godot version (`game/assets/models/<key>.glb`, written by
+`tools/prepare_car_models.py`) is drawn here from that very file, cabin and all (`Scripts/prepare_model_car.py`, run by
+`build.cmd` after the older step below): the export's lofted car under `PlayerCar` goes, and the model comes in as
+`ModelBody` (its body and cabin, tagged `GLP.Exterior` and seen from the seat too), `Wheel0..3` with a `Spin` each,
+`Steering/Spin`, the driver's `Eye` (the cockpit camera's place, `GLP.Eye`), `Dials` (a quad the size the prepared node
+gives, on which the game shows its instrument panel) and `RearMirror` (its glass, `MirrorGlass`, sized by the prepared
+node; a housing and a stalk where the game hangs its own). Nodes no scene reaches are pruned from the file: left in, the
+importer gave the model's `Wheel0`, `Spin` and `Dials` a unique suffix because the lofted car's nodes had the same names,
+and the level found no wheels. The model's `GLP_Paint` becomes a clear-coated paint in the model's own colour
+(`M_CarPaintSolid`) or over its texture (`M_CarPaintTextured`, the converter names them `GLP_PaintFlat` and
+`GLP_PaintTex`), `GLP_Glass` and `GLP_Lens` the clear glass; a mesh with a translucent slot is built without Nanite. So
+the Unreal cockpit is the Godot cockpit, and the cars' credits are the Godot version's (`THIRD_PARTY.md`, copied into the
+preview with `CREDITS-car-models.txt`).
+
+### The older step (0.13)
 
 The lofted bodies the game exports are stand-ins; the level puts real car models in their place
 (`Scripts/prepare_car_model.py`, driven by `Import/Models/models.json`): the model is turned to face the car's

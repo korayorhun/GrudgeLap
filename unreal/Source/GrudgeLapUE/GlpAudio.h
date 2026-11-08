@@ -146,6 +146,8 @@ private:
 	};
 
 	static bool LoadClip(const FString& File, FClip& Clip);
+	/** An Ogg Vorbis file (the player's replay tune as the Godot version keeps it), mixed down to one channel. */
+	static bool LoadOggClip(const FString& File, FClip& Clip);
 	static FString AudioDirectory();
 
 public:

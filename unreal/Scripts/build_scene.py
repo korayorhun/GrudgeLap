@@ -574,8 +574,11 @@ def car_parts(car):
 
 def mirror_glass(car):
     """RearMirror's glass: a stalk, the housing and the glass are made in that order, and the export names them
-    only by number."""
-    mirror = car_parts(car).get("RearMirror")
+    only by number; a prepared model's mirror (prepare_model_car.py) names its glass MirrorGlass."""
+    parts = car_parts(car)
+    if "MirrorGlass" in parts:
+        return parts["MirrorGlass"]
+    mirror = parts.get("RearMirror")
     if mirror is None:
         return None
     meshes = [a for a in mirror.get_attached_actors() if a.get_components_by_class(unreal.StaticMeshComponent)]
@@ -595,7 +598,8 @@ def rig_car(car, root_tag):
     parts = list(descendants(car))
     wheels = 0
     for index in range(4):
-        wheel = next((a for a in parts if a.get_actor_label() == f"Wheel{index}"), None)
+        # A label the level already had gets a suffix (Wheel0_<hash>): match the name with or without it.
+        wheel = next((a for a in parts if a.get_actor_label() == f"Wheel{index}" or a.get_actor_label().startswith(f"Wheel{index}_")), None)
         if wheel is None:
             continue
         tag(wheel, f"GLP.Wheel{index}")
@@ -606,18 +610,27 @@ def rig_car(car, root_tag):
     # CarView.BuildInterior: the steering wheel turns in a node "Wheel" on the "Column".
     steering = next((a for a in parts if a.get_actor_label() == "Wheel" and a.get_attach_parent_actor() is not None
                      and a.get_attach_parent_actor().get_actor_label() == "Column"), None)
+    if steering is None:
+        # A prepared model's steering wheel (prepare_model_car.py): CarView turns Steering/Spin about its local y.
+        steering = next((a for a in parts if a.get_actor_label().startswith("Spin") and a.get_attach_parent_actor() is not None
+                         and a.get_attach_parent_actor().get_actor_label().startswith("Steering")), None)
     if steering is not None:
         tag(steering, "GLP.Steering")
+    # A prepared model's driver's eye (0.74): the game's cockpit camera starts there instead of its table of eyes.
+    eye = next((a for a in parts if a.get_actor_label() == "Eye"), None)
+    if eye is not None:
+        tag(eye, "GLP.Eye")
     # ModelShell (0.13): a real car model's body in place of the lofted one (prepare_car_model.py), kept in the
-    # driver's view too (its roof and pillars frame the windscreen).
-    exterior = [a for a in parts if a.get_actor_label() in ("Shell", "Bonnet", "Glass", "Outside", "ModelShell")]
+    # driver's view too (its roof and pillars frame the windscreen). ModelBody (0.74): a prepared model's body with its
+    # own cabin (prepare_model_car.py), which the seat sees as the car's inside.
+    exterior = [a for a in parts if a.get_actor_label() in ("Shell", "Bonnet", "Glass", "Outside", "ModelShell", "ModelBody")]
     for actor in exterior:
         tag(actor, "GLP.Exterior")
         # CarView._outsideOnly: from the driver's seat only their shadows are drawn (the wheels are found by tag); a
         # model's body too, so the seat keeps the game's own cabin round it (its inner faces showed through, 0.13).
         if actor.get_actor_label() in ("Shell", "Outside", "ModelShell"):
             tag(actor, "GLP.OutsideOnly")
-    dials = next((a for a in parts if a.get_actor_label() == "Dials"), None)
+    dials = next((a for a in parts if a.get_actor_label() == "Dials" or a.get_actor_label().startswith("Dials_")), None)
     if dials is not None:
         tag(dials, "GLP.Dials")
     glass = mirror_glass(car)
@@ -640,7 +653,7 @@ def rig_car(car, root_tag):
                 tag(actor, "GLP.SideMirror")
                 side += 1
                 break
-    log(f"{root_tag} tagged: {wheels} wheels, steering {'found' if steering else 'missing'}, {len(exterior)} exterior "
+    log(f"{root_tag} tagged: {wheels} wheels, steering {'found' if steering else 'missing'}, eye {'found' if eye else 'table'}, {len(exterior)} exterior "
         f"parts, dials {'found' if dials else 'missing'}, mirror glass {glass.get_actor_label() if glass else 'missing'}, "
         f"{side} side mirror(s)")
 
@@ -778,6 +791,32 @@ def paint_solid_material():
     paint.set_editor_property("parameter_name", "Paint")
     paint.set_editor_property("default_value", unreal.LinearColor(0.54, 0.0023, 0.0039, 1.0))
     mel.connect_material_expressions(paint, "", attributes, "BaseColor")
+    for y, (pin, value) in enumerate((("Metallic", 0.35), ("Roughness", 0.38), ("ClearCoat", 1.0), ("ClearCoatRoughness", 0.04))):
+        constant = mel.create_material_expression(material, unreal.MaterialExpressionConstant, -250, 200 + y * 100)
+        constant.set_editor_property("r", value)
+        mel.connect_material_expressions(constant, "", attributes, pin)
+    mel.recompile_material(material)
+    eal.save_loaded_asset(material)
+    return material
+
+
+def paint_textured_material():
+    """The paint of a prepared model whose paint is a texture (a livery or a colour atlas, 0.74): the texture times
+    the Paint parameter under the same clear coat as M_CarPaintSolid, so the textured cars shine as the flat ones do."""
+    material = asset_tools.create_asset("M_CarPaintTextured", f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    material.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_CLEAR_COAT)
+    material.set_editor_property("use_material_attributes", True)
+    attributes = mel.create_material_expression(material, unreal.MaterialExpressionMakeMaterialAttributes, 0, 0)
+    mel.connect_material_property(attributes, "", unreal.MaterialProperty.MP_MATERIAL_ATTRIBUTES)
+    texture = mel.create_material_expression(material, unreal.MaterialExpressionTextureSampleParameter2D, -700, -100)
+    texture.set_editor_property("parameter_name", "Texture")
+    paint = mel.create_material_expression(material, unreal.MaterialExpressionVectorParameter, -700, 150)
+    paint.set_editor_property("parameter_name", "Paint")
+    paint.set_editor_property("default_value", unreal.LinearColor(1.0, 1.0, 1.0, 1.0))
+    colour = mel.create_material_expression(material, unreal.MaterialExpressionMultiply, -400, 0)
+    mel.connect_material_expressions(texture, "RGB", colour, "A")
+    mel.connect_material_expressions(paint, "", colour, "B")
+    mel.connect_material_expressions(colour, "", attributes, "BaseColor")
     for y, (pin, value) in enumerate((("Metallic", 0.35), ("Roughness", 0.38), ("ClearCoat", 1.0), ("ClearCoatRoughness", 0.04))):
         constant = mel.create_material_expression(material, unreal.MaterialExpressionConstant, -250, 200 + y * 100)
         constant.set_editor_property("r", value)
@@ -1007,7 +1046,8 @@ def car_materials():
 
     glass = constant_material("M_Glass", {mp.MP_BASE_COLOR: (0.0, 0.0, 0.0), mp.MP_OPACITY: 0.03,
                                           mp.MP_ROUGHNESS: 0.03, mp.MP_SPECULAR: 0.5, mp.MP_METALLIC: 0.0}, glassy)
-    return {"paint": paint_material(), "paint_solid": paint_solid_material(), "glass": glass, "mirror": mirror_material(),
+    return {"paint": paint_material(), "paint_solid": paint_solid_material(), "paint_textured": paint_textured_material(),
+            "glass": glass, "mirror": mirror_material(),
             "cabin": cabin_material(), "cabin_instances": {}}
 
 
@@ -1023,12 +1063,86 @@ def paint_material_name(name):
     tokens = {w for w in re.split(r"[^a-z]+", name.lower()) if w}
     return bool(tokens & PAINT_WORDS) or ("body" in tokens and tokens <= BODY_WORDS)
 
+def without_nanite(mesh):
+    """Translucency cannot be drawn by Nanite: a mesh with a glass slot is built without it."""
+    settings = mesh.get_editor_property("nanite_settings")
+    if settings.enabled:
+        settings.enabled = False
+        mesh.modify()
+        mesh.set_editor_property("nanite_settings", settings)
+        eal.save_loaded_asset(mesh, False)
+
+
+def translucent(material):
+    base = material.get_base_material() if material else None
+    return base is not None and base.get_editor_property("blend_mode") not in (unreal.BlendMode.BLEND_OPAQUE, unreal.BlendMode.BLEND_MASKED)
+
+
+def dress_prepared_model(car, parts, materials):
+    """A prepared model's materials (prepare_model_car.py, the game's own model): GLP_Paint becomes the level's
+    clear-coated paint in the model's own colour, through the Paint parameter, so the traffic copies can wear
+    theirs (a paint with a texture, a livery or a colour atlas, keeps its own material); GLP_Glass and GLP_Lens
+    the clear glass, as CarView.DressModel gives the game's windows and lamp lenses. A mesh with any translucent
+    slot left is built without Nanite."""
+    if "ModelBody" not in parts:
+        return
+    paints = {}
+    painted = glazed = plain = 0
+    for component in mesh_components(car):
+        if not component.get_owner().get_actor_label().startswith("Mdl_"):
+            continue
+        mesh = component.get_editor_property("static_mesh")
+        for slot in range(component.get_num_materials()):
+            material = component.get_material(slot)
+            name = material.get_name() if material else ""
+            if name.startswith(("GLP_Glass", "GLP_Lens", "MI_GLP_Glass", "MI_GLP_Lens")):
+                component.set_material(slot, materials["glass"])
+                glazed += 1
+            elif name.startswith(("GLP_Paint", "MI_GLP_Paint")) and isinstance(material, unreal.MaterialInstance):
+                # prepare_model_car.py names a textured paint GLP_PaintTex and a flat one GLP_PaintFlat.
+                textured = name.startswith(("GLP_PaintTex", "MI_GLP_PaintTex"))
+                try:
+                    texture = mel.get_material_instance_texture_parameter_value(material, "BaseColorTexture") if textured else None
+                    colour = mel.get_material_instance_vector_parameter_value(material, "BaseColorFactor")
+                except Exception:
+                    texture, colour = None, None
+                if colour is None or (textured and texture is None):
+                    plain += 1
+                    continue
+                key = (texture.get_path_name() if texture else "", round(colour.r, 4), round(colour.g, 4), round(colour.b, 4))
+                if key not in paints:
+                    instance = asset_tools.create_asset(f"MI_Paint_{car.get_actor_label()}_{len(paints)}", f"{GAME}/Materials",
+                                                        unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+                    mel.set_material_instance_parent(instance, materials["paint_textured" if textured else "paint_solid"])
+                    mel.set_material_instance_vector_parameter_value(instance, "Paint", unreal.LinearColor(colour.r, colour.g, colour.b, 1.0))
+                    if textured:
+                        mel.set_material_instance_texture_parameter_value(instance, "Texture", texture)
+                    mel.update_material_instance(instance)
+                    eal.save_loaded_asset(instance)
+                    paints[key] = instance
+                component.set_material(slot, paints[key])
+                painted += 1
+        if mesh is not None and any(translucent(component.get_material(s)) for s in range(component.get_num_materials())):
+            without_nanite(mesh)
+    log(f"{car.get_actor_label()}: prepared model dressed, {painted} paint slot(s) in {len(paints)} paint(s), "
+        f"{plain} paint slot(s) left as imported, {glazed} glass and lens slot(s)")
+
+
 def dress_car(car, materials):
     """Paint and glass on one car. The game's paint is flat red in the vertex colour (with darker panel seams);
     here it is a clear-coated metallic paint over that colour (paint_material). The glass, which the cockpit view
     hid at export, becomes a clear windscreen every view keeps; translucency cannot be drawn by Nanite, so its mesh
     is built without. The rear-view mirror's glass gets dark glass for the stills (the game shows its camera)."""
     parts = car_parts(car)
+    if "ModelBody" in parts:
+        # A prepared model (prepare_model_car.py, 0.74) brings its own cabin and materials: only its paint and glass
+        # change, and the mirror's glass takes the stills' dark glass. The lofted car's steps below would paint its
+        # GLP_Paint in the default red before the model's own colour could be read.
+        dress_prepared_model(car, parts, materials)
+        glass = mirror_glass(car)
+        for component in mesh_components(glass) if glass else []:
+            component.set_material(0, materials["mirror"])
+        return
     painted = 0
     for label in ("Shell", "Bonnet"):
         for component in mesh_components(parts[label]) if label in parts else []:
@@ -1084,6 +1198,8 @@ def dress_car(car, materials):
     # The plain-painted parts (CarView's solidPaint: metallic 0.18, roughness 0.26) and the cabin's photo materials.
     solid = cabin = 0
     for component in mesh_components(car):
+        if component.get_owner().get_actor_label().startswith("Mdl_"):
+            continue   # a model's own materials (dress_prepared_model)
         for slot in range(component.get_num_materials()):
             material = component.get_material(slot)
             if not isinstance(material, unreal.MaterialInstance):
@@ -1112,6 +1228,140 @@ def dress_car(car, materials):
             shell += 1
     log(f"{car.get_actor_label()} dressed: {painted} painted, {solid} plain-painted, {cabin} cabin, {glazed} glass, "
         f"{shell} shell part(s) out of Lumen, mirror glass {'found' if glass else 'missing'}")
+
+
+SHOULDER_HLSL = '''struct FGlpNoise
+{
+    float Hash(float2 p)
+    {
+        float3 p3 = frac(float3(p.xyx) * 0.1031);
+        p3 += dot(p3, p3.yzx + 33.33);
+        return frac((p3.x + p3.y) * p3.z);
+    }
+    float Value(float2 p)
+    {
+        float2 i = floor(p);
+        float2 f = frac(p);
+        float2 u = f * f * (3.0 - 2.0 * f);
+        return lerp(lerp(Hash(i), Hash(i + float2(1, 0)), u.x), lerp(Hash(i + float2(0, 1)), Hash(i + float2(1, 1)), u.x), u.y);
+    }
+};
+FGlpNoise N;
+float across = UV.x;
+float2 wp = WorldXY / 100.0;
+float fray = across + 0.20 * (N.Value(wp * 2.2) - 0.5) + 0.10 * (N.Value(wp * 8.0) - 0.5);
+Opacity = 1.0 - smoothstep(0.84, 0.90, fray);
+float2 uv = wp / 2.6;
+float l = N.Value(wp * 0.45) * 8.0;
+float fl = frac(l);
+float ia = floor(l);
+float2 oa = sin(float2(3.0, 7.0) * ia);
+float2 ob = sin(float2(3.0, 7.0) * (ia + 1.0));
+float2 dx = ddx(uv);
+float2 dy = ddy(uv);
+float3 ca = Stones.SampleGrad(StonesSampler, uv + oa, dx, dy).rgb;
+float3 cb = Stones.SampleGrad(StonesSampler, uv + ob, dx, dy).rgb;
+float w = smoothstep(0.2, 0.8, fl - 0.1 * dot(ca - cb, float3(1, 1, 1)));
+float3 c = lerp(ca, cb, w);
+float h = lerp(Height.SampleGrad(HeightSampler, uv + oa, dx, dy).r, Height.SampleGrad(HeightSampler, uv + ob, dx, dy).r, w);
+float3 nm = lerp(Normals.SampleGrad(NormalsSampler, uv + oa, dx, dy).rgb, Normals.SampleGrad(NormalsSampler, uv + ob, dx, dy).rgb, w);
+float lum = dot(c, float3(0.299, 0.587, 0.114)) / 0.20;
+float top = smoothstep(0.22, 0.42, h);
+float zone = 1.0 - smoothstep(0.42, 0.95, across + 0.30 * (N.Value(wp * 1.1 + 4.0) - 0.5));
+float age = N.Value(wp * 0.7 + 9.0);
+float chips = N.Value(wp * 32.0) * 0.6 + N.Value(wp * 90.0 + 3.0) * 0.4;
+float keep = zone * step(chips, 0.93 - 0.40 * age - 0.25 * (1.0 - top));
+// The Godot shader's colours are sRGB (source_color): (0.60, 0.30, 0.02), (0.60, 0.40, 0.16), (0.20, 0.15, 0.11), linear here.
+float3 paint = float3(0.319, 0.073, 0.0015);
+float3 faded = float3(0.319, 0.133, 0.022);
+float3 soil = float3(0.033, 0.019, 0.012);
+float3 coat = lerp(paint, faded, age * 0.65) * lerp(1.0, lum, 0.55);
+float3 face = lerp(c * float3(0.80, 0.66, 0.50), coat, keep);
+face *= 1.0 - 0.20 * (1.0 - smoothstep(0.0, 0.25, across));
+float3 joint = soil * lerp(0.7, 1.3, lum * 0.5);
+float3 albedo = lerp(joint, face, top) * Shade;
+albedo *= lerp(1.0, 0.65, Wet);
+float2 t = (nm.xy * 2.0 - 1.0) * 1.2;
+Normal = normalize(VertexNormal + float3(t.x, t.y, 0.0));
+Roughness = lerp(lerp(0.95, lerp(0.86, 0.62, keep), top), 0.45, Wet);
+Occlusion = lerp(0.45, 1.0, smoothstep(0.12, 0.40, h));
+return albedo;'''
+
+
+def shoulder_material():
+    """The verge (0.74), as the Godot game draws it (shoulder.gdshader, 0.36; ISTERLER P12, the owner: the stones at the
+    roadside orange, "like painted orange stones", a darker orange, not fake, never repeating): a photographed stone bed
+    (ambientCG Gravel020, the game's stones_*.jpg) painted the 1989 cabinet's burnt orange, fully by the asphalt and
+    thinning outwards, chipped in flecks and faded unevenly along the road, dark soil in the joints, the outer edge
+    fraying into the grass (masked); the photo's tile is broken up by two offset lookups blended where a slow noise
+    steps, and its relief bends the normal. The red-brown mud scan it replaces read as a flat orange band (0.13). The
+    same HLSL as the Godot shader, in one Custom node; UV.x runs 0 at the asphalt to 1 at the band's outer edge."""
+    m = asset_tools.create_asset("M_Shoulder", f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    m.set_editor_property("blend_mode", unreal.BlendMode.BLEND_MASKED)
+    m.set_editor_property("two_sided", True)
+    m.set_editor_property("tangent_space_normal", False)
+    textures = os.path.join(ROOT, "..", "game", "assets", "textures")
+    maps = {
+        "Stones": import_texture("GrudgeLap", "stones_color", "colour", path=os.path.join(textures, "stones_color.jpg")),
+        "Normals": import_texture("GrudgeLap", "stones_normal", "mask", path=os.path.join(textures, "stones_normal.jpg")),
+        "Height": import_texture("GrudgeLap", "stones_height", "mask", path=os.path.join(textures, "stones_height.jpg")),
+    }
+    custom = mel.create_material_expression(m, unreal.MaterialExpressionCustom, -400, 0)
+    custom.set_editor_property("code", SHOULDER_HLSL)
+    custom.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT3)
+    custom.set_editor_property("description", "GrudgeLap verge")
+    names = ["UV", "WorldXY", "VertexNormal", "Shade", "Wet", "Stones", "Normals", "Height"]
+    def custom_input(name):
+        entry = unreal.CustomInput()
+        entry.set_editor_property("input_name", name)
+        return entry
+
+    def custom_output(name, kind):
+        entry = unreal.CustomOutput()
+        entry.set_editor_property("output_name", name)
+        entry.set_editor_property("output_type", kind)
+        return entry
+
+    custom.set_editor_property("inputs", [custom_input(n) for n in names])
+    outputs = [("Opacity", unreal.CustomMaterialOutputType.CMOT_FLOAT1), ("Normal", unreal.CustomMaterialOutputType.CMOT_FLOAT3),
+               ("Roughness", unreal.CustomMaterialOutputType.CMOT_FLOAT1), ("Occlusion", unreal.CustomMaterialOutputType.CMOT_FLOAT1)]
+    custom.set_editor_property("additional_outputs", [custom_output(n, k) for n, k in outputs])
+    uv = mel.create_material_expression(m, unreal.MaterialExpressionTextureCoordinate, -900, -300)
+    world = mel.create_material_expression(m, unreal.MaterialExpressionWorldPosition, -1100, -200)
+    xy = mel.create_material_expression(m, unreal.MaterialExpressionComponentMask, -900, -200)
+    for c in "rgba":
+        xy.set_editor_property(c, c in "rg")
+    mel.connect_material_expressions(world, "", xy, "")
+    normal = mel.create_material_expression(m, unreal.MaterialExpressionVertexNormalWS, -900, -100)
+    shade = linear_vertex_colour(m, -900, 0)
+    mel.connect_material_expressions(uv, "", custom, "UV")
+    mel.connect_material_expressions(xy, "", custom, "WorldXY")
+    mel.connect_material_expressions(normal, "", custom, "VertexNormal")
+    mel.connect_material_expressions(shade, "", custom, "Shade")
+    if WEATHER["collection"] is not None:
+        wet = mel.create_material_expression(m, unreal.MaterialExpressionCollectionParameter, -900, 100)
+        wet.set_editor_property("collection", WEATHER["collection"])
+        wet.set_editor_property("parameter_name", "Wetness")
+    else:
+        wet = mel.create_material_expression(m, unreal.MaterialExpressionConstant, -900, 100)
+    mel.connect_material_expressions(wet, "", custom, "Wet")
+    for i, (name, texture) in enumerate(maps.items()):
+        node = mel.create_material_expression(m, unreal.MaterialExpressionTextureObject, -900, 200 + 100 * i)
+        node.set_editor_property("texture", texture)
+        if name != "Stones":
+            node.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_MASKS)
+        mel.connect_material_expressions(node, "", custom, name)
+    mel.connect_material_property(custom, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    mel.connect_material_property(custom, "Opacity", unreal.MaterialProperty.MP_OPACITY_MASK)
+    mel.connect_material_property(custom, "Normal", unreal.MaterialProperty.MP_NORMAL)
+    mel.connect_material_property(custom, "Roughness", unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.connect_material_property(custom, "Occlusion", unreal.MaterialProperty.MP_AMBIENT_OCCLUSION)
+    specular = mel.create_material_expression(m, unreal.MaterialExpressionConstant, -200, 300)
+    specular.set_editor_property("r", 0.2)   # the sky's blue in a stone's sheen turned the orange pink (shoulder.gdshader)
+    mel.connect_material_property(specular, "", unreal.MaterialProperty.MP_SPECULAR)
+    mel.recompile_material(m)
+    eal.save_loaded_asset(m)
+    return m
 
 
 def land_material():
@@ -1177,8 +1427,8 @@ def dress_track(actors):
     # brightness wobble on top, and the wear decals (road_decals) over it all. Wet under the weather, with puddles.
     asphalt = surface_material("M_Asphalt", "asphalt_02", 11.0 / 3.0, 1 / 3.0, tint=(0.9, 0.9, 0.9), macro=19.0, vertex_colour=True, wear=wear,
                                anti_tiling=True, wet={"dark": 0.5, "puddles": True})
-    # Red-brown earth, as the Godot version's shoulders (0.13) and the orange dirt of the original; the grass path read as lawn.
-    verge = surface_material("M_Verge", "brown_mud_dry", 2.6, 1.0, tint=(1.0, 0.96, 0.9), vertex_colour=True, anti_tiling=True, wet={"dark": 0.4, "rough": 0.3})
+    # The painted stones of the Godot version's verge (0.74; 0.13-0.73 a red-brown mud scan; the grass path read as lawn).
+    verge = shoulder_material()
     # The earthworks (the fork hill, the cuttings' walls) are bare earth in the game: its TerrainEarth mesh shares
     # the terrain's UVs (5 km across), so the mud scan tiles every 4 m there, tinted to the hill's red-brown.
     earth = surface_material("M_Earth", "brown_mud_dry", 5000 / 4.0, 5000 / 4.0, tint=(1.15, 0.78, 0.55))
@@ -1230,9 +1480,11 @@ def poly_haven_meshes(name, foliage_pipeline):
     return meshes
 
 
-def instanced(label, mesh, transforms, shadows=True, cull=0):
+def instanced(label, mesh, transforms, shadows=True, cull=0, ray_traced=True):
     """One actor holding every instance of a mesh (an instanced static mesh component); instances past cull
-    centimetres are not drawn (0: always drawn)."""
+    centimetres are not drawn (0: always drawn). ray_traced=False keeps them out of the ray-tracing scene (0.74):
+    the quarter of a million grass tufts would cost more to keep there than they give to reflections or bounce
+    light (Lumen warns above 100 000 instances)."""
     actor = actor_sub.spawn_actor_from_class(unreal.Actor, unreal.Vector(0, 0, 0))
     actor.set_actor_label(label)
     actor.set_folder_path("GrudgeLap/Foliage")
@@ -1243,8 +1495,13 @@ def instanced(label, mesh, transforms, shadows=True, cull=0):
     if component is None:
         raise RuntimeError(f"could not add an instanced mesh component: {reason}")
     component.set_static_mesh(mesh)
+    # Static (0.74): the scattered plants and rocks never move. Measured: no change in the frame time (the grass stays
+    # among the scene's dynamic instances, 230 000 of them, for its wind; the render thread waits 5-7 ms on visibility).
+    component.set_mobility(unreal.ComponentMobility.STATIC)
     component.set_collision_enabled(unreal.CollisionEnabled.NO_COLLISION)
     component.set_editor_property("cast_shadow", shadows)
+    if not ray_traced:
+        component.set_editor_property("visible_in_ray_tracing", False)
     component.add_instances(transforms, False, True)
     if cull:
         component.set_cull_distances(0, cull)
@@ -1295,7 +1552,7 @@ def scatter(placements, extra, actors):
 
     log(f"Nanite area preservation set on {preserved} foliage mesh(es)")
 
-    def place(label, choices, spots, cull=0):
+    def place(label, choices, spots, cull=0, ray_traced=True):
         """choices: (mesh, scale, weight); spots: (position, yaw degrees, scale, sink cm). One component per mesh."""
         sets = {}
         weights = [w for _, _, w in choices]
@@ -1303,14 +1560,14 @@ def scatter(placements, extra, actors):
             mesh, base, _ = rng.choices(choices, weights)[0]
             sets.setdefault(mesh.get_path_name(), (mesh, []))[1].append(transform(position, yaw, base * scale, sink))
         for i, (mesh, transforms) in enumerate(sets.values()):
-            instanced(f"{label}{i}", mesh, transforms, cull=cull)
+            instanced(f"{label}{i}", mesh, transforms, cull=cull, ray_traced=ray_traced)
 
     # 22 scanned tufts of 10 to 40 cm; the meadow takes them at 1 to 2.8 times (prepare_scatter.py).
     grass = [(m, 1.0, 1.0) for m in meshes["grass_medium_01"] + meshes["grass_medium_02"]]
     # The grass now lines every road (a quarter of a million tufts); a tuft under a metre tall is gone to the eye
     # long before 300 m, so it is not drawn beyond.
     if grass:
-        place("Grass", grass, [((x, y, z), math.degrees(yaw), scale, 2.0) for x, y, z, yaw, scale in extra["grass"]], cull=30000)
+        place("Grass", grass, [((x, y, z), math.degrees(yaw), scale, 2.0) for x, y, z, yaw, scale in extra["grass"]], cull=30000, ray_traced=False)
 
     for kind in ("rock_07", "rock_09", "boulder_01"):
         if meshes[kind]:
@@ -1337,7 +1594,7 @@ def scatter(placements, extra, actors):
 
     bushes = [(m, s, 1.0) for ms, s in ((meshes["shrub_02"], 1.0), (meshes["shrub_03"], 2.5), (meshes["shrub_04"], 2.0)) for m in ms]
     if bushes:
-        place("Bushes", bushes, [(b["position"], b["yaw"], b["scale"], 3.0) for b in extra["bushes"]], cull=80000)
+        place("Bushes", bushes, [(b["position"], b["yaw"], b["scale"], 3.0) for b in extra["bushes"]], cull=80000, ray_traced=False)
 
     # The scanned trees stand where the game's leaf-card trees stood; those go.
     removed = [label for label in actors if label.startswith("Tree-")]
@@ -1672,7 +1929,7 @@ def main():
     # hatch, GLP.Car3 the five, GLP.Car4 the turbo hatch, GLP.Car5-7 the everyday cars (0.13), GLP.Car8-12 the five of
     # cars13 (the 458, the two Bravos, the Leon Cupra and the BRZ, which await their exports and models); a missing
     # export leaves its slot empty and the title screen skips it.
-    for index, name in enumerate(["v8", "hothatch", "five", "turbohatch", "saloon", "estate", "fleet", "458", "bravohgt", "bravo16", "leoncupra", "brz"], start=1):
+    for index, name in enumerate(["v8", "hothatch", "five", "turbohatch", "saloon", "estate", "fleet", "458", "bravohgt", "bravo16", "leoncupra", "brz", "clio"], start=1):
         other = import_car(name)
         if other is not None:
             dress_car(other, materials)

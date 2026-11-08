@@ -10,6 +10,19 @@ public class GrudgeLapUE : ModuleRules
 		PublicDependencyModuleNames.AddRange(new[] { "Core", "CoreUObject", "Engine", "InputCore" });
 		PrivateDependencyModuleNames.AddRange(new[] { "AudioMixer", "RenderCore", "Slate", "SlateCore" });
 
+		// NVIDIA's DLSS plugin, when it is installed (README step 4): the game asks it whether the card can run Ray
+		// Reconstruction and switches it on (AGlpGame::BeginPlay). Without the plugin the game builds and runs on TSR.
+		bool dlss = Directory.Exists(Path.Combine(ModuleDirectory, "..", "..", "Plugins", "DLSS"));
+		if (dlss)
+		{
+			PrivateDependencyModuleNames.Add("DLSSBlueprint");
+		}
+		PrivateDefinitions.Add("WITH_GLP_DLSS=" + (dlss ? "1" : "0"));
+		// The engine's Ogg Vorbis decoder: the player's replay tune is kept as replay.ogg by the Godot version (GlpAudio).
+		PrivateDependencyModuleNames.AddRange(new[] { "AudioExtensions", "VorbisAudioDecoder" });
+		// FSoundQualityInfo, which the decoder fills in, is declared in TargetPlatform's Interfaces/IAudioFormat.h (a header only).
+		PrivateIncludePathModuleNames.Add("TargetPlatform");
+
 		// The simulation core: the repository's physics.native, the C# physics built with NativeAOT. Only its C
 		// header is compiled against; the DLL is loaded at run time (GlpLibrary) and staged beside the binaries
 		// from where `dotnet publish physics.native -c Release -r win-x64 -o artifacts/physics-native` leaves it.
