@@ -19,6 +19,10 @@ HALF = 700.0        # the grid covers the car's position +- HALF on X and Z
 BAND = 40.0          # metres either side of every road that get grass beyond the start
 BAND_DENSITY = 0.35  # tufts per square metre there, as the meadow's outer ring
 BAND_LIMIT = 260000
+SAGE_NEAR = 6.0       # sagebrush from this far from a road's edge...
+SAGE_FAR = 120.0      # ...out to this far (0.76)
+SAGE_DENSITY = 0.08   # bushes per square metre near the road, thinning to a third at SAGE_FAR
+SAGE_LIMIT = 70000
 NO_GRASS = ("Road-", "Shoulder-", "Lines-", "Field-", "SkidPad", "Pillars-", "Railings-", "House-", "Barn-",
             "Shop-", "Hut-", "Gate-", "Barrier-", "Pump-", "Pier-", "Railway", "Towers")
 rng = np.random.default_rng(11)
@@ -203,6 +207,51 @@ def roadside_grass(meshes, car, forward):
     return out
 
 
+def sagebrush(meshes):
+    """Sagebrush along every road (0.76): the flats of Jackson Hole are sage steppe, low grey-green bushes half a metre to
+    a metre high a few metres apart, not a lawn; from SAGE_NEAR to SAGE_FAR metres off the roads' edges, thinning with the
+    distance, off the fields, buildings and railway, on a 2 m grid of the whole track."""
+    roads = np.concatenate([t for name, t in meshes if name.startswith(("Road-", "Shoulder-"))])
+    lo = roads[:, :, [0, 2]].reshape(-1, 2).min(0) - SAGE_FAR - 20.0
+    hi = roads[:, :, [0, 2]].reshape(-1, 2).max(0) + SAGE_FAR + 20.0
+    centre = np.array([(lo[0] + hi[0]) / 2, 0.0, (lo[1] + hi[1]) / 2])
+    track = Grid(centre, half=float((hi - lo).max() / 2), cell=2.0)
+    near = Grid(centre, half=float((hi - lo).max() / 2), cell=2.0)
+    for name, tris in meshes:
+        if name == "Terrain":
+            track.rasterise(tris, True)
+        elif name.startswith(NO_GRASS) or name == "PlayerCar":
+            track.rasterise(tris, False)
+        if name.startswith(("Road-", "Shoulder-")):
+            near.rasterise(tris, False)
+    track.dilate(2)
+    # The distance from the roads in 2 m steps: the road mask grown one cell at a time.
+    distance = np.full(near.blocked.shape, np.inf, dtype=np.float32)
+    grown = near.blocked.copy()
+    distance[grown] = 0.0
+    for step in range(1, int(SAGE_FAR / near.cell) + 1):
+        nxt = grown.copy()
+        for di, dj in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nxt |= np.roll(np.roll(grown, di, 0), dj, 1)
+        distance[nxt & ~grown] = step * near.cell
+        grown = nxt
+    band = (distance >= SAGE_NEAR) & (distance <= SAGE_FAR)
+    weight = np.where(band, 1.0 - 0.67 * (distance - SAGE_NEAR) / (SAGE_FAR - SAGE_NEAR), 0.0)
+    cells = np.flatnonzero(band)
+    probability = weight.ravel()[cells]
+    count = min(int(probability.sum() * near.cell * near.cell * SAGE_DENSITY), SAGE_LIMIT)
+    picked = rng.choice(cells, size=count, p=probability / probability.sum())
+    i, j = np.unravel_index(picked, band.shape)
+    x = track.origin[0] + (i + rng.random(len(i))) * track.cell
+    z = track.origin[1] + (j + rng.random(len(j))) * track.cell
+    h, blocked = track.lookup(x, z)
+    keep = ~blocked & ~np.isnan(h)
+    out = [{"position": [float(xi), float(yi), float(zi)], "yaw": float(rng.random() * 360), "scale": float(rng.uniform(0.35, 0.8))}
+           for xi, yi, zi in zip(x[keep], h[keep], z[keep])]
+    print(f"sagebrush: {len(out)} bushes {SAGE_NEAR:.0f}-{SAGE_FAR:.0f} m from the roads")
+    return out
+
+
 def main():
     glb, placements_path, out = sys.argv[1:4]
     doc, blob = load_glb(glb)
@@ -277,7 +326,8 @@ def main():
             roadside = {"eye": eye, "target": target, "fov": 38.0}
             break
 
-    json.dump({"units": placements["units"], "grass": grass, "rocks": rocks, "trees": trees, "bushes": bushes,
+    sage = sagebrush(meshes)
+    json.dump({"units": placements["units"], "grass": grass, "rocks": rocks, "trees": trees, "bushes": bushes, "sage": sage,
                "roadside_camera": roadside}, open(out, "w", encoding="utf-8"))
     print(f"grass {len(grass)}, rocks {len(rocks)}, trees {len(trees)}, bushes {len(bushes)}, roadside {roadside} -> {out}")
 

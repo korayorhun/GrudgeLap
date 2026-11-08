@@ -187,7 +187,35 @@ def import_texture(folder, stem, kind, path=None):
 WEATHER = {"collection": None, "puddles": None}   # MPC_Weather and the puddle mask (weather_assets), read by the ground materials
 
 
-def surface_material(name, folder, u_tiling, v_tiling, tint=(1.0, 1.0, 1.0), macro=0.0, vertex_colour=False, wear=None, anti_tiling=False, wet=None):
+GROUND_HUES_HLSL = '''struct FGlpNoise
+{
+    float Hash(float2 p)
+    {
+        float3 p3 = frac(float3(p.xyx) * 0.1031);
+        p3 += dot(p3, p3.yzx + 33.33);
+        return frac((p3.x + p3.y) * p3.z);
+    }
+    float Value(float2 p)
+    {
+        float2 i = floor(p);
+        float2 f = frac(p);
+        float2 u = f * f * (3.0 - 2.0 * f);
+        return lerp(lerp(Hash(i), Hash(i + float2(1, 0)), u.x), lerp(Hash(i + float2(0, 1)), Hash(i + float2(1, 1)), u.x), u.y);
+    }
+};
+FGlpNoise N;
+float2 wp = WorldXY / 100.0;
+float dry = smoothstep(0.45, 0.75, N.Value(wp / 140.0) * 0.7 + N.Value(wp / 47.0 + 3.1) * 0.3);
+float green = smoothstep(0.55, 0.80, N.Value(wp / 6.0 + 11.7));
+// The half-metre clumps fade out where a pixel spans several of them, against shimmer at a distance.
+float footprint = max(length(ddx(wp)), length(ddy(wp)));
+float clump = lerp(N.Value(wp * 2.0 + 5.3), 0.5, saturate(footprint * 1.5));
+float3 m = lerp(float3(1.0, 1.0, 1.0), float3(1.55, 1.12, 0.62), dry);
+m = lerp(m, float3(0.82, 1.06, 0.85), green * (1.0 - dry * 0.7));
+return m * lerp(0.88, 1.10, clump);'''
+
+
+def surface_material(name, folder, u_tiling, v_tiling, tint=(1.0, 1.0, 1.0), macro=0.0, vertex_colour=False, wear=None, anti_tiling=False, wet=None, hues=False):
     """Base colour, normal and roughness/AO from one Poly Haven set, tiled on the mesh UVs.
 
     macro > 0 multiplies in the same texture at macro times the tile size as a slow brightness wobble, so a large
@@ -295,6 +323,27 @@ def surface_material(name, folder, u_tiling, v_tiling, tint=(1.0, 1.0, 1.0), mac
     else:
         mel.connect_material_expressions(tint_node, "", colour, "B")
     final = colour
+    if hues:
+        # The ground's colour on three scales (0.76), as the Godot ground's (0.36, ISTERLER P14): dry, straw-coloured
+        # stretches of a hundred metres and more, greener hollows a few metres across, half-metre clumps. One tint over
+        # the whole plain read as a lawn.
+        varied = expression(unreal.MaterialExpressionCustom, -400, -1200)
+        varied.set_editor_property("code", GROUND_HUES_HLSL)
+        varied.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT3)
+        varied.set_editor_property("description", "GrudgeLap ground hues")
+        entry = unreal.CustomInput()
+        entry.set_editor_property("input_name", "WorldXY")
+        varied.set_editor_property("inputs", [entry])
+        world = expression(unreal.MaterialExpressionWorldPosition, -800, -1200)
+        xy = expression(unreal.MaterialExpressionComponentMask, -600, -1200)
+        for c in "rgba":
+            xy.set_editor_property(c, c in "rg")
+        mel.connect_material_expressions(world, "", xy, "")
+        mel.connect_material_expressions(xy, "", varied, "WorldXY")
+        hued = expression(unreal.MaterialExpressionMultiply, -300, -1000)
+        mel.connect_material_expressions(final, "", hued, "A")
+        mel.connect_material_expressions(varied, "", hued, "B")
+        final = hued
     if vertex_colour:
         painted = expression(unreal.MaterialExpressionMultiply, -300, -400)
         mel.connect_material_expressions(final, "", painted, "A")
@@ -1571,7 +1620,7 @@ def dress_track(actors):
     # shoulder strips run 0..1 across 2.2 m. Tile sizes are the scans' real ones (Poly Haven "dimensions").
     # Mean linear albedos measured from the scans: asphalt 0.10 (kept), the aerial grass (0.17, 0.12, 0.03) is a
     # dry yellow; the tint turns it to a meadow's (0.09, 0.12, 0.03).
-    ground = surface_material("M_Ground", "aerial_grass_rock", 5000 / 15.0, 5000 / 15.0, tint=(0.5, 1.0, 1.3), macro=23.0, wet={"dark": 0.3, "rough": 0.55})
+    ground = surface_material("M_Ground", "aerial_grass_rock", 5000 / 15.0, 5000 / 15.0, tint=(0.5, 1.0, 1.3), macro=23.0, wet={"dark": 0.3, "rough": 0.55}, hues=True)
     # The road's wear sheet is the game's own (tools/make-road-wear.py); the road mesh carries its UV2 and the
     # vertex colours of the slabs, wheel tracks, patches and potholes.
     wear = import_texture("GrudgeLap", "road_wear", "colour", path=os.path.join(ROOT, "..", "game", "assets", "textures", "road_wear.png"))
@@ -1643,7 +1692,9 @@ def instanced(label, mesh, transforms, shadows=True, cull=0, ray_traced=True):
     actor.set_actor_label(label)
     actor.set_folder_path("GrudgeLap/Foliage")
     handles = subobjects.k2_gather_subobject_data_for_instance(actor)
-    params = unreal.AddNewSubobjectParams(parent_handle=handles[0], new_class=unreal.InstancedStaticMeshComponent)
+    # Hierarchical (0.76): the instances sit in a cluster tree culled as a whole, where the plain instanced component's
+    # quarter of a million grass tufts were culled one by one (the render thread waited 5-7 ms a frame on visibility).
+    params = unreal.AddNewSubobjectParams(parent_handle=handles[0], new_class=unreal.HierarchicalInstancedStaticMeshComponent)
     handle, reason = subobjects.add_new_subobject(params)
     component = unreal.SubobjectDataBlueprintFunctionLibrary.get_object(unreal.SubobjectDataBlueprintFunctionLibrary.get_data(handle))
     if component is None:
@@ -1749,6 +1800,36 @@ def scatter(placements, extra, actors):
     bushes = [(m, s, 1.0) for ms, s in ((meshes["shrub_02"], 1.0), (meshes["shrub_03"], 2.5), (meshes["shrub_04"], 2.0)) for m in ms]
     if bushes:
         place("Bushes", bushes, [(b["position"], b["yaw"], b["scale"], 3.0) for b in extra["bushes"]], cull=80000, ray_traced=False)
+    # Sagebrush along every road (0.76, prepare_scatter.sagebrush): the same scanned shrubs, small and in the sage's
+    # grey-green (their materials tinted on the instances' components), out to 300 m from the eye.
+    if bushes and extra.get("sage"):
+        before = {a.get_actor_label() for a in actor_sub.get_all_level_actors()}
+        place("Sage", bushes, [(b["position"], b["yaw"], b["scale"], 3.0) for b in extra["sage"]], cull=30000, ray_traced=False)
+        sage_tint = unreal.LinearColor(0.62, 0.70, 0.58, 1.0)
+        tinted = {}
+        for actor in actor_sub.get_all_level_actors():
+            if not actor.get_actor_label().startswith("Sage") or actor.get_actor_label() in before:
+                continue
+            for component in actor.get_components_by_class(unreal.InstancedStaticMeshComponent):
+                for slot in range(component.get_num_materials()):
+                    source = component.get_material(slot)
+                    if not isinstance(source, unreal.MaterialInstance):
+                        continue
+                    if source.get_name() not in tinted:
+                        try:
+                            factor = mel.get_material_instance_vector_parameter_value(source, "BaseColorFactor")
+                        except Exception:
+                            continue
+                        copy = asset_tools.create_asset(f"MI_Sage_{source.get_name()}", f"{GAME}/Materials",
+                                                        unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+                        mel.set_material_instance_parent(copy, source)
+                        mel.set_material_instance_vector_parameter_value(copy, "BaseColorFactor", unreal.LinearColor(
+                            factor.r * sage_tint.r, factor.g * sage_tint.g, factor.b * sage_tint.b, factor.a))
+                        mel.update_material_instance(copy)
+                        eal.save_loaded_asset(copy)
+                        tinted[source.get_name()] = copy
+                    component.set_material(slot, tinted[source.get_name()])
+        log(f"sagebrush: {len(extra['sage'])} bushes, {len(tinted)} tinted material(s)")
 
     # The scanned trees stand where the game's leaf-card trees stood; those go.
     removed = [label for label in actors if label.startswith("Tree-")]

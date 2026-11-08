@@ -256,11 +256,17 @@ def correct_material(material):
     # dashboard tops, at 0.5-0.6, mirrored the bright sky through the windscreen and read pale grey from the seat; the
     # Godot game hides that with a dark reflection probe in the cabin (CarView.BuildCabinShade), which Lumen has no
     # counterpart of. Textured plastics are rough; a black dashboard's sheen is faint.
+    # A dark "metal" without a texture is a black plastic or rubber exported as metal (the Testarossa's black_blactec,
+    # metallic 0.7 over 138 000 triangles of its trim and cabin): under the sun through the windscreen its specular lobe
+    # lit the dashboard pale grey (measured: switching the sun off took it from 85 to 10 grey levels, the sky light and the
+    # reflections barely mattered), where the game, its cabin in a dark reflection probe, shows it black.
     pbr = material["pbrMetallicRoughness"]
     base = pbr.get("baseColorFactor", [1.0, 1.0, 1.0, 1.0])
-    if (not driven and pbr.get("metallicFactor", 1.0) < 0.2 and not textured
-            and 0.2126 * base[0] + 0.7152 * base[1] + 0.0722 * base[2] < 0.1):
-        pbr["roughnessFactor"] = max(pbr.get("roughnessFactor", 1.0), 0.8)
+    if not driven and not textured and 0.2126 * base[0] + 0.7152 * base[1] + 0.0722 * base[2] < 0.1:
+        if pbr.get("metallicFactor", 1.0) < 0.9:
+            pbr["metallicFactor"] = 0.0
+        if pbr.get("metallicFactor", 1.0) < 0.2:
+            pbr["roughnessFactor"] = max(pbr.get("roughnessFactor", 1.0), 0.8)
 
 
 def glassy(material):
@@ -478,6 +484,15 @@ def main():
     doc["nodes"][root]["children"] = []
     for material in model.get("materials", []):
         correct_material(material)
+    # GLP_DEBUG_COLOURS="name=r,g,b;...": paints the named materials flat, to find which one a pixel is (a diagnosis aid).
+    for item in filter(None, os.environ.get("GLP_DEBUG_COLOURS", "").split(";")):
+        name, rgb = item.split("=")
+        for material in model.get("materials", []):
+            if material.get("name") == name:
+                pbr = material.setdefault("pbrMetallicRoughness", {})
+                pbr.pop("baseColorTexture", None)
+                pbr["baseColorFactor"] = [float(v) for v in rgb.split(",")] + [1.0]
+                pbr["metallicFactor"], pbr["roughnessFactor"] = 0.0, 1.0
     offsets = merge(doc, blob, model, model_blob)
     # The level paints a flat GLP_Paint in the model's colour and lays a clear coat over a textured one (a livery or a
     # colour atlas); the imported material always carries a texture parameter, so the name says which it is.
