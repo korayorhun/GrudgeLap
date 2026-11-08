@@ -47,10 +47,13 @@ internal sealed partial class EngineAudio : Node
     private float _songGain = 1f;
     private bool _songFading;
     // The instant replay's music: our own tune in the manner of the late-eighties arcade (tools/make-replay-music.py),
-    // played from its recording; 1989 mode plays the same score on this node's synthesiser (ReplaySong). It fades out
-    // in a third of a second when the replay ends or is skipped, as the synthesised one does.
+    // played from its recording; 1989 mode plays the same score on this node's synthesiser (ReplaySong), unless the
+    // player put a tune of their own in the user folder, which plays in both looks (0.70). It fades out in a third of
+    // a second when the replay ends or is skipped, as the synthesised one does.
     private AudioStreamPlayer? _replayMusic;
     private float _replayMusicFade;
+    // Whether _replayMusic holds the player's own tune (CustomReplayMusic) rather than the game's recording.
+    private bool _replayMusicIsOwn;
     private double _songTime;
     private int _songNext;
     private readonly List<Voice> _voices = new();
@@ -128,8 +131,15 @@ internal sealed partial class EngineAudio : Node
     public void RefreshReplayMusic()
     {
         var custom = CustomReplayMusic();
-        if (custom is null || _replayMusic is null || _replayMusic.Playing) return;
+        if (custom is null || _replayMusic is { Playing: true }) return;
+        if (_replayMusic is null)
+        {
+            // No recording of the game's own to swap out (a build without it): the player's tune gets a player of its own.
+            _replayMusic = new AudioStreamPlayer { VolumeDb = ReplayMusicDb };
+            AddChild(_replayMusic);
+        }
         _replayMusic.Stream = custom;
+        _replayMusicIsOwn = true;
     }
 
     /// <summary>Selects the recordings of the chosen car's engine, voiced for its body, and its turbo if it has one.</summary>
@@ -261,9 +271,12 @@ internal sealed partial class EngineAudio : Node
         _songGain = jingle == Jingle.Replay ? 2.8f : 1f;
         _songFade = 1f;
         _songFading = false;
-        if (jingle == Jingle.Replay && !Retro && _replayMusic is not null)
+        // The recording instead of the notes; in the 1989 look only when it is the player's own tune (0.70: until then
+        // that look always played the synthesised score, and a tune put in the user folder, most often the original
+        // arcade's own, was never heard there).
+        if (jingle == Jingle.Replay && _replayMusic is not null && (!Retro || _replayMusicIsOwn))
         {
-            // The recording instead of the notes.
+            if (_replayMusicIsOwn) GD.Print($"replay music: the player's own tune, {CustomReplayMusicName}");
             _song = null;
             _replayMusicFade = 0f;
             _replayMusic.VolumeDb = ReplayMusicDb;
@@ -310,6 +323,7 @@ internal sealed partial class EngineAudio : Node
         {
             _replayMusic = new AudioStreamPlayer { Stream = custom, VolumeDb = ReplayMusicDb };
             AddChild(_replayMusic);
+            _replayMusicIsOwn = true;
         }
         else if (ResourceLoader.Exists("res://assets/audio/music/replay.ogg"))
         {

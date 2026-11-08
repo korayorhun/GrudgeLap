@@ -89,7 +89,8 @@ internal sealed partial class Showroom : Node
     /// <summary>Automation (<c>--turn=</c>): the turntable held at its angle for a picture; a drag still turns it.</summary>
     public bool Held { get; init; }
     public VehicleSpec Spec => VehicleSpec.Catalogue[Index];
-    public static int Count => VehicleSpec.Catalogue.Length;
+    /// <summary>The cars the showroom steps through: the line-up (Lineup, 0.70), not the whole catalogue.</summary>
+    public static int Count => Lineup.Count;
     public Texture2D Texture => _viewport.GetTexture();
     public Rid ViewportRid => _viewport.GetViewportRid();
     /// <summary>The turntable's angle, degrees, for the automation's log.</summary>
@@ -107,7 +108,7 @@ internal sealed partial class Showroom : Node
     public static Showroom Create(int carIndex, PaintBook book, float startYawDegrees, bool fromMenu, bool held = false) => new()
     {
         Name = "Showroom",
-        Index = Math.Clamp(carIndex, 0, Count - 1),
+        Index = Lineup.IsDrivable(carIndex) ? carIndex : Lineup.Step(Math.Clamp(carIndex, 0, VehicleSpec.Catalogue.Length - 1), 1),
         _book = book,
         FromMenu = fromMenu,
         Held = held,
@@ -361,7 +362,7 @@ internal sealed partial class Showroom : Node
         _leaving = _car;
         _slideDirection = Math.Sign(direction);
         _slide = 0f;
-        Index = (Index + _slideDirection + Count) % Count;
+        Index = Lineup.Step(Index, _slideDirection);
         _car = Place(Index);
         PlaceCars();
         Preload();
@@ -594,7 +595,7 @@ internal sealed partial class Showroom : Node
         var wanted = new HashSet<string>();
         foreach (var offset in new[] { -1, 0, 1 })
         {
-            if (CarView.ModelPath(VehicleSpec.Catalogue[(Index + offset + Count) % Count]) is { } path) wanted.Add(path);
+            if (CarView.ModelPath(VehicleSpec.Catalogue[Lineup.Step(Index, offset)]) is { } path) wanted.Add(path);
         }
         foreach (var path in _preloaded.Keys.Where(p => !wanted.Contains(p)).ToList())
         {

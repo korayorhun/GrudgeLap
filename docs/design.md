@@ -3569,6 +3569,26 @@ The puddles were the view's alone: a mirror-flat patch on the asphalt, under the
   (a constant 3 mm inset) where a pixel spans more than half of its 4 cm cells along the line, instead of 0.68's fade,
   which took the fray away from a few metres out; the dash ends' fray is not faded at all (one value per dash, steady).
 
+### The replay tune in the 1989 look, matte tyre marks, the line-up (0.70.0)
+
+- **The replay tune** (`EngineAudio.PlayJingle`): a tune in the user folder (0.11, `user://music/replay.*`) now plays in the
+  1989 look too; until 0.70 that look always played the synthesised score, and a tune of the player's own was never heard
+  there. `_replayMusicIsOwn` tells the player's tune from the game's recording, which in the 1989 look still gives way to
+  the synthesised score. The owner's tune (the arcade's own) is only in the user folder of the owner's machine, never in
+  the repository or a release (ISTERLER S3). Checked by recording the master bus (`--audio-dump`) through a crash's
+  replay (`--ram=test`): the recording's envelope (10 ms RMS frames, normalised cross-correlation) matches the tune's at
+  0.98 and the game's own tune's at 0.30; in the 1989 look (`--retro --jingle=Replay`) 0.74 against 0.20, with the
+  pulse-train engine under it.
+- **Matte tyre marks** (`SkidMarks`): roughness 1 and no specular at all (`MetallicSpecular` 0, `SpecularMode.Disabled`).
+  At 0.42's roughness of 0.55 and the default specular the strips reflected the sky at a grazing angle more than the
+  rougher road round them and read as white streaks from the seat; Godot's f90 follows f0, so with f0 = 0 neither the
+  lobe nor the Fresnel rise is left.
+- **The line-up** (`Lineup`): the title and the showroom step through ten cars. The saloon (the VAZ-2106 model) and the
+  three lofted cars13 bodies are withdrawn, as the owner asked, but stay in the catalogue, whose indices the physics
+  tests, the saved settings and the paint book use; a saved choice of a withdrawn car moves on to the next. The traffic
+  draws every car with a model (eleven, the Ferraris in their own red, the others in the road's twelve colours), all
+  requested from the loader thread at the start as before.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

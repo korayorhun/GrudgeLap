@@ -15,8 +15,8 @@ namespace GrudgeLap.Game;
 /// <remarks>
 /// One multimesh of unit quads, each stretched from the wheel's last contact to its present one, in a ring of
 /// <see cref="Capacity"/> strips (the oldest give way); 1.5 cm over the road against fighting it for depth, alpha blended,
-/// a little glossy as worn rubber is. The marks start at <see cref="Threshold"/> of the wheel's slip intensity (the
-/// squeal's measure), so a tyre at the edge of its grip squeals before it marks. None in the 1989 look.
+/// matte (0.70). The marks start at <see cref="Threshold"/> of the wheel's slip intensity (the squeal's measure), so a
+/// tyre at the edge of its grip squeals before it marks. None in the 1989 look.
 /// </remarks>
 internal sealed partial class SkidMarks : MultiMeshInstance3D
 {
@@ -47,7 +47,13 @@ internal sealed partial class SkidMarks : MultiMeshInstance3D
             AlbedoColor = new Color(0.025f, 0.024f, 0.023f),
             VertexColorUseAsAlbedo = true,
             Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-            Roughness = 0.55f,
+            // Matte, reflecting nothing (0.70): 0.42 made them a little glossy (roughness 0.55 at the default specular),
+            // and at a grazing angle they mirrored the sky and the sun, brighter than the rough road round them, so
+            // from the seat they shone and at times read as white streaks. With no specular reflectance the Fresnel
+            // term has nothing to raise either (Godot's f90 follows f0): the strips only darken the road.
+            Roughness = 1f,
+            MetallicSpecular = 0f,
+            SpecularMode = BaseMaterial3D.SpecularModeEnum.Disabled,
             CullMode = BaseMaterial3D.CullModeEnum.Back,
         };
     }

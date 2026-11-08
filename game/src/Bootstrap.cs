@@ -164,6 +164,8 @@ public sealed partial class Bootstrap : Node3D
         InputSetup.Register();
         GetWindow().FilesDropped += OnFilesDropped;
         _carIndex = Math.Clamp(LoadChoice("car", 0), 0, VehicleSpec.Catalogue.Length - 1);
+        // A saved choice of a car taken out of the line-up (0.70, Lineup) moves on to the next one.
+        if (!Lineup.IsDrivable(_carIndex)) _carIndex = Lineup.Step(_carIndex, 1);
         _gearbox = (TransmissionMode)Math.Clamp(LoadChoice("transmission", (int)TransmissionMode.Automatic), 0, 2);
         _quality = (GraphicsQuality)Math.Clamp(LoadChoice("quality", (int)GraphicsQuality.High), 0, 2);
         // The weather (0.15): clear by default; the menu chooses clear, overcast, wet road, rain or random, and keeps it.
@@ -587,8 +589,19 @@ public sealed partial class Bootstrap : Node3D
         CarView.Overcast = _session is not null && !_retro && WeatherModel.Overcast(_session.Weather);
     }
 
-    /// <summary>The everyday cars the traffic is drawn as, in turn (BuildDroneViews).</summary>
-    private static readonly VehicleSpec[] TrafficCars = [VehicleSpec.Saloon, VehicleSpec.Estate, VehicleSpec.Fleet, VehicleSpec.HotHatch, VehicleSpec.TurboHatch];
+    /// <summary>
+    /// The cars the traffic is drawn as, in turn (BuildDroneViews): since 0.70 every car with a model of its own, as the
+    /// owner asked, the everyday ones between the sports cars so that a credit's eight drones are a mix. The lofted
+    /// cars13 bodies are left out, as they are out of the line-up (Lineup).
+    /// </summary>
+    private static readonly VehicleSpec[] TrafficCars =
+    [
+        VehicleSpec.Saloon, VehicleSpec.HotHatch, VehicleSpec.Estate, VehicleSpec.FlatPlaneV8, VehicleSpec.Fleet, VehicleSpec.ClioSixteen,
+        VehicleSpec.Boxer, VehicleSpec.TurboHatch, VehicleSpec.FiveHatch, VehicleSpec.FlatTwelve, VehicleSpec.V8Evo,
+    ];
+
+    /// <summary>The traffic's Ferraris keep their own red: the road's palette has beige, brown and ochre in it.</summary>
+    private static bool KeepsOwnPaint(CarStyle style) => style is CarStyle.FlatTwelve or CarStyle.V8 or CarStyle.FlatPlaneV8;
 
     private void BuildDroneViews()
     {
@@ -603,12 +616,14 @@ public sealed partial class Bootstrap : Node3D
         // from the last credit's, so no two drones of a credit look alike and the next credit's are others: five cars
         // and twelve colours repeat a pair only every sixty drones, and a credit has eight. Only the look: the drones
         // move as before (physics/Race/Traffic.cs), whatever car is drawn; their cabins are drawn only near
-        // (CarView.TrimCabinForTraffic).
+        // (CarView.TrimCabinForTraffic). Since 0.70 the drones are every car with a model (TrafficCars), eleven cars
+        // and twelve colours, the Ferraris in their own red.
         var everyday = TrafficCars;
         foreach (var drone in _session.Traffic.Cars)
         {
             var index = _droneSerial++ % (everyday.Length * CarView.TrafficPaints.Length);
-            var view = CarView.Create(everyday[index % everyday.Length], CarView.TrafficPaints[index % CarView.TrafficPaints.Length]);
+            var spec = everyday[index % everyday.Length];
+            var view = CarView.Create(spec, KeepsOwnPaint(spec.Style) ? null : CarView.TrafficPaints[index % CarView.TrafficPaints.Length]);
             view.Name = "Drone";
             view.SetViewpoint(false);
             AddChild(view);
@@ -1469,8 +1484,7 @@ public sealed partial class Bootstrap : Node3D
         var step = Input.IsActionJustPressed(InputSetup.SteerLeft) ? -1 : Input.IsActionJustPressed(InputSetup.SteerRight) ? 1 : 0;
         if (step != 0)
         {
-            var count = VehicleSpec.Catalogue.Length;
-            _carIndex = (_carIndex + step + count) % count;
+            _carIndex = Lineup.Step(_carIndex, step);
             SaveChoice("car", _carIndex);
             NewSession();
             _audio.Chime();

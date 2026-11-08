@@ -223,7 +223,7 @@ internal sealed partial class Hud : Control
             Centred(font, "GRUDGELAP", y, 58, white);
             Centred(font, $"<   {car.Spec.Name}   >", y + 62f, 28, white);
             // Held inside the panel's 880 px: with "or the stick" and the showroom's hint the line ran over its edge.
-            Centred(font, $"{CarFigures(car.Spec)}     left / right: car {CarNumber(car.Spec)} of {VehicleSpec.Catalogue.Length}     down or click the name: showroom", y + 90f, 15, grey);
+            Centred(font, $"{CarFigures(car.Spec)}     left / right: car {CarNumber(car.Spec)} of {Lineup.Count}     down or click the name: showroom", y + 90f, 15, grey);
             var options = new (string Key, string Label, TransmissionMode Mode)[]
             {
                 ("1", "AUTOMATIC", TransmissionMode.Automatic),
@@ -294,7 +294,7 @@ internal sealed partial class Hud : Control
         DrawTextureRect(room.Texture, new Rect2(Vector2.Zero, size), false);
         DrawRect(new Rect2(0f, 0f, size.X, 64f), new Color(0.05f, 0.05f, 0.06f, 0.5f));
         DrawString(font, new Vector2(20f, 44f), "SHOWROOM", HorizontalAlignment.Left, -1f, 30, white);
-        DrawString(font, new Vector2(size.X - 320f, 44f), $"CAR {room.Index + 1} OF {Showroom.Count}", HorizontalAlignment.Right, 300f, 22, grey);
+        DrawString(font, new Vector2(size.X - 320f, 44f), $"CAR {Lineup.Number(room.Index)} OF {Showroom.Count}", HorizontalAlignment.Right, 300f, 22, grey);
         // The name fades out and in with the cars sliding under it. In the bar: drawn over the stage (46 px, under the
         // bar) it lay on the roofs of the tall cars and of a car brought closer (the showroom's review).
         Centred(font, room.Spec.Name, 45f, 34, white with { A = room.TextAlpha });
@@ -460,7 +460,12 @@ internal sealed partial class Hud : Control
         return $"{power:0} HP{turbo}   {spec.MassKg:0} KG   {drive}   {spec.ForwardGearCount} GEARS";
     }
 
-    private static int CarNumber(VehicleSpec spec) => System.Array.FindIndex(VehicleSpec.Catalogue, c => c.Name == spec.Name) + 1;
+    /// <summary>The car's place in the line-up (Lineup): a withdrawn car, which only automation drives, shows the place of the next one.</summary>
+    private static int CarNumber(VehicleSpec spec)
+    {
+        var index = System.Array.FindIndex(VehicleSpec.Catalogue, c => c.Name == spec.Name);
+        return Lineup.Number(Lineup.IsDrivable(index) ? index : Lineup.Step(index, 1));
+    }
 
     private void DrawHelp(Font font, Vector2 size, VehicleSim car, RaceSession s, float bandTop)
     {
