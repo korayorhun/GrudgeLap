@@ -877,22 +877,32 @@ internal sealed partial class CarView
     /// </summary>
     public void TrimCabinForTraffic()
     {
-        if (_model is null || _modelEye is not { } eye) return;
-        // From the floor to the roof lining, inside the doors, from the dashboard to the rear seats' backs: what the
-        // cabin holds (the paint's lining box, SetPaintCabin, is the glasshouse over the seats).
+        foreach (var mesh in CabinMeshes())
+        {
+            mesh.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+            mesh.VisibilityRangeEnd = CabinSeenWithin;
+        }
+    }
+
+    /// <summary>
+    /// The meshes that are the cabin's own (TrimCabinForTraffic, MakeGhost): inside the box from the floor to the roof
+    /// lining, inside the doors and from the dashboard to the rear seats' backs, and made only of the cabin's materials
+    /// (the windows, the lenses and the paint are the outside's). None for a lofted body.
+    /// </summary>
+    private IEnumerable<MeshInstance3D> CabinMeshes()
+    {
+        if (_model is null || _modelEye is not { } eye) yield break;
+        // The paint's lining box (SetPaintCabin) is the glasshouse over the seats; this one is what the cabin holds.
         var cabin = new Aabb(new Vector3(-0.80f, eye.Y - 0.95f, eye.Z - 1.2f), new Vector3(1.60f, 1.55f, 2.5f));
         foreach (var mesh in Descendants(_model).OfType<MeshInstance3D>())
         {
             if (mesh.Mesh is null || !cabin.Encloses(FrameOf(mesh) * mesh.GetAabb())) continue;
-            // Only the cabin's own materials: the windows, the lenses and the paint are the outside's.
             var inside = true;
             for (var s = 0; s < mesh.Mesh.GetSurfaceCount() && inside; s++)
             {
                 inside = mesh.GetSurfaceOverrideMaterial(s) is null && mesh.Mesh.SurfaceGetMaterial(s)?.ResourceName.ToString() is not ("GLP_Paint" or "GLP_Glass" or "GLP_Lens" or "GLP_Brake");
             }
-            if (!inside) continue;
-            mesh.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
-            mesh.VisibilityRangeEnd = CabinSeenWithin;
+            if (inside) yield return mesh;
         }
     }
 

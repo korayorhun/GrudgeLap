@@ -13,7 +13,7 @@ Yeni bir thread bu dosyayı okuyup buradaki talimatla devam eder. Sahibin yapı�
 5. **Kurallar:**
    - Oyunu her zaman gizli ve sessiz çalıştır: `--audio-driver Dummy --position -32000,-32000 -- --invisible`.
    - Her iş bitince derle, test et ve yeni sürüm olarak yayınla.
-   - Model ve ses yalnız CC0 ya da CC BY olur ve kaynağı güvenilir olur; her kaynak [THIRD_PARTY.md](../THIRD_PARTY.md)'de anılır.
+   - Model ve ses yalnız CC0 ya da CC BY olur ve kaynağı güvenilir olur; her kaynak [THIRD_PARTY.md](../THIRD_PARTY.md)'de anılır. Sahibin 8 Kasım 2026 izniyle ("izin veriyorum"; oyun ücretsiz) BlendSwap'in "Fan Art" işaretli (ticari kullanım yasak) CC BY ve CC BY-SA modelleri de kullanılabilir; kısıtları THIRD_PARTY.md'de yazılır (ISTERLER A8).
    - Cevaplar Türkçe, kısa ve madde madde.
 6. **Başlarken:** ISTERLER.md'nin 10. bölümündeki açık işleri kısaca özetle. Sahip yeni bir istek verirse onunla başla.
 

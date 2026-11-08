@@ -40,6 +40,10 @@ public sealed class TerrainField
     /// <summary>Every cell within the two-cell reach of a cell that holds a frame: Height looks no further from any other.</summary>
     private readonly HashSet<(int, int)> _near = new();
     private readonly List<RoadFrame> _frames = new();
+    // The decks (0.73: the bridges, the drawbridge's ramps, the loop), by cell: DeckHeight.
+    private readonly Dictionary<(int, int), List<RoadFrame>> _deckCells = new();
+    /// <summary>How far the ground keeps under a deck's surface (0.73): the asphalt's wear and the ground mesh's chord.</summary>
+    private const float DeckClearance = 0.12f;
     private readonly List<int> _pathOfFrame = new();
     private readonly List<byte> _clampOfFrame = new();
     private readonly List<SkidPad> _pads;
@@ -65,6 +69,12 @@ public sealed class TerrainField
                 count++;
                 _minX = MathF.Min(_minX, f.Origin.X); _maxX = MathF.Max(_maxX, f.Origin.X);
                 _minZ = MathF.Min(_minZ, f.Origin.Z); _maxZ = MathF.Max(_maxZ, f.Origin.Z);
+                if (f.Surface == SurfaceType.Road && f.Normal.Y > 0.5f && f.Kind is SegmentKind.Overpass or SegmentKind.RampUp or SegmentKind.RampDown or SegmentKind.Loop)
+                {
+                    var deckKey = CellOf(f.Origin.X, f.Origin.Z);
+                    if (!_deckCells.TryGetValue(deckKey, out var decks)) _deckCells[deckKey] = decks = new List<RoadFrame>();
+                    decks.Add(f);
+                }
                 if (!IsEarthwork(f)) continue;
                 var index = _frames.Count;
                 _frames.Add(f);
@@ -117,6 +127,39 @@ public sealed class TerrainField
 
     /// <summary>Ground height at a point.</summary>
     public float Height(float x, float z) => Height(x, z, out _);
+
+    /// <summary>
+    /// The surface height of the lowest deck (a bridge, a drawbridge ramp, the loop) whose footprint, widened by
+    /// <paramref name="margin"/> on each side, covers (x, z); NaN where none does (0.73). The roads on earth answer
+    /// through Height's roadWeight; a deck never did, so nothing kept the meadow, the tufts or the fences off a deck
+    /// that runs low over the ground, as the stunt route's return-leg bridge does for 60 of its 90 m.
+    /// </summary>
+    public float DeckHeight(float x, float z, float margin)
+    {
+        var best = float.NaN;
+        var (cx, cz) = CellOf(x, z);
+        for (var dz = -1; dz <= 1; dz++)
+        {
+            for (var dx = -1; dx <= 1; dx++)
+            {
+                if (!_deckCells.TryGetValue((cx + dx, cz + dz), out var list)) continue;
+                foreach (var f in list)
+                {
+                    // The point in the frame's plan axes (the tangent and the lateral, solved as the probe does).
+                    var det = f.Tangent.X * f.Lateral.Z - f.Tangent.Z * f.Lateral.X;
+                    if (MathF.Abs(det) < 0.2f) continue;
+                    var ddx = x - f.Origin.X;
+                    var ddz = z - f.Origin.Z;
+                    var along = (ddx * f.Lateral.Z - ddz * f.Lateral.X) / det;
+                    var lateral = (f.Tangent.X * ddz - f.Tangent.Z * ddx) / det;
+                    if (MathF.Abs(along) > 0.6f || MathF.Abs(lateral) > f.HalfWidth + margin) continue;
+                    var y = f.Origin.Y + along * f.Tangent.Y + MathUtil.Clamp(lateral, -f.HalfWidth, f.HalfWidth) * f.Lateral.Y;
+                    if (float.IsNaN(best) || y < best) best = y;
+                }
+            }
+        }
+        return best;
+    }
 
     /// <summary>Ground height at a point; <paramref name="roadWeight"/> is 1 at a road's edge and fades to 0 away from it.</summary>
     public float Height(float x, float z, out float roadWeight)
@@ -225,6 +268,10 @@ public sealed class TerrainField
         }
 
         roadWeight = weightMax;
+        // Never above a deck (0.73): the decks are no road to the weights above, and on the stunt route's low return-leg
+        // bridge the ground came up through the asphalt by up to 1.8 cm.
+        var deck = DeckHeight(x, z, Shoulder);
+        if (!float.IsNaN(deck)) ceiling = MathF.Min(ceiling, deck - DeckClearance);
         if (weightSum <= 0f) return MathF.Min(baseHeight, ceiling);
         return MathF.Min(baseHeight + weightMax * (offsetSum / weightSum), ceiling);
     }

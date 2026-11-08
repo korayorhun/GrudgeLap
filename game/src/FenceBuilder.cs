@@ -102,8 +102,11 @@ internal static class FenceBuilder
         var fields = track.Props.Where(p => p.Kind == PropKind.Field).ToArray();
         bool Blocked(SN.Vector3 p)
         {
-            terrain.Height(p.X, p.Z, out var roadWeight);
+            var ground = terrain.Height(p.X, p.Z, out var roadWeight);
             if (roadWeight > 0.02f) return true;
+            // A deck less than 2.5 m over the ground (0.73: five bays of the cutting's fence crossed the stunt route's low
+            // return-leg bridge), and the railway, which a fence leaves a gap for.
+            if (terrain.DeckHeight(p.X, p.Z, 2f) - ground < 2.5f || track.Train?.OffsetFromLine(p.X, p.Z) < 2.5f) return true;
             var at = new SN.Vector2(p.X, p.Z);
             foreach (var (centre, reach) in obstacles)
             {

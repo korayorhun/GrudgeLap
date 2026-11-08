@@ -26,7 +26,12 @@ namespace GrudgeLap.Game;
 /// </summary>
 public sealed partial class Bootstrap : Node3D
 {
-    private const string BestLapFile = "user://bestlap.bin";
+    /// <summary>
+    /// A car's best lap file (0.73): user://bestlap-&lt;style&gt;.bin. Until 0.73 one best lap was kept for all the cars
+    /// (user://bestlap.bin, left where it is for the versions before) and the ghost was drawn as whichever car was
+    /// driven, so a lap set in one car raced another as its double: the owner could not tell whose ghost it was.
+    /// </summary>
+    private static string BestLapFileOf(VehicleSpec spec) => $"user://bestlap-{spec.Style}.bin";
     private const string SettingsFile = "user://settings.cfg";
 
     private RaceSession _session = null!;
@@ -45,6 +50,9 @@ public sealed partial class Bootstrap : Node3D
     private string? _ram;
     private SN.Vector3? _ramTarget;
     private CarView? _ghostView;
+    // Over the ghost: the lap it drives (0.73, BuildGhostView, SyncGhost).
+    private Label3D? _ghostLabel;
+    private LapRecording? _ghostLabelLap;
     private readonly List<CarView> _droneViews = new();
     private int _droneSerial;   // drones drawn so far, over the credits: the next one's car and colour (BuildDroneViews)
     private readonly Dictionary<int, Node3D> _propNodes = new();
@@ -63,7 +71,8 @@ public sealed partial class Bootstrap : Node3D
     private Updater _updater = null!;
     private readonly KeyboardDriver _keyboard = new();
     private readonly ScriptedDriver _scripted = new();
-    private LapRecording? _savedBestLap;
+    // Each car's best lap (0.73), read from its own file the first time the car is driven (SavedBestLap).
+    private readonly Dictionary<CarStyle, LapRecording?> _bestLaps = new();
     private bool _attract;
     private bool _park;
     private bool _tryTable;
@@ -303,7 +312,6 @@ public sealed partial class Bootstrap : Node3D
         FitOutPlayerCar();
         if (_perfLog) StartMark("updater, instruments and the player's fit-out");
 
-        _savedBestLap = LoadBestLap();
         NewSession();
         if (_perfLog) StartMark("session");
         if (_exportWorld is not null)
@@ -560,7 +568,7 @@ public sealed partial class Bootstrap : Node3D
         // The last credit's music ends with it (0.72): its game-over tune or the replay's tune.
         _audio.EndMusic();
         if (_perfLog) StartMark("  session: the engine voice");
-        if (_savedBestLap is not null && !_noGhost) _session.LoadBestLap(_savedBestLap);
+        if (!_noGhost && SavedBestLap(spec) is { } best) _session.LoadBestLap(best);
         _hud.Bind(_session);
         _instruments.Bind(_session);
         _scores.Dismiss();
@@ -655,11 +663,30 @@ public sealed partial class Bootstrap : Node3D
     {
         _ghostView?.QueueFree();
         _ghostView = null;
+        _ghostLabel = null;
+        _ghostLabelLap = null;
         if (!_session.GrudgeMatch) return;
         _ghostView = CarView.Create(VehicleSpec.Catalogue[_carIndex]);
         _ghostView.Name = "Ghost";
         _ghostView.MakeGhost();
         _ghostView.Visible = false;
+        // Over the ghost, what it is (0.73, the owner: "whose ghost is it?"): this car's best lap, its time and route.
+        // Not within 6 m, where at the start it would sit in the player's own windscreen.
+        _ghostLabel = new Label3D
+        {
+            Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+            FixedSize = true,
+            PixelSize = 0.0009f,
+            FontSize = 30,
+            OutlineSize = 10,
+            Modulate = new Color(0.75f, 0.94f, 1f, 0.9f),
+            OutlineModulate = new Color(0f, 0.08f, 0.15f, 0.7f),
+            Shaded = false,
+            Position = new Vector3(0f, 1.9f, 0f),
+            VisibilityRangeBegin = 6f,
+            VisibilityRangeEnd = 250f,
+        };
+        _ghostView.AddChild(_ghostLabel);
         AddChild(_ghostView);
     }
 
@@ -786,14 +813,23 @@ public sealed partial class Bootstrap : Node3D
         return failures == 0;
     }
 
-    private static LapRecording? LoadBestLap()
+    /// <summary>The car's best lap, the ghost it races: read from its file once, then kept.</summary>
+    private LapRecording? SavedBestLap(VehicleSpec spec)
+    {
+        if (_bestLaps.TryGetValue(spec.Style, out var known)) return known;
+        var lap = LoadBestLap(spec);
+        _bestLaps[spec.Style] = lap;
+        return lap;
+    }
+
+    private static LapRecording? LoadBestLap(VehicleSpec spec)
     {
         try
         {
-            var path = ProjectSettings.GlobalizePath(BestLapFile);
+            var path = ProjectSettings.GlobalizePath(BestLapFileOf(spec));
             if (!System.IO.File.Exists(path)) return null;
             var recording = LapRecording.Deserialize(System.IO.File.ReadAllBytes(path));
-            if (recording is not null) GD.Print($"best lap loaded: {RaceSession.FormatLapTime(recording.Duration)} ({recording.Route})");
+            if (recording is not null) GD.Print($"best lap loaded: {RaceSession.FormatLapTime(recording.Duration)} ({recording.Route}, {spec.Style})");
             return recording;
         }
         catch (System.Exception ex)
@@ -803,15 +839,15 @@ public sealed partial class Bootstrap : Node3D
         }
     }
 
-    private void SaveBestLap(LapRecording recording)
+    private void SaveBestLap(LapRecording recording, VehicleSpec spec)
     {
         try
         {
-            var path = ProjectSettings.GlobalizePath(BestLapFile);
+            var path = ProjectSettings.GlobalizePath(BestLapFileOf(spec));
             var directory = System.IO.Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(directory)) System.IO.Directory.CreateDirectory(directory);
             System.IO.File.WriteAllBytes(path, recording.Serialize());
-            _savedBestLap = recording;
+            _bestLaps[spec.Style] = recording;
         }
         catch (System.Exception ex)
         {
@@ -950,7 +986,7 @@ public sealed partial class Bootstrap : Node3D
         if (_poseLog) LogPose();
         if (_session.Events.Contains(RaceEvent.NewBestLap) && _session.BestLap is not null && (!_attract || _saveBest))
         {
-            SaveBestLap(_session.BestLap);
+            SaveBestLap(_session.BestLap, _session.Car.Spec);
             if (_ghostView is null) BuildGhostView();
         }
         if (_session.Events.Contains(RaceEvent.Knocked)) ShowKnock();
@@ -1465,6 +1501,12 @@ public sealed partial class Bootstrap : Node3D
             if (_ghostView.Visible) _ghostView.AdvanceWheels(_ghostView.GlobalPosition.DistanceTo(previous), _session.GhostSteer);
         }
         _ghostView.Visible = visible;
+        if (_ghostLabel is not null && _session.BestLap is { } lap && !ReferenceEquals(lap, _ghostLabelLap))
+        {
+            _ghostLabelLap = lap;
+            var route = lap.Route switch { RouteKind.Stunt => "  STUNT", RouteKind.Speed => "  SPEED", _ => "" };
+            _ghostLabel.Text = $"BEST LAP {RaceSession.FormatLapTime(lap.Duration)}{route}";
+        }
     }
 
     /// <summary>

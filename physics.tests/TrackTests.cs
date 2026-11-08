@@ -142,6 +142,86 @@ public sealed class TrackTests
         Assert.True(taperIn >= 60f && taperOut >= 60f, "the taper at each end should be at least 60 m");
     }
 
+    /// <summary>
+    /// The banked 180 starts and stops its roll gently (0.73): from one frame interval to the next the roll rate changes
+    /// by under 0.05 degrees a metre and the outer edge's grade by under 1 %. The linear spirals of 0.34 started and
+    /// stopped the roll within a metre (0.43 degrees a metre at once) with an 8 % break in the outer edge's grade, a
+    /// jolt of 20-26 m/s^2 (the owner, 8 November 2026: "a part with an abrupt transition").
+    /// </summary>
+    [Fact]
+    public void Banked_180_rolls_in_and_out_without_a_step()
+    {
+        var track = OriginalInspiredTrack.Build();
+        var frames = track.Stunt.Frames;
+        var first = Enumerable.Range(0, frames.Count).First(i => frames[i].Kind == SegmentKind.BankedCurve);
+        var last = Enumerable.Range(0, frames.Count).Last(i => frames[i].Kind == SegmentKind.BankedCurve);
+        static float Roll(RoadFrame f) => MathF.Asin(MathUtil.Clamp(f.Lateral.Y, -1f, 1f)) * MathUtil.Rad2Deg;
+        // A left-hander: the outside is the right edge, the one the bank raises.
+        static float Outer(RoadFrame f) => (f.Origin + f.Lateral * f.HalfWidth).Y;
+        var worstRate = 0f;
+        var worstGrade = 0f;
+        var worstAt = 0f;
+        float? lastRate = null;
+        float? lastGrade = null;
+        for (var i = Math.Max(first - 3, 1); i <= Math.Min(last + 3, frames.Count - 1); i++)
+        {
+            var a = frames[i - 1];
+            var b = frames[i];
+            var span = MathF.Max(b.Distance - a.Distance, 1e-3f);
+            var rate = (Roll(b) - Roll(a)) / span;
+            var grade = (Outer(b) - Outer(a)) / span * 100f;
+            if (lastRate is { } r && MathF.Abs(rate - r) > worstRate) { worstRate = MathF.Abs(rate - r); worstAt = b.Distance; }
+            if (lastGrade is { } g) worstGrade = MathF.Max(worstGrade, MathF.Abs(grade - g));
+            lastRate = rate;
+            lastGrade = grade;
+        }
+        _out.WriteLine($"banked 180: roll-rate step at most {worstRate:F3} deg/m (at {worstAt:F0} m), outer-edge grade step at most {worstGrade:F2} %");
+        Assert.True(worstRate < 0.05f, $"the roll rate jumps by {worstRate:F3} deg/m at {worstAt:F0} m");
+        Assert.True(worstGrade < 1f, $"the outer edge's grade breaks by {worstGrade:F2} %");
+    }
+
+    /// <summary>
+    /// The ground keeps under every deck (0.73): the decks were no road to the terrain, so on the stunt route's low
+    /// return-leg bridge the ground came up through the asphalt and the meadow and a fence stood on it.
+    /// </summary>
+    [Fact]
+    public void Ground_stays_under_every_deck()
+    {
+        var track = OriginalInspiredTrack.Build();
+        var worst = float.NegativeInfinity;
+        var where = "";
+        foreach (var path in track.Paths)
+        {
+            foreach (var f in path.Frames)
+            {
+                if (f.Surface != SurfaceType.Road || f.Normal.Y <= 0.5f || f.Kind is not (SegmentKind.Overpass or SegmentKind.RampUp or SegmentKind.RampDown or SegmentKind.Loop)) continue;
+                for (var lateral = -f.HalfWidth; lateral <= f.HalfWidth + 1e-3f; lateral += 0.5f)
+                {
+                    var p = f.Origin + f.Lateral * lateral;
+                    var over = track.Terrain.Height(p.X, p.Z) - p.Y;
+                    if (over <= worst) continue;
+                    worst = over;
+                    where = $"{path.Kind} {f.Distance:F0} m, lateral {lateral:F1} m";
+                }
+            }
+        }
+        _out.WriteLine($"the ground comes at most {worst:F3} m from a deck's surface ({where})");
+        Assert.True(worst <= -0.05f, $"the ground stands {worst:F3} m from a deck's surface at {where}");
+    }
+
+    /// <summary>
+    /// The flower beds stand clear of every road (0.73): one, placed by distance after the banked 180, moved to 6.7 m
+    /// from the cutting's centre line when 0.34 lengthened the bend, its stems over the asphalt.
+    /// </summary>
+    [Fact]
+    public void Flower_beds_stay_clear_of_every_road()
+    {
+        var track = OriginalInspiredTrack.Build();
+        var nearest = track.Props.Where(p => p.Kind == PropKind.Flowers).Min(p => track.ClearanceFromRoads(p.Position));
+        _out.WriteLine($"the nearest flower bed is {nearest:F1} m from a road");
+        Assert.True(nearest >= 12.5f, $"a flower bed stands {nearest:F1} m from a road");
+    }
+
     /// <summary>The banked 180's inner edge stays at grade (0.35): the arc climbs with its bank, so the inside is not a ditch.</summary>
     [Fact]
     public void Banked_bend_keeps_its_inner_edge_at_grade()

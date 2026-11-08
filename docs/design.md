@@ -3640,6 +3640,37 @@ The puddles were the view's alone: a mirror-flat patch on the asphalt, under the
   the traffic's McLaren takes the road's colours (only the Ferraris keep their red); `Showroom.Create` keeps any car
   automation names, and the line-up steps from a withdrawn car to its neighbours.
 
+### A clear ghost, the banked 180's gentle ends, nothing on the low bridge (0.73.0)
+
+- **The ghost** (`CarView.MakeGhost`, `ghost_depth.gdshader`, `ghost.gdshader`, `Bootstrap`): each car keeps its own best
+  lap (`user://bestlap-<style>.bin`; the old shared `bestlap.bin`, of an unknown car, is left for the versions before and
+  no longer raced), so the ghost is the lap set in the car it is drawn as. A `Label3D` over it says what it is ("BEST LAP
+  1:26.8  STUNT"), hidden within 6 m. Its look: the cabin's own parts (`CabinMeshes`, the classification the traffic's
+  cabin trim used), the lamps' lights and any decal or particles go; every mesh gets a depth-only pass (render priority
+  -10, drawn 3 mm inside the surface) whose next pass is the visible skin (priority +10): a cool translucent shell with a
+  Fresnel outline, faded within 2.5-8 m of the eye. So each pixel shows only the ghost's front-most surface; before, one
+  translucent material over every part showed the seats, the cabin and the wheels' insides through each other. The
+  ghost's depth hides blended objects behind it (glass, particles): accepted.
+- **The banked 180** (`TrackBuilder.TransitionShare`, `OriginalInspiredTrack`): the spirals' share is a cosine-ramped
+  trapezoid of the roll rate (half-cosine ramps over the first and last quarter, point-symmetric, so each spiral still turns
+  half of an arc of its length), and the spirals are 100 m. Per frame interval the roll rate changes by at most 0.027
+  degrees a metre (0.426 with 0.34's linear share, at four places) and the outer edge's grade by at most 0.51 % (8.18 %);
+  the peak roll rate is 0.34's, 12.8 degrees a second at 108 km/h. The bend is 294 m (269), its exit 0.46 m from where
+  it was, so only the distances after it grow by 25 m. Measured in the research's probe (the game's physics, a held 108
+  km/h): 9-11 m/s^2 felt at the ends instead of 20-26, 1-2.6 degrees a second of roll instead of 15-20. Test:
+  `Banked_180_rolls_in_and_out_without_a_step`. The Unreal export (`--export-world`) has to be run again for its level.
+- **Decks in the terrain** (`TerrainField.DeckHeight`, the dressing builders): the frames of the bridges, the drawbridge's
+  ramps and the loop are indexed by cell; `Height` keeps the ground 0.12 m under the lowest deck over a point (the
+  stunt route's low return-leg bridge, 0-0.84 m over the plain for 60 of its 90 m, had the ground up through its asphalt
+  by 1.8 cm), and the meadow, the tufts, the fences (2 m margin) and the power poles (1 m) skip any point under a deck
+  less than 2.5 m over the ground: 5 fence bays, 19 meadow cards and 3 tufts had stood on that bridge. They also keep off
+  the railway's ballast (`Train.OffsetFromLine`; 4 fence bays crossed the line, 66 cards and 25 tufts stood on it). The
+  flower bed after the bend, 6.7 m from the cutting's centre line since 0.34, is 17.9 m clear with the longer bend; a test
+  holds every bed 12.5 m clear. Tests: `Ground_stays_under_every_deck`, `Flower_beds_stay_clear_of_every_road`. Method
+  and the placement replay: the 8 November track research.
+- **Licences**: at the owner's word of 8 November 2026 BlendSwap models marked Fan Art (no commercial use) and CC BY-SA
+  ones may be used, the restriction written in THIRD_PARTY.md (DEVAM.md, ISTERLER A8).
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

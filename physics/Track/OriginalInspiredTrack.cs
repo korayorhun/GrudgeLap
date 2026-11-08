@@ -128,10 +128,12 @@ public static class OriginalInspiredTrack
             .Curve(-25f, 150f)
             .Straight(40f)
             .Mark(MarkerKind.Sign, "90<")
-            // Transition spirals of 75 m either end (0.34): the bank and the curvature rise and fall together, so the
-            // exit onto the flat road is a two-and-a-half-second taper at 110 km/h, not a 25 m drop of the bank on a
-            // 62 m radius (see TrackBuilder.Curve). The bend is 75 m longer; the return leg still crosses its cutting.
-            .Curve(-180f, 62f, 32f, transition: 75f)
+            // Transition spirals either end (0.34: 75 m): the bank and the curvature rise and fall together, so the exit
+            // onto the flat road is a taper, not a 25 m drop of the bank on a 62 m radius (see TrackBuilder.Curve). Since
+            // 0.73 they are 100 m with the roll rate ramping in and out (TrackBuilder.TransitionShare): the linear ones
+            // started and stopped the roll within a metre. The peak roll rate is 0.34's (12.8 degrees a second at
+            // 108 km/h); the bend is 25 m longer, its exit 0.46 m from where it was; the return leg still crosses its cutting.
+            .Curve(-180f, 62f, 32f, transition: 100f)
             .Mark(MarkerKind.ReturnPoint, "stunt-4")
             .Curve(-50f, 145f)
             .Straight(6.5f)

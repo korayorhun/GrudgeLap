@@ -211,6 +211,8 @@ internal static class FoliageBuilder
         {
             var y = terrain.Height(x, z, out var roadWeight);
             if (roadWeight > 0.97f) return;   // on the deck itself
+            // Nor on or under a low deck, nor on the railway's ballast (0.73; MeadowBuilder).
+            if (terrain.DeckHeight(x, z, 1f) - y < 2.5f || track.Train?.OffsetFromLine(x, z) < 2.6f) return;
             if (InField(x, z)) return;
             foreach (var pad in track.Pads)
             {

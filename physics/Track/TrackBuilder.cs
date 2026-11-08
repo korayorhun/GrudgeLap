@@ -95,6 +95,9 @@ public sealed class TrackBuilder
     /// at 110 km/h instead of 40. The turn is still <paramref name="angleDeg"/> in all: each spiral turns half of what
     /// an arc of its length would, and the arc between them turns the rest, so the curve is <paramref name="transition"/>
     /// metres longer than the plain arc. A transition too long for the angle is shortened to what the angle allows.
+    /// Since 0.73 the share along a spiral is <see cref="TransitionShare"/>: the roll rate itself ramps in and out on a
+    /// half cosine, so the bank, its rate and its acceleration are continuous (0.34's share in proportion to the way
+    /// along started and stopped the roll within a metre).
     /// Without a transition the geometry is the one every curve had before, to the bit.
     /// </remarks>
     public TrackBuilder Curve(float angleDeg, float radius, float bankDeg = 0f, float heightDelta = 0f, float transition = 0f)
@@ -111,9 +114,9 @@ public sealed class TrackBuilder
         var startBank = _bank;
         var startY = _pos.Y;
         var ease = MathF.Min(25f, length * 0.3f);
-        // The share of the arc's curvature and bank at a distance into the curve: along a spiral in proportion to the
-        // way along it, one on the arc between them.
-        float Spiral(float at) => at < transition ? at / transition : at > length - transition ? (length - at) / transition : 1f;
+        // The share of the arc's curvature and bank at a distance into the curve: along a spiral TransitionShare of the
+        // way along it (in proportion to it until 0.73), one on the arc between them.
+        float Spiral(float at) => at < transition ? TransitionShare(at / transition) : at > length - transition ? TransitionShare((length - at) / transition) : 1f;
         for (var i = 0; i < n; i++)
         {
             var s = (i + 1) * step;
@@ -144,6 +147,29 @@ public sealed class TrackBuilder
         _bank = 0f;
         _pitch = 0f;
         return this;
+    }
+
+    /// <summary>The share of a spiral's ramps over which its roll rate builds up and dies away (TransitionShare).</summary>
+    private const float TransitionRamp = 0.25f;
+
+    /// <summary>
+    /// The share of the arc's curvature and bank at <paramref name="u"/> (0 to 1) of the way along a transition spiral
+    /// (0.73): the roll rate ramps up on a half cosine over the first quarter, holds, and ramps down over the last, so
+    /// the bank, its rate and its acceleration are continuous. The linear share of 0.34 started and stopped the roll
+    /// within one metre (0 to 13 degrees a second at once at 108 km/h) and broke the outer edge's grade by 8 % where the
+    /// centre line climbs with the bank, a jolt of 20-26 m/s^2 the owner felt as "a part with an abrupt transition"
+    /// (8 November 2026). The share is point-symmetric about (1/2, 1/2), so a spiral still turns half of what an arc
+    /// of its length would; the peak rate is the linear one's times 1/(1 - ramp).
+    /// </summary>
+    internal static float TransitionShare(float u)
+    {
+        const float r = TransitionRamp;
+        const float peak = 1f / (1f - r);
+        static float Rise(float t) => t < r
+            ? peak * (0.5f * t - r / (2f * MathF.PI) * MathF.Sin(MathF.PI * t / r))
+            : peak * (0.5f * r + (t - r));
+        u = MathUtil.Clamp01(u);
+        return u <= 0.5f ? Rise(u) : 1f - Rise(1f - u);
     }
 
     /// <summary>Bridge deck over another road: eased rise, flat deck for the middle third, eased descent.</summary>

@@ -36,6 +36,19 @@ public sealed class Train
     /// <summary>The stretch of the line the train is ever on, metres along <see cref="Direction"/> from the crossing: from the far end of the parked train to the locomotive at the end of its run.</summary>
     public float LineFrom => -_halfLength - (2 * Cars.Length - 1) * CarSpacing - CarLength;
     public float LineTo => _halfLength + CarLength;
+    /// <summary>
+    /// How far (x, z) lies across the line, beside the stretch the train is ever on; infinity beyond it (0.73): the
+    /// roadside dressing keeps off the ballast (four fence bays crossed the line and the meadow grew on it).
+    /// </summary>
+    public float OffsetFromLine(float x, float z)
+    {
+        var dx = x - Crossing.X;
+        var dz = z - Crossing.Z;
+        var along = dx * Direction.X + dz * Direction.Z;
+        if (along < LineFrom || along > LineTo) return float.PositiveInfinity;
+        return MathF.Abs(dx * Direction.Z - dz * Direction.X);
+    }
+
     /// <summary>Unit direction of travel.</summary>
     public Vector3 Direction { get; }
     public float Speed { get; }

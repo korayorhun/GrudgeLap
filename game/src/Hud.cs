@@ -242,7 +242,8 @@ internal sealed partial class Hud : Control
             Centred(font, "pad: stick steers   RT gas   LT brake   RB / LB shift (here: gearbox)   X clutch   A start   B skip   Y camera", y + 212f, 14, grey);
             var pulse = 0.7f + 0.3f * MathF.Sin(_flash * 4f);
             Centred(font, "PRESS ENTER OR A TO START", y + 258f, 38, new Color(1f, 0.85f, 0.3f, pulse));
-            Centred(font, s.GrudgeMatch ? $"grudge match: the ghost of your best lap, {RaceSession.FormatLapTime(s.BestLapTime)}, is waiting" : "finish a lap and its ghost will race you next time", y + 312f, 18, new Color(0.6f, 0.9f, 1f));
+            // Each car its own best lap and ghost (0.73).
+            Centred(font, s.GrudgeMatch ? $"grudge match: your best lap in this car, {RaceSession.FormatLapTime(s.BestLapTime)}, races you as a ghost" : "finish a lap in this car and its ghost will race you next time", y + 312f, 18, new Color(0.6f, 0.9f, 1f));
             Centred(font, $"v{Updater.CurrentVersionText}   ESC menu and quit   F6 fps   F7 graphics   F8 1989 mode   F10 check for updates   F11 full screen", y + 346f, 15, grey);
         }
         else if (s.Phase == SessionPhase.Finished)

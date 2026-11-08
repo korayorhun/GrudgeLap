@@ -521,19 +521,26 @@ internal sealed partial class CarView : Node3D
     public void MakeGhost()
     {
         SetViewpoint(false);
-        var material = new StandardMaterial3D
+        // The car's outer shell only (0.73): the cabin's own parts, the lamps' lights and any decal or particles go,
+        // and the shell is drawn in two passes, its depth first (ghost_depth.gdshader) and then a translucent skin with
+        // a bright outline (ghost.gdshader), so that only its front-most surface shows. Until then one translucent
+        // material lay over every part, the cabin and the wheels' insides included, and they showed through each other
+        // (the owner, 8 November 2026: "random things seem to show").
+        foreach (var mesh in CabinMeshes()) mesh.Visible = false;
+        var skin = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/ghost.gdshader"), RenderPriority = 10 };
+        var depth = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/ghost_depth.gdshader"), RenderPriority = -10, NextPass = skin };
+        foreach (var node in Descendants(this))
         {
-            AlbedoColor = new Color(0.55f, 0.85f, 1.0f, 0.30f),
-            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-            EmissionEnabled = true,
-            Emission = new Color(0.25f, 0.55f, 0.85f),
-            EmissionEnergyMultiplier = 0.9f,
-            Roughness = 0.4f,
-        };
-        foreach (var mesh in Descendants(this).OfType<MeshInstance3D>())
-        {
-            mesh.MaterialOverride = material;
-            mesh.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+            switch (node)
+            {
+                case MeshInstance3D mesh:
+                    mesh.MaterialOverride = depth;
+                    mesh.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+                    break;
+                case Node3D other when other is Light3D or Decal or GpuParticles3D or CpuParticles3D:
+                    other.Visible = false;
+                    break;
+            }
         }
         foreach (var node in _cockpitOnly) node.Visible = false;
     }

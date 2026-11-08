@@ -133,6 +133,9 @@ internal static class MeadowBuilder
                             var y = terrain.Height(p.X, p.Z, out var roadWeight);
                             // Not on a road (this one's or another's) nor its stones, nor in a field or on a pad.
                             if (roadWeight > 0.9f || Blocked(p.X, p.Z)) continue;
+                            // Nor on a deck less than 2.5 m over the ground, nor on the railway's ballast (0.73: the stunt
+                            // route's low return-leg bridge carried meadow cards on its asphalt). NaN, no deck, compares false.
+                            if (terrain.DeckHeight(p.X, p.Z, 1f) - y < 2.5f || track.Train?.OffsetFromLine(p.X, p.Z) < 2.6f) continue;
                             var scale = 0.55f + 0.6f * (float)rng.NextDouble();
                             var basis = new Basis(Vector3.Up, (float)rng.NextDouble() * MathF.Tau).Scaled(new Vector3(scale, scale * (0.75f + 0.5f * (float)rng.NextDouble()), scale));
                             transforms.Add(new Transform3D(basis, Convert.ToGodot(new SN.Vector3(p.X, y - 0.02f, p.Z))));
