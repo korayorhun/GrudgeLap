@@ -90,8 +90,9 @@ internal static class FenceBuilder
     /// <summary>The fences along every road of <paramref name="track"/>; an empty node for the export.</summary>
     public static Node3D Build(TrackGeometry track)
     {
+        // Built for the world export too (0.76): WorldExport carries the bays as instances of one template mesh, which the
+        // Unreal level places (until then the export left the fences out).
         var root = new Node3D { Name = "Fences" };
-        if (WorldBuilder.ExportMode) return root;
         var terrain = track.Terrain;
         var obstacles = track.Props
             .Where(p => p.Kind is PropKind.Barn or PropKind.House or PropKind.Shop or PropKind.Hut or PropKind.Tower or PropKind.Pier or PropKind.Pump or PropKind.Gate or PropKind.Train)

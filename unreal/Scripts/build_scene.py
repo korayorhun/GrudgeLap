@@ -1720,6 +1720,115 @@ def transform(position, yaw_degrees, scale, sink=0.0):
     return unreal.Transform(location=location, rotation=unreal.Rotator(0.0, 0.0, yaw_degrees), scale=unreal.Vector(scale, scale, scale))
 
 
+def godot_transform(t):
+    """An instance transform the export wrote (Godot's basis columns and origin, metres) as Unreal's: the importer maps
+    Godot's (x, y, z) to Unreal's (x, z, y), so the basis is conjugated by that swap and the origin swapped and scaled.
+    Plain Python: the editor's Python has no numpy."""
+    columns = [(t[0], t[1], t[2]), (t[3], t[4], t[5]), (t[6], t[7], t[8])]
+    # Swap y and z in each column, then swap the second and third columns.
+    swapped = [(c[0], c[2], c[1]) for c in columns]
+    axes = [swapped[0], swapped[2], swapped[1]]
+    scale = [math.sqrt(sum(v * v for v in a)) for a in axes]
+    unit = [tuple(v / max(s, 1e-9) for v in a) for a, s in zip(axes, scale)]
+    rotation = unreal.MathLibrary.make_rotation_from_axes(unreal.Vector(*unit[0]), unreal.Vector(*unit[1]), unreal.Vector(*unit[2]))
+    origin = (t[9] * 100.0, t[11] * 100.0, t[10] * 100.0)
+    return unreal.Transform(unreal.Vector(*origin), rotation, unreal.Vector(*scale))
+
+
+def place_instanced(placements, actors):
+    """The fences, the power poles and the marker posts (0.76): the export carries each kind as placements of one template
+    mesh (Instanced-<n>, WorldExport); they are instanced here with that mesh and its material, the marker posts'
+    reflectors in their amber (right) and white (left), and each pair of neighbouring poles strung with the three wires
+    the game draws, parabolas of 0.9 m sag between the insulators (PowerLineBuilder: 9.72 m up, 1.05 m apart), out of
+    one-metre pieces of the export's Instanced-Wire. The templates go once placed."""
+    entries = placements.get("instanced", [])
+    templates = {}
+    for label, actor in actors.items():
+        if label.startswith("Instanced-"):
+            components = actor.get_components_by_class(unreal.StaticMeshComponent)
+            if components:
+                c = components[0]
+                templates[label] = (c.get_editor_property("static_mesh"), [c.get_material(i) for i in range(c.get_num_materials())])
+    counts = {}
+    tints = {}
+
+    def tinted(material, colour, key):
+        if key not in tints:
+            instance = asset_tools.create_asset(f"MI_Reflector_{key}", f"{GAME}/Materials", unreal.MaterialInstanceConstant,
+                                                unreal.MaterialInstanceConstantFactoryNew())
+            mel.set_material_instance_parent(instance, material)
+            try:
+                mel.set_material_instance_vector_parameter_value(instance, "BaseColorFactor", unreal.LinearColor(*colour, 1.0))
+            except Exception:
+                pass
+            mel.update_material_instance(instance)
+            eal.save_loaded_asset(instance)
+            tints[key] = instance
+        return tints[key]
+
+    for n, entry in enumerate(entries):
+        mesh, materials = templates.get(entry["mesh"], (None, None))
+        if mesh is None:
+            continue
+        group = entry["group"]
+        transforms = [godot_transform(t) for t in entry["transforms"]]
+        colours = entry.get("colours")
+        sets = [(transforms, None)]
+        if colours:
+            amber = [tr for tr, c in zip(transforms, colours) if c[1] < 0.8]
+            white = [tr for tr, c in zip(transforms, colours) if c[1] >= 0.8]
+            sets = [(amber, ("amber", (1.0, 0.31, 0.007))), (white, ("white", (0.89, 0.89, 0.89)))]
+        for part, (subset, tint) in enumerate(sets):
+            if not subset:
+                continue
+            actor = instanced(f"{group}{n}_{part}", mesh, subset, cull=70000 if group != "PowerLines" else 250000,
+                              ray_traced=group == "PowerLines")
+            for component in actor.get_components_by_class(unreal.InstancedStaticMeshComponent):
+                for slot, material in enumerate(materials):
+                    if material is not None:
+                        component.set_material(slot, tinted(material, tint[1], tint[0]) if tint else material)
+            counts[group] = counts.get(group, 0) + len(subset)
+
+    # The wires between neighbouring poles, in the order the export lists them along each line.
+    wire = templates.get("Instanced-Wire")
+    poles = [t for entry in entries if entry["group"] == "PowerLines" for t in entry["transforms"]]
+    pieces = []
+    if wire is not None and poles:
+        def add(u, v, s=1.0):
+            return [x + y * s for x, y in zip(u, v)]
+
+        for a, b in zip(poles, poles[1:]):
+            if math.dist(a[9:12], b[9:12]) > 55.0 * 1.5:
+                continue
+            for across in (-1.05, 0.0, 1.05):
+                # The insulator's top in each pole's frame: x along the line, y up, z across (Godot's).
+                ends = [add(add(list(t[9:12]), t[3:6], 9.72), t[6:9], across) for t in (a, b)]
+                points = []
+                for i in range(17):
+                    f = i / 16.0
+                    p = add(ends[0], [e1 - e0 for e0, e1 in zip(ends[0], ends[1])], f)
+                    p[1] -= 0.9 * 4.0 * f * (1.0 - f)
+                    points.append(p)
+                for p0, p1 in zip(points, points[1:]):
+                    u0 = (p0[0] * 100.0, p0[2] * 100.0, p0[1] * 100.0)
+                    u1 = (p1[0] * 100.0, p1[2] * 100.0, p1[1] * 100.0)
+                    direction = unreal.Vector(u1[0] - u0[0], u1[1] - u0[1], u1[2] - u0[2])
+                    length = math.dist(u0, u1) / 100.0
+                    middle = unreal.Vector((u0[0] + u1[0]) / 2.0, (u0[1] + u1[1]) / 2.0, (u0[2] + u1[2]) / 2.0)
+                    # The template is a metre of wire along Godot's +Y, which is Unreal's +Z.
+                    rotation = unreal.MathLibrary.make_rot_from_z(direction)
+                    pieces.append(unreal.Transform(middle, rotation, unreal.Vector(1.0, 1.0, length)))
+        if pieces:
+            actor = instanced("PowerLineWires", wire[0], pieces, cull=250000, shadows=False, ray_traced=False)
+            for component in actor.get_components_by_class(unreal.InstancedStaticMeshComponent):
+                for slot, material in enumerate(wire[1]):
+                    if material is not None:
+                        component.set_material(slot, material)
+    for label in [label for label in actors if label.startswith("Instanced-")]:
+        destroy_with_children(actors[label])
+    log(f"instanced dressing: {counts}, {len(pieces)} wire pieces")
+
+
 def scatter(placements, extra, actors):
     foliage = pipeline("/Interchange/Pipelines/DefaultGLTFAssetsPipeline", "Foliage",
                        {"combine_static_meshes_behavior": unreal.InterchangeCombineStaticMeshesBehavior.DO_NOT_COMBINE,
@@ -2172,6 +2281,7 @@ def main():
     rig_world(actors)
     place_game(car, game_materials(materials["paint"]))
     scatter(placements, extra, actors)
+    place_instanced(placements, actors)
     road_decals(placements)
     prepare_materials()
     shots = cameras(placements, extra)

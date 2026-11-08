@@ -23,6 +23,8 @@ internal static class WorldExport
         var forest = new List<float[]>();
         var forestMeshes = new SortedDictionary<int, Mesh>();
         var props = new List<object>();
+        var instanced = new List<object>();
+        var templates = new List<(string Name, Mesh Mesh, Material? Material)>();
         foreach (var child in root.GetChildren())
         {
             // The clouds are a sheet for this engine's sky; the other builds its own.
@@ -34,6 +36,29 @@ internal static class WorldExport
             {
                 // The wood's trees go out as placements of their variant meshes (Forest-<band>-<variant>), the grass as tufts.
                 var multimeshName = multimesh.Name.ToString();
+                // The fences, the power poles and the marker posts with their reflectors (0.76) go out as placements of a
+                // template mesh each, which the file carries once (Instanced-<n>); until then they went out as grass tufts.
+                if (InstancedGroup(multimesh, node) is { } group && multimesh.Multimesh.Mesh is { } instancedMesh)
+                {
+                    // One template per mesh and material: the fence's sixty-odd chunks share one bay.
+                    var known = templates.FindIndex(e => e.Mesh == instancedMesh && e.Material == multimesh.MaterialOverride);
+                    var template = known >= 0 ? templates[known].Name : $"Instanced-{templates.Count}";
+                    if (known < 0) templates.Add((template, instancedMesh, multimesh.MaterialOverride));
+                    var transforms = new List<float[]>();
+                    var colours = multimesh.Multimesh.UseColors ? new List<float[]>() : null;
+                    for (var i = 0; i < multimesh.Multimesh.InstanceCount; i++)
+                    {
+                        var t = multimesh.GlobalTransform * multimesh.Multimesh.GetInstanceTransform(i);
+                        transforms.Add([t.Basis.X.X, t.Basis.X.Y, t.Basis.X.Z, t.Basis.Y.X, t.Basis.Y.Y, t.Basis.Y.Z, t.Basis.Z.X, t.Basis.Z.Y, t.Basis.Z.Z, t.Origin.X, t.Origin.Y, t.Origin.Z]);
+                        if (colours is not null)
+                        {
+                            var c = multimesh.Multimesh.GetInstanceColor(i);
+                            colours.Add([c.R, c.G, c.B]);
+                        }
+                    }
+                    instanced.Add(new { group, name = multimeshName, mesh = template, transforms, colours });
+                    continue;
+                }
                 var isForest = multimeshName.StartsWith("Forest-", StringComparison.Ordinal);
                 var variant = isForest ? int.Parse(multimeshName[(multimeshName.LastIndexOf('-') + 1)..], System.Globalization.CultureInfo.InvariantCulture) : 0;
                 if (isForest && multimesh.Multimesh.Mesh is { } treeMesh) forestMeshes.TryAdd(variant, treeMesh);
@@ -64,6 +89,19 @@ internal static class WorldExport
 
         // One of each tree of the wood travels in the file, named for the placements to find (ForestVariant-<n>).
         foreach (var (variant, mesh) in forestMeshes) scene.AddChild(new MeshInstance3D { Mesh = mesh, Name = $"ForestVariant-{variant}" });
+        // And one of each instanced piece of dressing, in its multimesh's material (Instanced-<n>, 0.76), and a metre of
+        // power-line wire along +Y (Instanced-Wire) for the other engine to string between the poles: the game's own wires
+        // are ribbons its wire shader turns to the camera, which glTF cannot carry.
+        foreach (var (name, mesh, material) in templates) scene.AddChild(new MeshInstance3D { Mesh = mesh, Name = name, MaterialOverride = material });
+        if (templates.Count > 0)
+        {
+            scene.AddChild(new MeshInstance3D
+            {
+                Name = "Instanced-Wire",
+                Mesh = new CylinderMesh { TopRadius = 0.012f, BottomRadius = 0.012f, Height = 1f, RadialSegments = 6, Rings = 1 },
+                MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(0.12f, 0.12f, 0.13f), Metallic = 0.6f, Roughness = 0.5f },
+            });
+        }
 
         // The roads' centrelines every 8 m (0.13): position, tangent and half width of each frame on earth, so the other
         // engine can scatter its own wear (cracks, patches, oil, skid marks) along them.
@@ -99,6 +137,7 @@ internal static class WorldExport
             grass,
             forest,
             roads,
+            instanced,
         };
         System.IO.File.WriteAllText(System.IO.Path.ChangeExtension(path, ".json"), JsonSerializer.Serialize(placement));
         GD.Print(error == Error.Ok ? $"world exported: {path} ({scene.GetChildCount()} nodes, {props.Count} props, {grass.Count} grass tufts, {forest.Count} trees of the wood)" : $"world export failed: {error}");
@@ -107,6 +146,20 @@ internal static class WorldExport
     }
 
     private static float[] Vec(Vector3 v) => [v.X, v.Y, v.Z];
+
+    /// <summary>The kind of instanced dressing a multimesh is ("Fences", "PowerLines", "MarkerPosts"), from its ancestors' names
+    /// up to the top-level node; null for anything else (the grass, the meadow and the wood go out as before).</summary>
+    private static string? InstancedGroup(Node multimesh, Node top)
+    {
+        for (var n = multimesh.GetParent(); n is not null; n = n.GetParent())
+        {
+            var name = n.Name.ToString();
+            if (name is "Fences" or "PowerLines") return name;
+            if (name.StartsWith("MarkerPosts-", StringComparison.Ordinal)) return "MarkerPosts";
+            if (n == top) break;
+        }
+        return null;
+    }
 
     private static IEnumerable<Node> Descendants(Node node)
     {

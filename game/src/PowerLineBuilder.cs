@@ -88,8 +88,9 @@ internal static class PowerLineBuilder
     /// <summary>The line along every road of <paramref name="track"/>; an empty node for the export.</summary>
     public static Node3D Build(TrackGeometry track)
     {
+        // Built for the world export too (0.76): WorldExport carries the poles as instances of one template mesh; the wires,
+        // ribbons the wire shader turns to the camera, stay out of the export and the other engine strings its own.
         var root = new Node3D { Name = "PowerLines" };
-        if (WorldBuilder.ExportMode) return root;
         var terrain = track.Terrain;
         var obstacles = track.Props
             .Where(p => p.Kind is PropKind.Barn or PropKind.House or PropKind.Shop or PropKind.Hut or PropKind.Tower or PropKind.Pier or PropKind.Pump or PropKind.Gate or PropKind.Train or PropKind.Tree)
@@ -198,7 +199,7 @@ internal static class PowerLineBuilder
             for (var i = 0; i < poles.Count; i++) multi.SetInstanceTransform(i, poles[i]);
             root.AddChild(new MultiMeshInstance3D { Multimesh = multi, MaterialOverride = Wood, Name = "Poles" });
         }
-        if (wireCount > 0) root.AddChild(new MeshInstance3D { Mesh = wires.Commit(), MaterialOverride = Wire, Name = "Wires", CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
+        if (wireCount > 0 && !WorldBuilder.ExportMode) root.AddChild(new MeshInstance3D { Mesh = wires.Commit(), MaterialOverride = Wire, Name = "Wires", CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
         if (WorldBuilder.PerfLog) GD.Print($"power lines: {poles.Count} poles, {wireCount} spans");
         return root;
     }
