@@ -53,6 +53,18 @@ public sealed partial class Bootstrap : Node3D
     // Over the ghost: the lap it drives (0.73, BuildGhostView, SyncGhost).
     private Label3D? _ghostLabel;
     private LapRecording? _ghostLabelLap;
+    // The label as 0.73 drew it: a FixedSize em of 0.027 m at 1 m, 2-2.7 % of the view's height.
+    private const float GhostLabelPixelSize = 0.0009f;
+    private const int GhostLabelFontSize = 30;
+    private const int GhostLabelOutline = 10;
+    /// <summary>
+    /// The least em of the ghost's label in pixels of the 3D picture (0.74, FitGhostLabel). The 1989 look renders the 3D
+    /// picture at 0.32 of the window: at 900 lines the label's em came to 5.8-7.6 of the 288, its 30-pixel glyphs shrunk
+    /// to capitals 4-5 pixels tall under a 10-pixel outline, and its time could not be read. Ten is no more than the em
+    /// of the normal look on any window of 720 lines or more, Low's three quarters included (10.0 at the camera's widest
+    /// 72 degrees), so there nothing changes; nine left a time over the 1989 look's bright fields hard to make out.
+    /// </summary>
+    private const int GhostLabelLeastEm = 10;
     private readonly List<CarView> _droneViews = new();
     private int _droneSerial;   // drones drawn so far, over the credits: the next one's car and colour (BuildDroneViews)
     private readonly Dictionary<int, Node3D> _propNodes = new();
@@ -665,7 +677,7 @@ public sealed partial class Bootstrap : Node3D
         _ghostView = null;
         _ghostLabel = null;
         _ghostLabelLap = null;
-        if (!_session.GrudgeMatch) return;
+        if (!_session.GrudgeMatch || _noGhost) return;
         _ghostView = CarView.Create(VehicleSpec.Catalogue[_carIndex]);
         _ghostView.Name = "Ghost";
         _ghostView.MakeGhost();
@@ -676,9 +688,9 @@ public sealed partial class Bootstrap : Node3D
         {
             Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
             FixedSize = true,
-            PixelSize = 0.0009f,
-            FontSize = 30,
-            OutlineSize = 10,
+            PixelSize = GhostLabelPixelSize,
+            FontSize = GhostLabelFontSize,
+            OutlineSize = GhostLabelOutline,
             Modulate = new Color(0.75f, 0.94f, 1f, 0.9f),
             OutlineModulate = new Color(0f, 0.08f, 0.15f, 0.7f),
             Shaded = false,
@@ -813,6 +825,13 @@ public sealed partial class Bootstrap : Node3D
         return failures == 0;
     }
 
+    /// <summary>
+    /// Whether a lap of this run may become the car's best lap, its ghost and its file (0.74, RaceSession.KeepsBestLaps): the
+    /// attract driver's only under --save-best, and none under --no-ghost, a run that neither reads the car's best lap nor
+    /// races one. Until 0.74 the session took such laps for records all the same (see SaveBestLap and SyncGhost).
+    /// </summary>
+    private bool KeepsBestLaps => !_noGhost && (!_attract || _saveBest);
+
     /// <summary>The car's best lap, the ghost it races: read from its file once, then kept.</summary>
     private LapRecording? SavedBestLap(VehicleSpec spec)
     {
@@ -841,6 +860,9 @@ public sealed partial class Bootstrap : Node3D
 
     private void SaveBestLap(LapRecording recording, VehicleSpec spec)
     {
+        // Never over a faster lap (0.74): the writer trusted the session's NEW RECORD, and a session that had not read the
+        // file (--no-ghost until 0.74) took any first lap for one and wrote a 1:35.0 over a 1:20.0.
+        if (SavedBestLap(spec) is { } saved && saved.Duration <= recording.Duration) return;
         try
         {
             var path = ProjectSettings.GlobalizePath(BestLapFileOf(spec));
@@ -982,13 +1004,11 @@ public sealed partial class Bootstrap : Node3D
         else if (_session.Phase == SessionPhase.Driving && _session.OffRoad && Input.IsActionJustPressed(InputSetup.Abort)) _session.Abort();
 
         _session.Car.Wind = PrairieWind(dt);
+        // Set every frame: F9 hands the wheel to the attract driver and back in the middle of a credit.
+        _session.KeepsBestLaps = KeepsBestLaps;
         _session.Step(input, dt);
         if (_poseLog) LogPose();
-        if (_session.Events.Contains(RaceEvent.NewBestLap) && _session.BestLap is not null && (!_attract || _saveBest))
-        {
-            SaveBestLap(_session.BestLap, _session.Car.Spec);
-            if (_ghostView is null) BuildGhostView();
-        }
+        if (_session.Events.Contains(RaceEvent.NewBestLap) && _session.BestLap is { } best) SaveBestLap(best, _session.Car.Spec);
         if (_session.Events.Contains(RaceEvent.Knocked)) ShowKnock();
         if (_session.Events.Contains(RaceEvent.SignHit) && _propNodes.TryGetValue(_session.LastSoftHit, out var sign))
         {
@@ -1492,6 +1512,9 @@ public sealed partial class Bootstrap : Node3D
 
     private void SyncGhost()
     {
+        // The ghost the session races is drawn, whatever gave it one (0.74): until then the view was built only where a new
+        // best lap was saved, and the attract driver's unsaved lap was raced with the HUD saying GHOST and nothing drawn.
+        if (_ghostView is null && _session.GrudgeMatch && !_noGhost) BuildGhostView();
         if (_ghostView is null) return;
         var visible = _session.GhostVisible && _session.Phase == SessionPhase.Driving;
         if (visible)
@@ -1507,6 +1530,26 @@ public sealed partial class Bootstrap : Node3D
             var route = lap.Route switch { RouteKind.Stunt => "  STUNT", RouteKind.Speed => "  SPEED", _ => "" };
             _ghostLabel.Text = $"BEST LAP {RaceSession.FormatLapTime(lap.Duration)}{route}";
         }
+        if (visible) FitGhostLabel();
+    }
+
+    /// <summary>
+    /// Holds the ghost's label at an em of at least <see cref="GhostLabelLeastEm"/> pixels of the 3D picture (0.74). The
+    /// picture has the window's lines times Scaling3DScale (the 1989 look's 0.32, Low's 0.75, 1080 lines when FSR scales
+    /// up a tall window), and a FixedSize label keeps its share of the view's height (its em at 1 m over the view's height
+    /// at 1 m) whatever that is. Where that comes to the least em or more, the label is as 0.73 drew it; under it, its
+    /// glyphs are rasterised at the size they are shown, one texel to a pixel of the picture (shrunk from 30 they broke
+    /// up), the outline kept in proportion, and the label made that big.
+    /// </summary>
+    private void FitGhostLabel()
+    {
+        if (_ghostLabel is null || GetViewport().GetCamera3D() is not { } camera) return;
+        var lines = GetWindow().Size.Y * GetViewport().Scaling3DScale;
+        var viewAtOneMetre = 2f * MathF.Tan(Mathf.DegToRad(camera.Fov) * 0.5f);
+        var small = GhostLabelFontSize * GhostLabelPixelSize / viewAtOneMetre * lines < GhostLabelLeastEm;
+        _ghostLabel.FontSize = small ? GhostLabelLeastEm : GhostLabelFontSize;
+        _ghostLabel.OutlineSize = small ? GhostLabelLeastEm * GhostLabelOutline / GhostLabelFontSize : GhostLabelOutline;
+        _ghostLabel.PixelSize = small ? viewAtOneMetre / lines : GhostLabelPixelSize;
     }
 
     /// <summary>

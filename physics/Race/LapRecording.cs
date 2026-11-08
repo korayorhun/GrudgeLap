@@ -9,6 +9,7 @@ namespace GrudgeLap.Physics.Race;
 /// </summary>
 public sealed class LapRecording
 {
+    /// <summary>Samples a second on average (<see cref="RaceSession"/>.RecordLap); each one carries its own lap time, which is what <see cref="TryPose"/> goes by.</summary>
     public const float SampleHz = 20f;
     private const int Magic = 0x31474C47; // "GLG1"
 
@@ -26,29 +27,51 @@ public sealed class LapRecording
     public IReadOnlyList<PoseSample> Samples => _samples;
 
     /// <summary>Pose at a time into the lap; false once the recording has ended.</summary>
+    /// <remarks>
+    /// The samples are looked up by the lap time each one carries (0.74), never by their place in the list: until 0.74 the
+    /// n-th sample was taken to be n / <see cref="SampleHz"/> seconds in, but a lap recorded at 72 fps (a 144 Hz screen)
+    /// has one every 0.0556 s and at 30 fps one every 0.0667 s, so its ghost ran ahead of the lap it stood for and sat on
+    /// the line for the rest of it (a 0.72 lap of 86.8 s reached its last sample 78.0 s in). Looked up by time, the files
+    /// saved before replay right as they are.
+    /// </remarks>
     public bool TryPose(float lapTime, out Vector3 position, out Quaternion orientation, out float steer)
     {
         position = default;
         orientation = Quaternion.Identity;
         steer = 0f;
         if (_samples.Count == 0 || lapTime < 0f || lapTime > Duration) return false;
-        var index = (int)(lapTime * SampleHz);
-        if (index >= _samples.Count - 1)
+        var next = FirstSampleAfter(lapTime);
+        if (next == 0 || next == _samples.Count)
         {
-            var last = _samples[^1];
-            position = last.Position;
-            orientation = last.Orientation;
-            steer = last.SteerAngle;
+            // Before the first sample (a file of 0.73 or before starts a twentieth of a second or so in) or after the last one.
+            var held = next == 0 ? _samples[0] : _samples[^1];
+            position = held.Position;
+            orientation = held.Orientation;
+            steer = held.SteerAngle;
             return true;
         }
-        var a = _samples[index];
-        var b = _samples[index + 1];
+        var a = _samples[next - 1];
+        var b = _samples[next];
         var span = MathF.Max(b.Time - a.Time, 1e-4f);
         var t = MathUtil.Clamp01((lapTime - a.Time) / span);
         position = Vector3.Lerp(a.Position, b.Position, t);
         orientation = Quaternion.Normalize(Quaternion.Slerp(a.Orientation, b.Orientation, t));
         steer = MathUtil.Lerp(a.SteerAngle, b.SteerAngle, t);
         return true;
+    }
+
+    /// <summary>Index of the first sample later than <paramref name="lapTime"/>, or the count when none is; the times only grow along a lap.</summary>
+    private int FirstSampleAfter(float lapTime)
+    {
+        var low = 0;
+        var high = _samples.Count;
+        while (low < high)
+        {
+            var middle = (low + high) >>> 1;
+            if (_samples[middle].Time <= lapTime) low = middle + 1;
+            else high = middle;
+        }
+        return low;
     }
 
     public byte[] Serialize()

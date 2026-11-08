@@ -3671,6 +3671,34 @@ The puddles were the view's alone: a mirror-flat patch on the asphalt, under the
 - **Licences**: at the owner's word of 8 November 2026 BlendSwap models marked Fan Art (no commercial use) and CC BY-SA
   ones may be used, the restriction written in THIRD_PARTY.md (DEVAM.md, ISTERLER A8).
 
+### The Godot cars in the Unreal level, ray tracing, the smoke and the ghost's clock (0.74.0)
+
+- **The owner's decision (8 November 2026):** photorealism comes first, so Unreal Engine 5.8 becomes the main engine, step
+  by step; the C# simulation stays as it is (the NativeAOT DLL), Godot keeps generating and exporting the world and keeps
+  being released. The evaluation behind it: C:\temp\log\grudgelap\v74\engine\ (Unreal 5.8 has hardware Lumen, DLSS
+  RR and FG, MegaLights, Substrate; Godot 4.7/4.8 has no DLSS or hardware ray-traced effects; Unity HDRP gets no new
+  features).
+- **The Unreal cars** (`unreal/Scripts/prepare_model_car.py`): the Godot game's prepared model replaces the export's
+  lofted car whole, cabin included (`ModelBody`, `Wheel0..3/Spin`, `Steering/Spin`, `Eye`, `Dials`, `RearMirror`); the
+  meshes of each group are baked into one per material (a 205 from 160 actors to 7: the render thread went from 19.3 to
+  16.5 ms a frame with eight drones), unreachable nodes are pruned (left in, their names made the importer suffix the
+  model's), the binary chunk is compacted. The cockpit camera starts at the model's eye; the paint is a clear coat over the
+  model's colour or texture. Details: `unreal/README.md`.
+- **Hardware ray tracing and DLSS Ray Reconstruction** (Unreal): Lumen traces the geometry and lights reflections at the hit
+  point; on an RTX card the game turns on DLSS-RR through the plugin's `UDLSSLibrary` (`-GlpNoRR` to compare); the grass and
+  the bushes stay out of the ray-tracing scene. Measured at 1080p on the RTX 5060 Laptop: 16.5-17 ms a frame (DLSS with RR
+  3.1 ms, Lumen reflections 2.6 ms); the render thread is the limit (5-7 ms waiting on visibility: 230 000 grass instances).
+- **The Unreal verge** (`M_Shoulder`): the Godot verge's painted stones (shoulder.gdshader, P12) in one Custom node; its
+  colours are the shader's sRGB constants made linear (taken as linear they read pale yellow).
+- **The smoke out of the cabin** (`WheelDust`): the puffs fade within 1.5-3.5 m of the eye (PixelAlpha distance fade); a
+  sliding rear tyre's 3 m puffs had reached into the cabin.
+- **The ghost on the lap clock** (`LapRecording.TryPose`, `RaceSession.RecordLap/OpenLap/RecordedLap`): samples are found
+  by their stored time (binary search), the recorder keeps its leftover time, a lap opens with a sample at 0 s and closes
+  with one at its own time; the file format is unchanged, so old best laps replay at their own times. `KeepsBestLaps`:
+  attract laps without `--save-best` and laps under `--no-ghost` are no record and never overwrite a file;
+  `FormatLapTime` carries a rounded 60.0; `FitGhostLabel` keeps the label at least 10 pixels of the 3D picture (the 1989
+  look). Tests: `physics.tests/GhostTests.cs` (312 pass).
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

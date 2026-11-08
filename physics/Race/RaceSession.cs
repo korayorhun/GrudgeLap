@@ -134,6 +134,13 @@ public sealed partial class RaceSession
     public float GhostSteer { get; private set; }
     /// <summary>True once the lap in progress has a ghost to race.</summary>
     public bool GrudgeMatch => BestLap is not null;
+    /// <summary>
+    /// Whether a lap faster than the best becomes the best lap: the ghost, the NEW RECORD and its fanfare (on by default).
+    /// Off while a lap is driven that will not be kept (0.74): the game's attract driver without --save-best, any run
+    /// under --no-ghost. Until 0.74 such a lap became the ghost for the rest of the credit unsaved: over a saved lap it
+    /// took the car's own ghost and its BEST LAP label, and with none the HUD said GHOST over a ghost that was never drawn.
+    /// </summary>
+    public bool KeepsBestLaps { get; set; } = true;
     /// <summary>Indices into <c>Track.Props</c> of the signs the car has knocked over this credit.</summary>
     public IReadOnlySet<int> KnockedSigns => _knockedSigns;
     /// <summary>Index of the soft prop hit during the last step (cow or sign), or -1.</summary>
@@ -335,8 +342,35 @@ public sealed partial class RaceSession
         if (!_lapOpened) return;
         _lapSampleAccumulator += dt;
         if (_lapSampleAccumulator < 1f / LapRecording.SampleHz) return;
+        // The remainder is kept (0.74), as RecordReplay's since 0.35: zeroed, a sample came every fourth frame at 72 fps
+        // (0.0556 s apart) and every second one at 30 (0.0667 s), so a lap was recorded at 18 or 15 samples a second
+        // and the n-th sample, which the versions before 0.74 read as n / 20 s into the lap, lay further on.
+        _lapSampleAccumulator -= 1f / LapRecording.SampleHz;
+        AddLapSample();
+    }
+
+    private void AddLapSample() => _lapSamples.Add(new PoseSample(LapTime, Car.Position, Car.Orientation, Car.SteerAngle));
+
+    /// <summary>
+    /// The lap clock starts again at the line, and the lap's recording with the car there at 0 s (0.74): its first sample
+    /// used to come a twentieth of a second or more in, where the ghost then stood at the start.
+    /// </summary>
+    private void OpenLap()
+    {
+        LapTime = 0f;
+        _lapSamples.Clear();
         _lapSampleAccumulator = 0f;
-        _lapSamples.Add(new PoseSample(LapTime, Car.Position, Car.Orientation, Car.SteerAngle));
+        AddLapSample();
+    }
+
+    /// <summary>
+    /// The lap just completed as a recording, closed with the car on the line at the lap's own time (0.74): the last sample
+    /// used to fall up to a sampling interval short of it, and the ghost stopped short of the line.
+    /// </summary>
+    private LapRecording RecordedLap()
+    {
+        if (_lapSamples.Count == 0 || _lapSamples[^1].Time < LapTime) AddLapSample();
+        return new LapRecording(Route, LapTime, new List<PoseSample>(_lapSamples));
     }
 
     private void UpdateGhost()
@@ -406,9 +440,7 @@ public sealed partial class RaceSession
                     if (!_lapOpened)
                     {
                         _lapOpened = true;
-                        LapTime = 0f;
-                        _lapSamples.Clear();
-                        _lapSampleAccumulator = 0f;
+                        OpenLap();
                         if (BestLap is not null) SetMessage($"GRUDGE MATCH - BEAT {FormatLapTime(BestLapTime)}", 4f);
                     }
                     else if (!WrongWay)
@@ -448,10 +480,10 @@ public sealed partial class RaceSession
                 CreditBestLap = LapTime;
                 CreditBestRoute = Route;
             }
-            if (LapTime < BestLapTime)
+            if (KeepsBestLaps && LapTime < BestLapTime)
             {
                 BestLapTime = LapTime;
-                BestLap = new LapRecording(Route, LapTime, new List<PoseSample>(_lapSamples));
+                BestLap = RecordedLap();
                 _events.Add(RaceEvent.NewBestLap);
                 SetMessage($"NEW RECORD {FormatLapTime(LapTime)}  +{Options.LapBonus:F0}", 4f);
             }
@@ -466,20 +498,22 @@ public sealed partial class RaceSession
             SetMessage("LAP NOT COUNTED");
         }
         Lap++;
-        LapTime = 0f;
-        _lapSamples.Clear();
-        _lapSampleAccumulator = 0f;
+        OpenLap();
         _checkpointThisLap = false;
         Route = RouteKind.Undecided;
         ReturnPath = Track.Common;
         ReturnDistance = Track.Common.Markers.FirstOrDefault(m => m.Kind == MarkerKind.StartFinish).Distance;
     }
 
+    /// <summary>m:ss.s, or dashes for no time.</summary>
     public static string FormatLapTime(float seconds)
     {
         if (float.IsInfinity(seconds) || float.IsNaN(seconds)) return "-:--.-";
         var minutes = (int)(seconds / 60f);
-        return $"{minutes}:{seconds - minutes * 60f:00.0}";
+        var rest = (seconds - minutes * 60f).ToString("00.0", System.Globalization.CultureInfo.InvariantCulture);
+        // The seconds are rounded to the tenth after the minutes are taken, and from 59.95 s into a minute they round up
+        // to a whole one: carried into the minutes (0.74), 119.96 s reads 2:00.0 where it read 1:60.0.
+        return rest == "60.0" ? $"{minutes + 1}:00.0" : $"{minutes}:{rest}";
     }
 
     private void UpdateOffRoad(float dt)
