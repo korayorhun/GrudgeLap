@@ -710,6 +710,11 @@ void AGlpGame::Tick(float DeltaSeconds)
 		UE_LOG(LogGlpGame, Error, TEXT("step failed: %s"), *Library->LastError());
 		return;
 	}
+	// The player's brake lamps follow the pedal (0.76), as the Godot version's CarView.Braking.
+	if (FGlpCarView* Car = PlayerCar())
+	{
+		Car->SetBraking(Controls.brake > 0.05f ? 1.f : 0.f);
+	}
 	Library->GetState(Session, &Current);
 	MessageText = Library->Message(Session);
 	if (Current.phase == GLP_PHASE_FINISHED)
@@ -1010,6 +1015,16 @@ void AGlpGame::SyncTrafficAndTrain(float DeltaSeconds)
 		{
 			TrafficCars[i]->AdvanceWheels(Bodies[i].speed * DeltaSeconds, 0.f, 0.33f);
 		}
+		// A drone's brake lamps while it slows faster than 1.2 m/s^2, held 0.4 s (the Godot version's 0.69 rule).
+		DroneSpeeds.SetNum(Bodies.Num());
+		DroneBraking.SetNum(Bodies.Num());
+		if (bMoving && DeltaSeconds > 0.f)
+		{
+			const float Slowing = (DroneSpeeds[i] - Bodies[i].speed) / DeltaSeconds;
+			DroneBraking[i] = Slowing > 1.2f ? 0.4f : FMath::Max(DroneBraking[i] - DeltaSeconds, 0.f);
+		}
+		DroneSpeeds[i] = Bodies[i].speed;
+		TrafficCars[i]->SetBraking(DroneBraking[i] > 0.f ? 1.f : 0.f);
 	}
 
 	TrainDistance = 1e9f;

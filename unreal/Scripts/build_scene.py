@@ -917,6 +917,36 @@ def paint_textured_material():
     return material
 
 
+def brake_lamp_material():
+    """A prepared model's brake lamp lens (GLP_Brake, 0.76): its own colour and texture (Lens, Texture), lit by the Glow
+    parameter, which the game (FGlpCarView::SetBraking) raises while the car brakes. The glow is in the screen's light
+    units (as the instruments'), so a lit lamp reads bright red in daylight at the level's fixed exposure."""
+    m = asset_tools.create_asset("M_BrakeLamp", f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    texture = mel.create_material_expression(m, unreal.MaterialExpressionTextureSampleParameter2D, -800, -100)
+    texture.set_editor_property("parameter_name", "Texture")
+    lens = mel.create_material_expression(m, unreal.MaterialExpressionVectorParameter, -800, 150)
+    lens.set_editor_property("parameter_name", "Lens")
+    lens.set_editor_property("default_value", unreal.LinearColor(0.6, 0.0, 0.0, 1.0))
+    colour = mel.create_material_expression(m, unreal.MaterialExpressionMultiply, -550, 0)
+    mel.connect_material_expressions(texture, "RGB", colour, "A")
+    mel.connect_material_expressions(lens, "", colour, "B")
+    mel.connect_material_property(colour, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    glow = mel.create_material_expression(m, unreal.MaterialExpressionScalarParameter, -800, 300)
+    glow.set_editor_property("parameter_name", "Glow")
+    glow.set_editor_property("default_value", 0.0)
+    lit = mel.create_material_expression(m, unreal.MaterialExpressionMultiply, -550, 250)
+    mel.connect_material_expressions(colour, "", lit, "A")
+    mel.connect_material_expressions(glow, "", lit, "B")
+    mel.connect_material_property(lit, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    screen_units_emissive(m)
+    roughness = mel.create_material_expression(m, unreal.MaterialExpressionConstant, -300, 400)
+    roughness.set_editor_property("r", 0.15)
+    mel.connect_material_property(roughness, "", unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.recompile_material(m)
+    eal.save_loaded_asset(m)
+    return m
+
+
 def cabin_material():
     """The cabin's leather, fabric and carpet. Godot lays their photos on with triplanar mapping and the export
     leaves those meshes without texture coordinates, so the imported materials showed one flat colour. This
@@ -1138,6 +1168,7 @@ def car_materials():
     glass = constant_material("M_Glass", {mp.MP_BASE_COLOR: (0.0, 0.0, 0.0), mp.MP_OPACITY: 0.03,
                                           mp.MP_ROUGHNESS: 0.03, mp.MP_SPECULAR: 0.5, mp.MP_METALLIC: 0.0}, glassy)
     return {"paint": paint_material(), "paint_solid": paint_solid_material(), "paint_textured": paint_textured_material(),
+            "brake": brake_lamp_material(),
             "glass": glass, "mirror": mirror_material(),
             "cabin": cabin_material(), "cabin_instances": {}}
 
@@ -1193,6 +1224,26 @@ def dress_prepared_model(car, parts, materials):
             if name.startswith(("GLP_Glass", "GLP_Lens", "MI_GLP_Glass", "MI_GLP_Lens")):
                 component.set_material(slot, materials["glass"])
                 glazed += 1
+            elif name.startswith(("GLP_Brake", "MI_GLP_Brake")) and isinstance(material, unreal.MaterialInstance):
+                # The brake lamp's lens in its own colour and texture, lit by the game when braking (0.76).
+                try:
+                    texture = mel.get_material_instance_texture_parameter_value(material, "BaseColorTexture")
+                    colour = mel.get_material_instance_vector_parameter_value(material, "BaseColorFactor")
+                except Exception:
+                    texture, colour = None, None
+                key = ("brake", texture.get_path_name() if texture else "", round(colour.r, 4) if colour else 0, round(colour.g, 4) if colour else 0)
+                if key not in paints:
+                    instance = asset_tools.create_asset(f"MI_Brake_{car.get_actor_label()}_{len(paints)}", f"{GAME}/Materials",
+                                                        unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+                    mel.set_material_instance_parent(instance, materials["brake"])
+                    if texture is not None:
+                        mel.set_material_instance_texture_parameter_value(instance, "Texture", texture)
+                    if colour is not None:
+                        mel.set_material_instance_vector_parameter_value(instance, "Lens", unreal.LinearColor(colour.r, colour.g, colour.b, 1.0))
+                    mel.update_material_instance(instance)
+                    eal.save_loaded_asset(instance)
+                    paints[key] = instance
+                component.set_material(slot, paints[key])
             elif name.startswith(("GLP_Paint", "MI_GLP_Paint")) and isinstance(material, unreal.MaterialInstance):
                 # prepare_model_car.py names a textured paint GLP_PaintTex and a flat one GLP_PaintFlat.
                 textured = name.startswith(("GLP_PaintTex", "MI_GLP_PaintTex"))

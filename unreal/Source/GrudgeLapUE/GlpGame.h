@@ -136,7 +136,9 @@ private:
 	/** The imported car of each catalogue entry (the level may hold only some). */
 	TArray<TUniquePtr<FGlpCarView>> Cars;
 	TArray<TUniquePtr<FGlpCarView>> TrafficCars;
-	int32 DroneSerial = 0;   // the next drone's car and colour (0.74, as Bootstrap._droneSerial)
+	int32 DroneSerial = 0;
+	TArray<float> DroneSpeeds;    // each drone's speed a frame ago, for its brake lamps (0.76)
+	TArray<float> DroneBraking;   // seconds its brake lamps stay lit   // the next drone's car and colour (0.74, as Bootstrap._droneSerial)
 	TUniquePtr<FGlpCarView> Ghost;
 	TArray<TWeakObjectPtr<AActor>> TrainCars;
 	TArray<glp_body> TrainBodies;

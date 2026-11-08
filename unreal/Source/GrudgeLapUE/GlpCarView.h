@@ -43,6 +43,9 @@ public:
 
 	void SetVisible(bool bVisible);
 
+	/** The brake lamps' glow (0 off, 1 lit): every material of this car with a Glow parameter (M_BrakeLamp, 0.76). */
+	void SetBraking(float Glow);
+
 	/**
 	 * From the driver's seat the body shell, the outside details and the wheels are not drawn, only their shadows
 	 * (CarView.SetViewpoint): seen from inside, the single-sided shell showed its paint along the door tops.
@@ -67,5 +70,9 @@ private:
 	FTransform SteeringRest;
 	TArray<TWeakObjectPtr<AActor>> Owned;   // actors whose visibility SetVisible switches
 	TArray<TWeakObjectPtr<UPrimitiveComponent>> OutsideOnly;   // drawn only from outside the car (SetInside)
+	TArray<TWeakObjectPtr<class UMaterialInstanceDynamic>> BrakeLamps;   // the lamps SetBraking lights
+	float BrakeGlow = -1.f;
+	/** Gives a mesh's brake-lamp slots dynamic instances of their own and keeps them in BrakeLamps. */
+	void TakeBrakeLamps(class UStaticMeshComponent* Mesh);
 	float RollAngle = 0.f;
 };

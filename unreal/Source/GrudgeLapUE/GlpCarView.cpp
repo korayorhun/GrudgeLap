@@ -82,6 +82,12 @@ TUniquePtr<FGlpCarView> FGlpCarView::FromLevel(UWorld* World, FName RootTag)
 			View->Steering = Part->GetRootComponent();
 			View->SteeringRest = Part->GetRootComponent()->GetRelativeTransform();
 		}
+		TArray<UStaticMeshComponent*> PartMeshes;
+		Part->GetComponents<UStaticMeshComponent>(PartMeshes);
+		for (UStaticMeshComponent* Mesh : PartMeshes)
+		{
+			View->TakeBrakeLamps(Mesh);
+		}
 	}
 	for (const AActor* Part : Parts)
 	{
@@ -203,12 +209,55 @@ TUniquePtr<FGlpCarView> FGlpCarView::Clone(UWorld* World, const FString& Name, c
 				CopyMesh->SetMaterial(Slot, Material);
 			}
 			CopyMesh->SetCastShadow(Override == nullptr);
+			if (!Override)
+			{
+				View->TakeBrakeLamps(CopyMesh);
+			}
 			CopyMesh->RegisterComponent();
 			Count++;
 		}
 	}
 	UE_LOG(LogTemp, Log, TEXT("car copy %s: %d meshes"), *Name, Count);
 	return View;
+}
+
+void FGlpCarView::TakeBrakeLamps(UStaticMeshComponent* Mesh)
+{
+	for (int32 Slot = 0; Slot < Mesh->GetNumMaterials(); Slot++)
+	{
+		UMaterialInterface* Material = Mesh->GetMaterial(Slot);
+		float Glow = 0.f;
+		if (!Material || !Material->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("Glow")), Glow))
+		{
+			continue;
+		}
+		// A copy's slot may hold the source's dynamic instance: each car gets its own, so one car braking lights no other.
+		UMaterialInterface* Parent = Material;
+		if (const UMaterialInstanceDynamic* Dynamic = Cast<UMaterialInstanceDynamic>(Material))
+		{
+			Parent = Dynamic->Parent;
+		}
+		UMaterialInstanceDynamic* Lamp = UMaterialInstanceDynamic::Create(Parent, Mesh);
+		Mesh->SetMaterial(Slot, Lamp);
+		BrakeLamps.Add(Lamp);
+	}
+}
+
+void FGlpCarView::SetBraking(float Glow)
+{
+	if (FMath::IsNearlyEqual(Glow, BrakeGlow))
+	{
+		return;
+	}
+	BrakeGlow = Glow;
+	for (const TWeakObjectPtr<UMaterialInstanceDynamic>& Lamp : BrakeLamps)
+	{
+		if (UMaterialInstanceDynamic* L = Lamp.Get())
+		{
+			// About a third of the screen's white, times the lens's own red: bright in daylight, not a blown-out disc.
+			L->SetScalarParameterValue(TEXT("Glow"), Glow * 3.f);
+		}
+	}
 }
 
 void FGlpCarView::SetPose(const float Position[3], const float Orientation[4])
