@@ -303,8 +303,8 @@ public sealed class VehicleTests
     /// publish the figures launch (<see cref="RoadTestZeroToSixty"/>), within a tenth either side of the published
     /// 0-100 km/h less a twentieth, and top speed a tenth of the published figure either side; the Leon Cupra's 250 km/h
     /// (155 mph) is its limiter's, which holds the car within a few per cent of it rather than the drag, so its window
-    /// is the limiter's. The BRZ has none: its 226 km/h is the drag's, and it runs about 8 % past it here
-    /// (VehicleSpec.Boxer).
+    /// is the limiter's. The BRZ has none: its 226 km/h is the drag's, and it ran about 8 % past it here until 0.76
+    /// gave it the EPA's coast-down as its road load; now about 1 % (VehicleSpec.Boxer).
     /// <para>
     /// Until the cars13 review this test drove them as <see cref="Hatchbacks_match_their_published_figures"/> drives the
     /// hatchbacks, floored from idle with the shifts at 0.93 of the limiter, a tenth under the figure to a fifth over:

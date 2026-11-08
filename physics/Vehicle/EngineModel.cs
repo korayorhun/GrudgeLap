@@ -34,7 +34,8 @@ public sealed class EngineModel
     public float Rpm => AngularVelocity * RpmPerRadPerSec;
     public float LastTorque { get; private set; }
     /// <summary>
-    /// The throttle the engine ran at in the last <see cref="Torque"/> call, 0 to 1: the driver's, opened a little by the
+    /// The throttle the engine ran at in the last <see cref="Torque"/> call, 0 to 1: the driver's (in a torque converter's
+    /// D range the one its reading of the pedal asks for, 0.76 review, Drivetrain.Converter.cs), opened a little by the
     /// idle governor, shut by the rev limiter's cut and cut back by a diesel's governor. It is the engine's load for the
     /// sound (0.19): the torque is not,
     /// since a 1.4 at full throttle makes a fifth of what a V12 does and once sounded as if it were coasting.
@@ -104,9 +105,26 @@ public sealed class EngineModel
         _lastThrottle = throttle;
         // A turbo's share of the torque comes with the boost, which lags the throttle (see Tick).
         var full = FullTorque(rpm);
-        var braking = -(_spec.BrakingTorque + _spec.BrakingPerRpm * rpm);
-        LastTorque = MathUtil.Lerp(braking, full, throttle);
+        LastTorque = MathUtil.Lerp(BrakingAt(rpm), full, throttle);
         return LastTorque;
+    }
+
+    /// <summary>The engine's braking (N m, negative) at <paramref name="rpm"/> with the throttle shut.</summary>
+    private float BrakingAt(float rpm) => -(_spec.BrakingTorque + _spec.BrakingPerRpm * rpm);
+
+    /// <summary>
+    /// The throttle (0 to 1) at which the engine makes <paramref name="torque"/> (N m) at its present speed with the boost
+    /// it has now: <see cref="Torque"/>'s blend between engine braking and the full-throttle torque, inverted, and held
+    /// within the pedal's travel. A torque-based engine management turns a torque demand into a throttle opening this way
+    /// (0.76 review: the torque converter's D range, Drivetrain.Converter.cs, asks the engine for a torque); the idle
+    /// governor and the rev limiter still act in <see cref="Torque"/>.
+    /// </summary>
+    internal float ThrottleFor(float torque)
+    {
+        var rpm = Rpm;
+        var braking = BrakingAt(rpm);
+        var full = FullTorque(rpm);
+        return full > braking ? MathUtil.Clamp01((torque - braking) / (full - braking)) : 1f;
     }
 
     /// <summary>Advances limiter and stall bookkeeping; the drivetrain integrates the angular velocity itself.</summary>
@@ -168,12 +186,14 @@ public sealed record EngineSpec
     /// turbo engine also the revs of full boost. The launch assist holds the engine there while the clutch slips, the
     /// way a driver revs and slips a manual and a launch control holds a set speed: below it the engine bogs (until 0.18
     /// the assisted clutch bit from about 2,000 rpm and dragged every car down to a lugging start), far above it the
-    /// clutch only burns the difference.
+    /// clutch only burns the difference. An engine whose curve the rule does not suit sets its own
+    /// (<see cref="LaunchRpmOverride"/>).
     /// </summary>
     public float LaunchRpm
     {
         get
         {
+            if (!float.IsNaN(LaunchRpmOverride)) return LaunchRpmOverride;
             var peak = FullThrottleCurve.Max(p => p.Torque);
             var rpm = RedlineRpm * 0.5f;
             for (var r = IdleRpm; r < RedlineRpm; r += 50f)
@@ -184,6 +204,27 @@ public sealed record EngineSpec
             }
             if (BoostShare > 0f) rpm = MathF.Max(rpm, BoostThresholdRpm + 600f);
             return MathF.Max(rpm, IdleRpm * 2.5f);
+        }
+    }
+
+    /// <summary>
+    /// The revs a standing start is made at where <see cref="LaunchRpm"/>'s rule does not suit the curve (0.76 review): a
+    /// curve with a lump of torque under a dip, where the lowest revs with 95 % of the peak lie below the dip and a
+    /// launch held there is an ordinary pull-away (see <see cref="BoxerFour"/>). NaN, the default, takes the rule.
+    /// </summary>
+    public float LaunchRpmOverride { get; init; } = float.NaN;
+
+    /// <summary>
+    /// The most power (W) the full-throttle curve gives with full boost, read every 25 rpm from idle to the redline (0.76
+    /// review: the torque converter's D range reads its pedal as a share of it, Drivetrain.Converter.cs).
+    /// </summary>
+    internal float PeakPower
+    {
+        get
+        {
+            var peak = 0f;
+            for (var rpm = IdleRpm; rpm <= RedlineRpm; rpm += 25f) peak = MathF.Max(peak, CurveTorque(rpm) * rpm / EngineModel.RpmPerRadPerSec);
+            return peak;
         }
     }
 
@@ -365,19 +406,26 @@ public sealed record EngineSpec
 
     /// <summary>
     /// The BRZ's two-litre boxer four (Subaru FA20, 12.5:1, port and direct injection): 205 N m (151 lb ft) at 6400-6600
-    /// and 200 PS (200 hp) at 7000 (200.6 N m there), as Subaru's 2013 specification sheet gives them; the well-known
-    /// trough between 3500 and 4500, where the engine makes about 165 N m before the torque climbs again to its peak
-    /// near the redline (road tests of the 86 and BRZ of 2012-16 plot it; the figures between the published points are
-    /// game figures). The power peaks at 7000 as published: the redline's point gives 199 PS (until cars/phys2 its 190 N m
-    /// gave 200.2 PS, 0.1 % over the peak, and the showroom read the peak at 7400). The European BRZ of the 2017 facelift
-    /// kept these figures (200 PS, 205 N m at 6400-6600: motor1.com's German test of January 2017); the American and
-    /// Japanese manual's 205 hp at 7000 and 156 lb ft at 6400 are not taken (VehicleSpec.Boxer's remarks say why).
+    /// and 200 PS (147 kW) at 7000 (200.6 N m there), as Subaru's 2013 specification sheet gives them and Subaru
+    /// Deutschland's price list and technical data of the 2017 model year give them for the European facelift with either
+    /// gearbox (the American facelift's automatic kept them too: Subaru of America's 2017 sheet, 200 hp and 151 lb ft for
+    /// the automatic, 205 hp and 156 lb ft for the manual, which are not taken). The power peaks at 7000 as published: the
+    /// redline's point gives 199 PS (until cars/phys2 its 190 N m gave 200.2 PS, 0.1 % over the peak).
     /// </summary>
+    /// <remarks>
+    /// The shape between the published points (0.76) follows the stock FR-S on Edmunds' Inside Line dynamometer of April
+    /// 2012 (as Torque News and TopSpeed reported it): a lump of torque at 2500-3300 rpm about as high as the plateau from
+    /// 4500 to 6500, a 14 % drop to the trough at about 4000, the FA20's well-known dip, then the climb back; the lump is
+    /// held just under the published peak, which stays at 6400-6600. The points between the published ones are game
+    /// figures shaped by that dyno (the 0.70 review's curve). Until 0.76 the curve had about 180 N m at 2500-3000 and
+    /// 166-170 at 4000-4500, 14-17 points of the plateau too weak where the car is driven on the road, and climbed back
+    /// only by 5500.
+    /// </remarks>
     private static readonly (float Rpm, float Torque)[] BoxerCurve =
     [
-        (0f, 0f), (600f, 95f), (1000f, 130f), (1500f, 160f), (2000f, 175f), (2500f, 180f), (3000f, 180f), (3500f, 172f),
-        (4000f, 166f), (4500f, 170f), (5000f, 185f), (5500f, 198f), (6000f, 203f), (6400f, 205f), (6600f, 205f),
-        (7000f, 200.6f), (7400f, 189f), (7700f, 140f),
+        (0f, 0f), (600f, 95f), (1000f, 130f), (1500f, 160f), (2000f, 185f), (2500f, 197f), (3000f, 200f), (3300f, 198f),
+        (3700f, 186f), (4000f, 176f), (4300f, 182f), (4600f, 199f), (5000f, 202f), (5500f, 203f), (6000f, 204f),
+        (6400f, 205f), (6600f, 205f), (7000f, 200.6f), (7400f, 189f), (7700f, 140f),
     ];
 
     public static EngineSpec FlatTwelve => new();
@@ -612,6 +660,13 @@ public sealed record EngineSpec
         BrakingTorque = 13f,
         BrakingPerRpm = 0.0038f,
         FullThrottleCurve = BoxerCurve,
+        // Launched above the dip (0.76 review), as road testers launch a BRZ: Edmunds' best runs with the 2022 car came
+        // "launching the BRZ from 4,500 rpm with only the slightest feathering of the clutch" (its track test of the
+        // second generation's 2.4, as a search summary quotes it; no figure was found for the FA20). The generic rule
+        // takes the lump of 0.76's curve, 2,450 rpm: the clutch locked at 19 km/h and the engine climbed through the dip,
+        // an ordinary pull-away to the ear, where the 0.75 car launched at 5,400. At 4,500 the road-test start is quicker
+        // too: 0-100 km/h in 7.77 s against 7.90 (Subaru's 7.6).
+        LaunchRpmOverride = 4500f,
         Cylinders = 4,
         SoundFolder = "boxer4",
     };

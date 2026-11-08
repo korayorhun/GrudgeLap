@@ -18,9 +18,23 @@ public sealed class VehicleSim
 
     private readonly VehicleSpec _spec;
     private readonly WheelContact[] _contacts = new WheelContact[4];
-    /// <summary>Spring and damper rate of each wheel: the spec's rates scaled by the wheel's share of the static load.</summary>
+    /// <summary>
+    /// Spring and damper rate of each wheel: the spec's rates scaled by the wheel's share of the static load, but the
+    /// spring's the axle's own wheel rate where the spec sets one (<see cref="VehicleSpec.FrontWheelRate"/>, 0.76; the
+    /// dampers stay scaled).
+    /// </summary>
     private readonly float[] _springRate = new float[4];
     private readonly float[] _damperRate = new float[4];
+    /// <summary>
+    /// Each spring's preload (N) at full droop where an axle has its own wheel rate (<see cref="VehicleSpec.FrontWheelRate"/>):
+    /// what keeps the car at the ride height <see cref="VehicleSpec.SuspensionStiffness"/> gives it; zero otherwise.
+    /// </summary>
+    private readonly float[] _springPreload = new float[4];
+    /// <summary>The road load's speed terms per newton of a wheel's load (<see cref="VehicleSpec.RoadLoadPerSpeed"/>), or zero.</summary>
+    private readonly float _roadLoadPerSpeed;
+    private readonly float _roadLoadPerSpeedSquared;
+    /// <summary>The brakes' line pressure as a share of a full pedal's, rising at <see cref="VehicleSpec.BrakeBuildUpSeconds"/>.</summary>
+    private float _brakeLine;
     /// <summary>What the driveline gives each wheel this step: its drive torque (N m) and the inertia it turns with (kg m^2, the engine's share included while the clutch is locked).</summary>
     private readonly float[] _driveTorque = new float[4];
     private readonly float[] _driveInertia = new float[4];
@@ -51,15 +65,26 @@ public sealed class VehicleSim
             new WheelState(new Vector3(spec.HalfTrack, spec.HubHeight, -spec.RearAxle), false),
         ];
         // Each axle is sprung for its share of the weight, as cars are, so a car whose mass sits towards one end still
-        // rides level and both ends ride at the same frequency; the spec's rates are those of an evenly loaded corner.
+        // rides level and both ends ride at the same frequency; the spec's rates are those of an evenly loaded corner. An
+        // axle the spec gives its own wheel rate (the BRZ's, 0.76) rides at its own frequency instead, level all the same.
         var wheelbase = spec.FrontAxle + spec.RearAxle;
         var frontShare = (spec.RearAxle + spec.CentreOfMassOffset.Z) / wheelbase;
+        var sag = spec.MassKg * MathUtil.Gravity / 4f / spec.SuspensionStiffness;
         for (var i = 0; i < 4; i++)
         {
             var share = (i < 2 ? frontShare : 1f - frontShare) * 2f;
             _springRate[i] = spec.SuspensionStiffness * share;
             _damperRate[i] = spec.SuspensionDamping * share;
+            // An axle with its own wheel rate (0.76) rides at its own frequency at the same height: its springs carry the
+            // static load at the same compression through a preload, as a strut's spring sits preloaded on its seat.
+            var own = i < 2 ? spec.FrontWheelRate : spec.RearWheelRate;
+            if (float.IsNaN(own)) continue;
+            _springRate[i] = own;
+            _springPreload[i] = spec.MassKg * MathUtil.Gravity / 4f * share - own * sag;
         }
+        var weight = spec.MassKg * MathUtil.Gravity;
+        _roadLoadPerSpeed = spec.RoadLoadPerSpeed / weight;
+        _roadLoadPerSpeedSquared = spec.RoadLoadPerSpeedSquared / weight;
         Reset(track.StartFrame, track.StartCursor);
     }
 
@@ -187,6 +212,7 @@ public sealed class VehicleSim
         Array.Clear(_differentialReach);
         _differentialEngaged = false;
         _accumulator = 0f;
+        _brakeLine = 0f;
         Drivetrain.Reset();
         foreach (var w in Wheels) w.Reset();
         BodyHit = Track.Probe(Position, ref Cursor, true);
@@ -207,14 +233,16 @@ public sealed class VehicleSim
         var wheelSpeed = speedMps / _spec.WheelRadius;
         foreach (var w in Wheels) w.AngularVelocity = wheelSpeed;
 
-        // Highest gear that keeps the engine in its working band; falls back to top gear.
-        var gear = _spec.ForwardGearCount;
-        for (var g = 1; g <= _spec.ForwardGearCount; g++)
+        // Highest gear that keeps the engine in its working band; falls back to top gear. The gearbox is the one the car
+        // drives through in its mode (a torque-converter automatic has its own ratios).
+        var gears = Drivetrain.ForwardGearCount;
+        var gear = gears;
+        for (var g = 1; g <= gears; g++)
         {
-            var rpm = wheelSpeed * _spec.RatioForGear(g) * _spec.FinalDrive * EngineModel.RpmPerRadPerSec;
+            var rpm = wheelSpeed * Drivetrain.RatioForGear(g) * Drivetrain.FinalDrive * EngineModel.RpmPerRadPerSec;
             if (rpm <= _spec.Engine.RedlineRpm * 0.87f) { gear = g; break; }
         }
-        Drivetrain.ForceLocked(gear, wheelSpeed * _spec.RatioForGear(gear) * _spec.FinalDrive);
+        Drivetrain.ForceLocked(gear, wheelSpeed * Drivetrain.RatioForGear(gear) * Drivetrain.FinalDrive);
         BodyHit = Track.Probe(Position, ref Cursor, true);
     }
 
@@ -397,7 +425,7 @@ public sealed class VehicleSim
         _contacts[2].Bar = _spec.RearAntiRoll * (_contacts[2].Compression - _contacts[3].Compression);
         _contacts[3].Bar = -_contacts[2].Bar;
 
-        var pedal = MathUtil.Clamp01(input.Brake);
+        var pedal = BrakeLine(input.Brake, dt);
         // Torque the differential sends to each driven wheel: half the axle's each (an open differential), less or
         // plus what a limited-slip unit passes from the faster wheel to the slower one. On a four-wheel-drive car the
         // centre of the driveline first shares the gearbox's torque between the axles (DistributeFourWheelDrive).
@@ -468,6 +496,9 @@ public sealed class VehicleSim
             // The damper resists rebound harder than bump (DamperReboundRatio), the two averaging the spec's rate.
             var damping = _damperRate[i] * 2f / (1f + _spec.DamperReboundRatio) * (approach < 0f ? _spec.DamperReboundRatio : 1f);
             var fs = _springRate[i] * compression + damping * approach + c.Bar;
+            // A preloaded spring (0.76) pushes with its preload from the first millimetres of travel, taken up over the
+            // tyre's own give as the wheel comes onto the road, so the load does not jump as a wheel lands or lifts.
+            if (_springPreload[i] != 0f) fs += _springPreload[i] * MathUtil.Clamp01(compression / PreloadTakeUp);
             if (compression > _spec.MaxCompression)
             {
                 fs += _spec.BumpStopStiffness * (compression - _spec.MaxCompression);
@@ -523,6 +554,9 @@ public sealed class VehicleSim
             // 0.16 with the grass grip raised from 0.55, players found the car hard to bring back) acts on the
             // body only. Feeding it back into the wheel spin would just make the wheel wind up to cancel it.
             var rolling = (hit.Surface == SurfaceType.Grass ? 0.11f : _spec.RollingResistance) * fs;
+            // The road load's rise with speed (0.76, VehicleSpec.RoadLoadPerSpeed), shared out by the wheels' loads.
+            if (_roadLoadPerSpeed != 0f || _roadLoadPerSpeedSquared != 0f)
+                rolling += (_roadLoadPerSpeed * MathF.Abs(vLong) + _roadLoadPerSpeedSquared * vLong * vLong) * fs;
             if (w.WaterDepth > 0f) rolling += TireModel.WaterDrag(vLong, w.WaterDepth, w.Aquaplaning, tire);
             var drag = MathF.Sign(vLong) * MathF.Min(rolling, MathF.Abs(vLong) * 400f);
 
@@ -608,6 +642,26 @@ public sealed class VehicleSim
 
         Airborne = !anyContact;
         AirborneTime = Airborne ? AirborneTime + dt : 0f;
+    }
+
+    /// <summary>
+    /// The travel (m) over which a preloaded spring's preload comes onto a landing wheel, standing in for the tyre's own
+    /// give (a road tyre's 6,500 lb/in, about a kilonewton a millimetre on Spectral Performance's notes for the BRZ's): ten
+    /// times that, a game figure that keeps the load from jumping at the step rate as a wheel lands or lifts.
+    /// </summary>
+    private const float PreloadTakeUp = 0.01f;
+
+    /// <summary>
+    /// The brakes' share of a full pedal's pressure this step: the pedal itself on a car whose brakes act at once, and on one
+    /// with a <see cref="VehicleSpec.BrakeBuildUpSeconds"/> the pressure rising towards the pedal at that pace and falling
+    /// with it at once.
+    /// </summary>
+    private float BrakeLine(float brake, float dt)
+    {
+        var pedal = MathUtil.Clamp01(brake);
+        if (_spec.BrakeBuildUpSeconds <= 0f) return pedal;
+        _brakeLine = MathF.Min(pedal, _brakeLine + dt / _spec.BrakeBuildUpSeconds);
+        return _brakeLine;
     }
 
     private const float BodyFriction = 0.6f;
@@ -730,9 +784,10 @@ public sealed class VehicleSim
             return;
         }
         // While the clutch slips the wheels get the clutch's torque whatever the engine makes, so a cut would only drag
-        // the revs down (into a bog at the launch) without easing the wheelspin.
+        // the revs down (into a bog at the launch) without easing the wheelspin. A torque converter's drive follows the
+        // engine's speed, so through one the cut works with the converter open as well (Drivetrain.EngineCoupled, 0.76).
         var excess = 0f;
-        if (Drivetrain.ClutchLocked && float.IsFinite(differentialLead) && _differentialEngaged)
+        if (Drivetrain.EngineCoupled && float.IsFinite(differentialLead) && _differentialEngaged)
         {
             // With a brake-based differential at work the two systems share the job as the real ones do: the brake holds a
             // wheel that spins on its own, up to the lead it allows over its partner, and the engine is cut when both
@@ -748,7 +803,7 @@ public sealed class VehicleSim
                 excess = MathF.Max(excess, MathF.Max(MathF.Min(a, b), MathF.Max(a, b) - differentialLead));
             }
         }
-        else if (Drivetrain.ClutchLocked)
+        else if (Drivetrain.EngineCoupled)
         {
             excess = float.NegativeInfinity;
             foreach (var w in Wheels)

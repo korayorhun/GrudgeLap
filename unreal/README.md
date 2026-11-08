@@ -97,7 +97,9 @@ version, the game holds its frame rate to an even fraction of the primary displa
 on a 144 Hz panel) and 30 in the background, and logs each change (`frame cap:`): uncapped, a hybrid laptop's
 GPU ran flat out and its driver timed out. Runs with `-RenderOffScreen` (the scripts below) set their own.
 
-For automated checks, `-GlpAudioDump=<file.wav>` records the sound mix and `-GlpMute` keeps the speakers silent.
+For automated checks, `-GlpAudioDump=<file.wav>` records the sound mix and `-GlpMute` keeps the speakers silent;
+`-GlpHold` keeps the simulation from stepping (with `-GlpTitleShots` the shots' clock runs anyway), so two shots differ by
+what the renderer moves alone (the wind, the clouds, the rain).
 `drive.cmd` holds its runs to 60 fps (`t.MaxFPS`: off screen the game sets no cap of its own, and the development laptop's
 GPU has dropped out under an uncapped loop), keeps the editor's on-screen notes out of the shots
 (`DisableAllScreenMessages`) and passes further console commands from `GLP_EXEC` (each after a comma, e.g.
@@ -178,8 +180,9 @@ credits (`Import/Models/LICENSE.txt`) beside the executable.
     the verge and the grass darken and dull. The game sets it from the simulation's weather (`glp_state.weather`,
     drawn for every credit; `-GlpWeather=0..3` fixes it: dry, overcast, wet, rain), and under any weather but a
     clear day drops the sun to a wide soft source, closes the clouds over (the template cloud material's coverage
-    parameter), thickens the fog and opens the exposure; rain is `M_Rain`, a panning sheet of streaks on a
-    cylinder round the camera (`AGlpGame::ApplyWeather`).
+    parameter), thickens the fog and opens the exposure (`AGlpGame::ApplyWeather`). Rain (0.76) is the Godot version's
+    3600 thin lit streaks (`M_Rain`) falling through a box 10 m over the eye and 5 m ahead, led by where the camera will be
+    when they reach it, gone within 1.2 m of the eye (`AGlpGame::FallRain`); until 0.76 a panning sheet on a cylinder.
   - **The roadside (0.76):** the export carries the fences, the power poles and the marker posts as placements of one
     template mesh each (`instanced` in track.json, `Instanced-<n>` in the file; `WorldExport`), which `place_instanced`
     instances with the template's mesh and material: about 3000 buck-and-rail bays, 76 poles with the three wires strung
@@ -193,6 +196,14 @@ credits (`Import/Models/LICENSE.txt`) beside the executable.
     (`FGlpCarView::SetBraking`: the player's pedal; a drone slowing faster than 1.2 m/s² for 0.4 s); a sliding wheel lays
     a strip of `M_SkidMark` (modulating, so it darkens the road beneath) from 0.32 of its slip intensity, as the Godot
     version's `SkidMarks` (`AGlpGame::LaySkidMarks`, 6000 strips in a ring).
+  - **Dust, smoke and spray (0.76):** the Godot version's `WheelDust`: dust off the verge and the plain, the pale smoke of a
+    sliding tyre, the spray of a wet road behind the player's wheels and the traffic's, as a ring of camera-facing
+    instances (`AGlpGame::ThrowPuffs`, `M_Puff`). `-GlpPuffTest` throws all three from every wheel.
+  - **The wind (0.76):** the grass, the sagebrush, the bushes and the trees lean and sway in the Godot version's wind
+    (`WIND_HLSL`, a world position offset on windy copies of the scanned materials, `wind_on_plants`), within 30 to 150 m.
+  - **The glass (0.76):** a model's window drawn as two parallel layers keeps its outer one (`prepare_model_car.py`).
+  - **The camera (0.76):** the seat's smooth 11 Hz vibration, a knock's jolt, the chase eye following the loop
+    (`GlpCamera`, as the Godot version's `CameraRig`).
   - **The photographic finish (0.13):** a little film grain, a trace of chromatic aberration and lens flare, a
     touch more bloom and motion blur in the post-process volume; the chase camera a 54 degree lens from 7.4 m, as
     the Godot version's since 0.11.

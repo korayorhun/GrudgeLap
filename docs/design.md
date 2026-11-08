@@ -3721,6 +3721,46 @@ The puddles were the view's alone: a mirror-flat patch on the asphalt, under the
   time (InterleavedGradientNoise) and resolved by DLSS or TSR, masked, so the deck casts its ladder of shadows. The
   cuttings' earth is Poly Haven's dirt_floor, grey-brown, instead of a mud scan tinted orange.
 
+### The BRZ's automatic, the ghost's depth, and the Unreal roadside, glass, dust, rain and wind (0.76.0)
+
+- **The BRZ as the owner's European automatic** (`physics/Vehicle/AutomaticGearbox.cs`, `Drivetrain.Converter.cs`): a
+  car's own automatic (`VehicleSpec.Automatic`, only the BRZ's so far) drives through a torque converter (stall 2,540 rpm,
+  torque ratio 1.95 at stall falling to 1 at a speed ratio of 0.85; the stall speed from an aftermarket listing quoting the
+  factory figure, the ratio from a Toyota A960E description seen only in a search summary) and a lock-up clutch (4th-6th
+  above 45 km/h), the A960E's ratios 3.538 / 2.060 / 1.404 / 1.000 / 0.713 / 0.582 on a 4.100 final drive (Subaru's
+  sheets; EPA test data). In D the pedal asks for a drive at the wheels (pedal^1.75 of the engine's peak power, a force
+  below 36 km/h; the FA20's computer maps the pedal to a torque demand) and the box changes up only into a gear that can
+  give it, down when the gear in cannot; kickdown at 95 % pedal; a car rolling back holds first. The research's
+  corrections in every mode: per-axle wheel rates for 1.43 / 1.47 Hz, bars 26,500 / 12,700, the EPA coast-down's road
+  load, a 0.3 s brake build-up, the torque curve's dip at 4,000 rpm, the manual's launch at 4,500 rpm
+  (`EngineSpec.LaunchRpmOverride`). 0-100 km/h 8.21 s (Subaru 8.2), 212 km/h (210), 100-0 km/h 38.6 m. Every other car's
+  test output is unchanged.
+- **The ghost** (`CarView.MakeGhost`, `ghost.gdshader`, `ghost_depth.gdshader`): its depth pass at render priority 9, just
+  before its skin (10), after every ordinary blended surface, so the grating, the rain, the glass and the tyre marks behind
+  it show through it (at -10 it hid them, and the faded ghost near the eye still cut its hole in the rain); both passes draw
+  both faces and push the depth 3 mm away from the eye along the line of sight, so inward-wound and mirrored parts (the
+  estate's glasshouse and doors, the Testarossa's tail lamp, the BRZ's liners) are no longer holes. The 0.73 note that
+  the ghost's depth hides blended objects behind it no longer holds. In the 1989 look the loop's deck still covers the
+  ghost's label at the top of the loop (both blended at priority 0; the deck drawn opaque in that look is the fix, next).
+- **The Unreal glass** (`prepare_model_car.py`, `Merger.drop_inner_panes`): a window modelled as two or three parallel
+  layers keeps its outermost; Unreal's thin-translucent glass stands for a whole pane, and its path length is 1/cos of the
+  incidence (not of the refracted ray), so through the Testarossa's windscreen, 72 degrees to the eye's line, two layers
+  passed a ninth of the light.
+- **The Unreal effects** (`AGlpGame`): the wheels' dust, smoke and wet-road spray as `WheelDust`'s three kinds (and the
+  traffic's spray), a CPU ring of camera-facing instances with per-instance opacity and colour (`M_Puff`: lit, a distance
+  fade near the eye and a soft edge at the ground, both smoothsteps as Godot's); the rain as `CameraRig`'s 3600 lit streaks
+  in a box led ahead of the camera (`M_Rain`, now soft-referenced so the package cooks it: the 0.75 package had no rain);
+  the tyre marks drawn before every other translucent surface, the puffs and the rain after the car's glass from outside
+  and before it from the seat.
+- **The Unreal wind** (`build_scene.py`, `WIND_HLSL`): `wind.gdshaderinc` as a world position offset on windy copies of
+  the scanned plants' glTF materials, each vertex leaning by the square of its height over the instance's foot (stiffness
+  1 for the grass, 3 for the bushes, 9 for the trees); off beyond 30 / 50 / 150 m and not invalidating the virtual shadow
+  maps. Measured 16.45 ms a frame against 16.2 before it.
+- **The Unreal camera** (`GlpCamera`): `CameraRig`'s 11 Hz seat vibration (smooth noise; it was a fresh random offset every
+  frame), the knock's jolt spring, the chase eye rising towards the loop's centre with the car's tilt.
+- **Tried and dropped:** the volumetric clouds' shadows on the ground (the sun's `cast_cloud_shadows`): no measurable change
+  with the template's clouds.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

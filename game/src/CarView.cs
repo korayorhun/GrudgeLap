@@ -527,8 +527,15 @@ internal sealed partial class CarView : Node3D
         // material lay over every part, the cabin and the wheels' insides included, and they showed through each other
         // (the owner, 8 November 2026: "random things seem to show").
         foreach (var mesh in CabinMeshes()) mesh.Visible = false;
+        // Both passes after every other blended surface (render priority 0), the depth only just before the skin, and
+        // under the windscreen's drops (127), which go over everything (0.76). The depth pass went in first, at -10,
+        // until then, and glass, particles, the tyre marks, the clouds and the loop's grating behind the ghost failed
+        // the depth test inside its outline, though its skin lets 88 % of them through: a car-shaped hole in the deck,
+        // sky blue in the 1989 look's navy. What is blended in front of the ghost without writing depth (the grating
+        // seen from under the loop, the rain, another car's glass) is still drawn under its skin: blended surfaces are
+        // put in order by object, not by pixel, and only depth can hide the ghost behind one of them.
         var skin = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/ghost.gdshader"), RenderPriority = 10 };
-        var depth = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/ghost_depth.gdshader"), RenderPriority = -10, NextPass = skin };
+        var depth = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/ghost_depth.gdshader"), RenderPriority = 9, NextPass = skin };
         foreach (var node in Descendants(this))
         {
             switch (node)

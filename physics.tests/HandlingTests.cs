@@ -433,12 +433,12 @@ public sealed class HandlingTests(ITestOutputHelper output)
     // cars13 (no understeer gradient or roll rate is published for any of the five): the class's range narrowed round
     // each car's own figure (0.6 deg/g either side of it), so a change shows, as the fleet saloon's was. Measured: the
     // 458 1.10 and 1.50 deg/g, the Bravo HGT 1.78 and 2.99, the Bravo 1.6 2.16 and 3.26, the Leon Cupra 1.73 and 2.31,
-    // the BRZ 1.25 and 2.12.
+    // the BRZ 1.37 and 2.30 (since 0.76, its springs and bars the real car's balance and roll: 1.25 and 2.12 before).
     [InlineData(8, 0.5f, 1.7f, 1.0f, 2.1f)]
     [InlineData(9, 1.2f, 2.4f, 2.4f, 3.6f)]
     [InlineData(10, 1.5f, 2.8f, 2.7f, 3.9f)]
     [InlineData(11, 1.1f, 2.3f, 1.8f, 2.9f)]
-    [InlineData(12, 0.7f, 1.9f, 1.6f, 2.7f)]
+    [InlineData(12, 0.8f, 2.0f, 1.7f, 2.9f)]
     public void Understeer_and_roll_on_the_skid_pad(int car, float gradientMin, float gradientMax, float rollMin, float rollMax)
     {
         var spec = VehicleSpec.Catalogue[car];

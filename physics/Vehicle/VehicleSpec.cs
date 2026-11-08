@@ -79,6 +79,16 @@ public sealed record VehicleSpec
     /// </summary>
     public float SideForceAhead { get; init; } = 0.35f;
     public float RollingResistance { get; init; } = 0.015f;
+    /// <summary>
+    /// The road load's growth with speed beyond the air's drag (<see cref="DragCoefficient"/> times <see cref="FrontalArea"/>)
+    /// and the constant <see cref="RollingResistance"/> (0.76): N per m/s, and N per (m/s)^2. A coast-down's road load
+    /// is A + B v + C v^2, and the tyres' losses, which rise with speed, and the driveline's churning behind the gearbox
+    /// sit in its B and in the part of its C the published drag coefficient does not explain. Zero on a car whose road load
+    /// is only its drag and its rolling resistance (every car but the BRZ, whose road load is the EPA's coast-down of it).
+    /// The force is shared between the tyres by their load, as the rolling resistance is.
+    /// </summary>
+    public float RoadLoadPerSpeed { get; init; }
+    public float RoadLoadPerSpeedSquared { get; init; }
     /// <summary>Multiplier on the surface friction: modern tyres grip harder than 1984's.</summary>
     public float TireGrip { get; init; } = 1.0f;
     /// <summary>Electronic traction control: the throttle is eased when the driven wheels spin up. Period-correct only on the modern cars.</summary>
@@ -133,6 +143,15 @@ public sealed record VehicleSpec
     /// </summary>
     public float FrontAntiRoll { get; init; } = 27400f;
     public float RearAntiRoll { get; init; } = 12000f;
+    /// <summary>
+    /// Wheel rates (N/m at the wheel) of each axle's springs where they are set apart (0.76), so that each end rides at
+    /// its own frequency; NaN on a car whose axles are sprung from <see cref="SuspensionStiffness"/> by their share of
+    /// the weight (every car but the BRZ), which gives both ends one frequency. The springs are preloaded so the car
+    /// still sits at the height <see cref="SuspensionStiffness"/> gives it (the drawn models and the model preparations'
+    /// copies of the geometry are set to that height), as a strut's spring sits preloaded on its seat at full droop.
+    /// </summary>
+    public float FrontWheelRate { get; init; } = float.NaN;
+    public float RearWheelRate { get; init; } = float.NaN;
 
     // Steering
     /// <summary>
@@ -168,6 +187,13 @@ public sealed record VehicleSpec
     public float RearBrakeTorque { get; init; } = 1700f;
     /// <summary>Anti-lock brakes: each wheel's pressure is eased when it slips past the tyre's peak, so the car stops short and still steers.</summary>
     public bool AntiLockBrakes { get; init; }
+    /// <summary>
+    /// Seconds the brakes' pressure takes to rise to what the pedal asks (0.76): the booster, the lines and the callipers'
+    /// fill between the foot and the full stop, which every published stopping distance includes, as it is timed from the
+    /// pedal. Zero on a car whose brakes act at once (every car but the BRZ: their grip was set against their stops with
+    /// it so); the pressure falls with the pedal at once.
+    /// </summary>
+    public float BrakeBuildUpSeconds { get; init; }
 
     /// <summary>
     /// The speed limiter (cars13): the road speed (km/h) past which the engine management takes the throttle away and
@@ -199,6 +225,13 @@ public sealed record VehicleSpec
     public float LimitedSlipLocking { get; init; } = 0.4f;
     /// <summary>Torque (N m) the limited-slip clutches pass with no drive at all, from their spring preload.</summary>
     public float LimitedSlipPreload { get; init; } = 60f;
+
+    /// <summary>
+    /// The car's own automatic gearbox, a torque converter and its own gear set (0.76), which it drives through in
+    /// <see cref="TransmissionMode.Automatic"/>; null on a car whose automatic mode shifts its manual gearbox and works its
+    /// clutch for the driver (every car but the BRZ). The ratios above stay the manual gearbox's, which the manual modes use.
+    /// </summary>
+    public AutomaticGearbox? Automatic { get; init; }
 
     public int ForwardGearCount => GearRatios.Length - 2;
     public float RatioForGear(int gear) => GearRatios[gear + 1];
@@ -1095,7 +1128,9 @@ public sealed record VehicleSpec
     /// ran a manual BRZ of 2012 to 60 mph in 7.3 s and over the quarter mile in 15.3 s at 92.1 mph (autoblog.com's report
     /// of the test), which takes third gear: second runs out at the limiter's 7,400 rpm at 97 km/h on the free tyre
     /// radius, about 95 on the loaded one, just short of 60 mph. Its 215/45 R17 Michelin Primacy HP touring tyres held
-    /// about 0.9 g in the road tests of 2012-13 (Car and Driver's and Motor Trend's BRZ and FR-S).
+    /// about 0.9 g in the road tests of 2012-13 (Car and Driver's and Motor Trend's BRZ and FR-S). Since 0.76 it is also the
+    /// owner's car, a European BRZ of 2017-20 with the six-speed automatic, which it drives through in the automatic mode
+    /// (<see cref="BoxerAutomatic"/>); the manual modes keep the manual gearbox.
     /// </summary>
     /// <remarks>
     /// Its size is the BRZ's: 4240 x 1775 x 1285 mm, 2570 mm between the axles, tracks of 1520 mm in front and 1540
@@ -1109,29 +1144,32 @@ public sealed record VehicleSpec
     /// is drawn by a model of its twin, a first-generation Toyota 86 (the 2017 facelift's nose) with the W212's cabin
     /// (tools/car_models.json "brz"); a build without the models draws the V8's loft, fitted to these axles
     /// (CarStyle.Boxer), the nearest in height and proportion though its glass engine deck belongs to a mid-engined car.
-    /// The inertias follow the sports cars' (the dynamic index
-    /// about 0.9); the springs and bars a sports coupe's of 1315 kg (game figures, none published).
+    /// The inertias follow the sports cars' (the dynamic index about 0.9).
     /// <para>
-    /// The facelift of 2017-20, compared (cars/phys2): the drawn model is a facelifted first-generation twin (a Toyota
-    /// 86), still the ZC6. In Europe the facelift kept the engine and the figures this spec follows: 200 PS, 205 N m at
-    /// 6400-6600, 1243 kg at the kerb, 0-100 km/h in 7.6 s, 226 km/h, 215/45 R17 (motor1.com's German test of the
-    /// facelift, 19 January 2017); its revised springs and dampers and larger rear anti-roll bar are published without
-    /// rates (Subaru of America's release of 24 October 2016; motor1.com), its final drive not at all. The American and
-    /// Japanese manual took 205 hp at 7000, 156 lb ft at 6400 and a 4.30 final drive in place of the 4.10 (Subaru of
-    /// America, "2017 Subaru BRZ brings higher performance, updated styling", 24 October 2016), and Car and Driver
-    /// timed its twin, a 2017 Toyota 86 manual on the same 215/45 Michelin Primacy HP tyres (2,754 lb), at 6.2 s to
-    /// 60 mph, 16.8 s to 100 mph, the quarter mile in 14.8 s at 95 mph and 134 mph flat out, drag-limited (Car and
-    /// Driver, 13 October 2016, as Yahoo Autos carries it; its 2013 BRZ took 6.3-6.4 s, as 0-60specs.com lists the
-    /// magazine's tests). Set to those figures here (205 hp and 4.30, the rest as it is), the car runs 7.13 s to 60 mph
-    /// launched as a road test (7.20 now), 16.5 s to 100 mph and the quarter mile in 15.3 s at 95.8 mph: 0.9 s off that
-    /// test's 0-60 mph, as the 2013 car is off Car and Driver's (its rollout of a foot and launch are not the road-test
-    /// launch's), and the trap speed its; but flat out it runs to 253 km/h at 7,200 rpm in sixth, 12 % over Subaru's
-    /// 226 and 17 % over Car and Driver's 134 mph, out of the tenth either side every car's top speed is held to, as
-    /// the model's road load does not grow with speed (8 % over on the 4.10 already, above). So the BRZ stays the
-    /// 2013-16 car, which in Europe is the facelift's engine and published figures too; only its curve's redline point
-    /// is lowered so that the power peaks at 7000 as published (EngineSpec.BoxerFour). Moving to the American facelift
-    /// takes the curve through 205 hp at 7000 and 212 N m at 6400 and FinalDrive = 4.30, with the top speed's window
-    /// settled first (docs/design.md item 23).
+    /// The facelift of 2017-20, compared (cars/phys2, 0.76): the drawn model is a facelifted first-generation twin (a
+    /// Toyota 86), still the ZC6. In Europe the facelift kept the engine and the figures this spec follows with either
+    /// gearbox: 200 PS at 7000, 205 N m at 6400-6600, 215/45 R17 87W on 7J x 17, Cd 0.28; 1243 kg at the kerb with the
+    /// manual and 1266 kg with the automatic (both without a driver), 0-100 km/h in 7.6 s and 226 km/h with the manual,
+    /// 8.2 s and 210 km/h with the automatic (Subaru Deutschland's price list and technical data of the 2017 model year;
+    /// motor1.com's German test of the manual, 19 January 2017). Its revised springs and dampers and larger rear anti-roll
+    /// bar are published without rates (Subaru of America's release of 24 October 2016), so the 2013-16 car's measured
+    /// rates stand (the fields' comments). The American and Japanese manual took 205 hp at 7000, 156 lb ft at 6400 and a
+    /// 4.30 final drive in place of the 4.10 (Subaru of America, 24 October 2016; their automatic kept 200 hp, 151 lb ft
+    /// and 4.10), and Car and Driver timed its twin, a 2017 Toyota 86 manual on the same tyres (2,754 lb), at 6.2 s to
+    /// 60 mph, 16.8 s to 100 mph, the quarter mile in 14.8 s at 95 mph and 134 mph flat out (Car and Driver, 13 October
+    /// 2016, as Yahoo Autos carries it). The BRZ stays the European car; moving to the American manual takes the curve
+    /// through 205 hp at 7000 and 212 N m at 6400 and FinalDrive = 4.30.
+    /// </para>
+    /// <para>
+    /// 0.76 made it the owner's car (his "2021 model" European BRZ with the automatic: "its cabin, its sound and its
+    /// driving physics are nothing like it") and took up the 0.70 review's findings for every gearbox mode: the automatic
+    /// (<see cref="BoxerAutomatic"/>), the FA20's dyno shape (EngineSpec.BoxerFour), the EPA's road load, the springs at
+    /// the BRZ's ride frequencies and the bars at its load transfer, the bump travel and the brakes' build-up. The 0.76
+    /// review then gave the D range its own reading of the pedal, a drive at the wheels
+    /// (AutomaticGearbox.PedalPowerExponent), and the FA20 its launch revs above its dip in the manual modes
+    /// (EngineSpec.BoxerFour). Measured then: with the manual 0-100 km/h in 7.77 s
+    /// on the road-test launch (7.6 published), 229 km/h (226) and 38.6 m from 100 km/h (39); with the automatic 8.21 s
+    /// (8.2), 212 km/h in fifth (210) and 38.8 m.
     /// </para>
     /// </remarks>
     public static VehicleSpec Boxer => new()
@@ -1140,8 +1178,14 @@ public sealed record VehicleSpec
         Style = CarStyle.Boxer,
         FrontTire = new(215f, 45f, 17f),
         RearTire = new(215f, 45f, 17f),
-        FrontAntiRoll = 22000f,
-        RearAntiRoll = 14000f,
+        // The bars (0.76) give the real car's balance and roll: 61 % of the roll stiffness in front, its lateral load
+        // transfer (Spectral Performance's model of the BRZ: "roll resistance on front 61%"), and about 2.3 deg/g ("max
+        // roll angle +/-2.3 deg"). The real car's roll centres (53 mm in front, 97 mm behind on the same page) carry part
+        // of its load transfer through the links; the model's are at the ground, so its bars carry that part too and are
+        // stiffer than the real bars (18 / 14 mm, 23.0 / 6.8 kN/m in these units). Until 0.76 the bars were 22,000 /
+        // 14,000 on stiffer springs: 57 % in front, the car a little loose against the real one.
+        FrontAntiRoll = 26500f,
+        RearAntiRoll = 12700f,
         // 53/47 with the reference point 1.21 / 1.36 m from the axles; 0.14 m under it: the boxer sits low and far back.
         CentreOfMassOffset = new(0f, -0.14f, 0f),
         AntiLockBrakes = true,
@@ -1151,12 +1195,14 @@ public sealed record VehicleSpec
         Engine = EngineSpec.BoxerFour,
         // Its speedometer reads to 260 km/h.
         SpeedoMaxMph = 162f,
-        // No speed limiter: its published top speed (226 km/h, 230 in cars-data's listing of the Sport) is the drag's,
-        // in sixth at about 6,000 rpm; Subaru's specification sheets give no limited speed, and an owner's run to an
-        // indicated 237 km/h (Carscoops, 2013) ended on the drag. On the published curve, Cd 0.29 and the frontal area
-        // estimated from its size the car runs to about 245 km/h here, 8 % over 226 (the HGT and the Bravo 1.6 are 3-4 %
-        // over theirs): the model's rolling and driveline losses do not grow with speed as a real car's do.
-        // 1240 kg at the kerb with a driver.
+        // No speed limiter: its published top speeds (226 km/h with the manual, 210 with the automatic: Subaru
+        // Deutschland's technical data of 2017) are the drag's; Subaru's specification sheets give no limited speed, and
+        // an owner's run to an indicated 237 km/h (Carscoops, 2013) ended on the drag. Until 0.76 the road load was the
+        // drag of Cd 0.29 on an estimated 2.0 m^2 and a constant rolling resistance, and the car ran to 246 km/h, 8 % over;
+        // since then it is the EPA's coast-down of the car (RollingResistance, RoadLoadPerSpeed below).
+        // 1240 kg at the kerb with a driver: the manual's (1243 kg in Subaru Deutschland's 2017 data, without the driver).
+        // The automatic's 1266 kg is not taken: one mass serves every gearbox mode, and the model preparations' copy of
+        // the geometry carries it (tools/car_models.py SPECS).
         MassKg = 1315f,
         InertiaRoll = 420f,
         InertiaYaw = 2000f,
@@ -1173,14 +1219,30 @@ public sealed record VehicleSpec
         FrontalArea = 2.0f,
         FrontLiftArea = 0.08f,
         RearLiftArea = 0.04f,
+        // The road load (0.76) is the EPA's coast-down of the 2017-19 BRZ with the automatic (its test-car data, test
+        // weight 3,125 lb): A 32.33 lbf, B 0.1765 lbf/mph, C 0.0177 lbf/mph^2, that is 143.8 N, 1.756 N per m/s and
+        // 0.394 N per (m/s)^2. A as a rolling resistance at that weight; B as it is; of C, what the drag above (0.348 at
+        // the model's air density) leaves. The manual's of the same years is within 3 % of it at 200 km/h.
+        RollingResistance = 0.0103f,
+        RoadLoadPerSpeed = 1.756f,
+        RoadLoadPerSpeedSquared = 0.046f,
         // Touring tyres, chosen for the car's balance rather than its grip: the flat-twelve's 1.0 (about 0.9 g).
         TireGrip = 1.0f,
         TractionControl = true,
         WheelRadius = 0.313f,
         SuspensionRest = 0.24f,
+        // The ride height's springs (the sag of a quarter of the mass on 36,000 N/m, 90 mm, which the drawn model and
+        // the model preparations' SPECS are set to); the wheel rates are the axles' own below.
         SuspensionStiffness = 36000f,
+        // The springs (0.76): the BRZ's ride frequencies, 1.43 Hz in front and 1.47 Hz behind (Spectral Performance's
+        // suspension model), on each corner's share of the car's mass, which the model's springs carry whole (the real
+        // car's carry the body; its wheels, some 38 kg a corner, ride on the tyres). Until 0.76 the axles shared 36,000
+        // N/m by their loads, 38.1 / 33.9 kN/m, 1.67 Hz at both ends: 1.36 and 1.28 times too stiff.
+        FrontWheelRate = 28100f,
+        RearWheelRate = 26400f,
         SuspensionDamping = 3600f,
-        MaxCompression = 0.14f,
+        // 64 mm of bump travel from the ride height (2.5 in, Spectral Performance), the 90 mm of rebound the sag gives.
+        MaxCompression = 0.154f,
         // A 13.1:1 rack: quick.
         MaxSteerLowSpeedDeg = 32f,
         MaxSteerHighSpeedDeg = 7f,
@@ -1188,11 +1250,51 @@ public sealed record VehicleSpec
         // proportioned for a 53/47 car.
         FrontBrakeTorque = 2600f,
         RearBrakeTorque = 1100f,
+        // The brakes' response and build-up from the pedal (0.76): a car's hydraulic brake reaches its full pressure some
+        // 0.1-0.3 s after the foot (accident reconstruction's response and build-up times; a game figure at the top of
+        // that range). Every published stop is timed from the pedal, the build-up in it; without it the car stopped from
+        // 100 km/h in 36.5 m, 7 % short of the tests: ADAC's "just under 39 m" (its test of December 2014), Motor
+        // Trend's 120 ft from 60 mph and Car and Driver's 165 ft from 70 mph (39.2 and 39.6 m from 100 km/h).
+        BrakeBuildUpSeconds = 0.3f,
         GearRatios = [-3.437f, 0f, 3.626f, 2.188f, 1.541f, 1.213f, 1.000f, 0.767f],
         FinalDrive = 4.10f,
         ClutchMaxTorque = 400f,
         EngineInertia = 0.14f,
         WheelInertia = 1.0f,
+        Automatic = BoxerAutomatic,
+    };
+
+    /// <summary>
+    /// The BRZ's six-speed automatic (0.76), the owner's car: Aisin's A960E as the 2017-20 facelift had it in Europe (its
+    /// manual mode, paddles and downshift blips are not modelled: the game's automatic mode is its D range). Its ratios,
+    /// 3.538 / 2.060 / 1.404 / 1.000 / 0.713 / 0.582 with reverse 3.168, on a 4.100 final drive (Subaru of America's 2013
+    /// and 2017 specification sheets: the manual's final drive went to 4.300 for 2017, the automatic's stayed; the EPA's
+    /// test-car data of 2017-19 list the automatic on a 4.1 axle). The converter stalls at 2,540 +/- 150 rpm (SSP
+    /// Performance's converter listing, quoting the factory's figure) with a stall torque ratio of 1.95 (Toyota's
+    /// description of the A960E's three-element, one-stage, two-phase converter, as an excerpt of it quotes it: the
+    /// original was not seen). Subaru Deutschland's figures for it: 0-100 km/h in 8.2 s and 210 km/h, against 7.6 s and
+    /// 226 km/h with the manual; MotorWeek's automatic BRZ took 7.7 s to 60 mph.
+    /// </summary>
+    /// <remarks>
+    /// The lock-up clutch closes in fourth to sixth (Toyota's flex lock-up; its speed and capacity, the shift timing and
+    /// the D range's shift map are game figures in the manner of a six-speed automatic of its time, Aisin's being
+    /// unpublished; see <see cref="AutomaticGearbox"/>'s defaults). The manual's 226 km/h is reached in sixth at about
+    /// 6,000 rpm; the automatic's 210 in fifth at about 5,300, since its sixth (0.582) is an overdrive that pulls no
+    /// more than about 180 km/h on the road load: flat out the gearbox changes up at 7,000 rpm, which fifth never reaches.
+    /// </remarks>
+    private static AutomaticGearbox BoxerAutomatic => new()
+    {
+        GearRatios = [-3.168f, 0f, 3.538f, 2.060f, 1.404f, 1.000f, 0.713f, 0.582f],
+        FinalDrive = 4.100f,
+        StallRpm = 2540f,
+        StallTorqueRatio = 1.95f,
+        // The D range's upshift line (a game figure, Aisin's map not being published): the earliest a change up comes,
+        // about 1,500 rpm on a whisper of pedal, which puts sixth in at a steady 70 km/h, and at full pedal 7,000 rpm, a
+        // little short of the 7,400 redline so the change is made before the limiter. Since the 0.76 review a change up
+        // also waits until the gear above can give the pedal's drive (AutomaticGearbox.UpshiftLoadLimit), so a pull
+        // from rest changes up at 1,800-2,200 rpm at 0.3 pedal, 2,100-2,900 at 0.4 and 3,300-3,700 at 0.5, and from about
+        // 0.7 near the full pedal's line.
+        UpshiftRpm = [(0f, 1500f), (0.3f, 1800f), (0.45f, 2050f), (0.6f, 2700f), (0.75f, 3800f), (0.85f, 5000f), (0.95f, 6500f), (1f, 7000f)],
     };
 
     /// <summary>

@@ -45,6 +45,8 @@ public static class LoopRunUp
         }
         var drag = 0.5f * AirDensity * spec.DragCoefficient * spec.FrontalArea * speed * speed;
         var rolling = spec.RollingResistance * spec.MassKg * MathUtil.Gravity;
-        return (best - drag - rolling) / spec.MassKg;
+        // The road load's rise with speed where the spec has one (0.76, VehicleSpec.RoadLoadPerSpeed); zero on the others.
+        var growth = spec.RoadLoadPerSpeed * speed + spec.RoadLoadPerSpeedSquared * speed * speed;
+        return (best - drag - rolling - growth) / spec.MassKg;
     }
 }

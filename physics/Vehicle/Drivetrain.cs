@@ -6,8 +6,10 @@ namespace GrudgeLap.Physics.Vehicle;
 /// while slipping it transmits Coulomb torque limited by the pedal, when the speeds meet it locks and the
 /// engine inertia is lumped onto the wheels. That is numerically stable at the 240 Hz step and still gives
 /// the two behaviours the original cabinet was known for: a launch you can fluff, and a stall.
+/// A car with its own automatic gearbox (<see cref="VehicleSpec.Automatic"/>) drives through a torque converter instead
+/// in <see cref="TransmissionMode.Automatic"/> (0.76, Drivetrain.Converter.cs).
 /// </summary>
-public sealed class Drivetrain
+public sealed partial class Drivetrain
 {
     private readonly VehicleSpec _spec;
     private readonly float _launchRpm;
@@ -52,9 +54,33 @@ public sealed class Drivetrain
         Engine = new EngineModel(spec.Engine);
         // Read once: LaunchRpm walks the torque curve, and a pre-rev on the brake would ask for it every step.
         _launchRpm = spec.Engine.LaunchRpm;
+        _automatic = spec.Automatic;
+        if (_automatic is null) return;
+        _converterCapacity = TorqueConverter.StallCapacity(spec.Engine, _automatic);
+        // Read once, as the launch revs are: PeakPower walks the torque curve.
+        _peakWheelPower = spec.Engine.PeakPower * _automatic.DrivelineEfficiency;
     }
 
-    public float Ratio => _spec.RatioForGear(Gear) * _spec.FinalDrive;
+    /// <summary>
+    /// True while the car drives through its own torque-converter automatic (0.76): it has one and the automatic mode is
+    /// chosen. The gearing then is the automatic's (<see cref="RatioForGear"/>, <see cref="FinalDrive"/>), and
+    /// <see cref="ClutchLocked"/> is its lock-up clutch.
+    /// </summary>
+    public bool TorqueConverterDrives => _automatic is not null && Mode == TransmissionMode.Automatic;
+
+    /// <summary>The ratio of <paramref name="gear"/> in the gearbox the car drives through now (see <see cref="TorqueConverterDrives"/>).</summary>
+    public float RatioForGear(int gear) => TorqueConverterDrives ? _automatic!.RatioForGear(gear) : _spec.RatioForGear(gear);
+    public float FinalDrive => TorqueConverterDrives ? _automatic!.FinalDrive : _spec.FinalDrive;
+    public int ForwardGearCount => TorqueConverterDrives ? _automatic!.ForwardGearCount : _spec.ForwardGearCount;
+
+    public float Ratio => RatioForGear(Gear) * FinalDrive;
+
+    /// <summary>
+    /// Whether the engine's torque reaches the driven wheels now, so that cutting it eases a spinning wheel (the traction
+    /// control's question): the clutch locked, or a gear in through the torque converter, whose drive follows the engine's
+    /// speed (0.76). On a car without a converter it is <see cref="ClutchLocked"/>.
+    /// </summary>
+    public bool EngineCoupled => ClutchLocked || (TorqueConverterDrives && Gear != 0);
 
     public void Reset()
     {
@@ -68,12 +94,21 @@ public sealed class Drivetrain
         Launching = false;
         PreRevving = false;
         Synchronising = false;
+        ResetConverter();
         Engine.Stop();
     }
 
-    /// <summary>Test/debug helper: engine running, given gear engaged and clutch locked at the given input-shaft speed.</summary>
+    /// <summary>
+    /// Test/debug helper: engine running, given gear engaged and clutch locked at the given input-shaft speed. Through a
+    /// torque converter the lock-up clutch is closed where the gear allows it, the converter coupling the engine otherwise.
+    /// </summary>
     public void ForceLocked(int gear, float inputShaftSpeed)
     {
+        if (TorqueConverterDrives)
+        {
+            ForceConverterGear(gear, inputShaftSpeed);
+            return;
+        }
         Gear = Math.Clamp(gear, -1, _spec.ForwardGearCount);
         Engine.Start();
         Engine.AngularVelocity = MathF.Max(inputShaftSpeed, Engine.Spec.IdleRpm / EngineModel.RpmPerRadPerSec);
@@ -94,22 +129,17 @@ public sealed class Drivetrain
     /// </summary>
     public void Step(in DriverInputs input, float axleSpeed, float groundSpeed, float dt, float axleInertia = 0f, float axleLoadTorque = 0f)
     {
+        if (TorqueConverterDrives)
+        {
+            StepConverter(input, axleSpeed, groundSpeed, dt, axleInertia, axleLoadTorque);
+            return;
+        }
         HandleIgnition(input);
         SelectGear(input, groundSpeed, dt);
         var pedal = ResolveClutchPedal(input, groundSpeed, dt);
         Engagement = 1f - pedal;
 
-        var throttle = input.Throttle * MathUtil.Clamp01(TorqueCut);
-        if (float.IsFinite(_spec.SpeedLimiterKmh))
-        {
-            // The speed limiter (cars13): the engine management takes the throttle back over the 3 km/h past the limit
-            // and holds the car there, the smooth hold of the real limiters rather than the rev limiter's cut (the sound
-            // reads the throttle and hears a lift, not a stutter). The ramp starts at the limit: ending at it, the hold
-            // settled where the throttle it left matched the drag, 247.1 km/h for the Cupra's 250 at 0.95 (the cars13
-            // review); now it settles about 0.1 km/h over. A car without one never enters here.
-            var kmh = MathF.Abs(groundSpeed) * MathUtil.KmhPerMps;
-            throttle = MathF.Min(throttle, MathUtil.Clamp01((_spec.SpeedLimiterKmh + 3f - kmh) / 3f));
-        }
+        var throttle = LimitSpeed(input.Throttle * MathUtil.Clamp01(TorqueCut), groundSpeed);
         var shaftRpm = MathF.Abs(axleSpeed * Ratio) * EngineModel.RpmPerRadPerSec;
         var matchRpm = MathF.Min(shaftRpm, 0.98f * Engine.Spec.RedlineRpm);
         if (Mode != TransmissionMode.ManualClutch && _shiftTimer > 0f)
@@ -207,6 +237,20 @@ public sealed class Drivetrain
     }
 
     /// <summary>
+    /// The speed limiter (cars13): the engine management takes the throttle back over the 3 km/h past the limit and holds
+    /// the car there, the smooth hold of the real limiters rather than the rev limiter's cut (the sound reads the throttle
+    /// and hears a lift, not a stutter). The ramp starts at the limit: ending at it, the hold settled where the throttle it
+    /// left matched the drag, 247.1 km/h for the Cupra's 250 at 0.95 (the cars13 review); now it settles about 0.1 km/h
+    /// over. A car without one keeps <paramref name="throttle"/> as it is.
+    /// </summary>
+    private float LimitSpeed(float throttle, float groundSpeed)
+    {
+        if (!float.IsFinite(_spec.SpeedLimiterKmh)) return throttle;
+        var kmh = MathF.Abs(groundSpeed) * MathUtil.KmhPerMps;
+        return MathF.Min(throttle, MathUtil.Clamp01((_spec.SpeedLimiterKmh + 3f - kmh) / 3f));
+    }
+
+    /// <summary>
     /// Whether changing down one gear now would pull harder (0.19): the gear below lands the engine under 0.82 of its
     /// redline (so the next upshift does not come straight back) and gives at least 5 % more torque at the wheels, from
     /// the full-throttle curve times the ratio. What a driver, or an automatic's kick-down, does before a long pull: until
@@ -217,10 +261,10 @@ public sealed class Drivetrain
     {
         if (Gear <= 1) return false;
         var rpm = Engine.Rpm;
-        var lowerRpm = rpm * _spec.RatioForGear(Gear - 1) / _spec.RatioForGear(Gear);
+        var lowerRpm = rpm * RatioForGear(Gear - 1) / RatioForGear(Gear);
         if (lowerRpm > Engine.Spec.RedlineRpm * 0.82f) return false;
-        var now = Engine.Spec.CurveTorque(rpm) * _spec.RatioForGear(Gear);
-        var lower = Engine.Spec.CurveTorque(lowerRpm) * _spec.RatioForGear(Gear - 1);
+        var now = Engine.Spec.CurveTorque(rpm) * RatioForGear(Gear);
+        var lower = Engine.Spec.CurveTorque(lowerRpm) * RatioForGear(Gear - 1);
         return lower > now * 1.05f;
     }
 
