@@ -3,7 +3,7 @@ Kind:         1998-2005 front-engined front-drive five-door hatchback: a Renault
               (phase 2: the twin-lens headlamps, the bumpers and the grille of 2001-03), on steel wheels with hubcaps, a
               roof aerial, the Renault lozenge and the badges "RENAULT" and "Clio" on the tailgate - the catalogue's
               1.6 16V Clio ("CLIO 1.6 16V '01"). A shell: body, glass, lamps, bumpers, mirrors, handles, wipers,
-              plates, tyres, wheels and hubcaps, with a dark inner shell under the glass; no cabin.
+              plates, tyres, wheels and hubcaps, and its own cabin under the glass in one dark material.
 Licence:      Creative Commons Attribution 4.0 International (CC BY 4.0)
 Licence URL:  https://creativecommons.org/licenses/by/4.0/
 Author:       Nardeol (Sketchfab user "Nardeol", https://sketchfab.com/Nardeol; Rennes, Bretagne)
@@ -42,13 +42,15 @@ Geometry:     lies along z, nose at +z (glTF), Y up; wheelbase 7.983 file units,
 Materials:    paint "Tle_rouge" (Tole rouge: the body, Carrosserie); "Vitres" on the windows (drawn as the game's glass)
               and "Vitres.001" on the lamp covers (Feux avants, Feux arriere: drawn as clear lenses, the entry's "lens");
               "Phare" the headlamp bulbs, "Phare.001" the tail lamp bulbs and the high brake lamp (lit when braking);
-              "Dchet" (Dechet) the dark inner shell and the black rear panel; "Plastique" the bumpers, trim, wipers,
+              "Dchet" (Dechet) the cabin, inner shell and black rear panel; "Plastique" the bumpers, trim, wipers,
               handles and mirror housings; "Enjoliveurs" the hubcaps, the lozenge and the badges; "Plaque" the plates;
               "Material.002" the tyres, "Material.001" the steel wheels; "material_0" the right mirror's glass.
-Cabin:        none: the game borrows the SAAB 9-5's (tools/car_models.json cabin_from "_saab", as the Golf R32 does).
+Cabin:        its own, in "Dchet": dashboard, twin-cowl binnacle, steering wheel, front seats, rear bench and mirror;
+              tools/car_models.json "clio" draws it and takes its steering wheel out of the cabin's mesh to turn
+              (steering_part). Until November 2026 the game hid it under a borrowed SAAB 9-5 cabin.
 
 Attribution text to show in the game credits (CC BY 4.0 requires attribution, a licence link and a note of changes):
   "Clio 2" by Nardeol (https://sketchfab.com/3d-models/clio-2-2c4d2cb0cda14dc9b2ddcd7d2b3a1f95) is licensed under
   Creative Commons Attribution 4.0 International (CC BY 4.0) (https://creativecommons.org/licenses/by/4.0/).
-  Modified for use in GrudgeLap (re-scaled, re-rigged, wheels split by corner, given a borrowed cabin, materials
-  replaced by the game's paint, glass and lenses).
+  Modified for use in GrudgeLap (re-scaled, re-rigged, wheels split by corner, the steering wheel
+  cut out of its own cabin to turn, materials replaced by the game's paint, glass and lenses).

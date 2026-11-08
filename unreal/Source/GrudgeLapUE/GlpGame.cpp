@@ -214,6 +214,8 @@ void AGlpGame::BeginPlay()
 	Mirror->RegisterComponent();
 
 	LoadSettings();
+	// -GlpCar=<catalogue index> drives that car (automation: the off-screen shots of each car, 0.74).
+	FParse::Value(FCommandLine::Get(), TEXT("GlpCar="), CarIndex);
 	if (!Cars.IsValidIndex(CarIndex) || !Cars[CarIndex] || !IsDrivable(CarIndex))
 	{
 		CarIndex = 0;

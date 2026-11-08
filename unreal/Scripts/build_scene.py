@@ -778,23 +778,68 @@ def paint_material():
     return material
 
 
+def paint_finish(material, attributes, colour):
+    """The clear-coated paint's finish, and its dark lining (0.75): a back face inside the cabin (CabinMin..CabinMax, the
+    car's own frame in centimetres, set per car from its eye: CarView.SetPaintCabin's box) is the lining, matt and
+    near-black, as the Godot game's ModelPaint draws it. The models draw their panels from both faces and few have a
+    headlining, so from the seat the roof's underside and the pillars' inner faces showed in the body's colour. Outside
+    the box a back face stays paint, for the panels wound the wrong way (the Renault 12's doors)."""
+    position = mel.create_material_expression(material, unreal.MaterialExpressionWorldPosition, -1100, 450)
+    local = mel.create_material_expression(material, unreal.MaterialExpressionTransformPosition, -900, 450)
+    local.set_editor_property("transform_source_type", unreal.MaterialPositionTransformSource.TRANSFORMPOSSOURCE_WORLD)
+    local.set_editor_property("transform_type", unreal.MaterialPositionTransformSource.TRANSFORMPOSSOURCE_LOCAL)
+    mel.connect_material_expressions(position, "", local, "")
+    side = mel.create_material_expression(material, unreal.MaterialExpressionTwoSidedSign, -900, 550)
+    low = mel.create_material_expression(material, unreal.MaterialExpressionVectorParameter, -900, 650)
+    low.set_editor_property("parameter_name", "CabinMin")
+    low.set_editor_property("default_value", unreal.LinearColor(1.0, 1.0, 1.0, 0.0))
+    high = mel.create_material_expression(material, unreal.MaterialExpressionVectorParameter, -900, 750)
+    high.set_editor_property("parameter_name", "CabinMax")
+    high.set_editor_property("default_value", unreal.LinearColor(-1.0, -1.0, -1.0, 0.0))
+    custom = mel.create_material_expression(material, unreal.MaterialExpressionCustom, -650, 600)
+    custom.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT1)
+    custom.set_editor_property("description", "GrudgeLap lining")
+    custom.set_editor_property("code", "return (Side < 0.0 && all(Local > Low.xyz) && all(Local < High.xyz)) ? 1.0 : 0.0;")
+    inputs = []
+    for name in ("Local", "Side", "Low", "High"):
+        entry = unreal.CustomInput()
+        entry.set_editor_property("input_name", name)
+        inputs.append(entry)
+    custom.set_editor_property("inputs", inputs)
+    for node, pin in ((local, "Local"), (side, "Side"), (low, "Low"), (high, "High")):
+        mel.connect_material_expressions(node, "", custom, pin)
+    lining = mel.create_material_expression(material, unreal.MaterialExpressionConstant3Vector, -650, 300)
+    lining.set_editor_property("constant", unreal.LinearColor(0.045, 0.045, 0.05, 1.0))
+    mix = mel.create_material_expression(material, unreal.MaterialExpressionLinearInterpolate, -300, 0)
+    mel.connect_material_expressions(colour, "", mix, "A")
+    mel.connect_material_expressions(lining, "", mix, "B")
+    mel.connect_material_expressions(custom, "", mix, "Alpha")
+    mel.connect_material_expressions(mix, "", attributes, "BaseColor")
+    for y, (pin, paint_value, lining_value) in enumerate((("Metallic", 0.35, 0.0), ("Roughness", 0.38, 0.9),
+                                                         ("ClearCoat", 1.0, 0.0), ("ClearCoatRoughness", 0.04, 0.04))):
+        value = mel.create_material_expression(material, unreal.MaterialExpressionLinearInterpolate, -250, 200 + y * 100)
+        value.set_editor_property("const_a", paint_value)
+        value.set_editor_property("const_b", lining_value)
+        mel.connect_material_expressions(custom, "", value, "Alpha")
+        mel.connect_material_expressions(value, "", attributes, pin)
+
+
 def paint_solid_material():
     """The paint of the parts Godot paints with a plain material instead of the vertex colour: the strakes, the
     intakes, the mirror housings (CarView's solidPaint, (0.54, 0.002, 0.004) linear). The same clear coat as
     M_CarPaint and the same Paint parameter, so the traffic copies are painted all over in their own colour."""
     material = asset_tools.create_asset("M_CarPaintSolid", f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
     material.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_CLEAR_COAT)
+    # Both faces (0.74): the prepared models' panels are not all wound one way (the Renault 12's doors on mirrored nodes,
+    # the Godot game draws its paint from both sides), and a one-sided paint left holes where a panel faced inwards.
+    material.set_editor_property("two_sided", True)
     material.set_editor_property("use_material_attributes", True)
     attributes = mel.create_material_expression(material, unreal.MaterialExpressionMakeMaterialAttributes, 0, 0)
     mel.connect_material_property(attributes, "", unreal.MaterialProperty.MP_MATERIAL_ATTRIBUTES)
     paint = mel.create_material_expression(material, unreal.MaterialExpressionVectorParameter, -400, 0)
     paint.set_editor_property("parameter_name", "Paint")
     paint.set_editor_property("default_value", unreal.LinearColor(0.54, 0.0023, 0.0039, 1.0))
-    mel.connect_material_expressions(paint, "", attributes, "BaseColor")
-    for y, (pin, value) in enumerate((("Metallic", 0.35), ("Roughness", 0.38), ("ClearCoat", 1.0), ("ClearCoatRoughness", 0.04))):
-        constant = mel.create_material_expression(material, unreal.MaterialExpressionConstant, -250, 200 + y * 100)
-        constant.set_editor_property("r", value)
-        mel.connect_material_expressions(constant, "", attributes, pin)
+    paint_finish(material, attributes, paint)
     mel.recompile_material(material)
     eal.save_loaded_asset(material)
     return material
@@ -805,6 +850,7 @@ def paint_textured_material():
     the Paint parameter under the same clear coat as M_CarPaintSolid, so the textured cars shine as the flat ones do."""
     material = asset_tools.create_asset("M_CarPaintTextured", f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
     material.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_CLEAR_COAT)
+    material.set_editor_property("two_sided", True)   # as M_CarPaintSolid
     material.set_editor_property("use_material_attributes", True)
     attributes = mel.create_material_expression(material, unreal.MaterialExpressionMakeMaterialAttributes, 0, 0)
     mel.connect_material_property(attributes, "", unreal.MaterialProperty.MP_MATERIAL_ATTRIBUTES)
@@ -816,11 +862,7 @@ def paint_textured_material():
     colour = mel.create_material_expression(material, unreal.MaterialExpressionMultiply, -400, 0)
     mel.connect_material_expressions(texture, "RGB", colour, "A")
     mel.connect_material_expressions(paint, "", colour, "B")
-    mel.connect_material_expressions(colour, "", attributes, "BaseColor")
-    for y, (pin, value) in enumerate((("Metallic", 0.35), ("Roughness", 0.38), ("ClearCoat", 1.0), ("ClearCoatRoughness", 0.04))):
-        constant = mel.create_material_expression(material, unreal.MaterialExpressionConstant, -250, 200 + y * 100)
-        constant.set_editor_property("r", value)
-        mel.connect_material_expressions(constant, "", attributes, pin)
+    paint_finish(material, attributes, colour)
     mel.recompile_material(material)
     eal.save_loaded_asset(material)
     return material
@@ -1086,6 +1128,10 @@ def dress_prepared_model(car, parts, materials):
     slot left is built without Nanite."""
     if "ModelBody" not in parts:
         return
+    cabin = None
+    if "Eye" in parts:
+        eye = car.get_actor_transform().inverse_transform_location(parts["Eye"].get_actor_location())
+        cabin = (unreal.LinearColor(-86.0, eye.y - 110.0, eye.z - 55.0, 0.0), unreal.LinearColor(86.0, eye.y + 75.0, eye.z + 60.0, 0.0))
     paints = {}
     painted = glazed = plain = 0
     for component in mesh_components(car):
@@ -1117,6 +1163,9 @@ def dress_prepared_model(car, parts, materials):
                     mel.set_material_instance_vector_parameter_value(instance, "Paint", unreal.LinearColor(colour.r, colour.g, colour.b, 1.0))
                     if textured:
                         mel.set_material_instance_texture_parameter_value(instance, "Texture", texture)
+                    if cabin is not None:
+                        mel.set_material_instance_vector_parameter_value(instance, "CabinMin", cabin[0])
+                        mel.set_material_instance_vector_parameter_value(instance, "CabinMax", cabin[1])
                     mel.update_material_instance(instance)
                     eal.save_loaded_asset(instance)
                     paints[key] = instance
@@ -1364,6 +1413,109 @@ def shoulder_material():
     return m
 
 
+GRATING_HLSL = '''struct FGlpBars
+{
+    float Integral(float x, float p, float w)
+    {
+        float k = floor(x / p + 0.5);
+        return k * w + clamp(x - k * p + 0.5 * w, 0.0, w);
+    }
+    float Cover(float x, float p, float w, float fw)
+    {
+        fw = max(fw, 1e-5);
+        return (Integral(x + 0.5 * fw, p, w) - Integral(x - 0.5 * fw, p, w)) / fw;
+    }
+};
+FGlpBars B;
+float2 pitch = float2(0.060, 0.102);
+float2 bar = float2(0.010, 0.006);
+float2 depth = float2(0.076, 0.010);
+float3 up = normalize(Up);
+float3 across = normalize(Across);
+float3 along = normalize(cross(up, across));
+float3 ray = -normalize(ToEye);
+float rn = dot(ray, up);
+float inv = 1.0 / max(abs(rn), 1e-3);
+float2 halfWalk = float2(dot(ray, across), dot(ray, along)) * inv * depth * (rn < 0.0 ? 0.5 : -0.5);
+float2 fw = fwidth(UV) * 1.6;
+float2 top = float2(B.Cover(UV.x, pitch.x, bar.x, fw.x), B.Cover(UV.y, pitch.y, bar.y, fw.y));
+float2 band = min(pitch, bar + 2.0 * abs(halfWalk));
+float2 blocked = float2(B.Cover(UV.x + halfWalk.x, pitch.x, band.x, fw.x), B.Cover(UV.y + halfWalk.y, pitch.y, band.y, fw.y));
+float topCover = 1.0 - (1.0 - top.x) * (1.0 - top.y);
+float solid = 1.0 - (1.0 - blocked.x) * (1.0 - blocked.y);
+float wall = saturate((solid - topCover) / max(solid, 1e-4));
+float3 face = rn < 0.0 ? up : -up;
+float3 wallN = normalize(-sign(dot(ray, across) + 1e-6) * across * max(blocked.x - top.x, 0.0)
+    - sign(dot(ray, along) + 1e-6) * along * max(blocked.y - top.y, 0.0) + face * 1e-3);
+Normal = normalize(lerp(face, wallN, wall * 0.7));
+float far = smoothstep(0.3, 1.0, max(fw.x / pitch.x, fw.y / pitch.y));
+Roughness = max(lerp(0.45, 0.22, Wet), lerp(0.0, 0.6, far));
+// The coverage dithered in time: a per-pixel, per-frame threshold the temporal upscaler (DLSS or TSR) averages back to
+// the deck's opacity; the mask keeps the pixel where the coverage passes it (clip value 0.5).
+float dither = InterleavedGradientNoise(Parameters.SvPosition.xy, View.StateFrameIndexMod8);
+Coverage = solid + 0.5 - dither;
+// The Godot shader's steel is sRGB (0.62, 0.63, 0.64): linear here.
+return float3(0.342, 0.354, 0.367) * lerp(1.0, 0.5, wall) * lerp(1.0, 0.72, Wet);'''
+
+
+def grating_material():
+    """The loop's running surface (0.74), as the Godot game draws it (loop_grating.gdshader, 0.72; ISTERLER P16, the
+    owner: a perforated steel deck to see through, as in the original): a galvanised bar grating computed per pixel,
+    bearing bars 10 mm thick every 60 mm across, cross bars 6 mm every 102 mm along, the bars' depth closing the deck up
+    at a grazing angle; the export carries the deck as plain white (its material is Godot's shader). Masked here: the
+    coverage, box-filtered over the pixel's footprint, is dithered in time and resolved by DLSS or TSR into a veil of
+    the deck's opacity, so the deck still writes depth and casts its ladder of shadows in the ray tracing. UV.x is
+    metres across the deck, UV.y metres along it (WorldBuilder.BuildLoopDeck)."""
+    m = asset_tools.create_asset("M_LoopGrating", f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    m.set_editor_property("blend_mode", unreal.BlendMode.BLEND_MASKED)
+    m.set_editor_property("two_sided", True)
+    m.set_editor_property("tangent_space_normal", False)
+    custom = mel.create_material_expression(m, unreal.MaterialExpressionCustom, -400, 0)
+    custom.set_editor_property("code", GRATING_HLSL)
+    custom.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT3)
+    custom.set_editor_property("description", "GrudgeLap grating")
+
+    def custom_input(name):
+        entry = unreal.CustomInput()
+        entry.set_editor_property("input_name", name)
+        return entry
+
+    def custom_output(name, kind):
+        entry = unreal.CustomOutput()
+        entry.set_editor_property("output_name", name)
+        entry.set_editor_property("output_type", kind)
+        return entry
+
+    names = ["UV", "Up", "Across", "ToEye", "Wet"]
+    custom.set_editor_property("inputs", [custom_input(n) for n in names])
+    custom.set_editor_property("additional_outputs", [custom_output("Normal", unreal.CustomMaterialOutputType.CMOT_FLOAT3),
+                                                      custom_output("Roughness", unreal.CustomMaterialOutputType.CMOT_FLOAT1),
+                                                      custom_output("Coverage", unreal.CustomMaterialOutputType.CMOT_FLOAT1)])
+    uv = mel.create_material_expression(m, unreal.MaterialExpressionTextureCoordinate, -900, -300)
+    up = mel.create_material_expression(m, unreal.MaterialExpressionVertexNormalWS, -900, -200)
+    across = mel.create_material_expression(m, unreal.MaterialExpressionVertexTangentWS, -900, -100)
+    eye = mel.create_material_expression(m, unreal.MaterialExpressionCameraVectorWS, -900, 0)
+    if WEATHER["collection"] is not None:
+        wet = mel.create_material_expression(m, unreal.MaterialExpressionCollectionParameter, -900, 100)
+        wet.set_editor_property("collection", WEATHER["collection"])
+        wet.set_editor_property("parameter_name", "Wetness")
+    else:
+        wet = mel.create_material_expression(m, unreal.MaterialExpressionConstant, -900, 100)
+    for node, pin in ((uv, "UV"), (up, "Up"), (across, "Across"), (eye, "ToEye"), (wet, "Wet")):
+        mel.connect_material_expressions(node, "", custom, pin)
+    m.set_editor_property("opacity_mask_clip_value", 0.5)
+    mel.connect_material_property(custom, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    mel.connect_material_property(custom, "Normal", unreal.MaterialProperty.MP_NORMAL)
+    mel.connect_material_property(custom, "Roughness", unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.connect_material_property(custom, "Coverage", unreal.MaterialProperty.MP_OPACITY_MASK)
+    metallic = mel.create_material_expression(m, unreal.MaterialExpressionConstant, -150, 350)
+    metallic.set_editor_property("r", 0.85)
+    mel.connect_material_property(metallic, "", unreal.MaterialProperty.MP_METALLIC)
+    mel.recompile_material(m)
+    eal.save_loaded_asset(m)
+    return m
+
+
 def land_material():
     """The real land round the circuit (the Godot version's RealLand, 0.37): Jackson Hole's satellite image on the mesh's
     UV, turning to the plain's green by the export's rim weight (vertex colour B) where it meets the game's terrain,
@@ -1430,11 +1582,13 @@ def dress_track(actors):
     # The painted stones of the Godot version's verge (0.74; 0.13-0.73 a red-brown mud scan; the grass path read as lawn).
     verge = shoulder_material()
     # The earthworks (the fork hill, the cuttings' walls) are bare earth in the game: its TerrainEarth mesh shares
-    # the terrain's UVs (5 km across), so the mud scan tiles every 4 m there, tinted to the hill's red-brown.
-    earth = surface_material("M_Earth", "brown_mud_dry", 5000 / 4.0, 5000 / 4.0, tint=(1.15, 0.78, 0.55))
+    # the terrain's UVs (5 km across), so the scan tiles every 4 m there. Compacted grey-brown dirt (0.74), as the Godot
+    # game's cuttings (Ground067 since 0.36): the mud scan tinted red-brown read as orange clay hills beside the road.
+    earth = surface_material("M_Earth", "dirt_floor", 5000 / 4.0, 5000 / 4.0, tint=(0.92, 0.88, 0.82), macro=23.0)
     land = land_material() if "Land" in actors else None
+    grating = grating_material() if any(label.startswith("LoopDeck-") for label in actors) else None
     for label, actor in actors.items():
-        material = ground if label == "Terrain" else earth if label == "TerrainEarth" else asphalt if label.startswith("Road-") else verge if label.startswith("Shoulder-") else land if label == "Land" else None
+        material = ground if label == "Terrain" else earth if label == "TerrainEarth" else asphalt if label.startswith("Road-") else verge if label.startswith("Shoulder-") else land if label == "Land" else grating if label.startswith("LoopDeck-") else None
         if material is None:
             continue
         for component in mesh_components(actor):

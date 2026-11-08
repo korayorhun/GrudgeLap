@@ -1,8 +1,8 @@
 """Fetches the real car models the level dresses the catalogue cars with (Import/Models/models.json), from the
 Objaverse mirror on Hugging Face: CC BY 4.0 models from Sketchfab, each with its LICENSE.txt beside it in the
-repository (author, source, the credit line the licence asks for). A model uploaded after the mirror's 2022 snapshot
-(RELEASED) comes from the project's own copy, a release asset of the repository, and is checked against the SHA-256 of
-the file its LICENSE.txt describes. Nothing is downloaded that is already there.
+repository (author, source, the credit line the licence asks for). A model the mirror does not hold (RELEASED: uploaded
+after its 2022 snapshot, or from another site) comes from the project's own copy, a release asset of the repository,
+and is checked against the SHA-256 of the file its LICENSE.txt describes. Nothing is downloaded that is already there.
 Usage: python fetch_models.py [Import/Models]
 """
 import hashlib
@@ -27,16 +27,14 @@ MODELS = {
     "cow-holstein-nyilonelycompany.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-099/c5782e43dcf442718a25b49bed00f582.glb",
     "golf-r32-mk4.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-060/8171332b39be45e896a7fdf3c3e66354.glb",
     "renault-12-boitaloran.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-074/f8c26a68a3dd45b492d6d9a33cda6fcd.glb",
-    # models13: the flat-plane V8 as a Ferrari 458 Italia (Antonis_zks; a shell without a cabin, like the Testarossa, so
-    # the game lends it the 570S's). No CC BY model of the first-generation Fiat Bravo or of the 2018 SEAT Leon Cupra
-    # exists (a search of the whole Objaverse catalogue, Sketchfab's CC BY/CC0 listings, archive.org, Commons and
-    # OpenGameArt on 2026-11-02 found none that is not a game rip or behind a login): those two keep lofted bodies of
-    # their own (game/src/CarView.Cars13.cs).
-    "ferrari-458-italia-antonis.glb": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-011/9fc3bebac5ee4ad1a7fb1d743e0db7d3.glb",
+    # models13: no CC BY model of the first-generation Fiat Bravo or of the 2018 SEAT Leon Cupra exists (a search of the
+    # whole Objaverse catalogue, Sketchfab's CC BY/CC0 listings, archive.org, Commons and OpenGameArt on 2026-11-02 found
+    # none that is not a game rip or behind a login): those two keep lofted bodies of their own
+    # (game/src/CarView.Cars13.cs). Its 458 from this mirror (Antonis_zks's) gave way to RainerS's in v74 (RELEASED).
 }
 
 # Models the mirror does not hold: the project's copy of the file the LICENSE.txt describes, its SHA-256, and its
-# Sketchfab uid (the LICENSE.txt and THIRD_PARTY.md name the page by it).
+# Sketchfab uid or, for a model from another site, its page (the LICENSE.txt and THIRD_PARTY.md name the page by it).
 RELEASED = {
     # cars13 bodies: the BRZ as Ethan's first-generation Toyota 86 (ZN6), the BRZ ZC6's twin (uploaded 2023-06-25).
     "toyota-86-ethanchew.glb": {
@@ -50,6 +48,14 @@ RELEASED = {
         "url": "https://github.com/korayorhun/GrudgeLap/releases/download/models-2026-11/renault-clio-2-nardeol.glb",
         "sha256": "5b10089bf086db5354d7e8165ba04a73135d234dc4c0bf1e29eec7dbc5f1494c",
         "sketchfab": "2c4d2cb0cda14dc9b2ddcd7d2b3a1f95",
+    },
+    # v74: the flat-plane V8 as RainerS's Ferrari 458 Italia (BlendSwap #5151, CC BY 3.0, 2012), the project's glTF
+    # conversion of the author's ferrari_studio.blend by tools/convert_rainers_458.py (its LICENSE.txt records the
+    # conversion and the .blend's SHA-256); its own plain cabin is left out for the 570S's, as the earlier 458's was.
+    "ferrari-458-italia-rainers.glb": {
+        "url": "https://github.com/korayorhun/GrudgeLap/releases/download/models-2026-11/ferrari-458-italia-rainers.glb",
+        "sha256": "decc39ab168817f6ecb275adb0e5f6ef4df59e1e073b9159ec41816779c0abef",
+        "page": "https://www.blendswap.com/blend/5151",
     },
 }
 

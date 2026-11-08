@@ -19,4 +19,4 @@ Notes:
   - One rear rim mesh spans both rear wheels.
 
 Credit line (CC BY 4.0 requires attribution, a licence link and a note of changes):
-  "FREE Lancia Delta HF Integrale evo 2" by TARANTULA (begemot.988888), licensed under CC BY 4.0, https://sketchfab.com/3d-models/85614131e0dc4613a948472aaa935fc7; modified: re-scaled and re-rigged for GrudgeLap
+  "FREE Lancia Delta HF Integrale evo 2" by TARANTULA (begemot.988888), licensed under CC BY 4.0, https://sketchfab.com/3d-models/85614131e0dc4613a948472aaa935fc7; modified: re-scaled, re-rigged and its fuzzy dice left out for GrudgeLap

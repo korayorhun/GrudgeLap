@@ -1206,7 +1206,7 @@ public sealed record VehicleSpec
     /// which puts 193 km/h at 5,850 rpm in fifth, by the power peak. Discs in front, drums behind, ABS (standard on the
     /// 1.6 16V). 1045 kg at the kerb for the five-door, 1120 with a driver; about 62/38 as the hatchbacks; the springs,
     /// bars, inertias and sag scaled from the hot hatch's to this mass (game figures). Drawn by Nardeol's model of the
-    /// phase 2 five-door with the SAAB 9-5's cabin (tools/car_models.json "clio"); a build without the models draws
+    /// phase 2 five-door with its own cabin since 0.75 (tools/car_models.json "clio"; the SAAB 9-5's before); a build without the models draws
     /// the Bravo 1.6's loft, fitted to these axles. Its voice is the Bravo 1.6's "four16v" banks, a sixteen-valve 1.6
     /// four's (an MX-5's and a Golf's), until a recording of the K4M is found (docs/ISTERLER.md item 10.4).
     /// </summary>
@@ -1402,7 +1402,7 @@ public enum CarStyle
     /// <summary>
     /// The front-wheel-drive 1.6 everyday hatchback of 2001 (after the Renault Clio II phase 2 five-door 1.6 16V; A1,
     /// 0.33.0). Model key "clio", sound folder "four16v" (the Bravo 1.6's banks, until a K4M recording is found); drawn by
-    /// Nardeol's model with the SAAB 9-5's cabin (the Bravo 1.6's loft without the models).
+    /// Nardeol's model with its own cabin since 0.75 (the Bravo 1.6's loft without the models).
     /// </summary>
     ClioSixteen,
 }

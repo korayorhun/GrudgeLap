@@ -386,7 +386,7 @@ def rig(model, entry, spec, car, blob=None):
             near = np.linalg.norm(centre - pivot) < reach * 0.6
             if near and np.max(size) > np.max(tyre_size) * 1.05 and blob is not None:
                 # A box is its accessors' min and max, which an exporter may write over a vertex list the part shares
-                # with others: the 458's rims (models13) read 0.51 file units across, against their tyres' 0.46 and
+                # with others: the first 458 model's rims (models13) read 0.51 file units across, against their tyres' 0.46 and
                 # their own 0.40, and stood still in the body while the tyres round them rolled and steered.
                 points = mesh_points(model, blob, nodes[i]["mesh"], worlds[i])
                 size = points.max(axis=0) - points.min(axis=0)

@@ -636,7 +636,7 @@ public sealed partial class Bootstrap : Node3D
         if (_session.Traffic is null) return;
         // The traffic is the everyday cars of the road (0.9.1; until then every drone was the period sports car of the
         // original): the saloon, the estate and the fleet saloon, and since 0.21 the 205 and the Golf too (the 205
-        // the GTi its model is, its red wheels, bucket seats and pinstripe with it) in the road's colours. Each drone
+        // the GTi its model is, its pinstripe with it) in the road's colours. Each drone
         // in turn takes the next car and the next colour of the road palette (CarView.TrafficPaints), counting on
         // from the last credit's, so no two drones of a credit look alike and the next credit's are others: five cars
         // and twelve colours repeat a pair only every sixty drones, and a credit has eight. Only the look: the drones

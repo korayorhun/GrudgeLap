@@ -1,5 +1,5 @@
 {
-  "_comment": "The real car models the game draws (tools/prepare_car_models.py -> game/assets/models/<car>.glb), per catalogue car. file: the source in unreal/Import/Models (CC BY, its LICENSE.txt beside it); forward: the model's own nose axis; tyres: its tyre nodes (name or prefix); fixed: node-name parts that stay with the body though they sit at a wheel; drop: node-name parts left out; interior: false when the model has no cabin (the game builds its own inside the shell); steering: node-name parts of the steering wheel; mirror: of the rear-view mirror's housing (the game's glass goes on it), mirror_glass: of the model's own mirror glass (the game's glass covers it, at its size), mirror_box: that glass found by hand ({centre, size}, car frame), none of them: the game hangs its own mirror where the driver sees it; eye, dials (offset, width, past), mirror_offset: corrections in metres, car frame (x right, y up, z back); dials gear_top: where the gear readout's box starts on the panel (pixels down the 1024 x 400 InstrumentCluster, 120 by default), for a binnacle whose wheel rim crosses the panel where the box would be (the 570S's). eye_at: the eyes found by hand, car frame. frame: the geometry eye_at and mirror_box were read off the prepared model in ({front, rear, hub_y}: the axles' distances from the reference point and the rest hub height, as SPECS had them then); the preparation carries them to the present geometry, as the model is scaled to the wheelbase about its front hubs and hub plane (dims6: the E-Class's box, read at the Egea's wheelbase, hung the glass 7.5 cm under its housing at the W212's). same_as: draw another car's prepared model (the game fits the wheels to this car's tyres). cabin_from: {car: a donor entry (a key starting with _ is only a donor), nodes, offset, scale, inside_only, seats}: a shell without a cabin takes the donor's parts; inside_only: those of them drawn only from the driver's seat (they poke through the shell); seats: those that are seats though their names do not say so, for the eyes to pass over (the 570S's two buckets are one mesh). brake: material-name parts of the rear lamps that light when braking; keep: materials left untouched though their names say glass; glass: material-name parts of windows drawn in a material whose name does not say glass (the 458's whole glasshouse is one black Material.048; ==Name exactly, as for paint). materials: {material: {roughness, metallic, colour, emissive, emissive_strength}}: a material's finish corrected where the model is wrong about the real car (the 570S's gloss-black dashboard, matt leather and Alcantara on the car; colour, sRGB #RRGGBB, its base colour: the 458's paint in Rosso Corsa; emissive, sRGB, and emissive_strength, 0 for none: the BRZ's lamps, which glow at a night render's 10, drawn unlit by day). crop: [{nodes, min, max}]: triangles cut out of the named parts where their centres lie in the box (car frame, metres, after a borrowed cabin is placed): a saloon donor's rear bench and door tops that a coupe's shell would show, the model's own plain dashboard where the borrowed one goes (the BRZ's). liners: true: the model's arches are open behind the tyres (the 86's), so the preparation adds Liner0..3 nodes at the hubs and the game builds a dark wheel-arch liner over each; plate: {centre, size}: a rear number plate the model lacks, its centre in the car frame read off the prepared model (6 mm proud of the recess), size in metres (0.52 x 0.11 by default). lens: node selectors of lamp covers drawn in the windows' glass material, given clear lamp lenses instead (the BRZ's headlamps share the windscreen's near-black \"Glass\"). paint_atlas: {material: {key, tolerance}}: materials whose texture holds the paint with the rest of the car (lamps, trim, badges), recoloured by the game where the texture is the key colour (sRGB 0-255, measured from the texture; refined by the preparation) within the tolerance of chromaticity (default 0.06).",
+  "_comment": "The real car models the game draws (tools/prepare_car_models.py -> game/assets/models/<car>.glb), per catalogue car. file: the source in unreal/Import/Models (CC BY, its LICENSE.txt beside it); forward: the model's own nose axis; tyres: its tyre nodes (name or prefix); fixed: node-name parts that stay with the body though they sit at a wheel; drop: node-name parts left out; interior: false when the model has no cabin (the game builds its own inside the shell); steering: node-name parts of the steering wheel; mirror: of the rear-view mirror's housing (the game's glass goes on it), mirror_glass: of the model's own mirror glass (the game's glass covers it, at its size), mirror_box: that glass found by hand ({centre, size}, car frame), none of them: the game hangs its own mirror where the driver sees it; eye, dials (offset, width, past), mirror_offset: corrections in metres, car frame (x right, y up, z back); dials gear_top: where the gear readout's box starts on the panel (pixels down the 1024 x 400 InstrumentCluster, 120 by default), for a binnacle whose wheel rim crosses the panel where the box would be (the 570S's). eye_at: the eyes found by hand, car frame. frame: the geometry eye_at and mirror_box were read off the prepared model in ({front, rear, hub_y}: the axles' distances from the reference point and the rest hub height, as SPECS had them then); the preparation carries them to the present geometry, as the model is scaled to the wheelbase about its front hubs and hub plane (dims6: the E-Class's box, read at the Egea's wheelbase, hung the glass 7.5 cm under its housing at the W212's). same_as: draw another car's prepared model (the game fits the wheels to this car's tyres). cabin_from: {car: a donor entry (a key starting with _ is only a donor), nodes, offset, scale, inside_only, seats}: a shell without a cabin takes the donor's parts; inside_only: those of them drawn only from the driver's seat (they poke through the shell); seats: those that are seats though their names do not say so, for the eyes to pass over (the 570S's two buckets are one mesh). brake: material-name parts of the rear lamps that light when braking; keep: materials left untouched though their names say glass; glass: material-name parts of windows drawn in a material whose name does not say glass (the first 458 model's whole glasshouse was one black Material.048; ==Name exactly, as for paint). materials: {material: {roughness, metallic, colour, emissive, emissive_strength}}: a material's finish corrected where the model is wrong about the real car (the 570S's gloss-black dashboard, matt leather and Alcantara on the car; colour, sRGB #RRGGBB, its base colour: the 458's paint in Rosso Corsa; emissive, sRGB, and emissive_strength, 0 for none: the BRZ's lamps, which glow at a night render's 10, drawn unlit by day). crop: [{nodes, min, max}]: triangles cut out of the named parts where their centres lie in the box (car frame, metres, after a borrowed cabin is placed): a saloon donor's rear bench and door tops that a coupe's shell would show, the model's own plain dashboard where the borrowed one goes (the BRZ's). liners: true: the model's arches are open behind the tyres (the 86's), so the preparation adds Liner0..3 nodes at the hubs and the game builds a dark wheel-arch liner over each; plate: {centre, size}: a rear number plate the model lacks, its centre in the car frame read off the prepared model (6 mm proud of the recess), size in metres (0.52 x 0.11 by default). lens: node selectors of lamp covers drawn in the windows' glass material, given clear lamp lenses instead (the BRZ's headlamps share the windscreen's near-black \"Glass\"). paint_atlas: {material: {key, tolerance}}: materials whose texture holds the paint with the rest of the car (lamps, trim, badges), recoloured by the game where the texture is the key colour (sRGB 0-255, measured from the texture; refined by the preparation) within the tolerance of chromaticity (default 0.06). own_material: {name: node selectors}: the named parts drawn in an untextured copy of their material, called name, for materials to finish (colour, metallic and roughness, all three: glTF reads absent ones as white metal): parts whose colour in a texture atlas is wrong about the real car, which a factor cannot correct without tinting the rest of the atlas (the 205's rims, a flat red in the atlas its tyres, calipers and badges share; the GTi 1.9's were painted silver-grey, and its calipers, the model's red Brembos, in dull cast iron). turn: node selectors of painted parts whose pieces (runs of triangles that share vertices, 0.01 m2 or more) face into the car by their winding as drawn and by their normals: turned outwards after orient_paint, which turns only whole parts (the Renault 12's door mesh, whose lower halves, under the crease, are modelled inside out on a mirrored node: Godot, culling off, drew them from outside as the back of the paint, its dark cabin lining in a band along both sides). steering_part: {nodes, min, max}: a steering wheel modelled into a larger mesh, taken out into a part of its own, SteeringPart_<node>, for steering to name so that it turns: the pieces of the named parts (runs of triangles joined at their vertices) that lie wholly in the box (car frame, metres, after a borrowed cabin is placed; the Clio's own wheel is one piece of the mesh that holds its whole cabin, and the box round its rim also holds the ends of two dashboard pieces, which stay).",
   "_esprit": {
     "file": "lotus-esprit-turbo-1983.glb",
     "forward": "+z",
@@ -92,7 +92,29 @@
     ],
     "keep": [
       "org_glass"
-    ]
+    ],
+    "materials": {
+      "interior": {
+        "colour": "#33312E",
+        "metallic": 0,
+        "roughness": 0.55
+      },
+      "leather": {
+        "colour": "#2B2B2B",
+        "metallic": 0,
+        "roughness": 0.5
+      },
+      "17_-_Default": {
+        "colour": "#2A2A2A",
+        "metallic": 0,
+        "roughness": 0.3
+      },
+      "muffler": {
+        "colour": "#C8C8C8",
+        "metallic": 1,
+        "roughness": 0.25
+      }
+    }
   },
   "v8": {
     "file": "mclaren-570s-mmcworks.glb",
@@ -151,7 +173,21 @@
     "tyres": "auto",
     "drop": [
       "#171",
-      "#173"
+      "#173",
+      "#29",
+      "#31",
+      "#33",
+      "#35",
+      "#37",
+      "#39",
+      "#41",
+      "#43",
+      "#45",
+      "#47",
+      "#49",
+      "#51",
+      "#53",
+      "#159"
     ],
     "steering": [
       "#25"
@@ -163,6 +199,55 @@
           20,
           74
         ]
+      }
+    },
+    "cabin_from": {
+      "car": "_esprit",
+      "nodes": [
+        "sheat_interior",
+        "sheat001_interior"
+      ],
+      "offset": [
+        0.0,
+        0.17,
+        -0.04
+      ],
+      "scale": [
+        0.92,
+        1.0,
+        1.0
+      ]
+    },
+    "own_material": {
+      "rims": [
+        "#97",
+        "#111",
+        "#123",
+        "#153",
+        "#167"
+      ],
+      "calipers": [
+        "#109",
+        "#121",
+        "#151",
+        "#165"
+      ]
+    },
+    "materials": {
+      "rims": {
+        "colour": "#A4A7AA",
+        "metallic": 0.75,
+        "roughness": 0.32
+      },
+      "calipers": {
+        "colour": "#4B4D50",
+        "metallic": 0.5,
+        "roughness": 0.75
+      },
+      "interior": {
+        "colour": "#55585C",
+        "metallic": 0,
+        "roughness": 0.85
       }
     }
   },
@@ -184,7 +269,8 @@
       "=plane_red suns_0",
       "=plane.001_legend_0",
       "=plane.002_legion_0",
-      "=number plate.001_shield 2_0"
+      "=number plate.001_shield 2_0",
+      "=cube_cube_0"
     ],
     "eye_at": [
       -0.36,
@@ -206,6 +292,17 @@
         0.04
       ],
       "width": 0.24
+    },
+    "mirror_box": {
+      "centre": [
+        0.0,
+        0.594,
+        0.018
+      ],
+      "size": [
+        0.155,
+        0.06
+      ]
     }
   },
   "turbohatch": {
@@ -241,7 +338,8 @@
       "wheel_steering"
     ],
     "brake": [
-      "taillightreddeep"
+      "taillightreddeep",
+      "==GlassTaillight"
     ],
     "dials": {
       "offset": [
@@ -250,6 +348,29 @@
         0.0
       ],
       "width": 0.3
+    },
+    "keep": [
+      "glasstaillightamber"
+    ],
+    "materials": {
+      "GlassTaillight": {
+        "colour": "#D4141A",
+        "metallic": 0,
+        "roughness": 0.05
+      },
+      "GlassTaillightAmber": {
+        "colour": "#2E1C1A",
+        "metallic": 0,
+        "roughness": 0.05
+      },
+      "M_Interrior_Gray": {
+        "colour": "#36373A",
+        "roughness": 0.8
+      },
+      "M_Interrior_Dark": {
+        "colour": "#2A2A2B",
+        "roughness": 0.65
+      }
     }
   },
   "saloon": {
@@ -337,6 +458,9 @@
     "drop": [
       "=object_23"
     ],
+    "turn": [
+      "=object_19"
+    ],
     "eye_at": [
       -0.37,
       0.45,
@@ -363,28 +487,42 @@
       "front": 1.0,
       "rear": 1.441,
       "hub_y": -0.3435
+    },
+    "materials": {
+      "Material.001": {
+        "metallic": 0,
+        "roughness": 0.62
+      },
+      "Blanc": {
+        "roughness": 0.7
+      }
     }
   },
   "458": {
-    "file": "ferrari-458-italia-antonis.glb",
-    "forward": "-x",
+    "file": "ferrari-458-italia-rainers.glb",
+    "forward": "+z",
     "tyres": [
-      "=Object_7",
-      "=Object_62",
-      "=Object_75",
-      "=Object_88"
+      "=tyre_fl",
+      "=tyre_fr",
+      "=tyre_rl",
+      "=tyre_rr"
     ],
     "fixed": [
-      "=object_11",
-      "=object_70",
-      "=object_81",
-      "=object_96"
+      "caliper_"
+    ],
+    "drop": [
+      "interior",
+      "badge"
     ],
     "paint": [
-      "==Material"
+      "==MainBody.001",
+      "==MainBody.000"
     ],
-    "glass": [
-      "==Material.048"
+    "keep": [
+      "rearwindowedges",
+      "windowinterioredge",
+      "windowtriangle",
+      "hoodwindowconnector"
     ],
     "cabin_from": {
       "car": "v8",
@@ -422,10 +560,8 @@
       0.05,
       0.03
     ],
-    "mirror_offset": [
-      0.0,
-      -0.0405,
-      -0.048
+    "mirror_glass": [
+      "=rearviewmirrorglass"
     ],
     "materials": {
       "plastic.black": {
@@ -434,12 +570,16 @@
       "McLaren.black": {
         "roughness": 0.88
       },
-      "Material": {
+      "MainBody.001": {
+        "colour": "#E4002B"
+      },
+      "MainBody.000": {
         "colour": "#E4002B"
       }
     },
     "brake": [
-      "==Material.045"
+      "==TailLampLED",
+      "==Break_Light_Highlight.000"
     ]
   },
   "brz": {
@@ -625,10 +765,13 @@
         "roughness": 0.4
       },
       "mat_leather": {
-        "colour": "#768999"
+        "colour": "#6089B5"
       },
       "mat_inside_panel": {
-        "colour": "#545961"
+        "colour": "#434445"
+      },
+      "mat_salon": {
+        "colour": "#BDC9D3"
       }
     },
     "liners": true,
@@ -668,29 +811,22 @@
     "brake": [
       "phare.001"
     ],
-    "cabin_from": {
-      "car": "_saab",
-      "nodes": [
-        "inner_dashboard",
-        "wheel_steering",
-        "seat_front_m_interrior",
-        "inner_door_front",
-        "inner_down"
+    "frame": {
+      "front": 0.94,
+      "rear": 1.532,
+      "hub_y": -0.3268
+    },
+    "mirror_box": {
+      "centre": [
+        0.012,
+        0.625,
+        -0.035
       ],
-      "offset": [
-        0.0,
-        0.03,
-        -0.08
-      ],
-      "scale": [
-        0.96,
-        1.0,
-        0.96
+      "size": [
+        0.215,
+        0.065
       ]
     },
-    "steering": [
-      "wheel_steering"
-    ],
     "materials": {
       "Tle_rouge": {
         "colour": "#B41F2C",
@@ -711,6 +847,37 @@
         "metallic": 0,
         "roughness": 0.15
       }
+    },
+    "steering_part": {
+      "nodes": [
+        "=Object_9"
+      ],
+      "min": [
+        -0.49,
+        -0.03,
+        -0.275
+      ],
+      "max": [
+        -0.105,
+        0.355,
+        -0.09
+      ]
+    },
+    "steering": [
+      "steeringpart_"
+    ],
+    "eye": [
+      -0.012,
+      0.075,
+      -0.068
+    ],
+    "dials": {
+      "offset": [
+        0.009,
+        0.027,
+        -0.147
+      ],
+      "width": 0.38
     }
   }
 }

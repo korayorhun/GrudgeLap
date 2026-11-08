@@ -1,0 +1,79 @@
+Title:        Ferrari 458 Italia
+Kind:         2009-2015 mid-engined V8 berlinetta (Ferrari 458 Italia) - the catalogue's FlatPlaneV8 ("V8 4.5 '10").
+              Body, glass, lamps (the round tail lamps with their LED rings, chrome centres, red lens tubes and clear
+              covers; the high-mount stop lamp; the rear fog lamps), wheels with discs and calipers, the engine under
+              its glass, and a plain cabin (two seats, a dashboard top, a one-piece steering wheel, one tan material).
+Licence:      Creative Commons Attribution 3.0 Unported (CC BY 3.0)
+Licence URL:  https://creativecommons.org/licenses/by/3.0/
+Author:       RainerS (Rainer Selvet; BlendSwap user "RainerS")
+Source URL:   https://www.blendswap.com/blend/5151  (the archive's own licence file names the older address,
+              http://www.blendswap.com/blends/view/42810; published 2012-04-22, "Ready for Blender 2.62"; not marked
+              Fan Art)
+Download URL: https://github.com/korayorhun/GrudgeLap/releases/download/models-2026-11/ferrari-458-italia-rainers.glb
+              (the project's glTF conversion of the author's .blend: BlendSwap needs an account and serves no glTF, so
+              unreal/Scripts/fetch_models.py fetches the conversion from the repository's release assets and checks
+              its SHA-256)
+Downloaded:   2026-11-08, by the owner with a free BlendSwap account: the archive holding ferrari_studio.blend
+              (16,440,736 bytes, SHA-256 20169e8145eeb086cdfcd1408d2a7eaf7975ad46ea69853ccb026e460c3b5147, a Blender
+              2.62 file for Cycles) and BLENDSWAP_LICENSE.txt (SHA-256
+              3a30afac97c56d655af1f3ce0e80070b8169370622ea7de5bb66c6f9bf203bc9)
+Converted:    2026-11-08 with Blender 5.2.3 (e13b728c6880) headless, the file's own scripts disabled, by
+              tools/convert_rainers_458.py (the same file, byte for byte, on every run): the studio, the cameras, the
+              rig and a lit duplicate of the daytime lamps removed; the car set straight, unturned and in metres (the
+              scene's control turns it -193.06 degrees and scales it 1.7747, its steering control is at 24.73 degrees;
+              1 unit of the rig = 0.46715 m at the 2650 mm wheelbase, measured between the tyres' centres);
+              constraints, modifiers and transforms baked into the vertices (every node at identity), the 23 mirrored
+              parts turned back to face out, 15,696 duplicate faces removed, the windows and the tail lamp covers made
+              single sheets (their thickness left off), each corner's 13 caliper parts and each wiper's 5 parts joined;
+              the parts renamed (Tyre_FL ... the tread bands, TailLampFace_L ...); subdivision levels lowered and the
+              grilles, calipers, wiper blades and exhaust surround decimated (the parts kept had 947,228 triangles at
+              the file's viewport levels, 541,231 after); each Cycles 2.62 material rebuilt as one Principled BSDF from
+              a survey of its node tree; the tail lamp faces split at 0.58 of their radius into a red LED ring
+              (TailLampLED) and a chrome centre (TailLampChrome); left out: every texture (see below), the Ferrari and
+              Pininfarina badges.
+File:         ferrari-458-italia-rainers.glb (13,389,008 bytes, glTF 2.0 binary, Khronos glTF Blender I/O v5.2.41;
+              SHA-256 decc39ab168817f6ecb275adb0e5f6ef4df59e1e073b9159ec41816779c0abef;
+              541,231 triangles, 143 mesh nodes, 62 untextured materials, no images, no animations;
+              KHR_materials_transmission, KHR_materials_clearcoat and KHR_materials_sheen used, none required)
+Licence evidence: the archive's BLENDSWAP_LICENSE.txt: "Thank you for downloading "Ferrari 458 Italia" by RainerS
+              Released under Creative Commons Attribution 3.0 ... You MUST give credit to RainerS."; the page
+              (2026-11-08): "License CC-BY", staff pick, 1,009 downloads, "Polycount ~510 000 faces, Cycles render
+              engine, very primitive rig using constraints, materials/textures included", and a 17-page .pdf; the
+              .blend's own text block "Hey": "Thanks for downloading Ferrari 458 Italia created by Rainer Selvet! Make
+              sure to credit me if you use this for your projects, commercially or non-commercially." The author's
+              17-page making-of (April 2012) describes two months' modelling from the-blueprints drawings and
+              photographs, with a BlenderArtists work-in-progress thread. Not covered by the grant and left out: the
+              textures that are not the author's work (the tail lamp faces' and the side repeaters' product photographs
+              of other lamps, the fog lamps' crop of a Canon EOS 5D Mark II photograph with its GPS data, the wheel
+              caps' crop of a Phase One P 65+ photograph, the wing shields' logo with a logo site's watermark); the
+              design owner's marks (the Ferrari shields, horses and lettering, the "Ferrari" on the calipers, the
+              Pininfarina script). The plate's "728 ACF" and the tyres' lettering went with the other textures.
+Status:       USED: the game's 458 (tools/car_models.json "458"). It replaces "ferrari 458 italia" by Antonis_zks
+              (9fc3bebac5ee4ad1a7fb1d743e0db7d3, CC BY 4.0, from the Objaverse mirror; drawn since models13), whose tail
+              lamps were an opaque red disc in a painted ring.
+Geometry:     (after conversion) along z, nose at +z (glTF), left at +x, Y up, metres, the origin on the ground under
+              the middle of the wheelbase; wheelbase 2.650 m; 4.483 m long (Ferrari: 4527), 1.942 m wide over the body
+              (1937), 2.026 m over the mirrors, 1.228 m high (1213); tracks 1.703 / 1.690 m at the treads' centres
+              (1672 / 1606); tyres 0.723 m across front and rear (235/35 R20: 0.672, 295/35 R20: 0.715), 0.238 / 0.272 m
+              wide over the walls; round tail lamps 0.162 m across, their centres 1.560 m apart and 0.837 m over the
+              ground. Each wheel is separate: the tread band Tyre_<corner> (the entry's tyres), TyreWall_, RimFace_,
+              RimBarrel_, RimHub_, RimHubFace_, RimCentre_, BrakeDisc_ and WheelCap_ roll with it; Caliper_<corner>
+              stays with the body (the entry's fixed).
+Materials:    paint MainBody.001 (+ MainBody.000, two strips in the front lid's shut lines: named exactly in the
+              entry, which sets both to Rosso Corsa); glass Windshield.000, SideWindows.000, RearWindow.000; clear lamp
+              covers Front_Light_Covers.000 and Rear_Light_Cover.000 (glass by their transmission: drawn as lenses);
+              lit when braking, TailLampLED (the tail lamps' LED rings) and Break_Light_Highlight.000 (the high-mount
+              stop lamp's LEDs); TailLampChrome the lamps' concentric centres; Rear_Light_RedSide.000 the red lens
+              tubes, a translucent red of their own that never takes the paint; Break_Light_Cover.000 the stop lamp's
+              red cover (blended); RearWindowEdges.000, WindowInteriorEdge.000, WindowTriangle.000 and
+              HoodWindowConnector.000 are black trim whose names say window (the entry's keep).
+Cabin:        the model's own (Interior...: seats, headrests, dashboard top, tub, bulkhead, footwells and a one-piece
+              steering wheel in one tan velvet) is in the file and left out by the entry; the game borrows the McLaren
+              570S's, as it did for the earlier model.
+
+Attribution text to show in the game credits (CC BY 3.0 requires the author's name, the work's title, its URI, the
+licence's URI and a credit for the adaptation):
+  "Ferrari 458 Italia" by RainerS (Rainer Selvet) (https://www.blendswap.com/blend/5151) is licensed under Creative
+  Commons Attribution 3.0 (https://creativecommons.org/licenses/by/3.0/). Converted to glTF and modified for use in
+  GrudgeLap (re-scaled, re-rigged, materials converted, the tail lamp faces given an LED ring and a chrome centre,
+  badges and photographic textures removed, given a borrowed cabin).

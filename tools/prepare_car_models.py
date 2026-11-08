@@ -45,6 +45,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 from scipy import ndimage
+from scipy.sparse import coo_matrix
+from scipy.sparse.csgraph import connected_components
 
 import car_models as cm
 
@@ -75,7 +77,7 @@ def is_paint(name):
 
 def is_entry_glass(entry, name):
     """A material the entry names as a window (glass: material-name parts, "==Name" exactly), for the models whose
-    windows are an opaque material named like any other (the 458's black "Material.048")."""
+    windows are an opaque material named like any other (the first 458 model's black "Material.048")."""
     return any((name == w[2:]) if w.startswith("==") else (w.lower() in name.lower()) for w in entry.get("glass", []))
 
 
@@ -395,6 +397,88 @@ def orient_paint(model, blob, nodes, leave=()):
         print(f"  turned outwards: {turned}")
 
 
+def turn_pieces(model, blob, nodes, sources, name_of, words):
+    """Turns outwards the pieces of the named parts (turn: node selectors) that face into the car, after orient_paint.
+
+    orient_paint turns a whole part, but a model may join pieces modelled right and pieces modelled inside out in one
+    mesh: the Renault 12's four doors are one mesh, and the lower half of each door, under the crease where the
+    model's white side strips lie (dropped), faces into the car. A piece is a run of triangles that share vertices;
+    one of 0.01 m2 or more counts as inside out when less than a third of its area faces away from the car's middle,
+    by its winding as drawn and by its normals alike, and its triangles are then wound the other way and its normals
+    (and tangents) reversed. Smaller slivers at a part's edges and lips stay as they are: the car's middle cannot
+    tell them from faces meant to look into the cabin.
+
+    The winding is taken as drawn, not reversed for a node whose matrix mirrors (the doors' does). With culling off
+    (ModelPaint's cull_disabled) Godot keeps a mirrored instance's winding as it is and swaps only the side it culls
+    (scene_shader_forward_clustered.cpp), so FRONT_FACING was false on those halves seen from outside, and inside its
+    cabin box (CarView.SetPaintCabin) the paint drew them in its dark lining: a black band along both sides, from the
+    box's floor, 0.55 m under the eyes, up to the crease."""
+    parents = {c: i for i, n in enumerate(nodes) for c in n.get("children", [])}
+    middle = np.array([0.0, 0.1, 0.0])
+    for index, source in sources.items():
+        if not cm.matches(source, name_of(source), words):
+            continue
+        node = nodes[index]
+        mesh = model["meshes"][node["mesh"]]
+        world = node_world(nodes, index, parents)
+        inverse = np.linalg.inv(world[:3, :3])
+        primitives = []
+        pieces = 0
+        area_turned = 0.0
+        for primitive in mesh["primitives"]:
+            attributes = primitive["attributes"]
+            if primitive.get("mode", 4) != 4 or "NORMAL" not in attributes:
+                primitives.append(primitive)
+                continue
+            positions = cm.accessor_array(model, blob, attributes["POSITION"])
+            if "indices" in primitive:
+                indices = cm.accessor_array(model, blob, primitive["indices"]).astype(np.int64).reshape(-1)
+            else:
+                indices = np.arange(len(positions))
+            triangles = indices[: len(indices) // 3 * 3].reshape(-1, 3)
+            normals = cm.accessor_array(model, blob, attributes["NORMAL"]).astype(np.float32)
+            p = (np.c_[positions, np.ones(len(positions))] @ world.T)[:, :3]
+            a, b, c = p[triangles[:, 0]], p[triangles[:, 1]], p[triangles[:, 2]]
+            wound = np.cross(b - a, c - a)
+            area = np.linalg.norm(wound, axis=1) / 2
+            away = (a + b + c) / 3 - middle
+            by_winding = (wound * away).sum(axis=1) > 0
+            # Normals go to the car frame by the matrix's inverse transpose (rows times the inverse).
+            by_normals = ((normals.astype(np.float64) @ inverse)[triangles].sum(axis=1) * away).sum(axis=1) > 0
+            edges = np.concatenate([triangles[:, [0, 1]], triangles[:, [1, 2]]])
+            graph = coo_matrix((np.ones(len(edges)), (edges[:, 0], edges[:, 1])), shape=(len(positions), len(positions)))
+            label = connected_components(graph, directed=False)[1][triangles[:, 0]]
+            count = int(label.max()) + 1
+            total = np.bincount(label, weights=area, minlength=count)
+            inside_out = (total >= 0.01) & (np.bincount(label, weights=area * by_winding, minlength=count) < total / 3) \
+                & (np.bincount(label, weights=area * by_normals, minlength=count) < total / 3)
+            flip = inside_out[label]
+            if not flip.any():
+                primitives.append(primitive)
+                continue
+            order = triangles.copy()
+            order[flip] = order[flip][:, [0, 2, 1]]
+            # A piece's vertices are its own (pieces are joined by shared vertices), so reversing them leaves the rest.
+            turned = np.unique(triangles[flip])
+            normals[turned] *= -1.0
+            part = dict(primitive)
+            part["attributes"] = dict(attributes)
+            part["indices"] = append_accessor(model, blob, order.reshape(-1).astype(np.uint32), 5125, "SCALAR", 34963)
+            part["attributes"]["NORMAL"] = append_accessor(model, blob, normals, 5126, "VEC3", 34962)
+            if "TANGENT" in attributes:
+                tangents = cm.accessor_array(model, blob, attributes["TANGENT"]).astype(np.float32)
+                tangents[turned, :3] *= -1.0
+                part["attributes"]["TANGENT"] = append_accessor(model, blob, tangents, 5126, "VEC4", 34962)
+            primitives.append(part)
+            pieces += int(np.count_nonzero(inside_out))
+            area_turned += float(area[flip].sum())
+        if pieces:
+            # The mesh may be drawn by other nodes too: this node gets its own copy.
+            model["meshes"].append(dict(mesh, primitives=primitives))
+            node["mesh"] = len(model["meshes"]) - 1
+            print(f"  {node.get('name', '?')}: {pieces} piece(s) facing into the car turned outwards ({area_turned:.3f} m2)")
+
+
 def split_lining(model, blob, nodes, eye, wheel, masks=None):
     """The painted faces inside the cabin that face into it (the pillars' and the door frames' inner sides, the roof's
     underside, the screen header) take a dark trim, GLP_Lining: models paint whole shells, and from the seat the
@@ -563,6 +647,69 @@ def crop_parts(model, blob, r, world, boxes, crops):
         print(f"  crop {crop['nodes'][:3]} in ({crop['min']}, {crop['max']}): {cut} triangle(s) cut")
 
 
+def steering_part(model, blob, r, world, boxes, part):
+    """Takes a steering wheel that a model has modelled into a larger mesh (steering_part: {nodes, min, max}, car frame,
+    metres) out into a part of its own, "SteeringPart_<node>", that the entry's steering can name, so that it turns:
+    the Clio's own wheel is one piece of a mesh that holds its whole cabin, and the eyes given by hand (eye_at) left it
+    standing still. Only the connected pieces of the named parts that lie wholly in the box go (vertices joined where
+    they meet within 0.1 mm): a box drawn round the rim also holds the ends of the dashboard pieces behind it, which
+    must stay where they are."""
+    nodes = model["nodes"]
+    words = [s.lower() for s in part["nodes"]]
+    low, high = np.array(part["min"], dtype=float), np.array(part["max"], dtype=float)
+    for i in list(r["body_nodes"]):
+        if not cm.matches(i, r["name_of"](i), words):
+            continue
+        mesh = model["meshes"][nodes[i]["mesh"]]
+        kept, taken = [], []
+        for primitive in mesh["primitives"]:
+            if primitive.get("mode", 4) != 4:
+                kept.append(primitive)
+                continue
+            positions = cm.accessor_array(model, blob, primitive["attributes"]["POSITION"])
+            if "indices" in primitive:
+                indices = cm.accessor_array(model, blob, primitive["indices"]).astype(np.int64).reshape(-1)
+            else:
+                indices = np.arange(len(positions))
+            triangles = indices[: len(indices) // 3 * 3].reshape(-1, 3)
+            p = (np.c_[positions, np.ones(len(positions))] @ world[i].T)[:, :3]
+            _, weld = np.unique(np.round(p / 1e-4).astype(np.int64), axis=0, return_inverse=True)
+            corners = weld.reshape(-1)[triangles]
+            count = int(weld.max()) + 1
+            graph = coo_matrix((np.ones(2 * len(corners)), (np.r_[corners[:, 0], corners[:, 1]], np.r_[corners[:, 1], corners[:, 2]])), shape=(count, count))
+            _, label = connected_components(graph, directed=False)
+            piece = label[corners[:, 0]]
+            centres = p[triangles].mean(axis=1)
+            outside = ~np.all((centres > low) & (centres < high), axis=1)
+            whole = np.bincount(piece, weights=outside.astype(float), minlength=int(label.max()) + 1) == 0
+            take = whole[piece]
+            if not take.any():
+                kept.append(primitive)
+                continue
+            if not take.all():
+                kept.append(dict(primitive, indices=append_accessor(model, blob, triangles[~take].reshape(-1).astype(np.uint32), 5125, "SCALAR", 34963)))
+            taken.append(dict(primitive, indices=append_accessor(model, blob, triangles[take].reshape(-1).astype(np.uint32), 5125, "SCALAR", 34963)))
+        if not taken:
+            continue
+        name = r["name_of"](i)
+        if kept:
+            model["meshes"].append(dict(mesh, primitives=kept))
+            nodes[i]["mesh"] = len(model["meshes"]) - 1
+            points = cm.mesh_points(model, blob, nodes[i]["mesh"], world[i])
+            boxes[i] = (points.min(axis=0), points.max(axis=0))
+        else:
+            r["body_nodes"].remove(i)
+        model["meshes"].append({"name": "SteeringPart_" + name, "primitives": taken})
+        nodes.append({"name": "SteeringPart_" + name, "mesh": len(model["meshes"]) - 1})
+        k = len(nodes) - 1
+        world[k] = world[i]
+        points = cm.mesh_points(model, blob, nodes[k]["mesh"], world[k])
+        boxes[k] = (points.min(axis=0), points.max(axis=0))
+        r["body_nodes"].append(k)
+        print(f"  steering part {nodes[k]['name']}: {sum(len(cm.accessor_array(model, blob, q['indices'])) // 3 for q in taken)} triangle(s), "
+              f"centre ({(boxes[k][0][0] + boxes[k][1][0]) / 2:+.3f} {(boxes[k][0][1] + boxes[k][1][1]) / 2:+.3f} {(boxes[k][0][2] + boxes[k][1][2]) / 2:+.3f})")
+
+
 def lens_parts(model, r, words):
     """The named parts' glass drawn as clear lamp lenses (lens: node selectors): a model whose lamp covers share the
     windows' material (the BRZ's "Glass", a near-black tint on the windscreen and the headlamps alike) gets a copy of
@@ -585,6 +732,44 @@ def lens_parts(model, r, words):
         model["meshes"].append(dict(mesh, primitives=primitives))
         nodes[i]["mesh"] = len(model["meshes"]) - 1
         print(f"  {r['name_of'](i)} drawn as a lamp lens")
+
+
+def own_materials(model, r, parts, finishes):
+    """Parts drawn in an untextured material of their own (own_material: {name: node selectors}), for the entry's
+    materials to give them the real car's finish by that name. A texture atlas holds the colour of every part drawn
+    with it, and a factor only scales a texel: the 205's rims are a flat red in the atlas its tyres, calipers, grille
+    and badges share (the GTi's own were painted silver-grey), so no colour of materials could make them grey without
+    tinting the rest. The copy keeps the source's normal map and sidedness and drops its colour and metal-roughness
+    textures, so its finish is the factors alone; glTF reads absent ones as white, metallic 1 and roughness 1, which
+    CarView takes for an exporter's defaults (a matt dielectric), so the entry gives colour, metallic and roughness.
+    Wheel parts count as well as the body's: rims roll with their tyres."""
+    nodes = model["nodes"]
+    candidates = r["body_nodes"] + [i for assembly in r["assemblies"] for i in assembly]
+    for name, selectors in parts.items():
+        words = [s.lower() for s in selectors]
+        copies = {}
+        picked = 0
+        for i in candidates:
+            if not cm.matches(i, r["name_of"](i), words):
+                continue
+            mesh = model["meshes"][nodes[i]["mesh"]]
+            primitives = []
+            for primitive in mesh["primitives"]:
+                source = primitive.get("material")
+                if source is not None and source not in copies:
+                    copy = json.loads(json.dumps(model["materials"][source]))
+                    copy["name"] = name
+                    for texture in ("baseColorTexture", "metallicRoughnessTexture"):
+                        copy.setdefault("pbrMetallicRoughness", {}).pop(texture, None)
+                    model["materials"].append(copy)
+                    copies[source] = len(model["materials"]) - 1
+                primitives.append(dict(primitive, material=copies[source]) if source is not None else primitive)
+            model["meshes"].append(dict(mesh, primitives=primitives))
+            nodes[i]["mesh"] = len(model["meshes"]) - 1
+            picked += 1
+        print(f"  {picked} part(s) drawn in a material of their own, {name}" if picked else f"  own_material {name} names no part of the model")
+        if name.lower() not in finishes:
+            print(f"  own_material {name} has no finish in materials: drawn white")
 
 
 def in_present_frame(entry, spec):
@@ -650,8 +835,12 @@ def prepare(car, entry, inspect=False, config=None):
         borrow_cabin(model, blob, r, world, boxes, car, spec, config[cabin["car"]], cabin)
     if entry.get("crop"):
         crop_parts(model, blob, r, world, boxes, entry["crop"])
+    if entry.get("steering_part"):
+        steering_part(model, blob, r, world, boxes, entry["steering_part"])
     if entry.get("lens"):
         lens_parts(model, r, [s.lower() for s in entry["lens"]])
+    if entry.get("own_material"):
+        own_materials(model, r, entry["own_material"], {k.lower() for k in entry.get("materials", {})})
     print(f"{car}: {entry['file']} wheelbase {r['wheelbase']:.3f} -> scale {r['scale']:.4f} ({r['length']:.2f} m long), "
           f"tyre radius {r['tyre_radius']:.3f} m (simulation {spec['radius']:.3f}); {len(r['body_nodes'])} body node(s), "
           f"{sum(len(a) - 1 for a in r['assemblies'])} wheel part(s), {len(r['dropped'])} dropped")
@@ -687,6 +876,8 @@ def prepare(car, entry, inspect=False, config=None):
 
     children = []
     body_children = [add(name_of(i)[:60], world[i], nodes[i]["mesh"]) for i in body]
+    # The source node of each body part, for the entry's node selectors after the scene is rebuilt (turn).
+    body_sources = dict(zip(body_children, body))
     children.append(add("Body", children=body_children))
     # The tyres' radius from their vertices (a box would overstate a wheel stored turned about its axle), and each
     # wheel scaled about its hub to the simulation's radius: the hubs sit at the simulation's rest height, so a
@@ -919,7 +1110,7 @@ def prepare(car, entry, inspect=False, config=None):
     # model has them in gloss black (roughness 0.18-0.22), which mirrored the sky from the seat as a grey wash over the
     # right half of the frame (v8seat). Its entry takes them to 0.88, the game's own dark trim (0.85) and rubber (0.86):
     # at 0.55-0.6 the sun ahead still spread over them as a flat grey sheen. colour (sRGB "#RRGGBB") sets a material's
-    # base colour, kept linear as glTF has it: the 458's paint is a pure #F70000 in its model, and the car's ORIGINAL is
+    # base colour, kept linear as glTF has it: the first 458 model's paint was a pure #F70000, and the car's ORIGINAL is
     # its launch colour, Rosso Corsa (cars13 stage 2; the source is cited in CarView.LoftPaint). Only the named
     # materials change; a model without them prepares as before.
     finishes = {k.lower(): v for k, v in entry.get("materials", {}).items()}
@@ -928,6 +1119,19 @@ def prepare(car, entry, inspect=False, config=None):
         name = material.get("name", "")
         lower = name.lower()
         glassy = contains(lower, GLASS_WORDS) or "KHR_materials_transmission" in material.get("extensions", {})
+        # Godot reads a material in the specular-glossiness workflow (KHR_materials_pbrSpecularGlossiness: every one of
+        # the Esprit's, whose cabin the Testarossa and the 205's seats borrow) from that extension alone and ignores its
+        # metallic-roughness values (gltf_document.cpp, 4.7.2), so an entry's finish written to them never showed. A
+        # material the entry corrects is first turned into the metallic-roughness workflow from its own diffuse colour
+        # and glossiness; one with textures in that workflow is left as it is.
+        spec_gloss = material.get("extensions", {}).get("KHR_materials_pbrSpecularGlossiness")
+        if lower in finishes and spec_gloss is not None and "diffuseTexture" not in spec_gloss and "specularGlossinessTexture" not in spec_gloss:
+            material["pbrMetallicRoughness"] = {
+                "baseColorFactor": [float(c) for c in spec_gloss.get("diffuseFactor", [1.0, 1.0, 1.0, 1.0])],
+                "metallicFactor": 0.0,
+                "roughnessFactor": round(1.0 - float(spec_gloss.get("glossinessFactor", 1.0)), 6),
+            }
+            del material["extensions"]["KHR_materials_pbrSpecularGlossiness"]
         # Some exporters mark every material see-through (the VAZ's): an opaque one is drawn alpha-tested instead, so
         # it casts its shadow and sorts with the glass; a texture's holes (a grille) still show through.
         pbr = material.setdefault("pbrMetallicRoughness", {})
@@ -972,8 +1176,8 @@ def prepare(car, entry, inspect=False, config=None):
         if any(w.lower() in lower for w in entry.get("keep", [])):
             continue
         # Windows drawn in an opaque material whose name does not say glass (glass: material-name parts, "==Name"
-        # exactly): the 458's whole glasshouse, windscreen to engine cover, is one black "Material.048", and from the
-        # seat it hid everything but a sliver of road (models13).
+        # exactly): the first 458 model's whole glasshouse, windscreen to engine cover, was one black "Material.048",
+        # and from the seat it hid everything but a sliver of road (models13).
         if is_entry_glass(entry, name):
             material["name"] = "GLP_Glass"
             print(f"  {name} drawn as glass (the entry's glass)")
@@ -1022,6 +1226,8 @@ def prepare(car, entry, inspect=False, config=None):
         masks[index] = image
 
     orient_paint(model, blob, out_nodes, leave=set(atlas_materials))
+    if entry.get("turn"):
+        turn_pieces(model, blob, out_nodes, body_sources, name_of, [s.lower() for s in entry["turn"]])
     if interior and (steering or entry.get("eye_at")):
         split_lining(model, blob, out_nodes, eye, centre, masks)
 

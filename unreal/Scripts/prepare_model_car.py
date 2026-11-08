@@ -29,6 +29,7 @@ model's GLP_Paint, GLP_Glass and GLP_Lens materials the level's clear-coated pai
 prepared model passes through unchanged and keeps whatever it had.
 """
 import json
+import math
 import os
 import site
 import struct
@@ -176,6 +177,90 @@ def mesh_nodes(doc, index):
 def is_glass(model, mesh_index):
     names = [(model["materials"][p["material"]].get("name") or "") if "material" in p else "" for p in model["meshes"][mesh_index]["primitives"]]
     return bool(names) and all(n.startswith(("GLP_Glass", "GLP_Lens")) for n in names)
+
+
+METAL_WORDS = ("chrome", "croom", "metal", "metel", "steel", "alu", "alminum", "zinc", "brushed", "exhaust", "muffler")
+
+
+def srgb(c):
+    return [12.92 * v if v <= 0.0031308 else 1.055 * v ** (1 / 2.4) - 0.055 for v in c]
+
+
+def linear(c):
+    return [v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4 for v in c]
+
+
+def spec_gloss_to_metal_rough(material):
+    """KHR_materials_pbrSpecularGlossiness as Godot's glTF importer reads factors (GLTFDocument: the diffuse colour is
+    the albedo, the roughness one minus the glossiness, the metallic the material's default 0; its full conversion runs
+    only for a specular-glossiness texture). Unreal's importer ignores the extension and drew those materials at their
+    metallic-roughness defaults, white metal, so the Lotus Esprit's cabin (the Testarossa's, the 205's seats) came in
+    pale grey where the game shows it black (0.75)."""
+    sg = material.get("extensions", {}).pop("KHR_materials_pbrSpecularGlossiness", None)
+    if sg is None:
+        return
+    if not material["extensions"]:
+        material.pop("extensions")
+    diffuse = sg.get("diffuseFactor", [1.0, 1.0, 1.0, 1.0])
+    pbr = material.setdefault("pbrMetallicRoughness", {})
+    pbr["baseColorFactor"] = list(diffuse[:3]) + [diffuse[3] if len(diffuse) > 3 else 1.0]
+    pbr["metallicFactor"] = 0.0
+    pbr["roughnessFactor"] = 1.0 - sg.get("glossinessFactor", 1.0)
+    if "diffuseTexture" in sg and "baseColorTexture" not in pbr:
+        pbr["baseColorTexture"] = sg["diffuseTexture"]
+
+
+def correct_material(material):
+    """CarView.CorrectModelMaterial (the Godot game) on a model's own material, so the Unreal level draws the cabins as the
+    game does (0.74). glTF reads a missing metallic or roughness as 1: Unreal keeps that, and an untextured plastic, leather
+    or trim left at the exporter's defaults came out as grey metal (the Testarossa's black leather, the Clio's cabin); the
+    game draws it as a matt dielectric. Also its rubber, its silvered wing-mirror glass, its glowing white rear-lamp blocks
+    and its grey painted wheels. The game's own GLP_ materials are left to build_scene.py."""
+    spec_gloss_to_metal_rough(material)
+    name = (material.get("name") or "").lower()
+    if name.startswith("glp_"):
+        return
+    pbr = material.setdefault("pbrMetallicRoughness", {})
+    metallic = pbr.get("metallicFactor", 1.0)
+    roughness = pbr.get("roughnessFactor", 1.0)
+    driven = "metallicRoughnessTexture" in pbr
+    default = not driven and metallic >= 0.999 and roughness >= 0.999
+    textured = "baseColorTexture" in pbr
+    says = lambda *words: any(w in name for w in words)
+    colour = srgb(pbr.get("baseColorFactor", [1.0, 1.0, 1.0, 1.0])[:3])
+    alpha = pbr.get("baseColorFactor", [1.0, 1.0, 1.0, 1.0])[3:] or [1.0]
+    hi, lo = max(colour), min(colour)
+    saturation = (hi - lo) / hi if hi > 0 else 0.0
+    emissive = material.get("emissiveFactor", [0.0, 0.0, 0.0])
+    e_hi = max(emissive)
+    e_sat = (e_hi - min(emissive)) / e_hi if e_hi > 0 else 0.0
+    if e_hi > 0 and says("back", "rear", "tail") and e_sat < 0.2:
+        pbr["baseColorFactor"] = linear([0.45, 0.02, 0.02]) + alpha
+        material["emissiveFactor"] = [1.0, 0.05, 0.03]
+        strength = material.get("extensions", {}).get("KHR_materials_emissive_strength", {})
+        if strength:
+            strength["emissiveStrength"] = min(strength.get("emissiveStrength", 1.0), 0.6)
+        pbr["metallicFactor"], pbr["roughnessFactor"] = 0.0, 0.1
+    elif says("tyre", "tire", "pneu", "rubber"):
+        pbr["metallicFactor"] = 0.0
+        if not driven:
+            pbr["roughnessFactor"] = max(roughness, 0.86)
+    elif says("mirror") and default and not textured and 0.2126 * colour[0] + 0.7152 * colour[1] + 0.0722 * colour[2] > 0.6:
+        pbr["roughnessFactor"] = 0.03
+        pbr["baseColorFactor"] = linear([0.86, 0.87, 0.88]) + alpha
+    elif default and not says(*METAL_WORDS):
+        pbr["metallicFactor"], pbr["roughnessFactor"] = 0.0, 0.6
+    elif says("wheel", "weel", "rim") and not driven and not textured and metallic < 0.5 and saturation < 0.15 and hi > 0.3:
+        pbr["metallicFactor"], pbr["roughnessFactor"] = 0.75, 0.32
+    # Dark dielectrics (the cabins' plastics and leathers, the trims) get a grained surface here (0.75): under Lumen the
+    # dashboard tops, at 0.5-0.6, mirrored the bright sky through the windscreen and read pale grey from the seat; the
+    # Godot game hides that with a dark reflection probe in the cabin (CarView.BuildCabinShade), which Lumen has no
+    # counterpart of. Textured plastics are rough; a black dashboard's sheen is faint.
+    pbr = material["pbrMetallicRoughness"]
+    base = pbr.get("baseColorFactor", [1.0, 1.0, 1.0, 1.0])
+    if (not driven and pbr.get("metallicFactor", 1.0) < 0.2 and not textured
+            and 0.2126 * base[0] + 0.7152 * base[1] + 0.0722 * base[2] < 0.1):
+        pbr["roughnessFactor"] = max(pbr.get("roughnessFactor", 1.0), 0.8)
 
 
 def glassy(material):
@@ -391,6 +476,8 @@ def main():
 
     root = find_node(doc, "PlayerCar")
     doc["nodes"][root]["children"] = []
+    for material in model.get("materials", []):
+        correct_material(material)
     offsets = merge(doc, blob, model, model_blob)
     # The level paints a flat GLP_Paint in the model's colour and lays a clear coat over a textured one (a livery or a
     # colour atlas); the imported material always carries a texture parameter, so the name says which it is.

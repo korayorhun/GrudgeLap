@@ -20,4 +20,4 @@ Notes:
   - Units are decimetres (scale 0.1, true size).
 
 Credit line (CC BY 4.0 requires attribution, a licence link and a note of changes):
-  "Renault 12" by boitaloran (boitaloran), licensed under CC BY 4.0, https://sketchfab.com/3d-models/f8c26a68a3dd45b492d6d9a33cda6fcd; modified: re-scaled and re-rigged for GrudgeLap
+  "Renault 12" by boitaloran (boitaloran), licensed under CC BY 4.0, https://sketchfab.com/3d-models/f8c26a68a3dd45b492d6d9a33cda6fcd; modified: re-scaled, re-rigged, its lower door panels (modelled inside out) turned outwards and its cabin's finish made matt for GrudgeLap

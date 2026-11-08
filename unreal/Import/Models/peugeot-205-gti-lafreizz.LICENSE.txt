@@ -19,4 +19,4 @@ Notes:
   - The file has no real units: scale 1.8535 gives the real 3.705 m length.
 
 Credit line (CC BY 4.0 requires attribution, a licence link and a note of changes):
-  "Peugeot 205 Gti" by la_freizz (la_freizz), licensed under CC BY 4.0, https://sketchfab.com/3d-models/b52c8e5e8070463ab1485039246f527c; modified: re-scaled and re-rigged for GrudgeLap
+  "Peugeot 205 Gti" by la_freizz (la_freizz), licensed under CC BY 4.0, https://sketchfab.com/3d-models/b52c8e5e8070463ab1485039246f527c; modified: re-scaled, re-rigged, its rims repainted silver-grey and its calipers dull iron, and its Sparco seats left out for GrudgeLap

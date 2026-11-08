@@ -3,7 +3,7 @@
   "458": {
     "eye": [-0.358, 0.356, -0.019],
     "eye_over_road": 1.001,
-    "under_lining": 0.155,
+    "under_lining": 0.173,
     "lowered": false,
     "seats_passed_over": [],
     "wheel_centre": [-0.358, 0.026, -0.569],
@@ -14,8 +14,8 @@
       "gear_top": 44
     },
     "mirror": {
-      "glass": [0.0, 0.395, -0.559],
-      "on": "hung by the game"
+      "glass": [-0.0, 0.432, -0.433],
+      "size": [0.199, 0.068]
     }
   },
   "brz": {
@@ -37,21 +37,21 @@
     }
   },
   "clio": {
-    "eye": [-0.324, 0.534, 0.322],
-    "eye_over_road": 1.153,
-    "under_lining": 0.209,
+    "eye": [-0.31, 0.52, 0.27],
+    "eye_over_road": 1.139,
+    "under_lining": 0.216,
     "lowered": false,
     "seats_passed_over": [],
-    "wheel_centre": [-0.324, 0.254, -0.198],
-    "eye_from_wheel": [0.0, 0.28, 0.52],
+    "wheel_centre": [-0.298, 0.165, -0.182],
+    "eye_from_wheel": [-0.012, 0.355, 0.452],
     "dials": {
-      "centre": [-0.324, 0.321, -0.219],
-      "width": 0.26,
+      "centre": [-0.288, 0.248, -0.36],
+      "width": 0.38,
       "gear_top": 120
     },
     "mirror": {
-      "glass": [0.0, 0.624, -0.124],
-      "on": "hung by the game"
+      "glass": [0.008, 0.624, -0.031],
+      "size": [0.215, 0.065]
     }
   },
   "estate": {
@@ -86,8 +86,8 @@
       "gear_top": 120
     },
     "mirror": {
-      "glass": [0.0, 0.488, -0.191],
-      "on": "hung by the game"
+      "glass": [-0.005, 0.571, 0.021],
+      "size": [0.151, 0.059]
     }
   },
   "flat12": {
@@ -131,13 +131,7 @@
     "eye_over_road": 1.089,
     "under_lining": 0.247,
     "lowered": false,
-    "seats_passed_over": [
-      {
-        "mesh": "defaultMaterial",
-        "width": 0.477,
-        "top_over_road": 1.228
-      }
-    ],
+    "seats_passed_over": [],
     "wheel_centre": [-0.344, 0.19, -0.144],
     "eye_from_wheel": [0.0, 0.28, 0.52],
     "dials": {

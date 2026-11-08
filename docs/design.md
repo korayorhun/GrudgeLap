@@ -3699,6 +3699,28 @@ The puddles were the view's alone: a mirror-flat patch on the asphalt, under the
   `FormatLapTime` carries a rounded 60.0; `FitGhostLabel` keeps the label at least 10 pixels of the 3D picture (the 1989
   look). Tests: `physics.tests/GhostTests.cs` (312 pass).
 
+### The cars made truer, and the Unreal loop's grating (0.75.0)
+
+- **The model fixes** (`tools/prepare_car_models.py`, `tools/car_models.json`; the investigation and its renders:
+  C:\temp\log\grudgelap\v73\fix\ and v74\models\): `own_material` (parts drawn in an untextured copy of their material,
+  for a colour a texture atlas has wrong: the 205's rims, a flat red in the atlas its tyres share, now the GTi 1.9's
+  silver-grey, its calipers dull iron); `turn` with `turn_pieces` (the Renault 12's lower door panels, modelled inside
+  out on mirrored nodes, turned outwards: the black band on its doors was the lining the paint shader draws on a back
+  face inside the cabin box); the spec-gloss corrections (an untextured specular-glossiness material the entry corrects
+  is rewritten as metallic-roughness: the Esprit cabin in black leather); `steering_part` (the Clio's own cabin with its
+  wheel cut out to turn); the Golf's tail lamps as the brake lamp's red lens with the R32's smoked band; RainerS's 458
+  converted by `tools/convert_rainers_458.py` (BlendSwap #5151, CC BY 3.0; `fetch_models.py` and `CarModelSourceTests`
+  accept its BlendSwap page).
+- **The Unreal cars' materials** (`prepare_model_car.py`): `CarView.CorrectModelMaterial`'s rules ported (an untextured
+  material at the exporter's metallic and roughness of 1 is a matt dielectric, rubber, wing-mirror glass, white rear-lamp
+  blocks, grey painted wheels); specular-glossiness read as Godot's importer reads its factors (diffuse, glossiness,
+  metallic 0); dark dielectrics given a grained surface (roughness 0.8; under Lumen the dashboards mirrored the sky).
+  The paint is two-sided, its back faces inside the cabin box (CarView.SetPaintCabin's, from the model's eye) the dark
+  lining. Known: the dashboards still read lighter than in the Godot game.
+- **The Unreal loop** (`M_LoopGrating`): the Godot grating's per-pixel bars in one Custom node, the coverage dithered in
+  time (InterleavedGradientNoise) and resolved by DLSS or TSR, masked, so the deck casts its ladder of shadows. The
+  cuttings' earth is Poly Haven's dirt_floor, grey-brown, instead of a mud scan tinted orange.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

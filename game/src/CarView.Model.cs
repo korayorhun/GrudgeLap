@@ -870,7 +870,7 @@ internal sealed partial class CarView
 
     /// <summary>
     /// A drone's cabin (0.21): the meshes inside it cast no shadow and are drawn only near the camera. The models
-    /// bring whole cabins (seats, dashboard, door cards, the 205's roll cage), and the 205 and the Golf added to the
+    /// bring whole cabins (seats, dashboard, door cards, the Delta's roll cage), and the 205 and the Golf added to the
     /// traffic brought a hundred draw calls more (the shadow cascades draw each mesh again) for what tinted glass
     /// shows only close by; the shell shades the inside anyway. Trimmed, the eight drones draw 140 fewer than the
     /// three-car traffic before them.
@@ -907,7 +907,7 @@ internal sealed partial class CarView
     }
 
     /// <summary>
-    /// How near a drone's cabin is drawn (TrimCabinForTraffic): the 205's red seats show through its screen at 18 m,
+    /// How near a drone's cabin is drawn (TrimCabinForTraffic): the 205's red Sparco seats (until 0.75) showed through its screen at 18 m,
     /// and past 25 m a seat is a few pixels behind tinted glass.
     /// </summary>
     private const float CabinSeenWithin = 25f;
