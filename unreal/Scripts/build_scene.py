@@ -1957,6 +1957,185 @@ def place_instanced(placements, actors):
     log(f"instanced dressing: {counts}, {len(pieces)} wire pieces")
 
 
+WIND_HLSL = """struct FGlpWind
+{
+    float Hash(float2 p)
+    {
+        float3 p3 = frac(float3(p.xyx) * 0.1031);
+        p3 += dot(p3, p3.yzx + 33.33);
+        return frac((p3.x + p3.y) * p3.z);
+    }
+    float Value(float2 p)
+    {
+        float2 i = floor(p);
+        float2 f = frac(p);
+        float2 u = f * f * (3.0 - 2.0 * f);
+        return lerp(lerp(Hash(i), Hash(i + float2(1, 0)), u.x), lerp(Hash(i + float2(0, 1)), Hash(i + float2(1, 1)), u.x), u.y);
+    }
+};
+FGlpWind W;
+// Godot's wind (wind.gdshaderinc) on its (x, z) plane, which is Unreal's (x, y): downwind to -x and -z there.
+const float2 Dir = float2(-0.944, -0.330);
+float2 p = Origin.xy / 100.0;
+float2 across = float2(-Dir.y, Dir.x);
+float along = dot(p, Dir) - 4.5 * 1.3 * T;
+float side = dot(p, across);
+float n = W.Value(float2(along / 24.0, side / 70.0)) * 0.65 + W.Value(float2(along / 8.0, side / 18.0) + 17.0) * 0.35;
+float gust = smoothstep(0.38, 0.82, n);
+float flutter = sin(T * 6.3 + dot(p, float2(1.7, 2.3))) * (0.3 + 0.7 * gust);
+float lean = (0.06 + 0.22 * gust + 0.05 * flutter) / max(Stiffness, 0.1);
+// The plant's own height at this instance's scale; the tip leans lean times it, the foot stays put.
+float tall = max(Height * length(Up), 1.0);
+float h = saturate(Offset.z / tall);
+return float3(Dir.x, Dir.y, 0.0) * (lean * h * h * tall);"""
+
+
+def add_wind(material):
+    """Adds the ground's wind (WIND_HLSL) to a material's world position offset: each vertex leans downwind by the square
+    of its height over the instance's foot, as a share of the plant's height (scalar parameters WindHeight, cm, the
+    mesh's height before the instance's scale, and WindStiffness, 1 for the grass as Godot's tufts, 9 for a tree as its
+    impostors). The instance's foot and scale come from the local position in instance space taken to the world."""
+    mp = unreal.MaterialProperty
+
+    def expression(cls, x, y):
+        return mel.create_material_expression(material, cls, x, y)
+
+    local = expression(unreal.MaterialExpressionLocalPosition, -1600, 1400)
+    offset = expression(unreal.MaterialExpressionTransform, -1350, 1400)
+    offset.set_editor_property("transform_source_type", unreal.MaterialVectorCoordTransformSource.TRANSFORMSOURCE_LOCAL)
+    offset.set_editor_property("transform_type", unreal.MaterialVectorCoordTransform.TRANSFORM_WORLD)
+    mel.connect_material_expressions(local, "", offset, "")
+    unit = expression(unreal.MaterialExpressionConstant3Vector, -1600, 1550)
+    unit.set_editor_property("constant", unreal.LinearColor(0.0, 0.0, 1.0, 1.0))
+    up = expression(unreal.MaterialExpressionTransform, -1350, 1550)
+    up.set_editor_property("transform_source_type", unreal.MaterialVectorCoordTransformSource.TRANSFORMSOURCE_LOCAL)
+    up.set_editor_property("transform_type", unreal.MaterialVectorCoordTransform.TRANSFORM_WORLD)
+    mel.connect_material_expressions(unit, "", up, "")
+    where = expression(unreal.MaterialExpressionWorldPosition, -1350, 1250)
+    foot = expression(unreal.MaterialExpressionSubtract, -1100, 1300)
+    mel.connect_material_expressions(where, "", foot, "A")
+    mel.connect_material_expressions(offset, "", foot, "B")
+    time = expression(unreal.MaterialExpressionTime, -1100, 1700)
+    stiffness = expression(unreal.MaterialExpressionScalarParameter, -1100, 1800)
+    stiffness.set_editor_property("parameter_name", "WindStiffness")
+    stiffness.set_editor_property("default_value", 1.0)
+    height = expression(unreal.MaterialExpressionScalarParameter, -1100, 1900)
+    height.set_editor_property("parameter_name", "WindHeight")
+    height.set_editor_property("default_value", 45.0)
+    custom = expression(unreal.MaterialExpressionCustom, -800, 1500)
+    custom.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT3)
+    custom.set_editor_property("description", "GrudgeLap wind")
+    custom.set_editor_property("code", WIND_HLSL)
+    inputs = []
+    for name in ("Origin", "Offset", "Up", "T", "Stiffness", "Height"):
+        entry = unreal.CustomInput()
+        entry.set_editor_property("input_name", name)
+        inputs.append(entry)
+    custom.set_editor_property("inputs", inputs)
+    for source, name in ((foot, "Origin"), (offset, "Offset"), (up, "Up"), (time, "T"), (stiffness, "Stiffness"), (height, "Height")):
+        mel.connect_material_expressions(source, "", custom, name)
+    existing = mel.get_material_property_input_node(material, mp.MP_WORLD_POSITION_OFFSET)
+    if existing is not None:
+        total = expression(unreal.MaterialExpressionAdd, -500, 1500)
+        mel.connect_material_expressions(existing, "", total, "A")
+        mel.connect_material_expressions(custom, "", total, "B")
+        mel.connect_material_property(total, "", mp.MP_WORLD_POSITION_OFFSET)
+    else:
+        mel.connect_material_property(custom, "", mp.MP_WORLD_POSITION_OFFSET)
+    mel.recompile_material(material)
+
+
+def windy(parent, copies):
+    """A copy of a scanned plant's material chain whose master carries the wind (add_wind): a master is duplicated and
+    given it, a material instance duplicated onto the windy copy of its own parent, so every parameter the glTF import
+    set on the way stays. The engine's Interchange content itself is left alone."""
+    key = parent.get_path_name()
+    if key in copies:
+        return copies[key]
+    name = f"W_{parent.get_name()}"
+    path = f"{GAME}/Materials/{name}"
+    if eal.does_asset_exist(path):
+        eal.delete_asset(path)
+    copy = asset_tools.duplicate_asset(name, f"{GAME}/Materials", parent)
+    if isinstance(copy, unreal.Material):
+        add_wind(copy)
+    else:
+        mel.set_material_instance_parent(copy, windy(parent.get_editor_property("parent"), copies))
+        mel.update_material_instance(copy)
+    eal.save_loaded_asset(copy)
+    copies[key] = copy
+    return copy
+
+
+# The wind's share by kind of plant (label prefix of scatter()'s actors): stiffness as Godot's (1 for the tufts, 9 for the
+# trees; the bushes between), and how far out it is drawn (cm), past which the plant stands still.
+WIND_KINDS = {"Grass": (1.0, 3000), "Sage": (3.0, 3000), "Bushes": (3.0, 5000), "Trees": (9.0, 15000), "Wood": (9.0, 15000)}
+
+
+def wind_on_plants():
+    """The plants scatter() placed lean and sway in the wind (0.76). Each scanned material on their components gives way to
+    a windy copy (W_<kind>_<name>, made afresh with every build in the level's materials folder): a duplicate of the
+    scanned instance, so it keeps the import's textures and factors, on a windy copy of its parent chain (windy), told the
+    tallest of its meshes' heights and the kind's stiffness. The sage's tinted copies move onto the windy copy of their
+    scanned material. The scanned materials themselves, kept between builds with the Poly Haven imports, stay as imported:
+    a build that reparented them left them pointing at copies the next build deletes. The components evaluate the offset
+    only near the eye and keep their virtual shadow pages (the shadows hold still: a swaying shadow would invalidate them
+    every frame)."""
+    copies = {}
+    plants = {}   # (scanned material, kind) -> [scanned material, kind, tallest mesh in cm]
+    uses = []     # (component, slot, key, the sage's tinted copy or None)
+    for actor in actor_sub.get_all_level_actors():
+        label = actor.get_actor_label()
+        kind = next((k for k in WIND_KINDS if label.startswith(k)), None)
+        if kind is None:
+            continue
+        distance = WIND_KINDS[kind][1]
+        for component in actor.get_components_by_class(unreal.InstancedStaticMeshComponent):
+            mesh = component.get_editor_property("static_mesh")
+            tall = mesh.get_bounds().box_extent.z * 2.0 if mesh else 45.0
+            for setting, value in (("world_position_offset_disable_distance", distance), ("evaluate_world_position_offset", True),
+                                   ("shadow_cache_invalidation_behavior", unreal.ShadowCacheInvalidationBehavior.RIGID)):
+                try:
+                    component.set_editor_property(setting, value)
+                except Exception as error:  # a renamed setting must not stop the build
+                    log(f"wind {setting}: {error}")
+            for slot in range(component.get_num_materials()):
+                material = component.get_material(slot)
+                if not isinstance(material, unreal.MaterialInstanceConstant):
+                    continue
+                sage = material if material.get_name().startswith("MI_Sage_") else None
+                scanned = material.get_editor_property("parent") if sage else material
+                if not isinstance(scanned, unreal.MaterialInstanceConstant) or scanned.get_editor_property("parent") is None:
+                    continue
+                key = (scanned.get_path_name(), kind)
+                entry = plants.setdefault(key, [scanned, kind, 0.0])
+                entry[2] = max(entry[2], tall)
+                uses.append((component, slot, key, sage))
+    made = {}
+    for key, (scanned, kind, tall) in plants.items():
+        name = f"W_{kind}_{scanned.get_name()}"
+        path = f"{GAME}/Materials/{name}"
+        if eal.does_asset_exist(path):
+            eal.delete_asset(path)
+        copy = asset_tools.duplicate_asset(name, f"{GAME}/Materials", scanned)
+        mel.set_material_instance_parent(copy, windy(scanned.get_editor_property("parent"), copies))
+        mel.set_material_instance_scalar_parameter_value(copy, "WindStiffness", WIND_KINDS[kind][0])
+        mel.set_material_instance_scalar_parameter_value(copy, "WindHeight", max(tall, 10.0))
+        mel.update_material_instance(copy)
+        eal.save_loaded_asset(copy)
+        made[key] = copy
+    moved = set()
+    for component, slot, key, sage in uses:
+        if sage is None:
+            component.set_material(slot, made[key])
+        elif sage.get_path_name() not in moved:
+            moved.add(sage.get_path_name())
+            mel.set_material_instance_parent(sage, made[key])
+            mel.update_material_instance(sage)
+            eal.save_loaded_asset(sage)
+    log(f"wind: {len(made)} windy material(s) for {len(uses)} slot(s), {len(moved)} sage tint(s) moved, {len(copies)} windy parent(s)")
+
+
 def scatter(placements, extra, actors):
     foliage = pipeline("/Interchange/Pipelines/DefaultGLTFAssetsPipeline", "Foliage",
                        {"combine_static_meshes_behavior": unreal.InterchangeCombineStaticMeshesBehavior.DO_NOT_COMBINE,
@@ -2067,6 +2246,8 @@ def scatter(placements, extra, actors):
                         tinted[source.get_name()] = copy
                     component.set_material(slot, tinted[source.get_name()])
         log(f"sagebrush: {len(extra['sage'])} bushes, {len(tinted)} tinted material(s)")
+
+    wind_on_plants()
 
     # The scanned trees stand where the game's leaf-card trees stood; those go.
     removed = [label for label in actors if label.startswith("Tree-")]

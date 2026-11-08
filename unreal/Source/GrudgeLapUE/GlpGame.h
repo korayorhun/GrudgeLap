@@ -268,6 +268,7 @@ private:
 	float QuitAfter = 0.f;
 	bool bClockFromStart = false;
 	bool bSaveBest = false;
+	bool bHold = false;   // -GlpHold: the simulation does not step (the renderer's motion alone, for checks)
 	int32 AttractGearbox = GLP_MANUAL_AUTO_CLUTCH;
 	bool bFrameCap = false;      // the game holds its frame rate (a window on a screen, not the off-screen runs)
 	int32 FrameCap = 0;          // fps asked for at the last look

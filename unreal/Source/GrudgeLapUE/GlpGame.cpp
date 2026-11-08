@@ -181,6 +181,7 @@ void AGlpGame::BeginPlay()
 	FParse::Value(FCommandLine::Get(), TEXT("GlpQuitAfter="), QuitAfter);
 	bClockFromStart = FParse::Param(FCommandLine::Get(), TEXT("GlpTitleShots"));
 	bSaveBest = FParse::Param(FCommandLine::Get(), TEXT("GlpSaveBest"));
+	bHold = FParse::Param(FCommandLine::Get(), TEXT("GlpHold"));
 	// The attract-mode driver changes gear itself, as in the Godot version (Bootstrap._attractMode, --auto).
 	AttractGearbox = FParse::Param(FCommandLine::Get(), TEXT("GlpAuto")) ? GLP_AUTOMATIC : GLP_MANUAL_AUTO_CLUTCH;
 
@@ -1075,7 +1076,7 @@ void AGlpGame::Tick(float DeltaSeconds)
 	{
 		Library->Abort(Session);
 	}
-	if (Library->Step(Session, &Controls, DeltaSeconds) != 0)
+	if (!bHold && Library->Step(Session, &Controls, DeltaSeconds) != 0)
 	{
 		UE_LOG(LogGlpGame, Error, TEXT("step failed: %s"), *Library->LastError());
 		return;
