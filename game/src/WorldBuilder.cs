@@ -404,6 +404,9 @@ internal static class WorldBuilder
     public static void FollowCar(Vector3 carPosition, float time)
     {
         if (_carProbe is null || !_carProbe.Visible) return;
+        // Not during a lightning flash (0.64): a capture taken mid-stroke kept the lit sky in the paint and the glass for
+        // half a second after the sky had gone dark. SetFlash asks for a capture once the strokes are over.
+        if (_flash > 0f) return;
         if (time - _carProbeMovedAt < 0.5f && carPosition.DistanceTo(_carProbeAt) < 12f) return;
         _carProbeAt = carPosition;
         _carProbeMovedAt = time;
@@ -551,7 +554,7 @@ internal static class WorldBuilder
             environment.AmbientLightEnergy = overcast ? 1.1f : _sunrise ? AmbientEnergy * 0.8f : _dusk ? AmbientEnergy * 0.85f : AmbientEnergy;
             // Under the deck the air is the dome's own grey at the horizon (0.53), darker as the weather worsens: brighter,
             // the rain's thick air stood the mountains up as pale cut-outs against a darker sky.
-            var greyAir = (WeatherModel.Raining(_weather) ? 0.78f : _weather == Weather.Wet ? 0.9f : 1f) * Dawn;
+            var greyAir = (WeatherModel.Raining(_weather) ? 0.78f : _weather == Weather.Wet ? 0.9f : 1f) * DeckDawn;
             environment.FogLightColor = overcast ? new Color(0.60f, 0.62f, 0.66f) * greyAir : _night ? NightAir : _dusk ? DuskAir : _sunrise ? SunriseAir : ClearAir;
             // The low sun lights the haze towards it (0.55): the gold the far land takes looking into a sunrise, and the glow
             // over the Tetons where the sun has just set (0.60).
@@ -2130,16 +2133,29 @@ internal static class WorldBuilder
         _overcastDeck.SetShaderParameter("haze_strength", 1f);
         _overcastDeck.SetShaderParameter("density", 0.055f);
         // At dawn (0.55) the same grey deck lets less light through.
-        dark *= Dawn;
+        dark *= DeckDawn;
         _overcastDeck.SetShaderParameter("ambient_top", new Color(0.78f, 0.80f, 0.83f) * dark);
-        _overcastDeck.SetShaderParameter("ambient_bottom", new Color(0.46f, 0.48f, 0.51f) * under * Dawn);
+        _overcastDeck.SetShaderParameter("ambient_bottom", new Color(0.46f, 0.48f, 0.51f) * under * DeckDawn);
         _overcastDeck.SetShaderParameter("dome_top", new Color(0.34f, 0.37f, 0.42f) * dark);
         _overcastDeck.SetShaderParameter("dome_horizon", new Color(0.60f, 0.62f, 0.66f) * dark);
+        // The dome under the horizon by the hour too (0.64): it was never set and kept the day's grey at every hour, at
+        // night many times the sky above; through the radiance map it lit the land from below and, by the fog's aerial
+        // perspective, gave the far land its colour, so the mountains stood pale against a dark sky whatever the fog's
+        // own colour. At dusk and sunrise the land under the deck is a little darker for it too, against the sky.
+        _overcastDeck.SetShaderParameter("dome_ground", new Color(0.30f, 0.31f, 0.31f) * DeckDawn);
         return _overcastDeck;
     }
 
     /// <summary>The grey day's light at the hour: an overcast dawn is dimmer (0.55), an overcast night all but dark (0.57).</summary>
     private static float Dawn => _night ? 0.05f : _dusk ? 0.45f : _sunrise ? 0.75f : 1f;
+
+    /// <summary>
+    /// <see cref="Dawn"/> for the deck's colours and the fog's under it (0.64). Both are sRGB (Godot converts them to light),
+    /// so the night's 0.05 left the deck's horizon about a hundredth of the day's in light, and the sky under the deck
+    /// rendered black; 0.2 is about a twentieth. The fog keeps the deck's horizon grey (0.53), so the far land and the
+    /// far deck still meet in one grey.
+    /// </summary>
+    private static float DeckDawn => _night ? 0.2f : Dawn;
 
     /// <summary>The hours of a credit: the day (the sun 43 degrees up), the sunrise (5.85 degrees, 0.55), the night (0.57).</summary>
     public enum Hour { Day, Sunrise, Night, Dusk }
@@ -2161,18 +2177,28 @@ internal static class WorldBuilder
     private static float FlashGain => _night ? 1.2f : _dusk ? 0.8f : _sunrise ? 0.5f : 0.35f;
 
     /// <summary>
-    /// A lightning flash over the image (0.63, Thunderstorm): 0 none, about 1.6 for a strike under 2 km; the colour
-    /// adjustment's brightness carries it, so the clouds, the land and the cabin light up together for the stroke.
+    /// A lightning flash (0.63, Thunderstorm): <paramref name="stroke"/> the strokes' brightness (1 the first, 0 between),
+    /// <paramref name="strength"/> the strike's by its nearness (0.25 at 8 km to 1.6 under 2 km), its channel's top at
+    /// <paramref name="at"/> in the deck. Since 0.64 the deck carries most of it, lit from inside round the strike and in
+    /// the air towards it (volumetric_sky.gdshader flash), so the land stands dark against lit cloud; the colour
+    /// adjustment's brightness lifts the whole image a little, the land and the cabin the stroke lights.
     /// </summary>
-    public static void SetFlash(float level)
+    public static void SetFlash(float stroke, float strength, Vector3 at)
     {
+        var level = stroke * strength;
         if (MathF.Abs(level - _flash) < 0.001f) return;
+        // The strokes over: the car's reflections captured again at once (FollowCar holds them through a flash).
+        if (level <= 0f && _flash > 0f) _carProbeMovedAt = -100f;
         _flash = level;
+        // The deck by the strength's square root: in proportion a strike a kilometre off turned the sky white from edge
+        // to edge while one at five lit a patch, so the near ones are held down and the far ones kept.
+        _overcastDeck?.SetShaderParameter("flash", stroke * MathF.Sqrt(strength) * FlashGain * 0.4f);
+        _overcastDeck?.SetShaderParameter("flash_at", at);
         foreach (var environment in new[] { _environment, _mirrorEnvironment })
         {
             if (environment is null) continue;
             environment.AdjustmentEnabled = true;
-            environment.AdjustmentBrightness = 1f + level * FlashGain;
+            environment.AdjustmentBrightness = 1f + level * FlashGain * 0.35f;
         }
     }
 

@@ -36,6 +36,20 @@ uniform bool use_photo = true;
 uniform vec3 dome_top : source_color = vec3(0.34, 0.37, 0.42);
 uniform vec3 dome_horizon : source_color = vec3(0.60, 0.62, 0.66);
 uniform vec3 dome_ground : source_color = vec3(0.30, 0.31, 0.31);
+// A lightning strike (0.64, Thunderstorm through WorldBuilder.SetFlash): the stroke lights the deck from inside round the
+// channel's top (flash_at, in the world's metres), falling off over a kilometre or two, and the rain's air towards it.
+// Never in the radiance map: its incremental update would light the scene frames after the stroke.
+uniform float flash = 0.0;
+uniform vec3 flash_at = vec3(0.0, 700.0, 0.0);
+const vec3 FLASH_COLOUR = vec3(0.80, 0.84, 1.0);
+
+vec3 flash_glow(vec3 d, vec3 eye) {
+	if (flash <= 0.0) {
+		return vec3(0.0);
+	}
+	float toward = max(dot(normalize(d.xz + vec2(1e-5)), normalize(flash_at.xz - eye.xz + vec2(1e-5))), 0.0);
+	return FLASH_COLOUR * flash * 0.3 * pow(toward, 6.0);
+}
 
 vec3 dome(vec3 d) {
 	return d.y >= 0.0 ? mix(dome_horizon, dome_top, pow(clamp(d.y, 0.0, 1.0), 0.6)) : mix(dome_horizon, dome_ground, clamp(-d.y * 4.0, 0.0, 1.0));
@@ -107,8 +121,10 @@ void sky() {
 						float h = (p.y - cloud_bottom) / (cloud_top - cloud_bottom);
 						vec3 sunlit = sun_tint * sun_strength * LIGHT0_ENERGY * beer * mix(1.0, powder, 0.3) * hg * 4.0;
 						vec3 ambient = mix(ambient_bottom, ambient_top, h) * ambient_strength;
+						vec3 to_flash = p - flash_at;
+						vec3 flashlit = FLASH_COLOUR * flash / (1.0 + dot(to_flash, to_flash) / 1.44e6);
 						float absorbed = 1.0 - exp(-d * step_len);
-						light += transmittance * absorbed * (sunlit + ambient);
+						light += transmittance * absorbed * (sunlit + ambient + flashlit);
 						transmittance *= 1.0 - absorbed;
 						if (transmittance < 0.03) {
 							break;
@@ -123,13 +139,13 @@ void sky() {
 				}
 				// The air between: far clouds fade into the sky's own colour, near the horizon.
 				float haze = 1.0 - exp(-t0 / haze_distance);
-				light = mix(light, photo * (1.0 - transmittance), haze * haze_strength);
+				light = mix(light, (photo + flash_glow(dir, POSITION)) * (1.0 - transmittance), haze * haze_strength);
 				COLOR = light;
 				ALPHA = 1.0 - transmittance;
 			}
 		}
 	} else {
 		vec4 clouds = QUARTER_RES_COLOR;
-		COLOR = photo * (1.0 - clouds.a) + clouds.rgb;
+		COLOR = (photo + flash_glow(EYEDIR, POSITION)) * (1.0 - clouds.a) + clouds.rgb;
 	}
 }

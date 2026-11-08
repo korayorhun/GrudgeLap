@@ -3435,6 +3435,35 @@ The puddles were the view's alone: a mirror-flat patch on the asphalt, under the
   day's at every hour, and at night the drops stood on the glass like snowflakes; it is the hour's now (0.06 at night,
   half at dusk).
 
+### The lightning (0.64.0)
+
+- **The bolt** (`Thunderstorm.DrawBolt`, `assets/shaders/lightning.gdshader`): for a strike under 6 km a jagged line from
+  the deck's base (700 m) to 30 m under the plain at the strike, split six times by midpoint displacement (each midpoint
+  pushed sideways by up to a fifth of its segment), with two or three branches off its upper half; ribbons turned to the
+  eye and added over the scene unfogged, sized in pixels of the 3D render at the strike's distance (the active camera's
+  field of view, the window's height times the 3D scale; the stretched view's rect is its 1600 x 900 base): a
+  flat-topped core three pixels wide, a branch's two and a half, halos four to six times as wide at a twentieth of the
+  energy. Under two pixels the temporal anti-aliasing broke a line into dots. Its brightness follows the strokes (1,
+  0.1, 0.7, 0.05, 0.4), a dim channel in the gaps. A far strike shows no bolt (the last near one's mesh is dropped).
+- **The lit deck** (`volumetric_sky.gdshader` `flash`, `flash_at`; `WorldBuilder.SetFlash(stroke, strength, at)`): the
+  stroke lights the deck from inside, 1/(1 + (r/1.2 km)^2) round the channel's top, and the haze towards the strike (a
+  lobe of the bearing to the sixth power), by the stroke times the square root of the strike's strength times the hour's
+  gain times 0.4 (in proportion a strike a kilometre off turned the sky white from edge to edge while one at five lit a
+  patch); the colour adjustment's lift is the strength times the gain times 0.35 (0.63: times 1), so the land stands dark
+  against lit cloud. Not in the sky's radiance map, whose incremental update would light the scene frames after the
+  stroke; the car's reflection probe (`FollowCar`) is not moved while a flash is lit and is captured again once it is
+  over, or a capture taken mid-stroke kept the lit sky in the paint for up to half a second. Under the pause menu the
+  storm is checked with its clock stopped, so a change of weather or the 1989 look puts the flash and the bolt out.
+- **The night under the deck** (`WorldBuilder.DeckDawn`, `dome_ground`): the night sky under the deck rendered black
+  over pale mountains. The deck's and the fog's colours are sRGB (Godot converts both to light), so the night's factor
+  of 0.05 left the deck's horizon about a hundredth of the day's light: they take 0.2 at night now, about a twentieth.
+  The pale mountains came from the dome under the horizon, which was never set and kept the day's grey at every hour,
+  at night many times the sky above: through the radiance map it lit the land from below, and with the fog's aerial
+  perspective (0.8) it gave the far land four fifths of its colour, whatever the fog's own colour (set to black, the
+  mountains did not change). It takes the hour's factor now; the day is unchanged, and at dusk and sunrise the land
+  under the deck is a little darker against the sky, as it is at night. Measured on a fixed night view: the sky from
+  0.5 to about 10 of 255, the mountains from 31 to about 11, a shade under the sky above them.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

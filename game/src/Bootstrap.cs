@@ -867,6 +867,9 @@ public sealed partial class Bootstrap : Node3D
         {
             // The race stands still under the menu: no input reaches the car, the session does not step.
             HandleMenu();
+            // The storm with its clock stopped (0.64): a strike under way holds, but the weather or the 1989 look changed
+            // from the menu puts its flash and bolt out at once.
+            _thunder.Update(_session.Weather, _session.Phase, _retro, _cameraRig.Listener, 0f);
             FillMenuLabels();
             SyncView();
             AutomationAfterFrame();
@@ -970,7 +973,7 @@ public sealed partial class Bootstrap : Node3D
         {
             _audio.Update(_session, dt);
             _world.Update(_session, _cameraRig.Listener, dt);
-            _thunder.Update(_session.Weather, _session.Phase, _retro, dt);
+            _thunder.Update(_session.Weather, _session.Phase, _retro, _cameraRig.Listener, dt);
         }
         catch (System.Exception e)
         {
