@@ -4,7 +4,7 @@ namespace GrudgeLap.Game;
 
 /// <summary>
 /// The menu Esc (or the pad's Back) opens over the game: carry on, a new game, the car (its showroom), the car's paint,
-/// the camera, the picture, the weather, the units, full screen, the replay music's folder and quitting. While it is
+/// the camera, the picture, the weather, the units, full screen and quitting (0.71: no longer the replay music). While it is
 /// open the race stands still and the sound is off; the arrow keys, the d-pad and the mouse move its cursor instead of
 /// the car.
 /// </summary>
@@ -32,8 +32,6 @@ internal sealed class PauseMenu
         Retro,
         Units,
         Fullscreen,
-        /// <summary>The replay music: the built-in tune or the player's own file; taking it opens the user folder (0.15).</summary>
-        Music,
         Quit,
     }
 

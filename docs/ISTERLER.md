@@ -8,7 +8,7 @@ Yeni bir istek gelince buraya satır olarak eklenir. Bir sürüm bir isteği kar
 - **Durum:** `Tamam` karşılandı, `Kısmen` bir kısmı karşılandı, `Açık` henüz yapılmadı, `Karar` yön belirlendi, `Ertelendi` bilerek sonraya bırakıldı.
 - **Ayrıntı:** teknik gerekçeler [design.md](design.md)'de, sürüm notları GitHub Releases'te.
 
-Son güncelleme: 8 Kasım 2026 (sürüm 0.70.0).
+Son güncelleme: 8 Kasım 2026 (sürüm 0.71.0).
 
 ## 1. Hedef
 
@@ -21,6 +21,7 @@ Son güncelleme: 8 Kasım 2026 (sürüm 0.70.0).
 | H5 | Fotogerçekçilik için Unreal Engine sürümü de sürdürülsün; realizmi artıracaksa daha güçlü bir motora geçmek de seçenek. | 1 Kas, soru cevabı: "Unreal sürümü"; 7 Kas: "DLSS yerleşik olan daha iyi realizm verebilecek bir motora geçmek çok mu maliyetli?", "realizm'i arttırmak engine değiştirerek mümkünse lütfen onu da yapmaya çalış, her izni veriyorum", "gerekiyorsa engine değiştirebilir, hatta istiyorsan herşeyi baştan bile yapabilirsin" | Karar (7 Kas): Unreal sürümü güncel pistle yeniden kuruldu ve DLSS eklendi; aynı turun aynı anlarında yan yana bakıldı: kokpitte Godot açıkça önde (gerçek kabin modelleri; Unreal'da kabin kaba ve karanlık), dışarıda Unreal'ın gökyüzü, ağaç ve çalıları (Poly Haven taramaları) biraz daha gerçekçi, dağlar ikisinde de en zayıf öğe. Ana sürüm Godot kalıyor; Unreal'ın iyi olduğu şeyler (taranmış bitkiler, gökyüzü) Godot'ya taşınıyor; gerçek dağlar ikisine de (bölüm 10 madde 11, 22). 0.44'ten Unreal sürümü her sürümle birlikte indirilebilir önizleme olarak da yayımlanıyor (GrudgeLapUE-Preview), sahip iki motoru kendi bilgisayarında karşılaştırabilsin |
 | H6 | Ekran kartı RTX ise DLSS kullanılsın. | 7 Kas: "sistem RTX ise DLSS kullanma gibi bir şansımız var mı?", "dlss kullanma şansımız var mı?" | Tamam (Unreal sürümü, 7 Kas): NVIDIA'nın DLSS 4.5 eklentisi (8.9.0) kuruldu; RTX kartta TSR yerine DLSS çalışıyor (tam çözünürlükte DLAA, dinamik çözünürlük düşünce DLSS büyütmesi); bu makinenin RTX 5060'ında DLSS-SR ve DLSS-RR destekli. Godot 4.7'de DLSS yok (ölçekleyici olarak yalnız AMD FSR); FSR2 0.36'da `--fsr2=<ölçek>` ile denendi, tam çözünürlükte görünür kazanç vermedi |
 | H7 | Sık sık sürüm çıksın; sahip evde her yeni sürümü oynuyor; en az 10 sürüm çıkana kadar iterasyon sürsün. | 7 Kas akşam: "sık sık versiyon çıkarmaya devam et ben evde oynayacağım yeni versiyon çıktıkça", "en az 10 versiyon çıkarana kadar iterasyona devam" | Sürüyor (0.37.0 ile başladı) |
+| H8 | Uzaktaki bulutlar titremesin. | 8 Kas: "uzaktaki bulutlar titriyor ona da dikkat et lütfen" | Tamam (0.71.0): bulut gürültüleri mip zinciriyle; gölgelendirici her örneği pikselinin ve adımının boyuna göre okuyor. Sabit kamerayla ufka yakın gökyüzünde kareden kareye titreme 0,47'den 0,30 gri düzeyine indi; yakın bulutlar aynı, en uzaktakiler biraz daha yumuşak |
 
 ## 2. Pist ve dünya
 
@@ -79,6 +80,7 @@ Son güncelleme: 8 Kasım 2026 (sürüm 0.70.0).
 | A8 | Daha iyi modeller sahibin Sketchfab hesabıyla indirilebilir. | 2 Kas: "sana her türlü yetkiyi veriyorum" | Karar: yalnız doğrulanmış CC0/CC BY modeller, Sketchfab'ın resmi indirme API'siyle |
 | A9 | Lada sürülebilen arabalardan çıksın; trafikte bütün arabalar olsun. | 8 Kas: "sürebilinen arabalardan lada'yı çıkar, trafikte tüm arabalar olsun.." | Tamam (0.70.0): Lada (Şahin'in yerindeki VAZ-2106 modeli) seçilemiyor, trafikte duruyor; trafik artık modeli olan 11 arabanın hepsi (Ferrariler kendi kırmızısında) |
 | A10 | Subaru BRZ'nin içi, sesi ve sürüş fiziği gerçek BRZ'ye benzesin (sahibin eski arabası). | 8 Kas: "benim eskiden subaru brz'm vardı, içi ve sesi hiç benzemiyor, driving physics de.." | Açık: araştırma 8 Kas'ta başladı |
+| A11 | Orijinal oyundaki gibi bir kamyon ve gerçek modeli bulunursa bir otobüs trafiğe eklensin. | 8 Kas: "orjinal oyunda bir de kamyon var, ona benzeyen bir kamyon bir de (tabi ki gerçek model bulabiliyorsan) otobüs ekleyebilir misin?" | Açık: orijinaldeki kamyon ve lisanslı modeller araştırılıyor; trafikte her araç şimdilik 4,3 m (Traffic.HalfLength), uzun araçlar için boyutun araca göre olması gerekiyor |
 
 ## 6. Fizik
 
@@ -106,6 +108,7 @@ Son güncelleme: 8 Kasım 2026 (sürüm 0.70.0).
 | S6 | Instant replay müziği orijinal oyunun müziği olsun; lisans sorunu şimdilik görmezden gelinsin, sonra bir yol düşünülecek. | 7 Kas: "lisans sorunu var biliyorum, şimdilik görmezden gelelim" | Açık: karar bölüm 10, madde 20 |
 | S7 | Kaza olunca ses takılı kalmasın; instant replay'de yalnız müzik duyulsun. | 7 Kas: "kaza olunca ses takılı kalıyor, instant replay'da sadece müzik duyulsun" | Tamam (0.35.0): kazada motor stop ediyor (ses kesiliyor), enkaz penceresinde lastik sesi yok, tekrarda yalnız müzik (tekrardaki darbe sesi kaldırıldı); müzik tekrar oynatımıyla başlıyor |
 | S8 | Arabaların seslerine yapılabildiği kadar gerçeklik eklensin. | 7 Kas akşam: "arabalar (ses ve driving physics) için de yapabildiğin kadar gerçeklik ekleyebilir misin aralarda" | Kısmen (0.40.0): tabliye altından geçerken (yarmalardaki köprüler, döngünün tepesi) motor ve lastik sesi tabliyenin altından yansıyor: yüksekliğe göre gecikmeli bir yankı ve kısa bir çınlama, uzaklıkla sönen; köprü ve rampa uçlarındaki genleşme derzlerinde önce ön, sonra arka aks "tak-tak"; 0.47 yol kenarının sesi: geçilen direk, tabela, ağaç ve duvardan yansıyan araba gürültüsü; 0.54 yağmurun sesi: koltuktan tavana vuran yağmur ve sileceklerin her dönüşteki vuruşu, dışarıda yağmurun hışırtısı |
+| S9 | Menüdeki tekrar müziği satırı kalksın; tekrar müziği sahibin istediği şarkı olsun. | 8 Kas: "main menü'den instant replay adımını kaldır ve instant replay müziğini benim istediğim müzik yap.." | Tamam (0.71.0): menüde REPLAY MUSIC satırı yok; şarkı sahibin bilgisayarında kullanıcı klasöründe ve her iki görünümde çalıyor (S2). Pencereye bırakılan müzik dosyası yine tekrar müziği oluyor, menü açılmıyor |
 
 ## 8. Kullanım ve arayüz
 
@@ -187,6 +190,8 @@ Son güncelleme: 8 Kasım 2026 (sürüm 0.70.0).
 57. **Tekrar müziği: istenen şarkı** (S2, 0.70.0): Tamam. Sahibin yaklaşık yirmi kez istediği şarkı, Hard Drivin' arcade'in "Replay/Crash" teması, videonun kendisinden indirilip sahibin bilgisayarındaki oyunun kullanıcı klasörüne kondu; telifli olduğu için repoya ve yayına girmiyor. Oyunda 1989 görünümü kullanıcının müziğini yok sayıyordu; artık iki görünümde de o çalıyor. Tekrarda oyunun ses çıkışı kaydedilip şarkıyla karşılaştırıldı (0,98 örtüşme).
 58. **Mat lastik izleri** (H2, 0.70.0): Tamam. Lastik izleri hiçbir şey yansıtmıyor. 0.42'den beri hafif parlaktılar (pürüzlülük 0,55, varsayılan yansıtma): alçak açıdan bakınca gökyüzünü ve güneşi pürüzlü yoldan daha parlak yansıtıp koltuktan beyaz çizgiler gibi görünüyorlardı; artık yalnız yolu karartıyorlar.
 59. **Araba listesi ve trafik** (A9, G10, 0.70.0): Tamam. Seçilebilir arabalar 14'ten 10'a indi: Lada (VAZ-2106), Fiat Bravo HGT, Fiat Bravo 1.6 ve SEAT Leon Cupra çıktı (Bravo'ların ve Cupra'nın lisanslı modeli yok, çizimden yapılmış gövdeleri trafikte de yok). Kayıtlı seçim çıkan bir arabadaysa sonraki arabaya geçiliyor. Trafik artık modeli olan 11 arabanın hepsi; Ferrariler kendi kırmızısında, diğerleri yolun renklerinde.
+60. **Uzak bulutlar titremiyor** (H8, 0.71.0): Tamam. Bulutların üç gürültüsü artık mip zinciriyle üretiliyor (önceki doku yalnız tam boyu yapıyordu) ve bulut yürüyüşü her örneği pikselinin ve adımının kapladığı alana göre okuyor. Ufka doğru bir piksel 150 m, bir adım 230 m'yi buluyordu; dokunun 23-54 m'lik ayrıntıları bulutlar kaydıkça örneklerin arasına girip çıkıyor ve uzak bulutlar titriyordu. Ölçüm: sabit kamerayla ardışık on karede ufka yakın gökyüzünde titreme 0,47'den 0,30 gri düzeyine indi.
+61. **Menüde tekrar müziği satırı yok** (S9, 0.71.0): Tamam. Sahibin isteğiyle menünün REPLAY MUSIC satırı kalktı; tekrar müziği sahibin şarkısı.
 
 ## 11. Çalışma kuralları
 

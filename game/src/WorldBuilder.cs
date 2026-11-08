@@ -102,8 +102,9 @@ internal static class WorldBuilder
     private static ProceduralSkyMaterial? _overcastSky;
     // The overcast's deck of cloud (0.53, OvercastDeck): the volumetric sky over a grey dome, on the clear sky's noises.
     private static ShaderMaterial? _overcastDeck;
-    private static NoiseTexture3D? _shapeNoise;
-    private static NoiseTexture3D? _detailNoise;
+    // The clouds' 3D noises with their mip chains (0.71, CloudNoise).
+    private static CloudNoise? _shapeNoise;
+    private static CloudNoise? _detailNoise;
     private static NoiseTexture2D? _weatherNoise;
     private static Texture2D? _puddles;
     private static PuddleMap? _puddleMap;
@@ -2112,18 +2113,14 @@ internal static class WorldBuilder
     {
         var material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/volumetric_sky.gdshader") };
         material.SetShaderParameter("panorama", photo);
-        var shape = new NoiseTexture3D
-        {
-            Width = 96, Height = 48, Depth = 96, Seamless = true, Normalize = true,
-            Noise = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.Perlin, FractalType = FastNoiseLite.FractalTypeEnum.Fbm, FractalOctaves = 4, Frequency = 0.035f, Seed = 1989 },
-        };
-        material.SetShaderParameter("shape_noise", shape);
+        // The same noises as NoiseTexture3D made until 0.71, now with their mip chains (CloudNoise): the shader reads
+        // each at the level a sample's footprint calls for, and the far clouds no longer flicker.
+        var shape = new CloudNoise(new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.Perlin, FractalType = FastNoiseLite.FractalTypeEnum.Fbm, FractalOctaves = 4, Frequency = 0.035f, Seed = 1989 }, 96, 48, 96);
+        material.SetShaderParameter("shape_noise", shape.Texture);
         _shapeNoise = shape;
-        material.SetShaderParameter("detail_noise", new NoiseTexture3D
-        {
-            Width = 48, Height = 48, Depth = 48, Seamless = true, Normalize = true,
-            Noise = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.Cellular, CellularReturnType = FastNoiseLite.CellularReturnTypeEnum.Distance, FractalType = FastNoiseLite.FractalTypeEnum.Fbm, FractalOctaves = 2, Frequency = 0.09f, Seed = 33 },
-        });
+        var detail = new CloudNoise(new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.Cellular, CellularReturnType = FastNoiseLite.CellularReturnTypeEnum.Distance, FractalType = FastNoiseLite.FractalTypeEnum.Fbm, FractalOctaves = 2, Frequency = 0.09f, Seed = 33 }, 48, 48, 48);
+        material.SetShaderParameter("detail_noise", detail.Texture);
+        _detailNoise = detail;
         var weather = new NoiseTexture2D
         {
             Width = 256, Height = 256, Seamless = true, Normalize = true,
@@ -2181,7 +2178,7 @@ internal static class WorldBuilder
         {
             _overcastDeck = new ShaderMaterial { Shader = _volumetricSky.Shader };
             _overcastDeck.SetShaderParameter("use_photo", false);
-            _overcastDeck.SetShaderParameter("shape_noise", _shapeNoise);
+            _overcastDeck.SetShaderParameter("shape_noise", _shapeNoise.Texture);
             _overcastDeck.SetShaderParameter("detail_noise", _volumetricSky.GetShaderParameter("detail_noise"));
             _overcastDeck.SetShaderParameter("weather_map", _weatherNoise);
             _overcastDeck.SetShaderParameter("sun_strength", 1.6f);

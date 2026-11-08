@@ -3589,6 +3589,25 @@ The puddles were the view's alone: a mirror-flat patch on the asphalt, under the
   draws every car with a model (eleven, the Ferraris in their own red, the others in the road's twelve colours), all
   requested from the loader thread at the start as before.
 
+### The far clouds steady, the menu without the replay music (0.71.0)
+
+- **Mip chains for the clouds' noises** (`CloudNoise`, `volumetric_sky.gdshader`): NoiseTexture3D makes only the full-size
+  level, so the cloud march sampled the finest noise at every distance. Towards the horizon a quarter-resolution pixel
+  spans some 150 m and a step of the march up to 230 m, against texels of 54 m (shape) and 23 m (detail), and as the
+  clouds drifted their billows slipped in and out of the samples: the far clouds flickered. `CloudNoise` makes the same
+  seamless noises (FastNoiseLite's own GetSeamlessImage3D, blend skirt 0.1, normalised) on a worker thread and box-averages
+  every level down to one texel, in the order `ImageTexture3D.Create` takes them (each level's slices in turn); the
+  texture object is handed out at once and filled when the worker is done. The shader reads the shape, the detail and
+  the weather map with `textureLod` at the footprint of each sample: the larger of its pixel across the view
+  (`t` times the pixel's angle, from the derivatives of the eye direction taken before any branch) and its step along
+  the ray; the sun's four light steps read at least 80 m. The cloud shade on the CPU (`CloudShadows.Capture`) takes the
+  full-size level from `CloudNoise.Voxels`; read back from the texture it would now get every level's slices.
+- Measured with a fixed camera on the horizon (ten consecutive frames, mean absolute second difference in time): rows
+  400-560 of a 1080p view from 0.47 to 0.30 grey levels, the sky above from 0.09 to 0.08; the near clouds look the same
+  and the farthest a little softer. The horizontal bands a fixed-step march leaves inside far clouds are unchanged.
+- **The menu** (`PauseMenu`): the REPLAY MUSIC line is gone at the owner's wish; the tune in the user folder plays (0.70),
+  and a music file dropped on the window still becomes it, without opening the menu.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

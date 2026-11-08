@@ -30,7 +30,7 @@ internal static class CloudShadows
     private const float Floor = 0.12f;
 
     private static readonly List<ShaderMaterial> _materials = [];
-    private static NoiseTexture3D? _shapeTexture;
+    private static CloudNoise? _shapeTexture;
     private static NoiseTexture2D? _weatherTexture;
     private static byte[]? _shape;
     private static int _shapeWidth, _shapeHeight, _shapeDepth;
@@ -44,7 +44,7 @@ internal static class CloudShadows
     public static bool Log { get; set; }
 
     /// <summary>The sky's noises and the direction to the sun; the materials registered so far and later take them.</summary>
-    public static void SetClouds(NoiseTexture3D shape, NoiseTexture2D weather, Vector3 towardsSun)
+    public static void SetClouds(CloudNoise shape, NoiseTexture2D weather, Vector3 towardsSun)
     {
         _shapeTexture = shape;
         _weatherTexture = weather;
@@ -67,7 +67,7 @@ internal static class CloudShadows
         material.SetShaderParameter("cloud_sun", _sun);
         material.SetShaderParameter("cloud_shadows", false);
         if (_shapeTexture is null || _weatherTexture is null) return;
-        material.SetShaderParameter("cloud_shape", _shapeTexture);
+        material.SetShaderParameter("cloud_shape", _shapeTexture.Texture);
         material.SetShaderParameter("cloud_weather", _weatherTexture);
     }
 
@@ -196,27 +196,25 @@ internal static class CloudShadows
         return Vector2.Zero;
     }
 
-    /// <summary>Reads the noises back once their textures have been generated (on a thread, after the sky is made); true once they are.</summary>
+    /// <summary>
+    /// Takes the noises once they have been generated (on threads, after the sky is made); true once they are. The shape
+    /// comes as CloudNoise keeps its full-size level (0.71): read back from the texture it would now carry the whole mip
+    /// chain, every level's slices one after another.
+    /// </summary>
     public static bool Capture()
     {
         if (_shape is not null) return true;
-        if (_shapeTexture is null || _weatherTexture is null) return false;
-        var layers = _shapeTexture.GetData();
-        if (layers.Count == 0 || layers[0] is null || layers[0].IsEmpty()) return false;
+        if (_shapeTexture?.Voxels is not { } voxels || _weatherTexture is null) return false;
         var map = _weatherTexture.GetImage();
         if (map is null || map.IsEmpty()) return false;
-        var width = layers[0].GetWidth();
-        var height = layers[0].GetHeight();
-        var shape = new byte[width * height * layers.Count];
-        for (var k = 0; k < layers.Count; k++) Buffer.BlockCopy(Luminance(layers[k]), 0, shape, k * width * height, width * height);
         _weather = Luminance(map);
         _weatherWidth = map.GetWidth();
         _weatherHeight = map.GetHeight();
-        _shapeWidth = width;
-        _shapeHeight = height;
-        _shapeDepth = layers.Count;
-        _shape = shape;
-        if (Log) GD.Print($"cloud shade: noises read back, {width} x {height} x {layers.Count} and {_weatherWidth} x {_weatherHeight}");
+        _shapeWidth = _shapeTexture.Width;
+        _shapeHeight = _shapeTexture.Height;
+        _shapeDepth = _shapeTexture.Depth;
+        _shape = voxels;
+        if (Log) GD.Print($"cloud shade: noises read back, {_shapeWidth} x {_shapeHeight} x {_shapeDepth} and {_weatherWidth} x {_weatherHeight}");
         return true;
     }
 

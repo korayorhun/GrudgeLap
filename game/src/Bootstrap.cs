@@ -1746,12 +1746,9 @@ public sealed partial class Bootstrap : Node3D
         _perfSince = _elapsed;
     }
 
-    /// <summary>A long file name cut to fit the menu's panel, with an ellipsis.</summary>
-    private static string Shorten(string text, int length) => text.Length <= length ? text : text[..(length - 3)] + "...";
-
     /// <summary>
-    /// A music file dropped on the game's window becomes the instant replay's tune (0.15, EngineAudio.AdoptReplayMusic);
-    /// the menu opens on its line so the player sees it was taken.
+    /// A music file dropped on the game's window becomes the instant replay's tune (0.15, EngineAudio.AdoptReplayMusic).
+    /// The menu has no line for the replay music since 0.71 (the owner asked for it to go), so nothing opens.
     /// </summary>
     private void OnFilesDropped(string[] files)
     {
@@ -1759,8 +1756,6 @@ public sealed partial class Bootstrap : Node3D
         {
             if (_audio.AdoptReplayMusic(file) is null) continue;
             GD.Print($"replay music taken from {file}");
-            ShowMenu(true);
-            _menu.Select((int)PauseMenu.Item.Music);
             return;
         }
     }
@@ -1968,10 +1963,6 @@ public sealed partial class Bootstrap : Node3D
             case PauseMenu.Item.Retro:
                 SetRetro(!_retro);
                 break;
-            case PauseMenu.Item.Music when take:
-                // The player's own replay tune goes into the user folder (EngineAudio.CustomReplayMusic): open it for them.
-                OS.ShellOpen(ProjectSettings.GlobalizePath("user://music"));
-                break;
             case PauseMenu.Item.Units:
                 _instruments.UseKmh = !_instruments.UseKmh;
                 SaveChoice("units", _instruments.UseKmh ? 1 : 0);
@@ -1997,10 +1988,6 @@ public sealed partial class Bootstrap : Node3D
         labels[(int)PauseMenu.Item.Light] = $"LIGHT:  {LightLabel()}";
         labels[(int)PauseMenu.Item.Paint] = $"PAINT:  {_paints[_carIndex].Name}";
         labels[(int)PauseMenu.Item.Retro] = $"1989 MODE:  {(_retro ? "ON" : "OFF")}";
-        // The player's own tune by name (without its extension); the built-in one with the hint that Enter opens the folder.
-        labels[(int)PauseMenu.Item.Music] = _audio.CustomReplayMusicName is { } tune
-            ? $"REPLAY MUSIC:  {Shorten(System.IO.Path.GetFileNameWithoutExtension(tune).ToUpperInvariant(), 26)}"
-            : "REPLAY MUSIC:  BUILT-IN  (ENTER: FOLDER)";
         labels[(int)PauseMenu.Item.Units] = $"UNITS:  {(_instruments.UseKmh ? "KM/H" : "MPH")}";
         labels[(int)PauseMenu.Item.Fullscreen] = $"FULL SCREEN:  {(GetWindow().Mode == Window.ModeEnum.Fullscreen ? "ON" : "OFF")}";
         labels[(int)PauseMenu.Item.Quit] = "QUIT GAME";

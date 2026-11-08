@@ -12,7 +12,7 @@ uniform sampler2D panorama : source_color, filter_linear, repeat_enable;
 uniform float panorama_energy = 1.0;
 uniform sampler3D shape_noise : filter_linear_mipmap, repeat_enable;
 uniform sampler3D detail_noise : filter_linear_mipmap, repeat_enable;
-uniform sampler2D weather_map : filter_linear, repeat_enable;
+uniform sampler2D weather_map : filter_linear_mipmap, repeat_enable;
 uniform float cloud_bottom = 1700.0;
 uniform float cloud_top = 3200.0;
 uniform float coverage = 0.41;
@@ -56,26 +56,35 @@ vec3 dome(vec3 d) {
 }
 
 
-float cloud(vec3 p) {
+// The noises' texels in metres (WorldBuilder.VolumetricSky: 96 x 48 x 96 over 5200 x 2600 x 5200 m; 48 cubed over 1100 m).
+const float SHAPE_TEXEL = 54.2;
+const float DETAIL_TEXEL = 22.9;
+// The weather map's (256 square over 26 km), read the same way: it sets where the clouds are.
+const float WEATHER_TEXEL = 101.6;
+
+// The cloud's density at p, its noises read at the level a sample `footprint` metres across calls for (0.71: always
+// the finest until then, and towards the horizon, where a pixel spans 150 m and a step of the march up to 230 m, the
+// clouds flickered as their billows drifted in and out of the samples). The noises carry their mip chains (CloudNoise).
+float cloud(vec3 p, float footprint) {
 	float h = (p.y - cloud_bottom) / (cloud_top - cloud_bottom);
 	if (h <= 0.0 || h >= 1.0) {
 		return 0.0;
 	}
 	vec3 q = p + vec3(wind.x, 0.0, wind.y);
 	// Clear and cloudy stretches some kilometres across.
-	float weather = texture(weather_map, q.xz / 26000.0).r;
+	float weather = textureLod(weather_map, q.xz / 26000.0, log2(max(footprint / WEATHER_TEXEL, 1.0))).r;
 	float cover = clamp(coverage + (weather - 0.5) * 0.9, 0.0, 1.0);
 	// A cumulus's profile: a flat, sharp base, rounded and thinning towards its top.
 	float profile = smoothstep(0.0, 0.08, h) * (1.0 - smoothstep(0.35 + 0.45 * cover, 1.0, h));
 	// The noise as fine up as across (its texture is half as tall as it is wide): until 0.44 it changed over twice the
 	// height, and the clouds stood as columns with flat walls.
-	float shape = texture(shape_noise, q / vec3(5200.0, 2600.0, 5200.0)).r;
+	float shape = textureLod(shape_noise, q / vec3(5200.0, 2600.0, 5200.0), log2(max(footprint / SHAPE_TEXEL, 1.0))).r;
 	float d = shape * profile - (1.0 - cover);
 	if (d <= 0.0) {
 		return 0.0;
 	}
 	// The billows eaten into its edges.
-	float detail = texture(detail_noise, q / 1100.0 + vec3(0.0, h * 0.3, 0.0)).r;
+	float detail = textureLod(detail_noise, q / 1100.0 + vec3(0.0, h * 0.3, 0.0), log2(max(footprint / DETAIL_TEXEL, 1.0))).r;
 	d -= (1.0 - detail) * 0.32 * (1.0 - clamp(d * 3.0, 0.0, 1.0));
 	return max(d, 0.0) * density;
 }
@@ -86,6 +95,9 @@ void sky() {
 		COLOR = photo;
 	} else if (AT_QUARTER_RES_PASS) {
 		vec3 dir = EYEDIR;
+		// The angle one quarter-resolution pixel spans, taken before any branch, where the derivatives hold: with the
+		// distance it gives each sample's footprint across the view (0.71).
+		float pixel_angle = max(length(dFdx(dir)), length(dFdy(dir)));
 		COLOR = vec3(0.0);
 		ALPHA = 0.0;
 		if (dir.y > 0.012) {
@@ -109,12 +121,15 @@ void sky() {
 				float hg = mix((1.0 - g2 * g2) / pow(1.0 + g2 * g2 - 2.0 * g2 * mu, 1.5), (1.0 - g1 * g1) / pow(1.0 + g1 * g1 - 2.0 * g1 * mu, 1.5), 0.7) / (4.0 * PI);
 				for (int i = 0; i < STEPS; i++) {
 					vec3 p = POSITION + dir * t;
-					float d = cloud(p);
+					// A sample stands for its pixel across the view and for its step along the ray (0.71): a far ray's steps of up to
+					// 230 m are longer than the shape's finest billows, which would otherwise slip between them as the clouds drift.
+					float footprint = max(t * pixel_angle, step_len);
+					float d = cloud(p, footprint);
 					if (d > 0.0) {
 						// The sun's light through the cloud above this point: four steps towards it.
 						float od = 0.0;
 						for (int k = 1; k <= 4; k++) {
-							od += cloud(p + sun * (float(k) * 160.0)) * 160.0;
+							od += cloud(p + sun * (float(k) * 160.0), max(footprint, 80.0)) * 160.0;
 						}
 						float beer = exp(-od);
 						float powder = 1.0 - exp(-od * 2.0);
