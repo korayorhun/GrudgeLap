@@ -32,6 +32,8 @@ internal sealed partial class WorldAudio : Node
     // The prairie round the road (0.52): a bed of its birds, its insects and the wind in the long grass, everywhere at one
     // level (assets/audio/ambience/prairie.wav, tools/make-ambience.py), through the glass from the seat like the rest.
     private AudioStreamPlayer? _ambience;
+    // The prairie's night (0.59): frogs, toads and insects, now and then a whip-poor-will (ambience/night.wav, tools/make-night.py).
+    private AudioStreamPlayer? _night;
     // The rain (0.54, assets/audio/ambience, tools/make-rain.py): round the car on the world's bus, so through the glass
     // from the seat; and from the seat the drumming on the roof and the wipers, which are the cabin's own and so play on
     // the master bus, past the glass.
@@ -86,6 +88,7 @@ internal sealed partial class WorldAudio : Node
             AddChild(_ambience);
             _ambience.Play();
         }
+        _night = Bed("ambience/night.wav", BusName);
         // The rain's beds run silent until it rains, each from a random point.
         _rainOutside = Bed("ambience/rain-outside.wav", BusName);
         _rainRoof = Bed("ambience/rain-roof.wav", "Master");
@@ -240,7 +243,15 @@ internal sealed partial class WorldAudio : Node
                 _ => 1f,
             };
             if (session.Phase == SessionPhase.Replay) chorus = 0f;
-            _ambience.VolumeDb = Mathf.LinearToDb(MathF.Max(chorus, 0.0001f));
+            // At night (0.59) the prairie's frogs and insects instead of the day's birds: louder after rain, when the frogs
+            // call, and under the rain only a few. Until 0.59 the birds sang all night.
+            var night = WorldBuilder.CurrentHour == WorldBuilder.Hour.Night;
+            _ambience.VolumeDb = Mathf.LinearToDb(MathF.Max(night ? 0f : chorus, 0.0001f));
+            if (_night is not null)
+            {
+                var frogs = session.Weather switch { Weather.Rain => 0.35f, Weather.Overcast => 0.9f, _ => 1f };
+                _night.VolumeDb = Mathf.LinearToDb(MathF.Max(night && chorus > 0f ? frogs : 0f, 0.0001f));
+            }
         }
         UpdateRain(session, dt);
 

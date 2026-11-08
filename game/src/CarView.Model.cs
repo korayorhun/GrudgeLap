@@ -75,6 +75,8 @@ internal sealed partial class CarView
             if (value == _braking) return;
             _braking = value;
             foreach (var lamp in _brakeLamps) lamp.EmissionEnergyMultiplier = value ? 3f : 0f;
+            // At night the tail lamps' glow flares with the brake (0.59).
+            foreach (var glow in _tailGlows) glow.MaterialOverride = NightLamps.GlowMaterial(TailRed, value ? BrakeGlow : TailGlow);
         }
     }
 

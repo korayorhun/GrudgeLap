@@ -742,6 +742,14 @@ Three recordings on Freesound, all CC0 1.0, made into loops by `tools/make-rain.
 `WorldAudio` plays them while it rains: the outside bed on the world's bus, the roof and the wipers from the seat only,
 the wipers kept on the blades.
 
+## The prairie's night (`ambience/night.wav`)
+
+Danjocross, "Kansas Night.wav" (Freesound #503207, https://freesound.org/people/Danjocross/sounds/503207/, CC0 1.0): night
+sounds on the Kansas prairie, frogs and toads, insects and whip-poor-wills, no cars, recorded with a Tascam DR-40. Made
+into a 56-second loop by `tools/make-night.py` from the HQ preview (44.1 kHz stereo, high-passed at 90 Hz, 60 s from 30 s
+in, the last 4 s cross-faded into the first, -30 dBFS RMS). `WorldAudio` plays it at night in place of the day's prairie,
+through the glass from the seat.
+
 ## Instant replay music (`music/replay.ogg`, `music/replay.wav`)
 
 An original composition of this project, written for it in the style of late-1980s arcade music; it is not a

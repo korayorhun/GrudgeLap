@@ -3358,6 +3358,23 @@ The puddles were the view's alone: a mirror-flat patch on the asphalt, under the
   no shader: the glows went out as white cards).
 - **Cost**: 13.2 ms a frame at night, the CPU's share as by day.
 
+### The night's sound, the paint's beads, the low beam's reach (0.59.0)
+
+- **The sound** (`WorldAudio`, `ambience/night.wav`, `tools/make-night.py`): the birds sang all night; at night the day's
+  bed is silent and the prairie's night plays instead: Danjocross's "Kansas Night" (Freesound #503207, CC0), frogs and
+  toads, the insects and now and then a whip-poor-will, no cars; 60 s from 30 s in, high-passed at 90 Hz, the last 4 s
+  cross-faded into the first (a 56 s loop), -30 dBFS RMS as the day's. Full on a clear night and after rain (the frogs
+  call), 0.9 overcast, 0.35 under the rain; silent in the replay. Measured standing: the bed above 6 kHz 17 dB lower than
+  the day's (no birds), the band from 2 to 6 kHz up.
+- **The paint's beads** (`assets/shaders/road_paint_retro.gdshader`): at night a pass added over the centre and edge
+  lines (the materials' `NextPass`, set in `ApplyHour`) sends the lamps' light back towards them, a lobe a degree or two
+  wide at 6 times, so the lines shine down the road past the beams' pool; directional light (the moon) and the paint's
+  own lighting are left to the lines' material. A wider lobe lit the near lines like neon.
+- **The low beam's reach** (`CarView.BuildLamps`, `LowBeam`): aimed 1.5 degrees down with the cut-off under the axis, the
+  pool ended 15 m out and the road beyond was above the cut-off; aimed 0.6 degrees down with the cut-off just under the
+  axis it reaches 50 m, as a low beam's does, and the lamps came down to 20 (the drones' to 30).
+- **The brake lamps** (`CarView.Braking`): at night the tail lamps' glow flares from 3.5 to 9 with the brake.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

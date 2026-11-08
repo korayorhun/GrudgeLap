@@ -312,6 +312,11 @@ internal sealed partial class CarView : Node3D
     private bool _player;
     private bool _lampsOn;
     private readonly List<Node3D> _lamps = [];
+    private readonly List<MeshInstance3D> _tailGlows = [];
+    /// <summary>The tail lamps' red, and their glow lit and with the brake on (0.59: the brake lamps share the tail lamps' place).</summary>
+    private static readonly Color TailRed = new(1f, 0.06f, 0.03f);
+    private const float TailGlow = 3.5f;
+    private const float BrakeGlow = 9f;
 
     /// <summary>
     /// The car's lamps at night (0.57 the player's, 0.58 the traffic's): low beams from the front corners of the body,
@@ -347,8 +352,9 @@ internal sealed partial class CarView : Node3D
     }
 
     /// <summary>
-    /// The player's: two spot lights at the body's front corners (a quarter of a metre in from its sides), aimed a degree
-    /// and a half down, through a low beam's pattern (<see cref="LowBeam"/>): a flat cut-off on the oncoming side that
+    /// The player's: two spot lights at the body's front corners (a quarter of a metre in from its sides), aimed 0.6
+    /// degrees down (0.59: at 1.5 degrees with the cut-off under the axis the pool ended 15 m out; a low beam's reaches
+    /// 50 to 60 m), through a low beam's pattern (<see cref="LowBeam"/>): a flat cut-off on the oncoming side that
     /// steps up over the verge, the brightest just under it. Their shadows leave the car's own layer out, or its bumper
     /// and lamp glass would black them out. A red omni light behind for the tail lamps' glow on the road. A drone's (0.58):
     /// one spot between its lamps without shadows, eight drones' shadows being too dear for what they would show. Every
@@ -370,7 +376,8 @@ internal sealed partial class CarView : Node3D
             var head = NightLamps.Glow(new Color(1f, 0.95f, 0.85f), 9f, 0.45f);
             head.Position = new Vector3(_lampCentre.X + x, ground + 0.65f, front - 0.17f);
             AddLamp(head);
-            var tail = NightLamps.Glow(new Color(1f, 0.06f, 0.03f), 3.5f, 0.28f);
+            var tail = NightLamps.Glow(TailRed, _braking ? BrakeGlow : TailGlow, 0.28f);
+            _tailGlows.Add(tail);
             tail.Position = new Vector3(_lampCentre.X + x * 1.05f, ground + 0.82f, rear);
             tail.RotationDegrees = new Vector3(0f, 180f, 0f);
             AddLamp(tail);
@@ -381,9 +388,9 @@ internal sealed partial class CarView : Node3D
             {
                 Name = "Headlamps",
                 Position = new Vector3(_lampCentre.X, ground + 0.65f, front),
-                Rotation = new Vector3(Mathf.DegToRad(-1.5f), 0f, 0f),
+                Rotation = new Vector3(Mathf.DegToRad(-0.6f), 0f, 0f),
                 LightColor = new Color(1f, 0.95f, 0.86f),
-                LightEnergy = 40f,
+                LightEnergy = 30f,
                 SpotRange = 80f,
                 SpotAngle = 34f,
                 SpotAttenuation = 0.9f,
@@ -399,9 +406,9 @@ internal sealed partial class CarView : Node3D
             {
                 Name = i == 0 ? "HeadlampLeft" : "HeadlampRight",
                 Position = new Vector3(_lampCentre.X + (i == 0 ? -side : side), ground + 0.65f, front),
-                Rotation = new Vector3(Mathf.DegToRad(-1.5f), 0f, 0f),
+                Rotation = new Vector3(Mathf.DegToRad(-0.6f), 0f, 0f),
                 LightColor = new Color(1f, 0.95f, 0.86f),
-                LightEnergy = 28f,
+                LightEnergy = 20f,
                 SpotRange = 120f,
                 SpotAngle = 32f,
                 SpotAttenuation = 0.9f,
@@ -450,7 +457,7 @@ internal sealed partial class CarView : Node3D
                 // u from -1 (left) to 1 (right), v from -1 (top) to 1 (bottom).
                 var u = (x + 0.5f) / size * 2f - 1f;
                 var v = (y + 0.5f) / size * 2f - 1f;
-                var cut = u < 0.05f ? 0.06f : 0.06f - (u - 0.05f) * 0.27f;
+                var cut = u < 0.05f ? 0.02f : 0.02f - (u - 0.05f) * 0.27f;
                 var under = Mathf.SmoothStep(cut - 0.03f, cut + 0.03f, v);
                 var spot = MathF.Exp(-((u - 0.12f) * (u - 0.12f) / 0.06f + (v - cut - 0.08f) * (v - cut - 0.08f) / 0.02f));
                 var fill = MathF.Exp(-(u * u / 0.55f + (v - 0.25f) * (v - 0.25f) / 0.35f));

@@ -58,6 +58,9 @@ internal static class WorldBuilder
     private static Node3D? _land;
     private static ShaderMaterial? _landShader;
     private static StandardMaterial3D? _edgeLines;
+    // The road's paint, the centre lines' and the edge lines', for the beads' pass at night (0.59, ApplyHour).
+    private static readonly List<StandardMaterial3D> _paint = [];
+    private static ShaderMaterial? _paintBeads;
     // 1989 mode's orange for the shoulders and the earthworks; otherwise the shoulders are grey-brown gravel and the
     // cuttings' earth a natural brown (0.9.1; before, the orange of the original was kept in both).
     private static readonly Color OrangeShoulder = new(0.95f, 0.46f, 0.12f);
@@ -186,6 +189,8 @@ internal static class WorldBuilder
         _gravel = null;
         _earth = null;
         _edgeLines = null;
+        _paint.Clear();
+        _paintBeads = null;
         _modernRoad.Clear();
         _retroLand.Clear();
         _land = null;
@@ -1902,6 +1907,7 @@ internal static class WorldBuilder
             }
         }
         var material = new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 0.7f, CullMode = BaseMaterial3D.CullModeEnum.Back };
+        _paint.Add(material);
         return new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = material, Name = $"Lines-{path.Kind}" };
     }
 
@@ -1934,7 +1940,11 @@ internal static class WorldBuilder
                 else Quad(st, aOut, aIn, bOut, bIn, a.Normal, b.Normal, white, a.Distance, b.Distance);
             }
         }
-        _edgeLines ??= new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 0.65f, CullMode = BaseMaterial3D.CullModeEnum.Back };
+        if (_edgeLines is null)
+        {
+            _edgeLines = new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 0.65f, CullMode = BaseMaterial3D.CullModeEnum.Back };
+            _paint.Add(_edgeLines);
+        }
         var lines = new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = _edgeLines, Name = $"EdgeLines-{path.Kind}", Visible = !_retro };
         _modernRoad.Add(lines);
         return lines;
@@ -2152,6 +2162,10 @@ internal static class WorldBuilder
         }
         _landShader?.SetShaderParameter("sunrise", _sunrise ? 1f : 0f);
         FoliageBuilder.SetStand(_sunrise ? GrassStand : 0f);
+        // The paint's glass beads at night (0.59, assets/shaders/road_paint_retro.gdshader): a pass over the lines that sends
+        // the lamps' light back to them, only at night, so the lines ahead shine past the beams' pool.
+        if (_night && !ExportMode) _paintBeads ??= new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/road_paint_retro.gdshader") };
+        foreach (var paint in _paint) paint.NextPass = _night && !ExportMode ? _paintBeads : null;
     }
 
     /// <summary>How far the grass stands up to the sunrise's sun (FoliageBuilder.SetStand).</summary>

@@ -25,15 +25,7 @@ internal static class NightLamps
     /// </summary>
     public static MeshInstance3D Glow(Color colour, float energy, float size)
     {
-        _glow ??= GD.Load<Shader>("res://assets/shaders/lamp_glow.gdshader");
-        // One material for each colour and strength: forty-odd lamps at night share a handful.
-        if (!_materials.TryGetValue((colour, energy), out var material))
-        {
-            material = new ShaderMaterial { Shader = _glow };
-            material.SetShaderParameter("colour", colour);
-            material.SetShaderParameter("energy", energy);
-            _materials[(colour, energy)] = material;
-        }
+        var material = GlowMaterial(colour, energy);
         return new MeshInstance3D
         {
             Name = "Glow",
@@ -42,6 +34,18 @@ internal static class NightLamps
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             GIMode = GeometryInstance3D.GIModeEnum.Disabled,
         };
+    }
+
+    /// <summary>The glow's material for a colour and a strength, one for each: forty-odd lamps at night share a handful.</summary>
+    public static ShaderMaterial GlowMaterial(Color colour, float energy)
+    {
+        _glow ??= GD.Load<Shader>("res://assets/shaders/lamp_glow.gdshader");
+        if (_materials.TryGetValue((colour, energy), out var material)) return material;
+        material = new ShaderMaterial { Shader = _glow };
+        material.SetShaderParameter("colour", colour);
+        material.SetShaderParameter("energy", energy);
+        _materials[(colour, energy)] = material;
+        return material;
     }
 
     /// <summary>
