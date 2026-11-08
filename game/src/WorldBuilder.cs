@@ -561,7 +561,12 @@ internal static class WorldBuilder
             environment.FogSunScatter = overcast ? 0f : _sunrise ? 0.35f : _dusk ? 0.3f : 0f;
             environment.FogDensity = !overcast ? ClearAirDensity : WeatherModel.Raining(_weather) ? 0.00032f : 0.00016f;
             environment.FogAerialPerspective = overcast ? 0.8f : 0.55f;
-            environment.VolumetricFogDensity = overcast ? 0.00035f : 0.00012f;
+            // The rain's air at night (0.65): thick enough for the lamps' beams to show in it, as headlights do in rain;
+            // by day and at dusk the light everywhere would only grey the picture, so there it stays a trace.
+            environment.VolumetricFogDensity = WeatherModel.Raining(_weather) && _night ? RainNightAir : overcast ? 0.00035f : 0.00012f;
+            // The lit air veils the sky behind it as well as the land (0.65): with the day's tenth the beams' glow lay over
+            // the far mountains and not over the sky above them, and they stood pale against it.
+            environment.VolumetricFogSkyAffect = WeatherModel.Raining(_weather) && _night ? 1f : 0.1f;
             // The night's camera opens up (0.57): the moonlit land and the sky stay dark, the lamps bright.
             environment.TonemapExposure = _night ? 1.35f : _dusk ? 0.95f : overcast ? 1.15f : _sunrise ? 1.0f : 0.9f;
             // The lamps bloom more in the dark (0.58): an oncoming car's lamps are haloed points, as an eye sees them at night.
@@ -2175,6 +2180,15 @@ internal static class WorldBuilder
     /// <summary>How far a flash lifts the image by the hour: the whole of it at night, a third by day, when the grey's own light
     /// all but drowns a stroke (by day at the night's 1.2 the sky went white).</summary>
     private static float FlashGain => _night ? 1.2f : _dusk ? 0.8f : _sunrise ? 0.5f : 0.35f;
+
+    /// <summary>The rain's volumetric air at night (0.65), per metre: the beams' cones in it.</summary>
+    private const float RainNightAir = 0.0012f;
+
+    /// <summary>
+    /// The strike's own light on the land a kilometre from its channel (0.65, Thunderstorm's flash light): its strength
+    /// by the hour's gain, four tenths of it; the inverse square takes it on from there.
+    /// </summary>
+    public static float FlashLight(float level) => _retro ? 0f : level * FlashGain * 0.4f;
 
     /// <summary>
     /// A lightning flash (0.63, Thunderstorm): <paramref name="stroke"/> the strokes' brightness (1 the first, 0 between),

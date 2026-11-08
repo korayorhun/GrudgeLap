@@ -79,12 +79,43 @@ internal sealed partial class CameraRig : Node3D
         if (_blur is null) return;
         _blur.FrameSeconds = (float)delta;
         _blur.Enabled = WorldBuilder.CameraBlur;
+        LeadRain((float)delta);
+    }
+
+    /// <summary>Where the rain's box hangs from the camera when it stands still: 10 m over it, 5 m ahead.</summary>
+    private static readonly Vector3 RainBox = new(0f, 10f, -5f);
+
+    private Vector3 _rainEye;
+    private Vector3 _rainVelocity;
+    private bool _rainEyeKnown;
+
+    /// <summary>
+    /// The rain's box ahead of the camera by where it will be when the drops reach the eye (0.65). The drops fall in the
+    /// world, so at speed those down at the eye's height and the beams' had been let go a second earlier where the car
+    /// has since left: ahead of a car at 30 m/s there was only the fresh rain high up, from the seat the air looked dry
+    /// by day, and at night the beams lit nothing. The camera's velocity, smoothed over a fifth of a second (a jump of
+    /// the view, a cut or a reset, is not taken for one), times the 1.2 s a drop takes from the box to below the eye.
+    /// </summary>
+    private void LeadRain(float dt)
+    {
+        if (_rain is null || !_rain.Emitting || dt <= 0f) return;
+        var eye = _camera.GlobalPosition;
+        if (_rainEyeKnown)
+        {
+            var velocity = (eye - _rainEye) / dt;
+            if (velocity.LengthSquared() < 120f * 120f) _rainVelocity = _rainVelocity.Lerp(velocity, MathF.Min(dt / 0.2f, 1f));
+        }
+        _rainEye = eye;
+        _rainEyeKnown = true;
+        _rain.Position = RainBox + _camera.GlobalBasis.Inverse() * (_rainVelocity * 1.2f);
     }
 
     /// <summary>
     /// Rain in the air (0.12): a box of falling streaks that travels with the camera, 32 m across and 10 m above it,
     /// the drops in world space so they fall straight past a moving car. Thin vertical quads turned to the camera
-    /// about their own axis (a billboard fixed on Y), unlit and faint, a few thousand at a time, and none right at the eye.
+    /// about their own axis (a billboard fixed on Y), faint, a few thousand at a time, and none right at the eye. Lit
+    /// since 0.65: by day the grey sky's light, at night only what reaches them, the car's beams ahead, an oncoming
+    /// car's lamps through them from behind, a yard lamp, a flash; unlit, they stood white in the dark.
     /// </summary>
     public void SetRain(bool raining)
     {
@@ -108,21 +139,11 @@ internal sealed partial class CameraRig : Node3D
             var streak = new QuadMesh
             {
                 Size = new Vector2(0.014f, 0.42f),
-                Material = new StandardMaterial3D
-                {
-                    ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-                    Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-                    AlbedoColor = new Color(0.78f, 0.82f, 0.90f, 0.30f),
-                    BillboardMode = BaseMaterial3D.BillboardModeEnum.FixedY,
-                    BillboardKeepScale = true,
-                    CullMode = BaseMaterial3D.CullModeEnum.Disabled,
-                    // Gone within a metre and a bit of the eye, whole from four and a half (0.53): a drop half a metre away is a
-                    // streak thirty pixels wide, which no eye or camera sees in focus, and from the seat the drops fell inside
-                    // the cabin.
-                    DistanceFadeMode = BaseMaterial3D.DistanceFadeModeEnum.PixelAlpha,
-                    DistanceFadeMinDistance = 1.2f,
-                    DistanceFadeMaxDistance = 4.5f,
-                },
+                // The rain's own shader (0.65, assets/shaders/rain.gdshader): the standard material's fixed-Y billboard and its
+                // fade within a metre and a bit of the eye to whole at four and a half (0.53: a drop half a metre away is a
+                // streak thirty pixels wide, which no eye or camera sees in focus, and from the seat the drops fell inside the
+                // cabin), lit, and sending a lamp's light back towards it as a drop does.
+                Material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/rain.gdshader") },
             };
             _rain = new GpuParticles3D
             {
@@ -132,7 +153,7 @@ internal sealed partial class CameraRig : Node3D
                 ProcessMaterial = process,
                 DrawPass1 = streak,
                 VisibilityAabb = new Aabb(new Vector3(-40f, -40f, -40f), new Vector3(80f, 80f, 80f)),
-                Position = new Vector3(0f, 10f, -5f),
+                Position = RainBox,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             };
             _camera.AddChild(_rain);

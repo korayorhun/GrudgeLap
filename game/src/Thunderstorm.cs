@@ -30,6 +30,7 @@ internal sealed partial class Thunderstorm : Node
     private float _boltEnergy;
     private MeshInstance3D? _bolt;
     private ShaderMaterial? _boltMaterial;
+    private OmniLight3D? _light;
 
     public override void _Ready()
     {
@@ -38,6 +39,20 @@ internal sealed partial class Thunderstorm : Node
         _far = AudioClips.OneShot("thunder/far.wav");
         _player = new AudioStreamPlayer { Name = "Thunder", Bus = "World", VolumeDb = -80f };
         AddChild(_player);
+        // The strike's light (0.65): a point 500 m up its channel, only while the strokes last, falling off with the
+        // square of the distance, so the plain round a near strike lights up, the sides of the hills facing it most, and
+        // the mountains far behind it stay dark (a directional light lit them as brightly as the road). Without
+        // shadows: one more shadowed light for a third of a second would stall the frame.
+        _light = new OmniLight3D
+        {
+            Name = "Lightning",
+            LightColor = new Color(0.80f, 0.84f, 1f),
+            OmniRange = 16000f,
+            OmniAttenuation = 2f,
+            ShadowEnabled = false,
+            Visible = false,
+        };
+        AddChild(_light);
     }
 
     /// <summary>
@@ -65,6 +80,7 @@ internal sealed partial class Thunderstorm : Node
             _boltDrawn = _distance < 6000f;
             if (_boltDrawn) DrawBolt(eye, _strikeTop, ground, _distance);
             else if (_bolt is not null) _bolt.Mesh = null;
+            if (_light is not null) _light.Position = ground + new Vector3(0f, 500f, 0f);
         }
         var flash = 0f;
         if (_flashAt >= 0f)
@@ -75,6 +91,13 @@ internal sealed partial class Thunderstorm : Node
             if (t > 0.35f) _flashAt = -1f;
         }
         WorldBuilder.SetFlash(storm ? flash : 0f, _flashStrength, _strikeTop);
+        if (_light is not null)
+        {
+            // FlashLight is the light a kilometre from the channel; the inverse square takes it from there.
+            var energy = storm ? WorldBuilder.FlashLight(flash * _flashStrength) : 0f;
+            _light.Visible = energy > 0.005f;
+            _light.LightEnergy = energy * 1e6f;
+        }
         if (_bolt is not null && _boltMaterial is not null)
         {
             // The channel follows the strokes: bright with each, a dim glow in the gaps between them.

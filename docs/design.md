@@ -3464,6 +3464,30 @@ The puddles were the view's alone: a mirror-flat patch on the asphalt, under the
   under the deck is a little darker against the sky, as it is at night. Measured on a fixed night view: the sky from
   0.5 to about 10 of 255, the mountains from 31 to about 11, a shade under the sky above them.
 
+### Rain at night (0.65.0)
+
+- **The drops lit** (`assets/shaders/rain.gdshader`, `CameraRig.SetRain`): the streaks' StandardMaterial3D (unshaded) is a
+  spatial shader with the same fixed-Y billboard (BaseMaterial3D's code for it, the particle's scale kept) and the same
+  fade from 1.2 to 4.5 m, lit: the sky's light by day as before (the streaks measured the same on a fixed view, 113 of
+  255 against 114), at night only what reaches them. Its light(): lambert, light through from behind (0.85), and for a
+  lamp (not the sun) a retroreflection lobe, 5 times pow(L.V, 12): a drop is a small round lens and sends a lamp's light
+  back the way it came, as the paint's glass beads do, so the rain in the car's own beams shines. Unlit, it stood white
+  in the dark.
+- **The rain ahead of the car** (`CameraRig.LeadRain`): the drops fall in the world, so at speed those down at the eye's
+  height and the beams' had been let go a second earlier where the car had since left; ahead of a car at 30 m/s there
+  was only the fresh rain high up (from the seat the air looked dry by day, and at night the beams lit nothing). The
+  emitter leads the camera by its velocity (smoothed over 0.2 s, a jump of the view ignored) times 1.2 s, the time a drop
+  takes from the box to below the eye.
+- **The beams in the air** (`WorldBuilder.RainNightAir`): in the rain at night the volumetric fog is 0.0012 per metre
+  (0.00035 otherwise under the deck), so the lamps' cones show; and its sky affect is 1 there (0.1 otherwise): with the
+  tenth, the beams' lit air veiled the far land but not the sky above it, and the mountains stood pale against the sky
+  again. At 0.0025 a far strike's glow lost half its brightness through the veil and the cockpit looked foggy.
+- **The strike's light** (`Thunderstorm`, `WorldBuilder.FlashLight`): an OmniLight3D 500 m up the channel while the
+  strokes last, no shadow, range 16 km, attenuation 2 (Godot's inverse square), its energy the light a kilometre off times
+  a million; the plain round a near strike, its fences and the wet road light up, the mountains behind stay dark (a
+  directional light first tried lit them as brightly as the road; at 330 m up the ground under it was a hot spot).
+- Night rain on an attract lap: 11.1 to 11.6 ms of GPU time a frame, 60 frames a second.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and
