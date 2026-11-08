@@ -102,6 +102,8 @@ internal static class WorldBuilder
     private static ProceduralSkyMaterial? _overcastSky;
     // The overcast's deck of cloud (0.53, OvercastDeck): the volumetric sky over a grey dome, on the clear sky's noises.
     private static ShaderMaterial? _overcastDeck;
+    // The loop's grating (0.72, BuildLoopDeck): wetness from ApplyWeather, the arcade's navy from SetRetro.
+    private static ShaderMaterial? _loopGrating;
     // The clouds' 3D noises with their mip chains (0.71, CloudNoise).
     private static CloudNoise? _shapeNoise;
     private static CloudNoise? _detailNoise;
@@ -195,6 +197,7 @@ internal static class WorldBuilder
         NightLamps.ReleaseShared();
         _overcastSky = null;
         _overcastDeck = null;
+        _loopGrating = null;
         _shapeNoise = null;
         _detailNoise = null;
         _weatherNoise = null;
@@ -287,6 +290,7 @@ internal static class WorldBuilder
             }
             foreach (var node in BuildBridges(path)) root.AddChild(node);
             if (BuildLoopFrame(path, track.Terrain) is { } frame) root.AddChild(frame);
+            if (BuildLoopDeck(path) is { } deck) root.AddChild(deck);
         }
         Stage("roads, shoulders, lines, posts, bridges, the loop");
         if (BuildTowers(track) is { } towers) root.AddChild(towers);
@@ -521,6 +525,7 @@ internal static class WorldBuilder
         _groundShader?.SetShaderParameter("wetness", wet);
         _landShader?.SetShaderParameter("wetness", wet);
         foreach (var material in _weathered.Values) material.SetShaderParameter("wetness", wet);
+        _loopGrating?.SetShaderParameter("wetness", wet);
         _shoulderShader?.SetShaderParameter("wetness", wet);
         FoliageBuilder.SetWeather(DryGrass.Lerp(WetGrass, wet), wet);
         if (_edgeLines is StandardMaterial3D edges) edges.Roughness = Mathf.Lerp(0.65f, 0.25f, wet);
@@ -669,6 +674,7 @@ internal static class WorldBuilder
         if (_gravel is not null) _gravel.AlbedoColor = retro ? OrangeShoulder : GravelTint;
         _groundShader?.SetShaderParameter("retro", retro);
         foreach (var material in _weathered.Values) material.SetShaderParameter("retro", retro);
+        _loopGrating?.SetShaderParameter("retro", retro);
         FoliageBuilder.SetRetro(retro);
         _shoulderShader?.SetShaderParameter("retro", retro);
         foreach (var paint in _paint)
@@ -1682,7 +1688,6 @@ internal static class WorldBuilder
         var sink = path.Kind == PathKind.Stunt ? 0.012f : 0f;
         var grain = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth, Frequency = 0.9f, Seed = 31 + (int)path.Kind };
         var drift = new FastNoiseLite { NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth, Frequency = 1f / 70f, Seed = 5 };
-        var loopTint = new Color(1f, 0.62f, 0.55f);   // the loop is a painted steel structure in the original: a dark red deck
         var vertices = 0;
 
         // The rows first: a frame every half metre along each run, joined to the row before unless a gap or a run's
@@ -1695,7 +1700,8 @@ internal static class WorldBuilder
         {
             var a = frames[i];
             var b = frames[i + 1];
-            if (a.Surface == SurfaceType.Chasm || b.Surface == SurfaceType.Chasm)
+            // A gap, or the loop's grating (0.72, BuildLoopDeck): no asphalt.
+            if (a.Surface == SurfaceType.Chasm || b.Surface == SurfaceType.Chasm || IsGrating(a) || IsGrating(b))
             {
                 open = false;
                 continue;
@@ -1706,8 +1712,8 @@ internal static class WorldBuilder
                 rows.Add((s == 0 ? a : RoadFrame.Lerp(a, b, (float)s / steps), open));
                 open = true;
             }
-            // The run's last frame closes it: at the end of the path or before a gap.
-            if (i == frames.Count - 2 || frames[i + 2].Surface == SurfaceType.Chasm)
+            // The run's last frame closes it: at the end of the path or before a gap or the grating.
+            if (i == frames.Count - 2 || frames[i + 2].Surface == SurfaceType.Chasm || IsGrating(frames[i + 2]))
             {
                 rows.Add((b, true));
                 open = false;
@@ -1736,7 +1742,9 @@ internal static class WorldBuilder
             // Alternate the shade every original slab length: the stripey look of the 1989 road, softened.
             var slab = (int)MathF.Floor(f.Distance / TrackBuilder.Slab);
             var slabShade = slab % 2 == 0 ? 1f : 0.88f;
-            var tint = f.Kind == SegmentKind.Loop ? loopTint : Colors.White;
+            // The loop's deck is a grating of its own since 0.72 (BuildLoopDeck): its asphalt ends on the earthworks are
+            // road like any other, no longer tinted (0.34's red tint was a guess; the arcade's footage shows a navy deck).
+            var tint = Colors.White;
             var gLateral = Convert.ToGodot(f.Lateral);
             var sign = Convert.ToGodot(f.Normal).Cross(gLateral).Dot(Convert.ToGodot(f.Tangent)) < 0f ? -1f : 1f;
             var acrossDrift = 0.25f * drift.GetNoise1D(f.Distance);
@@ -1797,7 +1805,7 @@ internal static class WorldBuilder
     /// soffit closing the box underneath. Each face is wound left to right across it as the shoulders are (the lateral
     /// for a face looking up, and so round), so it lights from outside.
     /// </summary>
-    private static void DeckBox(MeshBuilder st, in RoadFrame a, in RoadFrame b, float kerbWidth, float kerbHeight, float depth, Color colour)
+    private static void DeckBox(MeshBuilder st, in RoadFrame a, in RoadFrame b, float kerbWidth, float kerbHeight, float depth, Color colour, bool soffit = true)
     {
         var aUp = a.Normal * kerbHeight;
         var bUp = b.Normal * kerbHeight;
@@ -1822,6 +1830,8 @@ internal static class WorldBuilder
                 Quad(st, aOut + aDown, aOut + aUp, bOut + bDown, bOut + bUp, -a.Lateral, -b.Lateral, colour, a.Distance, b.Distance);
             }
         }
+        // The loop's deck has no soffit (0.72): its grating is open to the sky and the ground (BuildLoopDeck).
+        if (!soffit) return;
         var aRight = a.Origin + a.Lateral * (a.HalfWidth + kerbWidth) + aDown;
         var aLeft = a.Origin - a.Lateral * (a.HalfWidth + kerbWidth) + aDown;
         var bRight = b.Origin + b.Lateral * (b.HalfWidth + kerbWidth) + bDown;
@@ -1940,7 +1950,8 @@ internal static class WorldBuilder
         {
             var a = frames[i];
             var b = frames[i + 1];
-            if (a.Surface == SurfaceType.Chasm || b.Surface == SurfaceType.Chasm) continue;
+            // No paint on the loop's grating (0.72): lines are not painted across open steel.
+            if (a.Surface == SurfaceType.Chasm || b.Surface == SurfaceType.Chasm || IsGrating(a) || IsGrating(b)) continue;
             var shared = SiblingSide(track, path, a);
             // One dashed yellow centre line, as on the 1989 circuit: a 3 m dash every 9 m, 16 cm wide, the rural road's
             // own measure (0.13's 4.5 m every 12 m, the arcade's, read as oversized; 0.15). Paint wears: every dash is a
@@ -2599,6 +2610,85 @@ internal static class WorldBuilder
     }
 
     /// <summary>
+    /// The loop's frames that stand off the ground (0.72): the grating's (BuildLoopDeck), where the asphalt ribbon, the
+    /// centre line and the tyre marks stop. Its two ends sit on the earthworks (TerrainField.IsEarthwork: the deck's up
+    /// within 16 degrees of the vertical) and stay asphalt, the way onto the steel.
+    /// </summary>
+    internal static bool IsGrating(in RoadFrame f) => f.Kind == SegmentKind.Loop && f.Normal.Y <= 0.96f;
+
+    /// <summary>
+    /// The loop's running surface (0.72, the owner's P16: perforated steel to see through, as in the original): a strip
+    /// over its grating frames, a row every half metre and four stations across (the deck is flat across), drawn by
+    /// loop_grating.gdshader, which computes the bars and the holes between them per pixel. UV.x is metres across from
+    /// the left edge and UV.y metres along from the grating's start (small numbers for the shader's precision); the
+    /// tangent is the lateral, its sign set as on the asphalt so that the binormal runs along the road.
+    /// </summary>
+    private static MeshInstance3D? BuildLoopDeck(TrackPath path)
+    {
+        var frames = path.Frames;
+        var rows = new List<(RoadFrame Frame, bool Joins)>();
+        var open = false;
+        for (var i = 0; i < frames.Count - 1; i++)
+        {
+            var a = frames[i];
+            var b = frames[i + 1];
+            if (!IsGrating(a) && !IsGrating(b))
+            {
+                open = false;
+                continue;
+            }
+            var steps = Math.Max(1, (int)MathF.Round((b.Distance - a.Distance) / RoadStep));
+            for (var s = 0; s < steps; s++)
+            {
+                rows.Add((s == 0 ? a : RoadFrame.Lerp(a, b, (float)s / steps), open));
+                open = true;
+            }
+            // The run's last frame closes it: at the end of the path or where the grating gives way to asphalt.
+            if (i == frames.Count - 2 || (!IsGrating(b) && !IsGrating(frames[i + 2])))
+            {
+                rows.Add((b, true));
+                open = false;
+            }
+        }
+        if (rows.Count < 2) return null;
+        const int stations = 4;
+        var st = new MeshBuilder();
+        var start = rows[0].Frame.Distance;
+        var vertices = 0;
+        var previous = -1;
+        foreach (var (f, joins) in rows)
+        {
+            var row = vertices;
+            var lateral = Convert.ToGodot(f.Lateral);
+            var sign = Convert.ToGodot(f.Normal).Cross(lateral).Dot(Convert.ToGodot(f.Tangent)) < 0f ? -1f : 1f;
+            for (var k = 0; k <= stations; k++)
+            {
+                var across = (-1f + 2f * k / stations) * f.HalfWidth;
+                st.SetColor(Colors.White);
+                st.SetNormal(Convert.ToGodot(f.Normal));
+                st.SetTangent(lateral, sign);
+                st.SetUV(new Vector2(across + f.HalfWidth, f.Distance - start));
+                st.AddVertex(Convert.ToGodot(f.Origin + f.Lateral * across));
+                vertices++;
+            }
+            if (joins && previous >= 0)
+            {
+                for (var k = 0; k < stations; k++)
+                {
+                    st.AddIndex(previous + k); st.AddIndex(row + k); st.AddIndex(previous + k + 1);
+                    st.AddIndex(previous + k + 1); st.AddIndex(row + k); st.AddIndex(row + k + 1);
+                }
+            }
+            previous = row;
+        }
+        _loopGrating ??= new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/loop_grating.gdshader") };
+        _loopGrating.SetShaderParameter("retro", _retro);
+        // No shadow from the grating itself: blended, it would throw a solid one where 78 % of the light gets through;
+        // its stringers and floor beams (BuildLoopFrame) throw the ladder a real grating's frame does.
+        return new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = _loopGrating, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Name = $"LoopDeck-{path.Kind}" };
+    }
+
+    /// <summary>
     /// The loop's steelwork: a ring of girders outside the deck on both sides, struts from the deck's edges to the
     /// ring, cross-beams and braces under the deck, and legs to the ground where the loop is low. From the plain it
     /// reads as the lattice the real thing could not stand without.
@@ -2611,14 +2701,24 @@ internal static class WorldBuilder
         var any = false;
         var last = -100f;
         SN.Vector3[]? previousRing = null;
-        // The deck itself: a steel box under the road with a low kerb plate along each edge (0.34), so the loop has a
-        // body from outside and the car cannot look through its floor.
+        // The deck's edges: a low kerb plate along each and a side girder 0.8 m deep (0.34; the box's soffit, there so
+        // that the car could not look through its floor, went in 0.72: the deck is a grating, BuildLoopDeck). Under the
+        // grating, what shows through it: two stringers under the wheel tracks and a floor beam across at every frame,
+        // a metre apart (real gratings carry cars over spans of 1.3-1.6 m), their tops clear of the bars' 76 mm.
         var frames = path.Frames;
         for (var i = 0; i < frames.Count - 1; i++)
         {
-            if (frames[i].Kind != SegmentKind.Loop || frames[i + 1].Kind != SegmentKind.Loop) continue;
-            DeckBox(st, frames[i], frames[i + 1], 0.3f, 0.2f, 0.5f, plate);
+            var a = frames[i];
+            var b = frames[i + 1];
+            if (a.Kind != SegmentKind.Loop || b.Kind != SegmentKind.Loop) continue;
+            DeckBox(st, a, b, 0.3f, 0.2f, 0.8f, plate, soffit: false);
             any = true;
+            if (!IsGrating(a) && !IsGrating(b)) continue;
+            foreach (var side in new[] { -2.75f, 2.75f })
+            {
+                Beam(st, a.Origin + a.Lateral * side - a.Normal * 0.22f, b.Origin + b.Lateral * side - b.Normal * 0.22f, 0.24f, plate);
+            }
+            Beam(st, a.Origin - a.Lateral * a.HalfWidth - a.Normal * 0.2f, a.Origin + a.Lateral * a.HalfWidth - a.Normal * 0.2f, 0.22f, plate);
         }
         foreach (var f in path.Frames)
         {

@@ -73,7 +73,8 @@ internal sealed partial class SkidMarks : MultiMeshInstance3D
         Visible = !retro;
         var car = session.Car;
         // Also through the wreck's slide after a crash (the replay phase's first seconds, simulated); the replay itself moves no wheel.
-        var marking = !retro;
+        // Not on the loop's open steel grating (0.72): a strip would hang over its holes.
+        var marking = !retro && !(car.BodyHit is { HasSurface: true } hit && WorldBuilder.IsGrating(hit.Frame));
         for (var i = 0; i < car.Wheels.Length && i < _last.Length; i++)
         {
             var w = car.Wheels[i];

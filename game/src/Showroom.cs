@@ -108,7 +108,10 @@ internal sealed partial class Showroom : Node
     public static Showroom Create(int carIndex, PaintBook book, float startYawDegrees, bool fromMenu, bool held = false) => new()
     {
         Name = "Showroom",
-        Index = Lineup.IsDrivable(carIndex) ? carIndex : Lineup.Step(Math.Clamp(carIndex, 0, VehicleSpec.Catalogue.Length - 1), 1),
+        // Any car of the catalogue, as Lineup promises automation (--showroom=, --car= then the menu's CAR line); stepping
+        // from a withdrawn car lands on the drivable ones either side (0.72: 0.70 moved it on here, so --showroom=saloon
+        // showed the Estate and the CAR line's first step skipped one).
+        Index = Math.Clamp(carIndex, 0, VehicleSpec.Catalogue.Length - 1),
         _book = book,
         FromMenu = fromMenu,
         Held = held,

@@ -3608,6 +3608,38 @@ The puddles were the view's alone: a mirror-flat patch on the asphalt, under the
 - **The menu** (`PauseMenu`): the REPLAY MUSIC line is gone at the owner's wish; the tune in the user folder plays (0.70),
   and a music file dropped on the window still becomes it, without opening the menu.
 
+### A steel loop you see through, no stuck sounds, the 0.70 review (0.72.0)
+
+- **The loop's grating** (`WorldBuilder.BuildLoopDeck`, `loop_grating.gdshader`, the owner's P16): the loop's frames off
+  the ground (`IsGrating`: a Loop frame whose up is more than 16 degrees off the vertical, the earthworks' rule) get a
+  strip of their own, UV in metres (across, along from the grating's start), drawn by a shader that computes a hot-dip
+  galvanised bar grating per pixel: bearing bars along the road 10 mm thick, 76 mm deep every 60 mm, cross bars 6 mm
+  thick, 10 mm deep every 102 mm, 78 % open from above. Each set of bars is a pulse train whose coverage of the pixel's
+  footprint is an exact box filter of its running integral (the footprint widened 1.6 times against moire); the bars'
+  depth is taken into account (the ray's sideways walk inside them), so the deck closes at a grazing angle, stays open
+  along the slots and shows the bars' side walls darker. The opacity is blended (the transparent pass): alpha hash,
+  tried first, left the far deck as white specks the temporal anti-aliasing did not settle; alpha to coverage needs
+  MSAA, off by default with the motion blur. Blended, the grating casts no shadow (it would throw a solid one); the
+  steel under it does. The asphalt ribbon, the centre line and the tyre marks stop on the grating; its two ends on the
+  earthworks stay asphalt, untinted. Under it the deck box keeps its kerb plates and side girders, 0.8 m deep, without
+  the soffit, and gains two stringers under the wheel tracks and a floor beam at every frame. 1989 look: flat navy with
+  a one-pixel column dither, opaque, as the arcade's footage shows. The physics is unchanged. Method after the 8 November
+  research (loop-grating.md).
+- **The car heard only while it is driven** (`EngineAudio.Update`, `TyreAudio`): the replay shows a frozen wreck, a
+  finished credit's session is not stepped (`RaceSession.Step` returns in `Finished`) and the showroom over a paused
+  credit does not step it, but the engine kept its last revs, the tyres their last slip and the wind its last speed:
+  a credit that ran out at 91 km/h left -14 dB of roar to the end of the recording, and the replay began with the
+  wreck's squeal. Now `live` is `StartEngine` or `Driving` and not paused; otherwise the engine is off, the structure
+  echoes silent and the tyres and the body noise muted, the tyres eased over a tenth of a second (`_level`). Measured
+  with `--audio-dump`: after the credit's end -27 to -31 dB (the game-over tune and the world), the replay's first
+  second -38 dB instead of -22. `EndMusic` on every new session fades a jingle still playing (the game-over tune ran on
+  into the next credit past the menu's NEW GAME) and the replay's tune.
+- **The 0.70 review's fixes**: `AdoptReplayMusic` decodes the dropped file before anything in the folder is touched,
+  copies it in under a temporary name and leaves the folder's own file alone when it is dropped back (both deleted the
+  owner's tune before); a tune taken while the replay's music plays is put in when that music ends (it was dropped);
+  the traffic's McLaren takes the road's colours (only the Ferraris keep their red); `Showroom.Create` keeps any car
+  automation names, and the line-up steps from a withdrawn car to its neighbours.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

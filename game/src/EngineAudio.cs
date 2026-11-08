@@ -54,6 +54,8 @@ internal sealed partial class EngineAudio : Node
     private float _replayMusicFade;
     // Whether _replayMusic holds the player's own tune (CustomReplayMusic) rather than the game's recording.
     private bool _replayMusicIsOwn;
+    // A tune taken while the replay's music played, to be put in once it has ended (RefreshReplayMusic).
+    private bool _replayMusicPending;
     private double _songTime;
     private int _songNext;
     private readonly List<Voice> _voices = new();
@@ -98,24 +100,37 @@ internal sealed partial class EngineAudio : Node
     /// <summary>
     /// Makes a music file the instant replay's tune (0.15: a file dropped on the game's window): copied into the user
     /// folder as replay.ogg, .mp3 or .wav, the other two taken away so this one plays, and its own name written beside
-    /// it for the menu. Returns that name, or null when the file is not ogg, mp3 or wav, cannot be copied or does not
-    /// decode.
+    /// it. Returns that name, or null when the file is not ogg, mp3 or wav, does not decode or cannot be copied; then
+    /// the tune already there stays.
     /// </summary>
+    /// <remarks>
+    /// Until 0.72 the tunes in the folder were deleted before the new file was copied or tried: a file that did not
+    /// decode left the folder without a tune (the old one played on from memory until the game closed), and the folder's
+    /// own replay.ogg dropped back on the window deleted itself before its copy. Now the file is decoded first, copied
+    /// in under a temporary name, and only then do the others go; the folder's own file is left where it is.
+    /// </remarks>
     public string? AdoptReplayMusic(string path)
     {
         var extension = System.IO.Path.GetExtension(path).ToLowerInvariant();
         if (extension is not (".ogg" or ".mp3" or ".wav")) return null;
+        if (Decode(path, extension) is null) return null;
         var folder = ProjectSettings.GlobalizePath("user://music");
+        var target = System.IO.Path.Combine(folder, "replay" + extension);
         try
         {
             System.IO.Directory.CreateDirectory(folder);
-            foreach (var old in new[] { ".ogg", ".mp3", ".wav" })
+            if (!string.Equals(System.IO.Path.GetFullPath(path), System.IO.Path.GetFullPath(target), System.StringComparison.OrdinalIgnoreCase))
             {
-                var file = System.IO.Path.Combine(folder, "replay" + old);
-                if (System.IO.File.Exists(file)) System.IO.File.Delete(file);
+                var incoming = target + ".new";
+                System.IO.File.Copy(path, incoming, overwrite: true);
+                foreach (var old in new[] { ".ogg", ".mp3", ".wav" })
+                {
+                    var file = System.IO.Path.Combine(folder, "replay" + old);
+                    if (System.IO.File.Exists(file)) System.IO.File.Delete(file);
+                }
+                System.IO.File.Move(incoming, target);
+                System.IO.File.WriteAllText(System.IO.Path.Combine(folder, "replay-name.txt"), System.IO.Path.GetFileName(path));
             }
-            System.IO.File.Copy(path, System.IO.Path.Combine(folder, "replay" + extension));
-            System.IO.File.WriteAllText(System.IO.Path.Combine(folder, "replay-name.txt"), System.IO.Path.GetFileName(path));
         }
         catch (System.Exception ex)
         {
@@ -127,11 +142,42 @@ internal sealed partial class EngineAudio : Node
         return CustomReplayMusicName;
     }
 
-    /// <summary>Looks in the user folder again (the menu opened): a tune dropped in while the game runs plays from the next replay.</summary>
+    /// <summary>A music file decoded as the game would play it, or null (logged) when it does not decode.</summary>
+    private static AudioStream? Decode(string path, string extension)
+    {
+        try
+        {
+            AudioStream? stream = extension switch
+            {
+                ".ogg" => AudioStreamOggVorbis.LoadFromFile(path),
+                ".mp3" => AudioStreamMP3.LoadFromFile(path),
+                _ => AudioStreamWav.LoadFromFile(path),
+            };
+            if (stream is null) GD.PrintErr($"replay music {path} does not decode");
+            return stream;
+        }
+        catch (System.Exception ex)
+        {
+            GD.PrintErr($"replay music {path} does not decode: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Looks in the user folder again (the menu opened, a file was dropped): a tune put there while the game runs plays
+    /// from the next replay. Taken while a replay's music plays, it waits for that music to end (0.72: until then it
+    /// was dropped, and the next replay played the old tune, or in the 1989 look the synthesised score).
+    /// </summary>
     public void RefreshReplayMusic()
     {
         var custom = CustomReplayMusic();
-        if (custom is null || _replayMusic is { Playing: true }) return;
+        if (custom is null) return;
+        if (_replayMusic is { Playing: true })
+        {
+            _replayMusicPending = true;
+            return;
+        }
+        _replayMusicPending = false;
         if (_replayMusic is null)
         {
             // No recording of the game's own to swap out (a build without it): the player's tune gets a player of its own.
@@ -263,6 +309,18 @@ internal sealed partial class EngineAudio : Node
         return [.. notes];
     }
 
+    /// <summary>
+    /// A new credit (0.72): a jingle still playing (the game-over tune of the credit before, a fanfare) and the replay's
+    /// tune fade out in a third of a second. Until then the game-over tune played on into the next credit, past the
+    /// menu's NEW GAME (the owner: "the music carries on from the menu into the game").
+    /// </summary>
+    public void EndMusic()
+    {
+        if (_song is not null) _songFading = true;
+        if (_replayMusic is { Playing: true } && _replayMusicFade <= 0f) _replayMusicFade = 1f;
+        _replayPlayingBefore = false;
+    }
+
     /// <summary>Starts a jingle from its first note, cutting one still playing.</summary>
     public void PlayJingle(Jingle jingle)
     {
@@ -274,6 +332,7 @@ internal sealed partial class EngineAudio : Node
         // The recording instead of the notes; in the 1989 look only when it is the player's own tune (0.70: until then
         // that look always played the synthesised score, and a tune put in the user folder, most often the original
         // arcade's own, was never heard there).
+        if (jingle == Jingle.Replay && _replayMusicPending) RefreshReplayMusic();
         if (jingle == Jingle.Replay && _replayMusic is not null && (!Retro || _replayMusicIsOwn))
         {
             if (_replayMusicIsOwn) GD.Print($"replay music: the player's own tune, {CustomReplayMusicName}");
@@ -430,21 +489,31 @@ internal sealed partial class EngineAudio : Node
         _thump = 1f;
     }
 
-    public void Update(RaceSession session, float dt)
+    /// <summary>
+    /// Once a frame: the car's voices from its state, the events' one-shots, the jingles. <paramref name="paused"/>: the
+    /// session is not being stepped (a showroom over a paused credit), so the car is not heard.
+    /// </summary>
+    public void Update(RaceSession session, float dt, bool paused = false)
     {
         var car = session.Car;
+        // The car is heard only while the session drives it (0.72): in the replay it is a frozen wreck, once the time is
+        // up and on the title it stands where it stopped, and a showroom over a paused credit does not step it. Until
+        // then the engine held its last revs, the tyres their last slip and the wind its last speed as a stuck note
+        // through the replay and a finished credit's score (the owner, 8 November 2026: "the last sound of the game
+        // stays stuck"; measured: a credit that ran out at 91 km/h held -14 dB of roar to the end of the recording).
+        var live = !paused && session.Phase is SessionPhase.StartEngine or SessionPhase.Driving;
         // The echo under a deck and the joints at its ends (0.40); none in 1989 mode, nor in the replay.
         if (!ReferenceEquals(_acousticsTrack, session.Track))
         {
             _acoustics = new StructureAcoustics(session.Track);
             _acousticsTrack = session.Track;
         }
-        var joint = _acoustics!.Update(session, dt, silent: Retro || session.Phase == SessionPhase.Replay);
+        var joint = _acoustics!.Update(session, dt, silent: Retro || !live);
         if (joint > 0f) _thump = MathF.Max(_thump, joint);
         var engine = car.Drivetrain.Engine;
         // The instant replay has no engine: the car stands wrecked while the crash is shown (the simulation holds
-        // its last revs through the replay, which played on as a frozen note).
-        _running = engine.Running && session.Phase != SessionPhase.Replay;
+        // its last revs through the replay, which played on as a frozen note); nor has a finished or paused credit.
+        _running = engine.Running && live;
         // The engine's load is its throttle (0.19), held through the limiter's cut, which the voice plays pulse by pulse.
         var load = engine.Throttle;
         var cut = engine.LimiterCut;
@@ -458,7 +527,7 @@ internal sealed partial class EngineAudio : Node
         {
             if (w.InContact && w.Surface == SurfaceType.Road) squeal = MathF.Max(squeal, w.SlipIntensity);
         }
-        if (session.Phase == SessionPhase.Replay) squeal = 0f;   // the wreck slides in silence but for the fire (0.35)
+        if (!live) squeal = 0f;   // the wreck slides in silence but for the fire (0.35), and a frozen car is silent
         var speedFactor = MathUtil.Clamp01((MathF.Abs(car.Speed) - 3f) / 10f);
         _squeal += (squeal * speedFactor - _squeal) * MathUtil.Clamp01(dt * 10f);
 
@@ -514,7 +583,11 @@ internal sealed partial class EngineAudio : Node
         {
             _replayMusicFade = MathF.Max(_replayMusicFade - dt * 3f, 0f);
             _replayMusic.VolumeDb = ReplayMusicDb + Mathf.LinearToDb(MathF.Max(_replayMusicFade, 0.001f));
-            if (_replayMusicFade <= 0f) _replayMusic.Stop();
+            if (_replayMusicFade <= 0f)
+            {
+                _replayMusic.Stop();
+                if (_replayMusicPending) RefreshReplayMusic();
+            }
         }
         _lastPhase = session.Phase;
         // The shifter: a clunk on every change of gear while the car is driven (the automatic's too).
@@ -570,7 +643,7 @@ internal sealed partial class EngineAudio : Node
         _sampled.Interior = Interior;
         _sampled.Update(_follower.Rpm, _follower.Load, _follower.Cut, _running, muted: Retro);
         _tyres.Interior = Interior;
-        _tyres.Update(session, dt, muted: Retro, running: _running);
+        _tyres.Update(session, dt, muted: Retro || !live, running: _running);
         Fill();
     }
 

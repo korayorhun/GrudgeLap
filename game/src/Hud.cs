@@ -294,7 +294,9 @@ internal sealed partial class Hud : Control
         DrawTextureRect(room.Texture, new Rect2(Vector2.Zero, size), false);
         DrawRect(new Rect2(0f, 0f, size.X, 64f), new Color(0.05f, 0.05f, 0.06f, 0.5f));
         DrawString(font, new Vector2(20f, 44f), "SHOWROOM", HorizontalAlignment.Left, -1f, 30, white);
-        DrawString(font, new Vector2(size.X - 320f, 44f), $"CAR {Lineup.Number(room.Index)} OF {Showroom.Count}", HorizontalAlignment.Right, 300f, 22, grey);
+        // A withdrawn car (automation only) has no place in the line-up.
+        var place = Lineup.Number(room.Index) is > 0 and var number ? $"CAR {number} OF {Showroom.Count}" : "NOT IN THE LINE-UP";
+        DrawString(font, new Vector2(size.X - 320f, 44f), place, HorizontalAlignment.Right, 300f, 22, grey);
         // The name fades out and in with the cars sliding under it. In the bar: drawn over the stage (46 px, under the
         // bar) it lay on the roofs of the tall cars and of a car brought closer (the showroom's review).
         Centred(font, room.Spec.Name, 45f, 34, white with { A = room.TextAlpha });

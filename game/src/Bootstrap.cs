@@ -557,6 +557,8 @@ public sealed partial class Bootstrap : Node3D
         _carView.Name = $"Car-{spec.Style}";
         if (_perfLog) StartMark("  session: weather, repair, the car");
         _audio.SetCar(spec);
+        // The last credit's music ends with it (0.72): its game-over tune or the replay's tune.
+        _audio.EndMusic();
         if (_perfLog) StartMark("  session: the engine voice");
         if (_savedBestLap is not null && !_noGhost) _session.LoadBestLap(_savedBestLap);
         _hud.Bind(_session);
@@ -600,8 +602,11 @@ public sealed partial class Bootstrap : Node3D
         VehicleSpec.Boxer, VehicleSpec.TurboHatch, VehicleSpec.FiveHatch, VehicleSpec.FlatTwelve, VehicleSpec.V8Evo,
     ];
 
-    /// <summary>The traffic's Ferraris keep their own red: the road's palette has beige, brown and ochre in it.</summary>
-    private static bool KeepsOwnPaint(CarStyle style) => style is CarStyle.FlatTwelve or CarStyle.V8 or CarStyle.FlatPlaneV8;
+    /// <summary>
+    /// The traffic's Ferraris, the Testarossa and the 458, keep their own red: the road's palette has beige, brown and
+    /// ochre in it. The McLaren takes the palette like the rest (0.72: 0.70 kept it too, always in its model's orange).
+    /// </summary>
+    private static bool KeepsOwnPaint(CarStyle style) => style is CarStyle.FlatTwelve or CarStyle.FlatPlaneV8;
 
     private void BuildDroneViews()
     {
@@ -872,7 +877,8 @@ public sealed partial class Bootstrap : Node3D
             // The showroom over the title screen or the paused credit: its own keys and mouse, the session not stepping.
             // The title's ambience (the cows, the train) plays on under it; under the menu the bus is muted as before.
             HandleShowroom();
-            if (!_menu.Open) UpdateSound(dt);
+            // The session is not stepped under the showroom: the car is silent (EngineAudio.Update), the world is not.
+            if (!_menu.Open) UpdateSound(dt, paused: true);
             if (_perfLog) LogPerformance();
             AutomationAfterFrame();
             return;
@@ -982,11 +988,11 @@ public sealed partial class Bootstrap : Node3D
     /// picture, the clock, quitting) carries on. In 0.8.0 the world sound threw on every frame of a second credit
     /// and the view stopped following the car: it stood at the line while the engine revved and the clock ran.
     /// </summary>
-    private void UpdateSound(float dt)
+    private void UpdateSound(float dt, bool paused = false)
     {
         try
         {
-            _audio.Update(_session, dt);
+            _audio.Update(_session, dt, paused);
             _world.Update(_session, _cameraRig.Listener, dt);
             _thunder.Update(_session.Weather, _session.Phase, _retro, _cameraRig.Listener, dt);
         }

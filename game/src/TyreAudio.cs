@@ -41,6 +41,9 @@ internal sealed partial class TyreAudio : Node
     private TrackGeometry? _echoesTrack;
 
     public float Volume { get; set; } = 0.9f;
+    // The tyres' gain, eased towards Volume or silence (0.72): muted now also while the car stands frozen (the replay,
+    // a finished credit), and a sliding tyre's scrub cut off in one frame clicked.
+    private float _level;
     /// <summary>Heard from the driver's seat: the wind at the pillars, the gears through the tunnel, the anti-lock pump through the pedal.</summary>
     public bool Interior { get; set; }
 
@@ -112,7 +115,10 @@ internal sealed partial class TyreAudio : Node
         }
         _mix.Update(_contacts.AsSpan(0, count), WeatherModel.Wetness(session.Weather), dt);
 
-        var gain = muted ? 0f : Volume;
+        var target = muted ? 0f : Volume;
+        _level += (target - _level) * MathUtil.Clamp01(dt * 12f);
+        if (MathF.Abs(target - _level) < 0.002f) _level = target;
+        var gain = _level;
         Set(_road, gain * _mix.Roll.Level, _mix.Roll.Pitch);
         Set(_squeal, gain * _mix.Squeal.Level, _mix.Squeal.Pitch);
         Set(_howl, gain * _mix.Howl.Level * 0.9f, _mix.Howl.Pitch);
