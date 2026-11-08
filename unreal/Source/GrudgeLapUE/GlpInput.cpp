@@ -11,7 +11,7 @@ namespace
 		EKeys::LeftShift, EKeys::RightShift, EKeys::E, EKeys::PageUp, EKeys::Q, EKeys::PageDown,
 		EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five, EKeys::Six, EKeys::Seven,
 		EKeys::N, EKeys::R, EKeys::Enter, EKeys::SpaceBar, EKeys::C, EKeys::U, EKeys::F5, EKeys::F8, EKeys::F9,
-		EKeys::F11, EKeys::F12,
+		EKeys::F11, EKeys::F12, EKeys::Escape,
 		// The pad's buttons (InputSetup): the stick and the triggers are read as axes.
 		EKeys::Gamepad_DPad_Left, EKeys::Gamepad_DPad_Right, EKeys::Gamepad_DPad_Up, EKeys::Gamepad_DPad_Down,
 		EKeys::Gamepad_LeftStick_Left, EKeys::Gamepad_LeftStick_Right,

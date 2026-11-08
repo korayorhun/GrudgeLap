@@ -162,7 +162,9 @@ private:
 	FGlpCameraRig Rig;
 	FGlpScores Scores;
 	bool bScoreOffered = false;   // the credit's end has been put to the high-score table
-	int32 CarIndex = 0;
+	// A first start (no settings yet) shows the hot hatch (0.74): its own cabin is the best of the line-up's, where the
+	// first catalogue car's borrowed cream cabin glared in the windscreen.
+	int32 CarIndex = 2;
 	int32 Transmission = GLP_MANUAL_AUTO_CLUTCH;
 	bool bKmh = true;   // metric by default since 0.14 (the Godot version too); U toggles, the choice is kept
 	bool bAttract = false;

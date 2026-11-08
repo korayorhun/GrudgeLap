@@ -141,7 +141,7 @@ void AGlpHud::DrawHUD()
 		Centred(TEXT("PRESS ENTER OR A TO START"), Y + 258.f, 38.f, FGlpPainter::Srgb(1.f, 0.85f, 0.3f, Pulse));
 		Centred(S.grudge_match ? FString::Printf(TEXT("grudge match: the ghost of your best lap, %s, is waiting"), *LapTime(S.best_lap_time)) : FString(TEXT("finish a lap and its ghost will race you next time")),
 			Y + 312.f, 18.f, FGlpPainter::Srgb(0.6f, 0.9f, 1.f));
-		Centred(FString::Printf(TEXT("Unreal Engine version   C camera   U units   H weather: %s   M replay music folder   F11 full screen"), G->WeatherName()), Y + 346.f, 15.f, Grey);
+		Centred(FString::Printf(TEXT("Unreal Engine version   C camera   U units   H weather: %s   M replay music folder   F11 full screen   Esc quit"), G->WeatherName()), Y + 346.f, 15.f, Grey);
 	}
 	else if (S.phase == GLP_PHASE_FINISHED)
 	{

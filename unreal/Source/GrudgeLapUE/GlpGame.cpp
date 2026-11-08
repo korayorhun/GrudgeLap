@@ -905,6 +905,20 @@ void AGlpGame::HandleGlobalKeys()
 			Settings->ApplyResolutionSettings(false);
 		}
 	}
+	// Esc (0.74): the Unreal version had no way out but Alt+F4. Until it has the Godot version's menu, Esc on the title
+	// screen quits and during a credit goes back to the title screen.
+	if (Input.Pressed(EKeys::Escape))
+	{
+		if (Current.phase == GLP_PHASE_SELECT_TRANSMISSION)
+		{
+			SaveSettings();
+			FPlatformMisc::RequestExit(false);
+		}
+		else
+		{
+			NewSession();
+		}
+	}
 	if (Input.Pressed(EKeys::F12))
 	{
 		const FString File = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Screenshots"), FString::Printf(TEXT("grudgelap-%s.png"), *FDateTime::Now().ToString(TEXT("%Y%m%d-%H%M%S"))));
