@@ -1706,8 +1706,9 @@ def dress_track(actors):
     verge = shoulder_material()
     # The earthworks (the fork hill, the cuttings' walls) are bare earth in the game: its TerrainEarth mesh shares
     # the terrain's UVs (5 km across), so the scan tiles every 4 m there. Compacted grey-brown dirt (0.74), as the Godot
-    # game's cuttings (Ground067 since 0.36): the mud scan tinted red-brown read as orange clay hills beside the road.
-    earth = surface_material("M_Earth", "dirt_floor", 5000 / 4.0, 5000 / 4.0, tint=(0.92, 0.88, 0.82), macro=23.0)
+    # game's cuttings (Ground067 since 0.36): the mud scan tinted red-brown read as orange clay hills beside the road, the
+    # dirt scan at its own shade as dunes of sand.
+    earth = surface_material("M_Earth", "dirt_floor", 5000 / 4.0, 5000 / 4.0, tint=(0.62, 0.58, 0.52), macro=23.0)
     land = land_material() if "Land" in actors else None
     grating = grating_material() if any(label.startswith("LoopDeck-") for label in actors) else None
     for label, actor in actors.items():

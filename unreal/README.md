@@ -180,6 +180,19 @@ credits (`Import/Models/LICENSE.txt`) beside the executable.
     clear day drops the sun to a wide soft source, closes the clouds over (the template cloud material's coverage
     parameter), thickens the fog and opens the exposure; rain is `M_Rain`, a panning sheet of streaks on a
     cylinder round the camera (`AGlpGame::ApplyWeather`).
+  - **The roadside (0.76):** the export carries the fences, the power poles and the marker posts as placements of one
+    template mesh each (`instanced` in track.json, `Instanced-<n>` in the file; `WorldExport`), which `place_instanced`
+    instances with the template's mesh and material: about 3000 buck-and-rail bays, 76 poles with the three wires strung
+    between neighbours as the game's 0.9 m sag parabolas (one-metre pieces of `Instanced-Wire`), 158 posts with their
+    reflectors amber on the right and white on the left. Until then the export left the fences and the line out and sent
+    the posts as grass tufts.
+  - **The plain (0.76):** the ground's colour varies on three scales as the Godot ground's (dry straw stretches, greener
+    hollows, half-metre clumps; `GROUND_HUES_HLSL`), and sagebrush, the scanned shrubs small and tinted grey-green, stands
+    6 to 120 m off every road (`prepare_scatter.sagebrush`, about 47 000). The scatter is in hierarchical instances.
+  - **Brake lamps and tyre marks (0.76):** a model's `GLP_Brake` lens becomes `M_BrakeLamp`, lit while the car brakes
+    (`FGlpCarView::SetBraking`: the player's pedal; a drone slowing faster than 1.2 m/s² for 0.4 s); a sliding wheel lays
+    a strip of `M_SkidMark` (modulating, so it darkens the road beneath) from 0.32 of its slip intensity, as the Godot
+    version's `SkidMarks` (`AGlpGame::LaySkidMarks`, 6000 strips in a ring).
   - **The photographic finish (0.13):** a little film grain, a trace of chromatic aberration and lens flare, a
     touch more bloom and motion blur in the post-process volume; the chase camera a 54 degree lens from 7.4 m, as
     the Godot version's since 0.11.
