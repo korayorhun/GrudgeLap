@@ -525,7 +525,10 @@ internal static class WorldBuilder
         if (_edgeLines is StandardMaterial3D edges) edges.Roughness = Mathf.Lerp(0.65f, 0.25f, wet);
         foreach (var paint in _paint)
         {
-            if (paint is ShaderMaterial shader) shader.SetShaderParameter("wetness", wet);
+            if (paint is not ShaderMaterial shader) continue;
+            shader.SetShaderParameter("wetness", wet);
+            // The worn specks in the road's own colour, as the road takes it (0.69).
+            shader.SetShaderParameter("tar_tint", DryAsphalt.Lerp(WetAsphalt, wet));
         }
         if (_environment is null || _sun is null || _retro) return;
         var overcast = WeatherModel.Overcast(_weather);

@@ -3556,6 +3556,19 @@ The puddles were the view's alone: a mirror-flat patch on the asphalt, under the
   (a sine hash fed thousands of units turns periodic). The night beads still draw the whole quads: their few-millimetre
   slivers past the fray were left.
 
+### The traffic's brake lamps (0.69.0)
+
+- **Brake lamps** (`Bootstrap.SyncTraffic`): the drones slow when the player or a slower drone is ahead in their lane
+  (`Traffic.Step`, braking at up to 7 m/s^2), but only the player's car ever lit its brake lamps. A drone's view now
+  brakes while its speed falls faster than 1.2 m/s^2 between frames, held 0.4 s so that the lamps do not flicker
+  (CarView.Braking: the lamps' emission, and at night the tail glows' flare). On an attract minute the drones kept their
+  cruising speeds and none braked; it shows when a faster drone closes on a slower one or on the player.
+- **The paint's review, second pass**: the worn specks take the road's own albedo colour as an sRGB uniform
+  (`tar_tint`, set with the wetness), where 0.67's 0.52 and 0.68's mix of 0.52 and 0.15 were treated as light and left
+  them about twice the road's brightness dry and up to eight times wet; the edge fray's noise is steadied to its mean
+  (a constant 3 mm inset) where a pixel spans more than half of its 4 cm cells along the line, instead of 0.68's fade,
+  which took the fray away from a few metres out; the dash ends' fray is not faded at all (one value per dash, steady).
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

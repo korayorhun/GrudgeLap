@@ -1364,15 +1364,35 @@ public sealed partial class Bootstrap : Node3D
         }
     }
 
+    /// <summary>The drones' speeds a frame ago and how long their brake lamps stay lit (SyncTraffic, 0.69).</summary>
+    private float[] _droneSpeedWas = [];
+    private float[] _droneBrakeHold = [];
+
     private void SyncTraffic(float dt)
     {
         if (_session.Traffic is null) return;
         var cars = _session.Traffic.Cars;
+        if (_droneSpeedWas.Length != cars.Count)
+        {
+            _droneSpeedWas = new float[cars.Count];
+            _droneBrakeHold = new float[cars.Count];
+            for (var i = 0; i < cars.Count; i++) _droneSpeedWas[i] = cars[i].Speed;
+        }
+        var running = _session.Phase is SessionPhase.Driving or SessionPhase.StartEngine;
         for (var i = 0; i < cars.Count && i < _droneViews.Count; i++)
         {
             _droneViews[i].SetTrafficPose(cars[i].Position, cars[i].Orientation);
             _droneViews[i].Headlights = WorldBuilder.CarLampsLit;
-            if (_session.Phase is SessionPhase.Driving or SessionPhase.StartEngine || (_session.Phase == SessionPhase.Replay && !_session.ReplayPlaying)) _droneViews[i].AdvanceWheels(cars[i].Speed * dt, 0f);
+            if (running || (_session.Phase == SessionPhase.Replay && !_session.ReplayPlaying)) _droneViews[i].AdvanceWheels(cars[i].Speed * dt, 0f);
+            // The traffic's brake lamps (0.69): lit while a drone slows by more than 1.2 m/s^2 (closing on the player or a
+            // slower car), held 0.4 s so that they do not flicker; until now only the player's car ever lit its own.
+            if (running && dt > 0f)
+            {
+                var slowing = (_droneSpeedWas[i] - cars[i].Speed) / dt;
+                _droneBrakeHold[i] = slowing > 1.2f ? 0.4f : MathF.Max(0f, _droneBrakeHold[i] - dt);
+            }
+            _droneSpeedWas[i] = cars[i].Speed;
+            _droneViews[i].Braking = running && _droneBrakeHold[i] > 0f;
         }
     }
 
