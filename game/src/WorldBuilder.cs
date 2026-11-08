@@ -170,6 +170,7 @@ internal static class WorldBuilder
         _dayPhoto = null;
         _sunrisePhoto = null;
         _nightPhoto = null;
+        NightLamps.ReleaseShared();
         _overcastSky = null;
         _overcastDeck = null;
         _shapeNoise = null;
@@ -537,6 +538,8 @@ internal static class WorldBuilder
             environment.VolumetricFogDensity = overcast ? 0.00035f : 0.00012f;
             // The night's camera opens up (0.57): the moonlit land and the sky stay dark, the lamps bright.
             environment.TonemapExposure = _night ? 1.35f : overcast ? 1.15f : _sunrise ? 1.0f : 0.9f;
+            // The lamps bloom more in the dark (0.58): an oncoming car's lamps are haloed points, as an eye sees them at night.
+            environment.GlowIntensity = _night ? 0.5f : 0.2f;
         }
     }
 

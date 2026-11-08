@@ -12,12 +12,43 @@ namespace GrudgeLap.Game;
 internal sealed partial class TrainView : Node3D
 {
     private readonly List<Node3D> _cars = new();
+    private StandardMaterial3D? _windows;
+    private Node3D? _lamp;
+    private bool _night;
     private Train _train = null!;
     private TerrainField _terrain = null!;
 
     /// <summary>Height of the rails' top over the ground: the wheels stand on it.</summary>
     private const float RailTop = 0.14f;
     private const float Gauge = 1.435f;
+
+    /// <summary>
+    /// The train at night (0.58): the locomotive's headlamp on the smokebox, a glow and a beam down the line 160 m, and the
+    /// coaches' windows lit warm from inside.
+    /// </summary>
+    public bool Night
+    {
+        set
+        {
+            if (value == _night) return;
+            _night = value;
+            if (value && _lamp is null && _cars.Count > 0)
+            {
+                // The node's -Z is the lamp's face: turned round, it looks down the line ahead of the cowcatcher (+Z).
+                _lamp = new Node3D { Name = "Headlamp", Position = new Vector3(0f, 3.8f, 5.95f), RotationDegrees = new Vector3(0f, 180f, 0f) };
+                _lamp.AddChild(NightLamps.Glow(new Color(1f, 0.92f, 0.75f), 8f, 0.9f));
+                _lamp.AddChild(new SpotLight3D { LightColor = new Color(1f, 0.92f, 0.75f), LightEnergy = 30f, SpotRange = 160f, SpotAngle = 18f, SpotAttenuation = 0.8f, ShadowEnabled = false, RotationDegrees = new Vector3(-2f, 0f, 0f) });
+                Locomotive.AddChild(_lamp);
+            }
+            if (_lamp is not null) _lamp.Visible = value;
+            if (_windows is not null)
+            {
+                _windows.EmissionEnabled = value;
+                _windows.Emission = new Color(0.95f, 0.78f, 0.50f);
+                _windows.EmissionEnergyMultiplier = 1.4f;
+            }
+        }
+    }
 
     /// <summary>The locomotive's node, where the train's sounds are placed.</summary>
     public Node3D Locomotive => _cars[0];
@@ -29,6 +60,7 @@ internal sealed partial class TrainView : Node3D
         var coach = WorldBuilder.PropMaterial("metal", new Color(0.84f, 0.85f, 0.87f), 0.5f);
         var band = new StandardMaterial3D { AlbedoColor = new Color(0.70f, 0.08f, 0.07f), Roughness = 0.5f };
         var windows = new StandardMaterial3D { AlbedoColor = new Color(0.10f, 0.12f, 0.15f), Roughness = 0.2f, Metallic = 0.6f };
+        view._windows = windows;
         var roof = new StandardMaterial3D { AlbedoColor = new Color(0.42f, 0.42f, 0.44f), Roughness = 0.7f };
         var dark = new StandardMaterial3D { AlbedoColor = new Color(0.08f, 0.08f, 0.09f), Roughness = 0.8f, Metallic = 0.3f };
         for (var i = 0; i < train.Cars.Length; i++)

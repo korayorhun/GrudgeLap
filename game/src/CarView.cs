@@ -255,6 +255,7 @@ internal sealed partial class CarView : Node3D
     /// </summary>
     public void MarkPlayer()
     {
+        _player = true;
         foreach (var geometry in Descendants(this).OfType<GeometryInstance3D>())
         {
             geometry.Layers = 3;
@@ -308,40 +309,90 @@ internal sealed partial class CarView : Node3D
 
     private Aabb? _lampBounds;
     private Vector3 _lampCentre;
-    private SpotLight3D[]? _headlamps;
-    private OmniLight3D? _tailGlow;
+    private bool _player;
+    private bool _lampsOn;
+    private readonly List<Node3D> _lamps = [];
 
     /// <summary>
-    /// The player's lamps at night (0.57): two low beams from the front corners of the body, 0.65 m up, and a red glow
-    /// behind; made the first time they are switched on (<see cref="BuildLamps"/>).
+    /// The car's lamps at night (0.57 the player's, 0.58 the traffic's): low beams from the front corners of the body,
+    /// 0.65 m up, the lamps' glow ahead and the tail lamps' behind; made the first time they are switched on
+    /// (<see cref="BuildLamps"/>).
     /// </summary>
     public bool Headlights
     {
-        get => _headlamps is { } lamps && lamps[0].Visible;
+        get => _lampsOn;
         set
         {
-            if (value && _headlamps is null) BuildLamps();
-            if (_headlamps is null) return;
-            foreach (var lamp in _headlamps) lamp.Visible = value;
-            if (_tailGlow is not null) _tailGlow.Visible = value;
+            if (value == _lampsOn) return;
+            if (value && _lamps.Count == 0) BuildLamps();
+            _lampsOn = value;
+            foreach (var lamp in _lamps) lamp.Visible = value;
+        }
+    }
+
+    /// <summary>Where the lamps go on a car not measured as the player's (MarkPlayer): its shell's or its model's box.</summary>
+    private void MeasureLamps()
+    {
+        if (_shell is not null && _body is not null)
+        {
+            var box = _shell.GetAabb();
+            _lampBounds = box;
+            _lampCentre = _body.Transform * box.GetCenter();
+        }
+        else if (_model is not null)
+        {
+            _lampBounds = _modelBounds;
+            _lampCentre = _modelBounds.GetCenter();
         }
     }
 
     /// <summary>
-    /// Two spot lights at the body's front corners (a quarter of a metre in from its sides), aimed a degree and a half
-    /// down, through a low beam's pattern (<see cref="LowBeam"/>): a flat cut-off on the oncoming side that steps up
-    /// over the verge, the brightest just under it. Their shadows leave the car's own layer out, or its bumper and lamp
-    /// glass would black them out. A red omni light behind for the tail lamps' glow on the road.
+    /// The player's: two spot lights at the body's front corners (a quarter of a metre in from its sides), aimed a degree
+    /// and a half down, through a low beam's pattern (<see cref="LowBeam"/>): a flat cut-off on the oncoming side that
+    /// steps up over the verge, the brightest just under it. Their shadows leave the car's own layer out, or its bumper
+    /// and lamp glass would black them out. A red omni light behind for the tail lamps' glow on the road. A drone's (0.58):
+    /// one spot between its lamps without shadows, eight drones' shadows being too dear for what they would show. Every
+    /// car: the lamps' glow (NightLamps.Glow), white ahead and red behind, which blooms in the dark and fades seen from
+    /// the side the lamp does not face.
     /// </summary>
     private void BuildLamps()
     {
+        if (_lampBounds is null) MeasureLamps();
         if (_lampBounds is not { } bounds) return;
         var ground = -_cgHeight;
         // From the centre the car was measured round, so a body set off in its node still has its lamps at its nose.
         var front = _lampCentre.Z - bounds.Size.Z * 0.5f + 0.15f;
         var side = MathF.Max(bounds.Size.X * 0.5f - 0.25f, 0.3f);
         var beam = LowBeam();
-        _headlamps = new SpotLight3D[2];
+        var rear = _lampCentre.Z + bounds.Size.Z * 0.5f - 0.05f;
+        foreach (var x in new[] { -side, side })
+        {
+            var head = NightLamps.Glow(new Color(1f, 0.95f, 0.85f), 9f, 0.45f);
+            head.Position = new Vector3(_lampCentre.X + x, ground + 0.65f, front - 0.17f);
+            AddLamp(head);
+            var tail = NightLamps.Glow(new Color(1f, 0.06f, 0.03f), 3.5f, 0.28f);
+            tail.Position = new Vector3(_lampCentre.X + x * 1.05f, ground + 0.82f, rear);
+            tail.RotationDegrees = new Vector3(0f, 180f, 0f);
+            AddLamp(tail);
+        }
+        if (!_player)
+        {
+            AddLamp(new SpotLight3D
+            {
+                Name = "Headlamps",
+                Position = new Vector3(_lampCentre.X, ground + 0.65f, front),
+                Rotation = new Vector3(Mathf.DegToRad(-1.5f), 0f, 0f),
+                LightColor = new Color(1f, 0.95f, 0.86f),
+                LightEnergy = 40f,
+                SpotRange = 80f,
+                SpotAngle = 34f,
+                SpotAttenuation = 0.9f,
+                SpotAngleAttenuation = 0.5f,
+                LightProjector = beam,
+                ShadowEnabled = false,
+            });
+            return;
+        }
         for (var i = 0; i < 2; i++)
         {
             var lamp = new SpotLight3D
@@ -361,19 +412,23 @@ internal sealed partial class CarView : Node3D
                 LightVolumetricFogEnergy = 1.5f,
                 Visible = false,
             };
-            AddChild(lamp);
-            _headlamps[i] = lamp;
+            AddLamp(lamp);
         }
-        _tailGlow = new OmniLight3D
+        AddLamp(new OmniLight3D
         {
             Name = "TailGlow",
             Position = new Vector3(_lampCentre.X, ground + 0.75f, _lampCentre.Z + bounds.Size.Z * 0.5f + 0.25f),
             LightColor = new Color(1f, 0.08f, 0.04f),
             LightEnergy = 0.35f,
             OmniRange = 3.5f,
-            Visible = false,
-        };
-        AddChild(_tailGlow);
+        });
+    }
+
+    private void AddLamp(Node3D lamp)
+    {
+        lamp.Visible = false;
+        AddChild(lamp);
+        _lamps.Add(lamp);
     }
 
     private static Texture2D? _lowBeam;

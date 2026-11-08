@@ -40,11 +40,14 @@ internal static class PropBuilder
             case PropKind.Barn:
                 BuildingBuilder.Barn(node, prop, (parent, text, at, fontSize, colour, flip) => Label(parent, text, at, fontSize, colour, flip));
                 BuildingBuilder.SetFoot(node, prop.Position.Y);
+                // The farm's yard lamp by a front corner (0.58, NightLamps.YardLamp).
+                node.AddChild(NightLamps.YardLamp(new Vector3(size.X * 0.5f + 2.5f, 0f, size.Z * 0.5f + 2f)));
                 break;
 
             case PropKind.House:
                 BuildingBuilder.House(node, prop);
                 BuildingBuilder.SetFoot(node, prop.Position.Y);
+                node.AddChild(NightLamps.YardLamp(new Vector3(-size.X * 0.5f - 2.5f, 0f, size.Z * 0.5f + 2f)));
                 break;
 
             case PropKind.Shop:

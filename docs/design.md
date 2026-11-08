@@ -3339,6 +3339,25 @@ The puddles were the view's alone: a mirror-flat patch on the asphalt, under the
 - Still to come: the traffic's and the train's lamps, the farms' yard lights; a few cars' light trim (the estate's dash
   panel, the flat-twelve's console) stays lighter than the rest at night.
 
+### The lamps of the night (0.58.0)
+
+- **A lamp's glow** (`NightLamps.Glow`, `assets/shaders/lamp_glow.gdshader`): a card turned to the camera, added over
+  the scene past the glow's threshold so it blooms, tested against the depth (the body hides the far lamp); it shines
+  the way its node's -Z faces and fades seen from the other side (a headlamp from behind, a tail lamp from ahead), or
+  all round for a yard lamp's refractor. One material for each colour and strength (forty-odd lamps share a handful: a
+  material each had cost a couple of milliseconds of the CPU's frame). The night's glow intensity is 0.5 against the
+  day's 0.2, so an oncoming car's lamps are haloed points as an eye sees them in the dark.
+- **The cars** (`CarView.Headlights`, `MeasureLamps`): every car's lamps from its shell's or its model's box, two white
+  glows at the nose and two red at the tail; the player's two shadowed beams and the red glow on the road (0.57), a
+  drone's one beam between its lamps without shadows (eight drones' shadows cost too much for what they show).
+- **The train** (`TrainView.Night`): a headlamp on the smokebox, a glow and a beam 160 m down the line, and the coaches'
+  windows lit warm from inside.
+- **The farms** (`NightLamps.YardLamp`): by each barn and house a wooden pole 7 m high with a lamp on an arm, standing by
+  day too; at night an orange sodium lamp (a 1980s farm's dusk-to-dawn lamp, about 2000 K) lights the yard and the
+  building's face 30 m round, without shadows. The world's export keeps the poles and leaves the lamps out (glTF carries
+  no shader: the glows went out as white cards).
+- **Cost**: 13.2 ms a frame at night, the CPU's share as by day.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and
