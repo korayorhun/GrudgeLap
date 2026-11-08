@@ -65,6 +65,12 @@ internal sealed partial class WheelDust : Node3D
             // Soft where a puff meets the road or the ground (0.53): the quads cut into it in hard bands.
             ProximityFadeEnabled = true,
             ProximityFadeDistance = 0.6f,
+            // Clear within 1.5 m of the eye and whole from 3.5 m (0.74): a sliding rear tyre's puffs, up to 3 m across and
+            // facing the eye, reached into the cabin, and from the seat the car seemed to fill with smoke (the owner,
+            // 8 November 2026). Behind the car, through the rear window and from the chase camera, the smoke still shows.
+            DistanceFadeMode = BaseMaterial3D.DistanceFadeModeEnum.PixelAlpha,
+            DistanceFadeMinDistance = 1.5f,
+            DistanceFadeMaxDistance = 3.5f,
         };
         var scale = new Curve();
         scale.AddPoint(new Vector2(0f, startSize / endSize));
