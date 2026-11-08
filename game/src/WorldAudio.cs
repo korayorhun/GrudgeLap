@@ -245,12 +245,15 @@ internal sealed partial class WorldAudio : Node
             if (session.Phase == SessionPhase.Replay) chorus = 0f;
             // At night (0.59) the prairie's frogs and insects instead of the day's birds: louder after rain, when the frogs
             // call, and under the rain only a few. Until 0.59 the birds sang all night.
-            var night = WorldBuilder.CurrentHour == WorldBuilder.Hour.Night;
-            _ambience.VolumeDb = Mathf.LinearToDb(MathF.Max(night ? 0f : chorus, 0.0001f));
+            // At dusk (0.60) the last of the birds over the frogs and insects starting up.
+            var hour = WorldBuilder.CurrentHour;
+            var birds = hour switch { WorldBuilder.Hour.Night => 0f, WorldBuilder.Hour.Dusk => 0.45f, _ => 1f };
+            var evening = hour switch { WorldBuilder.Hour.Night => 1f, WorldBuilder.Hour.Dusk => 0.55f, _ => 0f };
+            _ambience.VolumeDb = Mathf.LinearToDb(MathF.Max(chorus * birds, 0.0001f));
             if (_night is not null)
             {
                 var frogs = session.Weather switch { Weather.Rain => 0.35f, Weather.Overcast => 0.9f, _ => 1f };
-                _night.VolumeDb = Mathf.LinearToDb(MathF.Max(night && chorus > 0f ? frogs : 0f, 0.0001f));
+                _night.VolumeDb = Mathf.LinearToDb(MathF.Max(chorus > 0f ? frogs * evening : 0f, 0.0001f));
             }
         }
         UpdateRain(session, dt);

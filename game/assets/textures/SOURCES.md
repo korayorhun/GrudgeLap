@@ -28,6 +28,7 @@ verge's at 2K (0.36: they fill most of the screen).
 | `clouds.png` | drawn by `tools/make-clouds.py` (no source material): a tileable sheet of fair-weather cumulus, white with a grey underside on a transparent ground | this repository | MIT |
 | `sky.hdr` | Poly Haven **kloofendal_43d_clear_puresky** (2K HDR; the partly cloudy 48d sky of the same place was used before, its haze washed the plain out) | https://polyhaven.com/a/kloofendal_43d_clear_puresky | CC0 1.0 |
 | `sky_sunrise.hdr` | Poly Haven **syferfontein_6d_clear_puresky** (2K HDR; Greg Zaal, sky edits Jarod Guest): a clear sky with the sun 5.85 degrees up, turned by `tools/make-sunrise-sky.py` (its columns rolled, nothing resampled) so its sun stands at compass bearing 85 for the sunrise (0.55) | https://polyhaven.com/a/syferfontein_6d_clear_puresky | CC0 1.0 |
+| `sky_dusk.hdr` | the same Poly Haven **syferfontein_6d_clear_puresky**, turned by `tools/make-sunrise-sky.py` to compass bearing 285 for the dusk (0.60): its sun just behind the Tetons | https://polyhaven.com/a/syferfontein_6d_clear_puresky | CC0 1.0 |
 | `sky_night.hdr` | Poly Haven **kloppenheim_02_puresky** (2K HDR; Greg Zaal, sky edits Jarod Guest): a clear night with the moon 17 degrees up and its stars, used as photographed (its moon stands where the day's sun does); drawn at 0.035 of its level for the night (0.57) | https://polyhaven.com/a/kloppenheim_02_puresky | CC0 1.0 |
 
 ambientCG: https://ambientcg.com (assets dedicated to the public domain under CC0). Poly Haven:

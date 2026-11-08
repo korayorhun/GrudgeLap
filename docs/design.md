@@ -3375,6 +3375,24 @@ The puddles were the view's alone: a mirror-flat patch on the asphalt, under the
   axis it reaches 50 m, as a low beam's does, and the lamps came down to 20 (the drones' to 30).
 - **The brake lamps** (`CarView.Braking`): at night the tail lamps' glow flares from 3.5 to 9 with the brake.
 
+### Dusk (0.60.0)
+
+- **The sky and the sun** (`tools/make-sunrise-sky.py ... sky_dusk.hdr 285`): the sunrise's photo turned to compass bearing
+  285, the sun 5.85 degrees up behind the Tetons, whose ridge stands 7.5 to 9 degrees high from the circuit that way, so
+  the land hides the sun and its glow spreads over the ridge (`WorldBuilder.DuskDirection`).
+- **The land** (`tools/make-terrain.py`, grid version 3): a third sun's visibility, the dusk's: the circuit and half the
+  far land lie in the range's shadow (it reaches some 19 km at 6 degrees). `RealLand` puts it in the vertices' second UV;
+  `land.gdshader` takes it at dusk and lights the faces the sun still reaches six times the valley's weak light
+  (`sun_gain`).
+- **The light**: the directional light is the west's glow over a valley in shadow, deep orange (1, 0.55, 0.32) at 0.3;
+  the clouds, kilometres up, still have the sun: their sun strength is six times, pink and orange underneath; the haze's
+  sun scatter 0.3, exposure 0.95, the sky's light 0.85 and the ground's bounce 0.6 of the day's, the cabin 0.45; the
+  glass's dust and arcs take a quarter of the glow (the sun is behind the range).
+- **Lamps and sound**: dusk-to-dawn, the lamps are lit as at night (`WorldBuilder.LampsLit`: the cars', the train's, the
+  yards', the paint's beads); the day's birds at 0.45 over the night's frogs and insects at 0.55.
+- **The menu**: LIGHT steps day, sunrise, dusk, night, random (a draw of the four); the dusk is stored as 4.
+- **Cost**: 12.5 ms a frame (an attract lap at 1080p).
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

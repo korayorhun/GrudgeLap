@@ -13,6 +13,9 @@ uniform vec3 plain_colour : source_color = vec3(0.36, 0.45, 0.20);
 uniform float wetness : hint_range(0.0, 1.0) = 0.0;
 // The hour (0.55, WorldBuilder.SetSunrise): 1 at sunrise, whose sun's shadows the vertices carry in their alpha.
 uniform float sunrise : hint_range(0.0, 1.0) = 0.0;
+// The dusk (0.60): its sun's shadows are in UV2.x; the faces it still reaches lit sun_gain times the valley's weak light.
+uniform float dusk : hint_range(0.0, 1.0) = 0.0;
+uniform float sun_gain = 1.0;
 
 // COLOR: r the game's sun's visibility, g the sky's, b the weight of the image over the plain's colour, a the sunrise's
 // sun's visibility.
@@ -21,7 +24,7 @@ varying float cloud_ratio;
 varying vec3 world_pos;
 
 void vertex() {
-	sun_vis = mix(COLOR.r, COLOR.a, sunrise);
+	sun_vis = mix(mix(COLOR.r, COLOR.a, sunrise), UV2.x, dusk);
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	cloud_ratio = cloud_light_ratio(world_pos, length(world_pos - CAMERA_POSITION_WORLD));
 }
@@ -53,6 +56,6 @@ void fragment() {
 }
 
 void light() {
-	float shadow = LIGHT_IS_DIRECTIONAL ? sun_vis * cloud_ratio : 1.0;
+	float shadow = LIGHT_IS_DIRECTIONAL ? sun_vis * cloud_ratio * sun_gain : 1.0;
 	DIFFUSE_LIGHT += clamp(dot(NORMAL, LIGHT), 0.0, 1.0) * ATTENUATION * LIGHT_COLOR / PI * shadow;
 }

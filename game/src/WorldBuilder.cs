@@ -138,6 +138,20 @@ internal static class WorldBuilder
     /// short for a moon this low, which no one sees by its light.
     /// </summary>
     private static readonly Vector3 MoonDirection = new(-0.557f, 0.293f, -0.777f);
+    /// <summary>
+    /// The dusk's sun (0.60): the sunrise's photo turned to compass bearing 285 (sky_dusk.hdr), the sun 5.85 degrees up and
+    /// just set behind the Tetons, whose ridge stands 7.5 to 9 degrees high from the circuit that way: the valley lies in
+    /// their shadow (the land's grid version 3 casts it), the sky glows over them, and the Gros Ventre's peaks across the
+    /// valley and the clouds still catch the sun.
+    /// </summary>
+    private static readonly Vector3 DuskDirection = new(0.961f, 0.102f, 0.257f);
+    /// <summary>The last of the sun: deep orange, and weak on the valley in the mountains' shadow (the bright west's glow).</summary>
+    private static readonly Color DuskLight = new(1f, 0.55f, 0.32f);
+    private const float DuskEnergy = 0.3f;
+    /// <summary>How much brighter the far land's sunlit faces are than the valley's light at dusk: the peaks the sun still reaches.</summary>
+    private const float DuskPeaks = 6f;
+    /// <summary>The dusk's air: warm grey, gold towards the set sun (the fog's sun scatter).</summary>
+    private static readonly Color DuskAir = new(0.62f, 0.55f, 0.52f);
     /// <summary>The moon's light as the eye takes it at night: bluish (the rods see blue best), dim.</summary>
     private static readonly Color MoonLight = new(0.70f, 0.80f, 1f);
     private const float MoonEnergy = 0.18f;
@@ -149,10 +163,12 @@ internal static class WorldBuilder
     /// <summary>The night's air: a deep blue that the far land fades into.</summary>
     private static readonly Color NightAir = new(0.030f, 0.040f, 0.065f);
     /// <summary>The direction to the sun now, or to the moon at night (<see cref="SetHour"/>).</summary>
-    private static Vector3 SunDirection => _hour switch { Hour.Sunrise => SunriseDirection, Hour.Night => MoonDirection, _ => DayDirection };
+    private static Vector3 SunDirection => _hour switch { Hour.Sunrise => SunriseDirection, Hour.Night => MoonDirection, Hour.Dusk => DuskDirection, _ => DayDirection };
     private static Hour _hour;
     private static bool _sunrise => _hour == Hour.Sunrise;
     private static bool _night => _hour == Hour.Night;
+    private static bool _dusk => _hour == Hour.Dusk;
+    private static Texture2D? _duskPhoto;
     private static Texture2D? _dayPhoto;
     private static Texture2D? _sunrisePhoto;
     private static Texture2D? _nightPhoto;
@@ -173,6 +189,7 @@ internal static class WorldBuilder
         _dayPhoto = null;
         _sunrisePhoto = null;
         _nightPhoto = null;
+        _duskPhoto = null;
         NightLamps.ReleaseShared();
         _overcastSky = null;
         _overcastDeck = null;
@@ -510,10 +527,10 @@ internal static class WorldBuilder
         }
         ApplyHour();
         if (_clouds is not null) _clouds.Visible = !overcast && _volumetricSky is null;   // the grey sky is its own cloud
-        _sunEnergy = overcast ? 0.6f * Dawn : _night ? MoonEnergy : _sunrise ? SunriseEnergy : SunEnergy;
-        if (overcast || _sunrise || _night) _cloudShade = 1f;
+        _sunEnergy = overcast ? 0.6f * Dawn : _night ? MoonEnergy : _dusk ? DuskEnergy : _sunrise ? SunriseEnergy : SunEnergy;
+        if (overcast || _hour != Hour.Day) _cloudShade = 1f;
         _sun.LightEnergy = _sunEnergy * _cloudShade;
-        _sun.LightColor = overcast ? CloudSun : _night ? MoonLight : _sunrise ? SunriseLight : DrySun;
+        _sun.LightColor = overcast ? CloudSun : _night ? MoonLight : _dusk ? DuskLight : _sunrise ? SunriseLight : DrySun;
         // Under the deck the light comes from high in the grey whatever the hour: a sunrise's 6 degrees lit the spray
         // and the rain's streaks facing it brightly over a road it barely touched (0.55).
         _sun.LookAtFromPosition(Vector3.Zero, -(overcast ? DayDirection : SunDirection), Vector3.Up);
@@ -529,22 +546,23 @@ internal static class WorldBuilder
             environment.AmbientLightSkyContribution = overcast ? 0.95f : SkyAmbientShare;
             // The ground's warm bounce, the ambient's fifth that is not the sky's, is a day's: at night it lit the cabin and
             // the plain as at dusk whatever the sky did (0.57), so it comes down with the night sky.
-            environment.AmbientLightColor = GroundBounce * (_night ? NightSkyEnergy : 1f);
+            environment.AmbientLightColor = GroundBounce * (_night ? NightSkyEnergy : _dusk ? 0.6f : 1f);
             // At sunrise the sky's light under the low sun's is a little less (0.55): the shadows' blue against the lit gold.
-            environment.AmbientLightEnergy = overcast ? 1.1f : _sunrise ? AmbientEnergy * 0.8f : AmbientEnergy;
+            environment.AmbientLightEnergy = overcast ? 1.1f : _sunrise ? AmbientEnergy * 0.8f : _dusk ? AmbientEnergy * 0.85f : AmbientEnergy;
             // Under the deck the air is the dome's own grey at the horizon (0.53), darker as the weather worsens: brighter,
             // the rain's thick air stood the mountains up as pale cut-outs against a darker sky.
             var greyAir = (WeatherModel.Raining(_weather) ? 0.78f : _weather == Weather.Wet ? 0.9f : 1f) * Dawn;
-            environment.FogLightColor = overcast ? new Color(0.60f, 0.62f, 0.66f) * greyAir : _night ? NightAir : _sunrise ? SunriseAir : ClearAir;
-            // The low sun lights the haze towards it (0.55): the gold the far land takes looking into a sunrise.
-            environment.FogSunScatter = !overcast && _sunrise ? 0.35f : 0f;
+            environment.FogLightColor = overcast ? new Color(0.60f, 0.62f, 0.66f) * greyAir : _night ? NightAir : _dusk ? DuskAir : _sunrise ? SunriseAir : ClearAir;
+            // The low sun lights the haze towards it (0.55): the gold the far land takes looking into a sunrise, and the glow
+            // over the Tetons where the sun has just set (0.60).
+            environment.FogSunScatter = overcast ? 0f : _sunrise ? 0.35f : _dusk ? 0.3f : 0f;
             environment.FogDensity = !overcast ? ClearAirDensity : WeatherModel.Raining(_weather) ? 0.00032f : 0.00016f;
             environment.FogAerialPerspective = overcast ? 0.8f : 0.55f;
             environment.VolumetricFogDensity = overcast ? 0.00035f : 0.00012f;
             // The night's camera opens up (0.57): the moonlit land and the sky stay dark, the lamps bright.
-            environment.TonemapExposure = _night ? 1.35f : overcast ? 1.15f : _sunrise ? 1.0f : 0.9f;
+            environment.TonemapExposure = _night ? 1.35f : _dusk ? 0.95f : overcast ? 1.15f : _sunrise ? 1.0f : 0.9f;
             // The lamps bloom more in the dark (0.58): an oncoming car's lamps are haloed points, as an eye sees them at night.
-            environment.GlowIntensity = _night ? 0.5f : 0.2f;
+            environment.GlowIntensity = _night ? 0.5f : _dusk ? 0.3f : 0.2f;
         }
     }
 
@@ -2063,8 +2081,11 @@ internal static class WorldBuilder
     /// <summary>The direction to the sun, Godot axes.</summary>
     public static Vector3 TowardsSun => SunDirection;
 
-    /// <summary>How much of the sun reaches the camera: none overcast or in the 1989 look, the clouds' share otherwise (CloudShadows).</summary>
-    public static float SunShare => _retro || _night || WeatherModel.Overcast(_weather) ? 0f : _cloudShade;
+    /// <summary>
+    /// How much of the sun reaches the camera: none overcast, at night or in the 1989 look, a quarter at dusk (0.60: the sun
+    /// behind the Tetons, only its glow in the sky reaches the glass), the clouds' share otherwise (CloudShadows).
+    /// </summary>
+    public static float SunShare => _retro || _night || WeatherModel.Overcast(_weather) ? 0f : _dusk ? 0.25f : _cloudShade;
 
     /// <summary>The sun casts shadows at medium and high quality under a clear sky (--sun-shadow= forces it), not overcast (0.47).</summary>
     private static bool SunShadowsOn => SunShadowOverride ?? (!_retro && _quality >= GraphicsQuality.Medium && !WeatherModel.Overcast(_weather));
@@ -2118,10 +2139,10 @@ internal static class WorldBuilder
     }
 
     /// <summary>The grey day's light at the hour: an overcast dawn is dimmer (0.55), an overcast night all but dark (0.57).</summary>
-    private static float Dawn => _night ? 0.05f : _sunrise ? 0.75f : 1f;
+    private static float Dawn => _night ? 0.05f : _dusk ? 0.45f : _sunrise ? 0.75f : 1f;
 
     /// <summary>The hours of a credit: the day (the sun 43 degrees up), the sunrise (5.85 degrees, 0.55), the night (0.57).</summary>
-    public enum Hour { Day, Sunrise, Night }
+    public enum Hour { Day, Sunrise, Night, Dusk }
 
     /// <summary>The credit's hour, applied at once.</summary>
     public static void SetHour(Hour hour)
@@ -2134,7 +2155,10 @@ internal static class WorldBuilder
     public static Hour CurrentHour => _hour;
 
     /// <summary>A closed cabin's ambient light against the day's (CarView.CabinLight): the night sky's share at night.</summary>
-    public static float CabinLight => _night && !_retro ? NightSkyEnergy * 1.5f : 1f;
+    public static float CabinLight => _retro ? 1f : _night ? NightSkyEnergy * 1.5f : _dusk ? 0.45f : 1f;
+
+    /// <summary>The lamps are lit (the cars', the train's, the yards'): at night and at dusk (0.60), dusk-to-dawn as they are.</summary>
+    public static bool LampsLit => !_retro && _hour is Hour.Night or Hour.Dusk;
 
     /// <summary>
     /// The hour on the clear sky and the land (0.55): the day's photo or the sunrise's, the clouds lit by the low sun's
@@ -2144,7 +2168,7 @@ internal static class WorldBuilder
     /// </summary>
     private static void ApplyHour()
     {
-        var photo = _night ? NightPhoto ?? _dayPhoto : _sunrise ? SunrisePhoto ?? _dayPhoto : _dayPhoto;
+        var photo = _night ? NightPhoto ?? _dayPhoto : _dusk ? DuskPhoto ?? _dayPhoto : _sunrise ? SunrisePhoto ?? _dayPhoto : _dayPhoto;
         if (photo is not null)
         {
             if (_clearSky is ShaderMaterial clear) clear.SetShaderParameter("panorama", photo);
@@ -2152,8 +2176,10 @@ internal static class WorldBuilder
         }
         if (_volumetricSky is not null)
         {
-            _volumetricSky.SetShaderParameter("sun_tint", _night ? new Color(0.70f, 0.80f, 1f) : _sunrise ? new Color(1f, 0.80f, 0.60f) : new Color(1f, 0.97f, 0.92f));
-            _volumetricSky.SetShaderParameter("coverage", _night ? 0.3f : _sunrise ? 0.22f : 0.41f);
+            _volumetricSky.SetShaderParameter("sun_tint", _night ? new Color(0.70f, 0.80f, 1f) : _dusk ? new Color(1f, 0.55f, 0.40f) : _sunrise ? new Color(1f, 0.80f, 0.60f) : new Color(1f, 0.97f, 0.92f));
+            _volumetricSky.SetShaderParameter("coverage", _night ? 0.3f : _dusk ? 0.32f : _sunrise ? 0.22f : 0.41f);
+            // At dusk the clouds, kilometres up, still have the sun the valley lost: their light is the sun's whole (0.60).
+            _volumetricSky.SetShaderParameter("sun_strength", _dusk ? 3.6f * DuskPeaks : 3.6f);
             // At night the photo and the clouds' sky light come down together, or the clouds glowed as by day (0.57).
             var sky = _night ? NightSkyEnergy : 1f;
             _volumetricSky.SetShaderParameter("panorama_energy", sky);
@@ -2161,11 +2187,14 @@ internal static class WorldBuilder
             _volumetricSky.SetShaderParameter("ambient_bottom", new Color(0.34f, 0.37f, 0.42f) * sky);
         }
         _landShader?.SetShaderParameter("sunrise", _sunrise ? 1f : 0f);
-        FoliageBuilder.SetStand(_sunrise ? GrassStand : 0f);
+        _landShader?.SetShaderParameter("dusk", _dusk ? 1f : 0f);
+        _landShader?.SetShaderParameter("sun_gain", _dusk ? DuskPeaks : 1f);
+        FoliageBuilder.SetStand(_sunrise || _dusk ? GrassStand : 0f);
         // The paint's glass beads at night (0.59, assets/shaders/road_paint_retro.gdshader): a pass over the lines that sends
         // the lamps' light back to them, only at night, so the lines ahead shine past the beams' pool.
-        if (_night && !ExportMode) _paintBeads ??= new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/road_paint_retro.gdshader") };
-        foreach (var paint in _paint) paint.NextPass = _night && !ExportMode ? _paintBeads : null;
+        var beads = LampsLit && !ExportMode;
+        if (beads) _paintBeads ??= new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/road_paint_retro.gdshader") };
+        foreach (var paint in _paint) paint.NextPass = beads ? _paintBeads : null;
     }
 
     /// <summary>How far the grass stands up to the sunrise's sun (FoliageBuilder.SetStand).</summary>
@@ -2177,6 +2206,9 @@ internal static class WorldBuilder
     /// is missing (the day's photo stays).
     /// </summary>
     private static Texture2D? NightPhoto => _nightPhoto ??= ResourceLoader.Exists("res://assets/textures/sky_night.hdr") ? GD.Load<Texture2D>("res://assets/textures/sky_night.hdr") : null;
+
+    /// <summary>The dusk's sky (0.60, tools/make-sunrise-sky.py at bearing 285), or null when it is missing (the day's photo stays).</summary>
+    private static Texture2D? DuskPhoto => _duskPhoto ??= ResourceLoader.Exists("res://assets/textures/sky_dusk.hdr") ? GD.Load<Texture2D>("res://assets/textures/sky_dusk.hdr") : null;
 
     /// <summary>The sunrise's sky (tools/make-sunrise-sky.py), or null when it is missing (the day's photo stays).</summary>
     private static Texture2D? SunrisePhoto => _sunrisePhoto ??= ResourceLoader.Exists("res://assets/textures/sky_sunrise.hdr") ? GD.Load<Texture2D>("res://assets/textures/sky_sunrise.hdr") : null;

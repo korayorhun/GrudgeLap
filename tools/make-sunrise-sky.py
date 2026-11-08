@@ -4,6 +4,10 @@ bearing 85, a September sunrise over the Gros Ventre, behind a driver on the sta
 Tetons' faces as the Jackson Hole postcards have it.
 
     python tools/make-sunrise-sky.py syferfontein_6d_clear_puresky_2k.hdr game/assets/textures/sky_sunrise.hdr
+    python tools/make-sunrise-sky.py syferfontein_6d_clear_puresky_2k.hdr game/assets/textures/sky_dusk.hdr 285
+
+The dusk's sky (0.60) is the same photo turned to bearing 285: the sun just set behind the Tetons, whose ridge stands
+7.5 to 9 degrees high from the circuit that way, its glow over them (WorldBuilder.DuskDirection).
 
 The game's panorama puts a direction (x, z) at u = 0.5 + atan2(-x, -z) / 2 pi (WorldBuilder.SunDirection's sun, u 0.600
 in sky.hdr, measured the same way), and the game's frame has +X west and +Z north (tools/make-terrain.py), so bearing b
@@ -108,6 +112,8 @@ def sun(rgbe):
 
 
 src, dst = sys.argv[1], sys.argv[2]
+if len(sys.argv) > 3:
+    BEARING = float(sys.argv[3])
 rgbe, header = read_hdr(src)
 h, w = rgbe.shape[:2]
 u, v = sun(rgbe)

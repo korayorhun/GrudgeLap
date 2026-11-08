@@ -8,7 +8,8 @@ and writes two files the game reads:
   <out>.bin        zlib: a header and, per sample of a regular grid (step metres), the height over the valley floor
                    at the circuit (int16, decimetres), the sun's visibility from the game's sun (uint8: the mountains
                    throw their shadows, too far for the shadow maps), the sky's (uint8: valleys and gullies darker) and,
-                   since version 2 (0.55), the visibility of the sunrise's sun (uint8, WorldBuilder.SunriseDirection)
+                   since version 2 (0.55), the visibility of the sunrise's sun (uint8, WorldBuilder.SunriseDirection) and,
+                   since version 3 (0.60), the dusk's (uint8, WorldBuilder.DuskDirection: the sun just behind the Tetons)
   <out>_albedo.jpg the ground's colour from a Sentinel-2 image, the image's own sunlight divided out (its sun stood
                    higher than the game's) and the snow kept white
 
@@ -36,7 +37,7 @@ from pyproj import Transformer
 from scipy import ndimage
 
 MAGIC = b"GLPT"
-VERSION = 2
+VERSION = 3
 HEADER = "<4sIIffffff"
 
 
@@ -86,18 +87,18 @@ def sun_visibility(height, step, sun):
     return lit
 
 
-def write_grid(path, n, step, half, base, cx, cz, heading, height, lit, sky, lit_sunrise):
+def write_grid(path, n, step, half, base, cx, cz, heading, height, lit, sky, lit_sunrise, lit_dusk):
     with open(path, "wb") as f:
         body = bytearray()
         body += struct.pack(HEADER, MAGIC, VERSION, n, step, half, base, cx, cz, heading)
         body += np.clip(np.round(height * 10.0), -32768, 32767).astype("<i2").tobytes()
-        for array in (lit, sky, lit_sunrise):
+        for array in (lit, sky, lit_sunrise, lit_dusk):
             body += np.clip(np.round(array * 255.0), 0, 255).astype(np.uint8).tobytes()
         f.write(zlib.compress(bytes(body), 9))
     print("wrote", path)
 
 
-def from_bin(path, out, game_sun, sunrise_sun):
+def from_bin(path, out, game_sun, sunrise_sun, dusk_sun):
     """A written grid again: its heights and sky kept, both suns' shadows cast anew (the rasters not needed)."""
     raw = zlib.decompress(open(path, "rb").read())
     magic, version, n, step, half, base, cx, cz, heading = struct.unpack_from(HEADER, raw, 0)
@@ -108,8 +109,9 @@ def from_bin(path, out, game_sun, sunrise_sun):
     sky = np.frombuffer(raw, dtype=np.uint8, count=n * n, offset=off + 3 * n * n).reshape(n, n).astype(np.float32) / 255.0
     lit = sun_visibility(height, step, game_sun)
     lit_sunrise = sun_visibility(height, step, sunrise_sun)
-    print(f"in shadow: the game's sun {100 * (lit < 0.5).mean():.1f} %, the sunrise's {100 * (lit_sunrise < 0.5).mean():.1f} %")
-    write_grid(out + ".bin", n, step, half, base, cx, cz, heading, height, lit, sky, lit_sunrise)
+    lit_dusk = sun_visibility(height, step, dusk_sun)
+    print(f"in shadow: the game's sun {100 * (lit < 0.5).mean():.1f} %, the sunrise's {100 * (lit_sunrise < 0.5).mean():.1f} %, the dusk's {100 * (lit_dusk < 0.5).mean():.1f} %")
+    write_grid(out + ".bin", n, step, half, base, cx, cz, heading, height, lit, sky, lit_sunrise, lit_dusk)
 
 
 def main():
@@ -127,13 +129,14 @@ def main():
     ap.add_argument("--cz", type=float, default=115.6, help="the circuit's centre in the game (Godot z)")
     ap.add_argument("--game-sun", default="-0.431,0.682,-0.591", help="WorldBuilder.SunDirection (towards the sun, Godot)")
     ap.add_argument("--sunrise-sun", default="-0.991,0.102,0.087", help="WorldBuilder.SunriseDirection (towards the sun, Godot)")
+    ap.add_argument("--dusk-sun", default="0.961,0.102,0.257", help="WorldBuilder.DuskDirection (towards the sun, Godot)")
     ap.add_argument("--half", type=float, default=24000.0, help="half the square's side, metres")
     ap.add_argument("--step", type=float, default=30.0, help="the height grid's step, metres")
     ap.add_argument("--texture", type=int, default=5120, help="the colour texture's side, pixels")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     if a.from_bin:
-        from_bin(a.from_bin, a.out, a.game_sun, a.sunrise_sun)
+        from_bin(a.from_bin, a.out, a.game_sun, a.sunrise_sun, a.dusk_sun)
         return
     if not (a.dem and a.image and a.sun_az is not None and a.sun_el is not None and a.lat is not None and a.lon is not None):
         raise SystemExit("--dem, --image, --sun-az, --sun-el, --lat and --lon are needed (or --from-bin)")
@@ -170,6 +173,7 @@ def main():
     # ---- the game's sun over the land: shadows and the sky's share -------------------------------------------
     lit = sun_visibility(height, a.step, a.game_sun)
     lit_sunrise = sun_visibility(height, a.step, a.sunrise_sun)
+    lit_dusk = sun_visibility(height, a.step, a.dusk_sun)
     rows0, cols0 = np.mgrid[0:n, 0:n].astype(np.float32)
     sky = np.zeros_like(height)
     directions = 12
@@ -187,7 +191,7 @@ def main():
     sky /= directions
     print(f"in shadow {100 * (lit < 0.5).mean():.1f} % (sunrise {100 * (lit_sunrise < 0.5).mean():.1f} %), sky {sky.min():.2f} .. {sky.max():.2f}")
 
-    write_grid(a.out + ".bin", n, a.step, a.half, base, a.cx, a.cz, a.heading, height, lit, sky, lit_sunrise)
+    write_grid(a.out + ".bin", n, a.step, a.half, base, a.cx, a.cz, a.heading, height, lit, sky, lit_sunrise, lit_dusk)
 
     # ---- the colour --------------------------------------------------------------------------------------------
     image, im_x0, im_y0, im_dx, im_dy = geotiff(a.image)

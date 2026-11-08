@@ -167,7 +167,7 @@ public sealed partial class Bootstrap : Node3D
         _quality = (GraphicsQuality)Math.Clamp(LoadChoice("quality", (int)GraphicsQuality.High), 0, 2);
         // The weather (0.15): clear by default; the menu chooses clear, overcast, wet road, rain or random, and keeps it.
         _weatherChoice = Math.Clamp(LoadChoice("weather", 0), 0, 4);
-        _lightChoice = Math.Clamp(LoadChoice("light", 0), 0, 3);
+        _lightChoice = Math.Clamp(LoadChoice("light", 0), 0, 4);
         ParseArgs();   // may override the saved car with --car= and the paint with --paint=
         // The paints (0.21, per car since 0.25): every car in its own colour by default; the showroom and the menu
         // choose another, and keep it. An automated run reads them but never writes the player's file.
@@ -383,7 +383,7 @@ public sealed partial class Bootstrap : Node3D
             else if (arg == "--no-ghost") _noGhost = true;       // pictures of the car without the best lap's ghost over it
             else if (arg == "--no-traffic") _noTraffic = true;
             else if (arg.StartsWith("--weather=", System.StringComparison.Ordinal)) _weather = WeatherModel.Parse(arg["--weather=".Length..]);
-            else if (arg.StartsWith("--light=", System.StringComparison.Ordinal)) _hourArg = arg["--light=".Length..] switch { "sunrise" => WorldBuilder.Hour.Sunrise, "night" => WorldBuilder.Hour.Night, _ => WorldBuilder.Hour.Day };
+            else if (arg.StartsWith("--light=", System.StringComparison.Ordinal)) _hourArg = arg["--light=".Length..] switch { "sunrise" => WorldBuilder.Hour.Sunrise, "night" => WorldBuilder.Hour.Night, "dusk" => WorldBuilder.Hour.Dusk, _ => WorldBuilder.Hour.Day };
             else if (arg == "--no-hud") _noHud = true;
             else if (arg.StartsWith("--orbit=", System.StringComparison.Ordinal))
             {
@@ -1077,7 +1077,7 @@ public sealed partial class Bootstrap : Node3D
         _world.Interior = cockpit;
         _world.Wipers = _cameraRig.Wipers;
         // The lamps at night (0.57); the 1989 cabinet knew no night.
-        var night = WorldBuilder.CurrentHour == WorldBuilder.Hour.Night && !_retro;
+        var night = WorldBuilder.LampsLit;
         _carView.Headlights = night;
         // The other lamps of the night (0.58): the farms' yard lamps and the train's.
         NightLamps.Night = night;
@@ -1361,7 +1361,7 @@ public sealed partial class Bootstrap : Node3D
         for (var i = 0; i < cars.Count && i < _droneViews.Count; i++)
         {
             _droneViews[i].SetTrafficPose(cars[i].Position, cars[i].Orientation);
-            _droneViews[i].Headlights = WorldBuilder.CurrentHour == WorldBuilder.Hour.Night && !_retro;
+            _droneViews[i].Headlights = WorldBuilder.LampsLit;
             if (_session.Phase is SessionPhase.Driving or SessionPhase.StartEngine || (_session.Phase == SessionPhase.Replay && !_session.ReplayPlaying)) _droneViews[i].AdvanceWheels(cars[i].Speed * dt, 0f);
         }
     }
@@ -1640,8 +1640,9 @@ public sealed partial class Bootstrap : Node3D
     /// </summary>
     private void CycleLight(int step)
     {
-        // The menu's order: day, sunrise, night, random; the stored numbers keep 0.55's (random 2) and add the night as 3.
-        int[] order = [0, 1, 3, 2];
+        // The menu's order: day, sunrise, dusk, night, random; the stored numbers keep 0.55's (random 2) and add the
+        // night as 3 (0.57) and the dusk as 4 (0.60).
+        int[] order = [0, 1, 4, 3, 2];
         var at = Array.IndexOf(order, _lightChoice);
         _lightChoice = order[(Math.Max(at, 0) + step + order.Length) % order.Length];
         SaveChoice("light", _lightChoice);
@@ -1653,11 +1654,12 @@ public sealed partial class Bootstrap : Node3D
     {
         1 => WorldBuilder.Hour.Sunrise,
         3 => WorldBuilder.Hour.Night,
-        2 => (WorldBuilder.Hour)System.Random.Shared.Next(3),
+        4 => WorldBuilder.Hour.Dusk,
+        2 => (WorldBuilder.Hour)System.Random.Shared.Next(4),
         _ => WorldBuilder.Hour.Day,
     };
 
-    private string LightLabel() => _lightChoice switch { 0 => "DAY", 1 => "SUNRISE", 3 => "NIGHT", _ => "RANDOM" };
+    private string LightLabel() => _lightChoice switch { 0 => "DAY", 1 => "SUNRISE", 3 => "NIGHT", 4 => "DUSK", _ => "RANDOM" };
 
     /// <summary>
     /// Automation (--perf-log): the main view's measured GPU time and the frame's CPU time, averaged over five
