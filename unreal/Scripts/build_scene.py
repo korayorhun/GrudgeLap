@@ -407,8 +407,10 @@ def surface_material(name, folder, u_tiling, v_tiling, tint=(1.0, 1.0, 1.0), mac
 
 def weather_assets():
     """MPC_Weather (Wetness and Rain, set by the game from the simulation's weather, AGlpGame::ApplyWeather), the
-    puddle mask the wet ground reads, and M_Rain, the unlit sheet of falling streaks the game wraps round the camera
-    (a cylinder, panning down) when it rains. Made before the ground materials, which read the collection."""
+    puddle mask the wet ground reads, and M_Rain, the rain's streaks (AGlpGame::FallRain): as the Godot version's
+    rain.gdshader, a faint lit streak (alpha 0.3, sRGB 0.78, 0.82, 0.90) gone within 1.2 m of the eye and whole from
+    4.5 m; until 0.76 an unlit sheet panning down a cylinder round the camera. Made before the ground materials, which
+    read the collection."""
     path = f"{GAME}/Materials/MPC_Weather"
     if eal.does_asset_exist(path):
         eal.delete_asset(path)
@@ -425,38 +427,34 @@ def weather_assets():
     decals = os.path.join(IMPORT, "Decals")
     WEATHER["puddles"] = import_texture("Decals", "puddles", "mask", path=os.path.join(decals, "puddles.png"))
 
-    streaks = import_texture("Decals", "rain_streaks", "colour", path=os.path.join(decals, "rain_streaks.png"))
     rain_path = f"{GAME}/Materials/M_Rain"
     if eal.does_asset_exist(rain_path):
         eal.delete_asset(rain_path)
     rain = asset_tools.create_asset("M_Rain", f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
-    rain.set_editor_property("blend_mode", unreal.BlendMode.BLEND_ADDITIVE)
-    rain.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    rain.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+    rain.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_DEFAULT_LIT)
+    rain.set_editor_property("translucency_lighting_mode", unreal.TranslucencyLightingMode.TLM_VOLUMETRIC_NON_DIRECTIONAL)
     rain.set_editor_property("two_sided", True)
-    coords = mel.create_material_expression(rain, unreal.MaterialExpressionTextureCoordinate, -1000, 0)
-    coords.set_editor_property("u_tiling", 6.0)
-    coords.set_editor_property("v_tiling", 2.5)
-    panner = mel.create_material_expression(rain, unreal.MaterialExpressionPanner, -800, 0)
-    panner.set_editor_property("speed_x", 0.03)
-    panner.set_editor_property("speed_y", 1.7)
-    mel.connect_material_expressions(coords, "", panner, "Coordinate")
-    sample = mel.create_material_expression(rain, unreal.MaterialExpressionTextureSample, -600, 0)
-    sample.set_editor_property("texture", streaks)
-    sample.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_COLOR)
-    mel.connect_material_expressions(panner, "", sample, "UVs")
-    # Emissive light is scene-referred (nits): under the grey day's exposure (EV100 about 12) a streak needs a few
-    # hundred nits to show at all; at 0.35 the rain was invisible (0.13).
-    glow = mel.create_material_expression(rain, unreal.MaterialExpressionMultiply, -350, -100)
-    glow.set_editor_property("const_b", 900.0)
-    mel.connect_material_expressions(sample, "RGB", glow, "A")
-    mel.connect_material_property(glow, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
-    amount = mel.create_material_expression(rain, unreal.MaterialExpressionCollectionParameter, -600, 300)
-    amount.set_editor_property("collection", collection)
-    amount.set_editor_property("parameter_name", "Rain")
-    opacity = mel.create_material_expression(rain, unreal.MaterialExpressionMultiply, -350, 200)
-    mel.connect_material_expressions(sample, "R", opacity, "A")
-    mel.connect_material_expressions(amount, "", opacity, "B")
-    mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY)
+    colour = mel.create_material_expression(rain, unreal.MaterialExpressionConstant3Vector, -500, -100)
+    colour.set_editor_property("constant", unreal.LinearColor(0.571, 0.638, 0.787, 1.0))
+    mel.connect_material_property(colour, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    where = mel.create_material_expression(rain, unreal.MaterialExpressionWorldPosition, -1000, 200)
+    eye = mel.create_material_expression(rain, unreal.MaterialExpressionCameraPositionWS, -1000, 300)
+    reach = mel.create_material_expression(rain, unreal.MaterialExpressionDistance, -750, 250)
+    mel.connect_material_expressions(where, "", reach, "A")
+    mel.connect_material_expressions(eye, "", reach, "B")
+    fade = mel.create_material_expression(rain, unreal.MaterialExpressionCustom, -500, 200)
+    fade.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT1)
+    fade.set_editor_property("description", "GrudgeLap rain streak")
+    fade.set_editor_property("code", "return 0.30 * smoothstep(120.0, 450.0, Reach);")
+    entry = unreal.CustomInput()
+    entry.set_editor_property("input_name", "Reach")
+    fade.set_editor_property("inputs", [entry])
+    mel.connect_material_expressions(reach, "", fade, "Reach")
+    mel.connect_material_property(fade, "", unreal.MaterialProperty.MP_OPACITY)
+    rough = mel.create_material_expression(rain, unreal.MaterialExpressionConstant, -500, 400)
+    rough.set_editor_property("r", 1.0)
+    mel.connect_material_property(rough, "", unreal.MaterialProperty.MP_ROUGHNESS)
     mel.recompile_material(rain)
     eal.save_loaded_asset(rain)
     log("weather assets made: MPC_Weather, the puddle mask, M_Rain")
@@ -780,6 +778,9 @@ def place_game(car, materials):
     for prop, name in (("ghost_material", "M_Ghost"), ("instruments_material", "M_Instruments"), ("mirror_material", "M_MirrorView")):
         game.set_editor_property(prop, materials[name])
     game.set_editor_property("skid_material", skid_material())
+    game.set_editor_property("puff_material", puff_material())
+    # The rain sheet (weather_assets) by a soft reference, so the package cooks it.
+    game.set_editor_property("rain_material", eal.load_asset(f"{GAME}/Materials/M_Rain"))
     log("game placed")
 
 
@@ -916,6 +917,58 @@ def paint_textured_material():
     mel.recompile_material(material)
     eal.save_loaded_asset(material)
     return material
+
+
+def puff_material():
+    """The wheels' dust, tyre smoke and spray (0.76, GlpGame's Puffs): a soft round puff on a plane the game turns to
+    the camera, lit as translucency is (the sun's light and the sky's, in the translucency volume), in the colour and
+    opacity each instance carries (its custom data: 0 the opacity, 1-3 the linear colour). As the Godot version's
+    WheelDust: the puff's alpha 0.55 at its centre, none at its rim; soft where it meets the road or the ground (a
+    smoothstep over 60 cm of depth behind it, as Godot's proximity fade; the quads cut into it in hard bands), clear
+    within 1.5 m of the eye and whole from 3.5 m by the distance from the eye, not the depth along the view (Godot's
+    pixel distance fade; from the seat a sliding rear tyre's smoke, its puffs 3 m across, filled the car)."""
+    m = asset_tools.create_asset("M_Puff", f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    m.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+    m.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_DEFAULT_LIT)
+    m.set_editor_property("translucency_lighting_mode", unreal.TranslucencyLightingMode.TLM_VOLUMETRIC_NON_DIRECTIONAL)
+    m.set_editor_property("two_sided", True)
+    colour = mel.create_material_expression(m, unreal.MaterialExpressionPerInstanceCustomData3Vector, -500, -150)
+    colour.set_editor_property("data_index", 1)
+    mel.connect_material_property(colour, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    alpha = mel.create_material_expression(m, unreal.MaterialExpressionPerInstanceCustomData, -800, 100)
+    alpha.set_editor_property("data_index", 0)
+    uv = mel.create_material_expression(m, unreal.MaterialExpressionTextureCoordinate, -800, 0)
+    depth = mel.create_material_expression(m, unreal.MaterialExpressionPixelDepth, -800, 200)
+    scene = mel.create_material_expression(m, unreal.MaterialExpressionSceneDepth, -800, 300)
+    where = mel.create_material_expression(m, unreal.MaterialExpressionWorldPosition, -1100, 400)
+    eye = mel.create_material_expression(m, unreal.MaterialExpressionCameraPositionWS, -1100, 500)
+    reach = mel.create_material_expression(m, unreal.MaterialExpressionDistance, -800, 450)
+    mel.connect_material_expressions(where, "", reach, "A")
+    mel.connect_material_expressions(eye, "", reach, "B")
+    custom = mel.create_material_expression(m, unreal.MaterialExpressionCustom, -500, 100)
+    custom.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT1)
+    custom.set_editor_property("description", "GrudgeLap puff")
+    custom.set_editor_property("code", "float rim = length(UV - 0.5) * 2.0; "
+                               "float soft = smoothstep(0.0, 60.0, Scene - Depth); "
+                               "return 0.55 * saturate(1.0 - rim) * Alpha * soft * smoothstep(150.0, 350.0, Reach);")
+    inputs = []
+    for name in ("UV", "Alpha", "Depth", "Scene", "Reach"):
+        entry = unreal.CustomInput()
+        entry.set_editor_property("input_name", name)
+        inputs.append(entry)
+    custom.set_editor_property("inputs", inputs)
+    mel.connect_material_expressions(uv, "", custom, "UV")
+    mel.connect_material_expressions(alpha, "", custom, "Alpha")
+    mel.connect_material_expressions(depth, "", custom, "Depth")
+    mel.connect_material_expressions(scene, "", custom, "Scene")
+    mel.connect_material_expressions(reach, "", custom, "Reach")
+    mel.connect_material_property(custom, "", unreal.MaterialProperty.MP_OPACITY)
+    rough = mel.create_material_expression(m, unreal.MaterialExpressionConstant, -250, 300)
+    rough.set_editor_property("r", 1.0)
+    mel.connect_material_property(rough, "", unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.recompile_material(m)
+    eal.save_loaded_asset(m)
+    return m
 
 
 def skid_material():
@@ -2107,8 +2160,8 @@ def prepare_materials():
         for path in eal.list_assets(root, recursive=True):
             kind = str(eal.find_asset_data(path).asset_class_path.asset_name)
             if kind == "Material" and root == "/Game/GrudgeLap/Materials":
-                if "/M_Decal_" in path or path.endswith("/M_Rain"):
-                    continue   # decals and the rain sheet are neither Nanite nor instanced
+                if "/M_Decal_" in path:
+                    continue   # decals are neither Nanite nor instanced (the rain's streaks are instanced since 0.76)
                 material = eal.load_asset(path)
                 translucent = material.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
                 for usage in USAGES[1:] if translucent else USAGES:

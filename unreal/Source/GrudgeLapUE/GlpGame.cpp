@@ -223,12 +223,51 @@ void AGlpGame::BeginPlay()
 	}
 	Skids->SetCastShadow(false);
 	Skids->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	// Drawn before every other translucent surface: a modulating strip drawn after the smoke or a window would darken
+	// them too (the rear-view mirror's capture showed it).
+	Skids->TranslucencySortPriority = -2;
 	Skids->SetUsingAbsoluteLocation(true);
 	Skids->SetUsingAbsoluteRotation(true);
 	Skids->SetUsingAbsoluteScale(true);
 	Skids->SetupAttachment(GetRootComponent());
 	Skids->RegisterComponent();
 	Skids->SetWorldTransform(FTransform::Identity);
+
+	// The wheels' dust, tyre smoke and spray (0.76): the ring of puffs, all hidden until a wheel throws one. Not in the
+	// ray tracing scene nor the sky's capture: a puff faces the eye and would show as a flat card in a reflection. As
+	// one primitive the puffs sort by the box of all of them: they are put after the car's glass from outside (the
+	// young smoke lies between the camera and the car) and before it from the seat (SyncViews).
+	Puffs = NewObject<UInstancedStaticMeshComponent>(this, TEXT("Puffs"));
+	Puffs->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane")));
+	if (UMaterialInterface* PuffBase = PuffMaterial.LoadSynchronous())
+	{
+		Puffs->SetMaterial(0, PuffBase);
+	}
+	Puffs->SetCastShadow(false);
+	Puffs->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Puffs->TranslucencySortPriority = 1;
+	Puffs->bVisibleInRayTracing = false;
+	Puffs->bVisibleInRealTimeSkyCaptures = false;
+	Puffs->bVisibleInReflectionCaptures = false;
+	Puffs->bAffectDynamicIndirectLighting = false;
+	Puffs->bAffectDistanceFieldLighting = false;
+	Puffs->SetUsingAbsoluteLocation(true);
+	Puffs->SetUsingAbsoluteRotation(true);
+	Puffs->SetUsingAbsoluteScale(true);
+	Puffs->SetNumCustomDataFloats(4);
+	Puffs->SetupAttachment(GetRootComponent());
+	Puffs->RegisterComponent();
+	Puffs->SetWorldTransform(FTransform::Identity);
+	{
+		// Four wheels' dust and smoke, 48 puffs each over a puff's life (the Godot version's PerWheel), their spray and
+		// the traffic's (at most 43 alive per emitter on a streaming road); the oldest give way when it is full.
+		constexpr int32 PuffCapacity = 1536;
+		PuffPool.SetNum(PuffCapacity);
+		PuffTransforms.Init(FTransform(FQuat::Identity, FVector::ZeroVector, FVector::ZeroVector), PuffCapacity);
+		PuffData.Init(0.f, PuffCapacity * 4);
+		Puffs->AddInstances(PuffTransforms, false, true);
+		PuffRandom.Initialize(1989);
+	}
 
 	LoadSettings();
 	// -GlpCar=<catalogue index> drives that car (automation: the off-screen shots of each car, 0.74).
@@ -245,7 +284,7 @@ void AGlpGame::ApplyWeather()
 	// What the credit's weather does to the level (0.13), as WorldBuilder.ApplyWeather does in Godot: under any
 	// weather but a clear day the sun drops to a wide soft source behind the cloud, the clouds close over, the air
 	// thickens and the camera opens up; a wet road darkens and shines through MPC_Weather (the ground materials,
-	// Scripts/build_scene.py); rain is a sheet of streaks round the camera.
+	// Scripts/build_scene.py); rain is streaks falling past the camera (FallRain).
 	UWorld* World = GetWorld();
 	if (!World)
 	{
@@ -355,19 +394,36 @@ void AGlpGame::ApplyWeather()
 	}
 	if (!Rain)
 	{
-		Rain = NewObject<UStaticMeshComponent>(this, TEXT("Rain"));
-		Rain->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder")));
-		if (UMaterialInterface* Sheet = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/GrudgeLap/Materials/M_Rain.M_Rain")))
+		// 3600 streaks, as the Godot version's: each a unit plane scaled to 1.4 cm by 42 cm, its long side upright.
+		Rain = NewObject<UInstancedStaticMeshComponent>(this, TEXT("Rain"));
+		Rain->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane")));
+		if (UMaterialInterface* Streak = RainMaterial.IsNull() ? LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/GrudgeLap/Materials/M_Rain.M_Rain")) : RainMaterial.LoadSynchronous())
 		{
-			Rain->SetMaterial(0, Sheet);
+			Rain->SetMaterial(0, Streak);
 		}
 		Rain->SetCastShadow(false);
 		Rain->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Rain->TranslucencySortPriority = InCockpit() ? -1 : 1;
+		Rain->bVisibleInRayTracing = false;
+		Rain->bVisibleInRealTimeSkyCaptures = false;
+		Rain->bVisibleInReflectionCaptures = false;
 		Rain->bAffectDynamicIndirectLighting = false;
 		Rain->bAffectDistanceFieldLighting = false;
+		Rain->SetUsingAbsoluteLocation(true);
+		Rain->SetUsingAbsoluteRotation(true);
+		Rain->SetUsingAbsoluteScale(true);
 		Rain->SetupAttachment(GetRootComponent());
 		Rain->RegisterComponent();
-		Rain->SetWorldScale3D(FVector(70.0, 70.0, 50.0));
+		Rain->SetWorldTransform(FTransform::Identity);
+		Drops.SetNum(3600);
+		DropTransforms.Init(FTransform(FQuat::Identity, FVector::ZeroVector, FVector::ZeroVector), Drops.Num());
+		Rain->AddInstances(DropTransforms, false, true);
+		DropRandom.Initialize(1965);
+	}
+	if (!bRaining)
+	{
+		bDropsSeeded = false;
+		bRainEyeKnown = false;
 	}
 	Rain->SetVisibility(bRaining);
 	if (WeatherShown != Weather)
@@ -428,6 +484,238 @@ void AGlpGame::ClearSkidMarks()
 	}
 }
 
+void AGlpGame::FallRain(float DeltaSeconds, const FVector& Eye, const FQuat& View)
+{
+	// The Godot version's rain (CameraRig.SetRain and LeadRain, 0.12, 0.53, 0.65): drops let go in a box 32 m across and
+	// a metre deep, 10 m over the eye and 5 m ahead, at 9 to 11 m/s within 1.5 degrees of straight down, a little wind
+	// pushing them on (0.7 m/s2 to Godot's +x) as they gain speed, each living 1.7 s. The box is led by where the eye
+	// will be when the drops reach it: the camera's velocity, smoothed over a fifth of a second (a jump of the view is
+	// not taken for one), times the 1.2 s a drop takes to fall below the eye; ahead of a car at 30 m/s there was
+	// otherwise only fresh rain high up and the air before it looked dry. Each streak turns to the eye about its own
+	// upright axis; the material fades it out within 1.2 to 4.5 m of the eye.
+	if (!Rain || !Rain->IsVisible() || DeltaSeconds <= 0.f || Drops.IsEmpty())
+	{
+		return;
+	}
+	if (bRainEyeKnown)
+	{
+		const FVector Velocity = (Eye - RainEye) / DeltaSeconds;
+		if (Velocity.SizeSquared() < FMath::Square(12000.0))
+		{
+			RainVelocity = FMath::Lerp(RainVelocity, Velocity, FMath::Min(DeltaSeconds / 0.2f, 1.f));
+		}
+	}
+	RainEye = Eye;
+	bRainEyeKnown = true;
+	FVector Ahead = View.GetForwardVector();
+	Ahead.Z = 0.0;
+	Ahead = Ahead.GetSafeNormal(UE_SMALL_NUMBER, FVector::ForwardVector);
+	const FVector Box = Eye + FVector(0.0, 0.0, 1000.0) + Ahead * 500.0 + RainVelocity * 1.2;
+	static const FVector Push = GlpSpace::GodotLocalToUnreal(0.7, -1.5, 0.0);
+	constexpr float Life = 1.7f;
+	auto LetGo = [this, &Box](FDrop& Drop, float Age)
+	{
+		Drop.Position = Box + FVector(DropRandom.FRandRange(-1600.f, 1600.f), DropRandom.FRandRange(-1600.f, 1600.f), DropRandom.FRandRange(-50.f, 50.f));
+		Drop.Velocity = DropRandom.VRandCone(-FVector::UpVector, FMath::DegreesToRadians(1.5f)) * DropRandom.FRandRange(900.f, 1100.f);
+		Drop.Age = Age;
+	};
+	if (!bDropsSeeded)
+	{
+		// Start as if it had been raining: every drop somewhere in its fall.
+		bDropsSeeded = true;
+		for (FDrop& Drop : Drops)
+		{
+			const float Age = DropRandom.FRandRange(0.f, Life);
+			LetGo(Drop, Age);
+			Drop.Position += Drop.Velocity * Age + 0.5 * Push * Age * Age;
+			Drop.Velocity += Push * Age;
+		}
+	}
+	for (int32 i = 0; i < Drops.Num(); i++)
+	{
+		FDrop& Drop = Drops[i];
+		Drop.Age += DeltaSeconds;
+		if (Drop.Age >= Life)
+		{
+			LetGo(Drop, FMath::Fmod(Drop.Age, Life));
+		}
+		Drop.Velocity += Push * DeltaSeconds;
+		Drop.Position += Drop.Velocity * DeltaSeconds;
+		// Upright, its face turned to the eye about the vertical (the plane's +Z towards the eye, its Y up).
+		FVector ToEye = Eye - Drop.Position;
+		ToEye.Z = 0.0;
+		const FQuat Facing = FRotationMatrix::MakeFromYZ(FVector::UpVector, ToEye.GetSafeNormal(UE_SMALL_NUMBER, FVector::ForwardVector)).ToQuat();
+		DropTransforms[i] = FTransform(Facing, Drop.Position, FVector(0.014, 0.42, 1.0));
+	}
+	Rain->BatchUpdateInstancesTransforms(0, DropTransforms, true, false, true);
+}
+
+void AGlpGame::ClearPuffs()
+{
+	for (FPuff& Puff : PuffPool)
+	{
+		Puff.Life = 0.f;
+	}
+	for (int32 w = 0; w < 4; w++)
+	{
+		PuffLast[w].Reset();
+		PuffDue[w][0] = PuffDue[w][1] = PuffDue[w][2] = 0.f;
+	}
+	TrafficSprayDue.Reset();
+	TrafficSprayLast.Reset();
+}
+
+void AGlpGame::ThrowPuffs(float DeltaSeconds, const FVector& Eye)
+{
+	// As the Godot version's WheelDust: dust off the verge and the plain while a wheel runs there faster than 5 m/s, full
+	// at 30; the pale smoke of rubber while a tyre slides hard on the road (its slip intensity, VehicleSim.SlipIntensity,
+	// from 0.55, full at 0.95, less when the car barely moves); on a wet road a fine mist of spray from 8 m/s, full at
+	// 33, by the road's wetness, behind the player's wheels and the traffic's rear wheels (0.62; the core does not
+	// export the puddles' depth, so the spray is not thickened through a puddle as in Godot). A kind's puffs per
+	// emitter over a puff's life at full; each rising at 0.4 to 1.6 m/s within 70 degrees of up, slowed by 1.5 to
+	// 3 m/s2 and carried downwind, growing and thinning out to nothing. None in the replay. -GlpPuffTest throws all
+	// three from every wheel.
+	struct FKind
+	{
+		float Life, Start, End, Lift, Opacity, PerEmitter;
+		FLinearColor Colour;
+	};
+	static const FKind Dust{ 1.6f, 0.6f, 2.2f, 0.f, 0.9f, 48.f, FLinearColor(FColor(148, 135, 117)) };     // sRGB 0.58, 0.53, 0.46
+	static const FKind Smoke{ 2.2f, 0.8f, 3.0f, 15.f, 0.9f, 48.f, FLinearColor(FColor(219, 219, 222)) };   // sRGB 0.86, 0.86, 0.87
+	static const FKind Spray{ 0.8f, 0.35f, 1.3f, 10.f, 0.2f, 96.f, FLinearColor(FColor(184, 191, 199)) };  // sRGB 0.72, 0.75, 0.78
+	static const bool bTest = FParse::Param(FCommandLine::Get(), TEXT("GlpPuffTest"));
+	// Owed puffs of a kind for an emitter that moved from From to To this frame, thrown spread along that path: at
+	// speed a wheel covers half a metre between frames, and in one spot the puffs came out in clumps.
+	auto Throw = [this, DeltaSeconds](const FKind& Kind, const FVector& From, const FVector& To, float Amount, float& Due)
+	{
+		if (Amount <= 0.02f)
+		{
+			Due = 0.f;
+			return;
+		}
+		for (Due += Amount * Kind.PerEmitter / Kind.Life * DeltaSeconds; Due >= 1.f; Due -= 1.f)
+		{
+			FPuff& Puff = PuffPool[PuffNext];
+			PuffNext = (PuffNext + 1) % PuffPool.Num();
+			Puff.Position = FMath::Lerp(From, To, PuffRandom.FRand()) + FVector(0.0, 0.0, Kind.Lift);
+			Puff.Velocity = PuffRandom.VRandCone(FVector::UpVector, FMath::DegreesToRadians(70.f)) * PuffRandom.FRandRange(40.f, 160.f);
+			Puff.Age = 0.f;
+			Puff.Life = Kind.Life;
+			Puff.StartSize = Kind.Start;
+			Puff.EndSize = Kind.End;
+			Puff.Damping = PuffRandom.FRandRange(150.f, 300.f);
+			Puff.Opacity = Kind.Opacity;
+			Puff.Colour = Kind.Colour;
+		}
+	};
+	FGlpCarView* Car = PlayerCar();
+	const float Wet = FMath::Clamp(Current.wetness, 0.f, 1.f);
+	if (Puffs && Car && Car->Root() && Current.phase == GLP_PHASE_DRIVING && DeltaSeconds > 0.f)
+	{
+		const float Speed = FVector(Current.velocity[0], Current.velocity[1], Current.velocity[2]).Size();
+		const FVector Up = Car->Root()->GetActorUpVector();
+		for (int32 w = 0; w < 4; w++)
+		{
+			const FVector Contact = Car->WheelHub(w) - Up * (CarSpec.wheel_radius * 100.f);
+			const FVector From = PuffLast[w].Get(Contact);
+			PuffLast[w] = Contact;
+			const float Slip = FMath::Clamp(FMath::Max(FMath::Abs(Current.wheel_slip_ratio[w]) * 2.5f, FMath::Abs(Current.wheel_slip_angle[w]) * 4.f) - 0.25f, 0.f, 1.f);
+			const bool bRoad = Current.wheel_contact[w] != 0 && Current.wheel_surface[w] == GLP_SURFACE_ROAD;
+			const bool bGrass = Current.wheel_contact[w] != 0 && Current.wheel_surface[w] == GLP_SURFACE_GRASS;
+			Throw(Dust, From, Contact, bTest ? 1.f : bGrass ? FMath::Clamp((Speed - 5.f) / 25.f, 0.f, 1.f) : 0.f, PuffDue[w][0]);
+			Throw(Smoke, From, Contact, bTest ? 1.f : bRoad ? FMath::Clamp((Slip - 0.55f) / 0.4f, 0.f, 1.f) * FMath::Clamp(Speed / 6.f + 0.3f, 0.f, 1.f) : 0.f, PuffDue[w][1]);
+			Throw(Spray, From, Contact, bTest ? 0.45f : bRoad ? Wet * FMath::Clamp((Speed - 8.f) / 25.f, 0.f, 1.f) * 0.45f : 0.f, PuffDue[w][2]);
+		}
+		// The traffic's spray: behind each drone's rear wheels, 0.75 m out from its centre, 1.3 m back, at the road (its
+		// Godot frame); the drones have no wheels in the simulation.
+		const int32 Drones = FMath::Min(TrafficCars.Num(), Bodies.Num());
+		TrafficSprayDue.SetNum(Drones * 2);
+		TrafficSprayLast.SetNum(Drones * 2);
+		for (int32 i = 0; i < Drones; i++)
+		{
+			const AActor* Drone = TrafficCars[i] ? TrafficCars[i]->Root() : nullptr;
+			const float Amount = Drone && (Wet > 0.f || bTest) ? FMath::Max(Wet, bTest ? 1.f : 0.f) * FMath::Clamp((FMath::Abs(Bodies[i].speed) - 8.f) / 25.f, 0.f, 1.f) * 0.45f : 0.f;
+			for (int32 Side = 0; Side < 2; Side++)
+			{
+				const int32 e = i * 2 + Side;
+				if (Amount <= 0.02f)
+				{
+					TrafficSprayLast[e].Reset();
+					TrafficSprayDue[e] = 0.f;
+					continue;
+				}
+				const FVector At = Drone->GetActorTransform().TransformPosition(GlpSpace::GodotLocalToUnreal(Side ? 0.75 : -0.75, -0.5, 1.3));
+				const FVector From = TrafficSprayLast[e].Get(At);
+				TrafficSprayLast[e] = At;
+				Throw(Spray, From, At, Amount, TrafficSprayDue[e]);
+			}
+		}
+	}
+	else
+	{
+		for (int32 w = 0; w < 4; w++)
+		{
+			PuffLast[w].Reset();
+		}
+		for (TOptional<FVector>& Last : TrafficSprayLast)
+		{
+			Last.Reset();
+		}
+	}
+	if (!Puffs)
+	{
+		return;
+	}
+	// The Godot version's particle gravity, (-3.776, 0.25, -1.32) m/s2 in its world frame, downwind (to its -x and -z)
+	// and a little up; Godot's (x, y, z) is Unreal's (x, z, y), not the simulation's mapping (SimToUnreal negates z).
+	static const FVector Drift = GlpSpace::GodotLocalToUnreal(-3.776, 0.25, -1.32);
+	bool bAny = false;
+	for (int32 i = 0; i < PuffPool.Num(); i++)
+	{
+		FPuff& Puff = PuffPool[i];
+		float* Data = &PuffData[i * 4];
+		if (Puff.Life > 0.f)
+		{
+			Puff.Age += DeltaSeconds;
+			if (Puff.Age >= Puff.Life)
+			{
+				Puff.Life = 0.f;
+			}
+		}
+		if (Puff.Life <= 0.f)
+		{
+			PuffTransforms[i] = FTransform(FQuat::Identity, Eye, FVector::ZeroVector);
+			Data[0] = 0.f;
+			continue;
+		}
+		bAny = true;
+		Puff.Velocity += Drift * DeltaSeconds;
+		const double Speed = Puff.Velocity.Size();
+		if (Speed > 0.0)
+		{
+			Puff.Velocity *= FMath::Max(Speed - Puff.Damping * DeltaSeconds, 0.0) / Speed;
+		}
+		Puff.Position += Puff.Velocity * DeltaSeconds;
+		const float T = Puff.Age / Puff.Life;
+		// The plane is a metre across; it faces the eye (its +Z towards it).
+		const FVector ToEye = (Eye - Puff.Position).GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector);
+		PuffTransforms[i] = FTransform(FRotationMatrix::MakeFromZ(ToEye).ToQuat(), Puff.Position, FVector(FMath::Lerp(Puff.StartSize, Puff.EndSize, T)));
+		Data[0] = Puff.Opacity * (1.f - T);
+		Data[1] = Puff.Colour.R;
+		Data[2] = Puff.Colour.G;
+		Data[3] = Puff.Colour.B;
+	}
+	if (!bAny && !bPuffsShown)
+	{
+		return;
+	}
+	bPuffsShown = bAny;
+	// The instance data manager sends the changed instances and their bounds at the end of the frame; marking the
+	// render state dirty as well rebuilt the whole scene proxy every frame.
+	Puffs->BatchUpdateInstancesTransforms(0, PuffTransforms, true, false, true);
+	Puffs->SetCustomData(0, PuffPool.Num() - 1, PuffData, false);
+}
+
 void AGlpGame::LaySkidMarks()
 {
 	// As the Godot version's SkidMarks: a wheel on the road marks it from 0.32 of its slip intensity (the squeal's measure,
@@ -474,7 +762,8 @@ void AGlpGame::LaySkidMarks()
 			}
 			else
 			{
-				Skids->UpdateInstanceTransform(SkidNext, Strip, true, true);
+				// Teleported, and through the instance data manager rather than a rebuild of the 6000-strip proxy.
+				Skids->UpdateInstanceTransform(SkidNext, Strip, true, false, true);
 			}
 			SkidNext = (SkidNext + 1) % Capacity;
 		}
@@ -510,6 +799,7 @@ void AGlpGame::NewSession()
 	}
 	bInsideShown = false;
 	ClearSkidMarks();
+	ClearPuffs();
 	const FEyePoint& Eye = EyePoints[FMath::Clamp(CarSpec.style, 0, (int32)UE_ARRAY_COUNT(EyePoints) - 1)];
 	Rig.Eye = FVector3f(-0.38f, Eye.Height - CarSpec.cg_height, Eye.Back);
 	// A prepared model's own eye (GLP.Eye, build_scene.py), as CarView takes the model's Eye node (0.74): the cockpit
@@ -738,11 +1028,6 @@ void AGlpGame::Tick(float DeltaSeconds)
 		return;
 	}
 	Time += DeltaSeconds;
-	if (Rain && Rain->IsVisible() && Camera)
-	{
-		// The rain sheet stays round the camera, upright whatever the car does.
-		Rain->SetWorldLocationAndRotation(Camera->GetComponentLocation() - FVector(0.0, 0.0, 600.0), FQuat::Identity);
-	}
 	if (bFrameCap && Time >= FrameCapCheck)
 	{
 		// The window may have lost the focus or moved to a screen with another refresh rate.
@@ -828,6 +1113,12 @@ void AGlpGame::Tick(float DeltaSeconds)
 	{
 		SaveBestLap();
 		BuildGhost();
+	}
+	if (Event(Current, GLP_EVENT_KNOCKED))
+	{
+		// The head is thrown towards what the car struck (the game's ShowKnock: Jolt(-push), push = -ToGodot(normal));
+		// knock_normal is in the simulation's car frame (z forward), the rig's in Godot's (z back).
+		Rig.AddJolt(FVector3f(Current.knock_normal[0], Current.knock_normal[1], -Current.knock_normal[2]), Current.knock_speed);
 	}
 	if (Current.events & ((1u << GLP_EVENT_SIGN_HIT) | (1u << GLP_EVENT_COW_HIT) | (1u << GLP_EVENT_CRASHED)))
 	{
@@ -1045,6 +1336,16 @@ void AGlpGame::SyncViews(float DeltaSeconds)
 	if (bInside != bInsideShown)
 	{
 		Car->SetInside(bInside);
+		if (Puffs)
+		{
+			// From the seat every puff is beyond the glass; from outside the young smoke is between the eye and the car.
+			Puffs->SetTranslucentSortPriority(bInside ? -1 : 1);
+		}
+		if (Rain)
+		{
+			// The rain too: beyond the windscreen from the seat, between the eye and the car from outside.
+			Rain->SetTranslucentSortPriority(bInside ? -1 : 1);
+		}
 		ShowSideMirrors(bInside);
 		bInsideShown = bInside;
 	}
@@ -1076,6 +1377,8 @@ void AGlpGame::SyncViews(float DeltaSeconds)
 
 	SyncTrafficAndTrain(DeltaSeconds);
 	LaySkidMarks();
+	ThrowPuffs(DeltaSeconds, Shot.Location);
+	FallRain(DeltaSeconds, Shot.Location, Shot.Rotation);
 	if (Ghost)
 	{
 		const bool bVisible = Current.ghost_visible && Current.phase == GLP_PHASE_DRIVING;

@@ -56,6 +56,17 @@ public:
 	UPROPERTY(EditAnywhere, Category = "GrudgeLap")
 	TSoftObjectPtr<UMaterialInterface> SkidMaterial;
 
+	/** M_Puff: the wheels' dust, tyre smoke and spray, soft lit puffs turned to the camera (0.76). */
+	UPROPERTY(EditAnywhere, Category = "GrudgeLap")
+	TSoftObjectPtr<UMaterialInterface> PuffMaterial;
+
+	/**
+	 * M_Rain: the rain's streaks, lit, faint, gone near the eye. A soft reference so that the packaged game cooks it:
+	 * loaded by its path alone it was left out of the 0.75 package, which showed no rain.
+	 */
+	UPROPERTY(EditAnywhere, Category = "GrudgeLap")
+	TSoftObjectPtr<UMaterialInterface> RainMaterial;
+
 	// What the HUD shows.
 	bool HasSession() const { return Session != 0; }
 	const glp_state& State() const { return Current; }
@@ -130,6 +141,38 @@ private:
 	void LaySkidMarks();
 	void ClearSkidMarks();
 
+	/**
+	 * The wheels' dust, tyre smoke and wet-road spray (0.76): a fixed ring of puffs, each a unit plane the game moves,
+	 * grows, fades and turns to the camera every frame (a CPU particle system: a Niagara system cannot be authored from
+	 * the level's build script). A slot whose puff has died is a zero-scale instance.
+	 */
+	UPROPERTY()
+	TObjectPtr<class UInstancedStaticMeshComponent> Puffs;
+	struct FPuff
+	{
+		FVector Position = FVector::ZeroVector;    // cm
+		FVector Velocity = FVector::ZeroVector;    // cm/s
+		float Age = 0.f;                            // s
+		float Life = 0.f;                           // s; 0 for a free slot
+		float StartSize = 0.f;                      // m across
+		float EndSize = 0.f;
+		float Damping = 0.f;                        // cm/s2 off its speed
+		float Opacity = 0.f;
+		FLinearColor Colour = FLinearColor::White;  // linear
+	};
+	TArray<FPuff> PuffPool;
+	TArray<FTransform> PuffTransforms;
+	TArray<float> PuffData;
+	int32 PuffNext = 0;
+	float PuffDue[4][3] = {};                       // puffs owed per wheel: dust, smoke, spray
+	TOptional<FVector> PuffLast[4];
+	TArray<float> TrafficSprayDue;                  // per drone, its left and right rear wheel
+	TArray<TOptional<FVector>> TrafficSprayLast;
+	bool bPuffsShown = false;
+	FRandomStream PuffRandom;
+	void ThrowPuffs(float DeltaSeconds, const FVector& Eye);
+	void ClearPuffs();
+
 	/** The outside mirrors of the player's car: their own polished glass from outside, the mirror's view from the seat. */
 	TArray<TWeakObjectPtr<UStaticMeshComponent>> SideMirrors;
 	UPROPERTY()
@@ -191,9 +234,24 @@ private:
 	bool bInsideShown = false;   // the player's car is drawn for the driver's seat (FGlpCarView::SetInside)
 	uint32 MirrorFrame = 0;
 
-	// The weather (ApplyWeather): the level's own values, kept for a clear day, and the rain sheet round the camera.
+	// The weather (ApplyWeather): the level's own values, kept for a clear day, and the rain's streaks (FallRain).
 	UPROPERTY()
-	TObjectPtr<UStaticMeshComponent> Rain;
+	TObjectPtr<class UInstancedStaticMeshComponent> Rain;
+	struct FDrop
+	{
+		FVector Position = FVector::ZeroVector;   // cm
+		FVector Velocity = FVector::ZeroVector;   // cm/s
+		float Age = 0.f;                           // s
+	};
+	TArray<FDrop> Drops;
+	TArray<FTransform> DropTransforms;
+	FRandomStream DropRandom;
+	FVector RainEye = FVector::ZeroVector;
+	FVector RainVelocity = FVector::ZeroVector;
+	bool bRainEyeKnown = false;
+	bool bDropsSeeded = false;
+	/** Moves the streaks and hangs fresh ones in the box above and ahead of the eye (View the camera's rotation). */
+	void FallRain(float DeltaSeconds, const FVector& Eye, const FQuat& View);
 	UPROPERTY()
 	TObjectPtr<UMaterialInterface> CloudMaterial;   // the level's cloud material, put back on a clear day
 	float SunLux = -1.f;

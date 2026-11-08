@@ -13,8 +13,9 @@ struct FGlpShot
 
 /**
  * The game's camera rig (CameraRig.cs). From the driver's seat the head lags the car (it sways out of a corner
- * and nods under braking), the view picks up a few millimetres of road jitter and widens a little at speed;
- * the chase camera trails the car on a spring; the replay looks down from a crane.
+ * and nods under braking), the view picks up a few millimetres of road vibration and widens a little at speed;
+ * a knock throws the head and it springs back; the chase camera trails the car on a spring, rising towards the
+ * loop's centre as the car tilts on its wall; the replay looks down from a crane.
  */
 class FGlpCameraRig
 {
@@ -35,6 +36,12 @@ public:
 	 */
 	FGlpShot Follow(const FTransform& Car, float SpeedMps, const FVector2f& Acceleration, float Roughness, float DeltaSeconds);
 
+	/**
+	 * A knock felt in the seat (CameraRig.Jolt): the head is thrown along Push (the car's Godot frame: right, up,
+	 * back) by a few centimetres for a hard one, and springs back within half a second. Speed is the closing speed.
+	 */
+	void AddJolt(const FVector3f& Push, float Speed);
+
 	/** The replay's crane over the recorded pose: simulation position and forward axis (metres). */
 	FGlpShot Replay(const FVector& SimPosition, const FVector& SimForward) const;
 
@@ -42,5 +49,9 @@ private:
 	FVector3f Head = FVector3f::ZeroVector;
 	FVector ChaseEye = FVector::ZeroVector;
 	bool bChaseSet = false;
-	FRandomStream Random{3};
+	// The seat's vibration runs on its own clock through smooth noise (CameraRig 0.36).
+	float VibrationTime = 0.f;
+	// The knock's jolt: the eye's offset in the car's Godot frame and its velocity, on a stiff, well-damped spring.
+	FVector3f JoltOffset = FVector3f::ZeroVector;
+	FVector3f JoltVelocity = FVector3f::ZeroVector;
 };

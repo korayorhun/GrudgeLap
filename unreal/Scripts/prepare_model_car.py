@@ -368,6 +368,99 @@ class Merger:
         builder.doc.setdefault("meshes", []).append({"name": name, "primitives": primitives})
         return len(builder.doc["meshes"]) - 1
 
+    def drop_inner_panes(self, eye):
+        """Keeps one face of each window the model draws as two parallel layers (0.76): the level's glass is a thin
+        translucent surface standing for a whole pane, both its faces, so a pane modelled as its inner and outer faces
+        let the light through it twice. Through the Testarossa's windscreen, raked 72 degrees to the eye's line, the
+        road came out at a ninth of its light (measured against the cockpit with the glass hidden), where one layer lets
+        through about a third, as the 458's and the McLaren's single-layer screens do; the BRZ, the saloon and the
+        turbo hatch had the same doubled glass. Only the outermost face stays; the game's own glass only, every
+        material of it at once (the turbo hatch's rear window has its two faces in two materials named GLP_Glass)."""
+        glass = [m for m, bucket in self.buckets.items()
+                 if m >= 0 and bucket["indices"] and (self.model["materials"][m].get("name") or "").startswith("GLP_Glass")]
+        if not glass:
+            return 0
+        every, owner, base = [], [], 0
+        for material in glass:
+            bucket = self.buckets[material]
+            every.append((np.vstack(bucket["position"]).astype(np.float64),
+                          np.concatenate(bucket["indices"]).astype(np.int64).reshape(-1, 3) + base))
+            owner.append(np.full(len(every[-1][1]), material))
+            base += len(every[-1][0])
+        inner = inner_layer(np.vstack([p for p, _ in every]), np.vstack([t for _, t in every]), np.asarray(eye, np.float64))
+        owner = np.concatenate(owner)
+        dropped = 0
+        for material in glass:
+            bucket = self.buckets[material]
+            positions = np.vstack(bucket["position"]).astype(np.float64)
+            triangles = np.concatenate(bucket["indices"]).astype(np.int64).reshape(-1, 3)
+            keep = ~inner[owner == material]
+            if keep.all():
+                continue
+            dropped += int((~keep).sum())
+            triangles = triangles[keep]
+            if not len(triangles):
+                # A material that held only inner faces goes whole.
+                del self.buckets[material]
+                continue
+            used = np.unique(triangles)
+            remap = np.full(len(positions), -1, np.int64)
+            remap[used] = np.arange(len(used))
+            for key in ("position", "normal", "uv0", "uv1", "colour"):
+                bucket[key] = [np.vstack(bucket[key])[used]]
+            bucket["indices"] = [remap[triangles].astype(np.uint32).ravel()]
+            bucket["count"] = len(used)
+        return dropped
+
+
+def inner_layer(positions, triangles, eye, reach=0.035, cell=0.1):
+    """Which triangles are an inner face of a pane drawn as parallel layers: a ray from a triangle's centre along its
+    normal, either way, meets a near-parallel triangle of the same glass within reach (3.5 cm; the models' panes are
+    1 to 28 mm thick) lying farther from the driver's eye. Any such twin, not only the nearest, so that of three
+    layers only the outermost stays. Candidates come from a grid of cells, each triangle filed in every cell its box,
+    grown by reach, touches."""
+    a, b, c = (positions[triangles[:, k]] for k in range(3))
+    e1, e2 = b - a, c - a
+    normal = np.cross(e1, e2)
+    length = np.linalg.norm(normal, axis=1)
+    valid = np.nonzero(length > 1e-12)[0]
+    unit = normal / np.maximum(length, 1e-12)[:, None]
+    centre = (a + b + c) / 3.0
+    low = np.floor((np.minimum(np.minimum(a, b), c) - reach) / cell).astype(np.int64)
+    high = np.floor((np.maximum(np.maximum(a, b), c) + reach) / cell).astype(np.int64)
+    filed = {}
+    for t in valid:
+        for x in range(low[t, 0], high[t, 0] + 1):
+            for y in range(low[t, 1], high[t, 1] + 1):
+                for z in range(low[t, 2], high[t, 2] + 1):
+                    filed.setdefault((x, y, z), []).append(t)
+    home = np.floor(centre / cell).astype(np.int64)
+    sources = {}
+    for t in valid:
+        sources.setdefault(tuple(home[t]), []).append(t)
+    inner = np.zeros(len(triangles), bool)
+    for key, members in sources.items():
+        s = np.array(members)
+        targets = np.array(filed.get(key, []))
+        if len(targets) == 0:
+            continue
+        # Moller-Trumbore, every source's ray against every target triangle of its cell; t is signed along the normal.
+        d = unit[s][:, None, :]
+        h = np.cross(d, e2[targets][None])
+        det = (e1[targets][None] * h).sum(-1)
+        ok = (np.abs(det) > 1e-12) & (np.abs(unit[s] @ unit[targets].T) > 0.95) & (s[:, None] != targets[None, :])
+        f = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
+        offset = centre[s][:, None, :] - a[targets][None]
+        u = f * (offset * h).sum(-1)
+        q = np.cross(offset, e1[targets][None])
+        v = f * (q * d).sum(-1)
+        t = f * (q * e2[targets][None]).sum(-1)
+        hit = ok & (u >= -1e-6) & (v >= -1e-6) & (u + v <= 1.0 + 1e-6) & (np.abs(t) > 5e-4) & (np.abs(t) <= reach)
+        # A twin sits at centre + t * normal: farther from the eye when that step points away from it.
+        farther = hit & (((centre[s] - eye) * unit[s]).sum(1)[:, None] * t > 0)
+        inner[s[farther.any(1)]] = True
+    return inner
+
 
 def compact(doc, blob):
     """The binary chunk with only what the remaining meshes and images use: the model's own meshes, baked into new ones,
@@ -504,8 +597,9 @@ def main():
     count = {"body": 0, "glass": 0}
     glass_materials = {i for i, m in enumerate(model.get("materials", [])) if glassy(m)}
 
-    def baked(label, items):
-        """One node per kind of surface: the opaque parts (Nanite) and the glass (translucent, which Nanite cannot draw)."""
+    def baked(label, items, eye=None):
+        """One node per kind of surface: the opaque parts (Nanite) and the glass (translucent, which Nanite cannot draw).
+        With the driver's eye (the body), a window drawn as two layers keeps the outer one (Merger.drop_inner_panes)."""
         opaque, glass = Merger(model, model_blob), Merger(model, model_blob)
         for i, matrix in items:
             mesh = model["meshes"][model["nodes"][i]["mesh"]]
@@ -516,6 +610,8 @@ def main():
                     model["meshes"].append({"primitives": primitives})
                     target.add(len(model["meshes"]) - 1, matrix)
                     model["meshes"].pop()
+        if eye is not None:
+            count["inner panes"] = glass.drop_inner_panes(eye)
         nodes = []
         for prefix, merger in (("Mdl_", opaque), ("Mdl_Glass_", glass)):
             mesh = merger.build(b, prefix + label, offsets["materials"])
@@ -528,7 +624,8 @@ def main():
     children = []
 
     # The body, its cabin and whatever else hangs on it (arch liners, the plate), baked in the car's frame.
-    body = baked("Body", [(i, worlds[i]) for name, c in top.items() if name not in special for i in mesh_nodes(model, c)])
+    body = baked("Body", [(i, worlds[i]) for name, c in top.items() if name not in special for i in mesh_nodes(model, c)],
+                 worlds[top["Eye"]][:3, 3] if "Eye" in top else None)
     children.append(b.node("ModelBody", None, None, body))
 
     # The wheels on their hubs, each spinning in a Spin node of its own; another car's model is fitted to these tyres.
@@ -585,7 +682,7 @@ def main():
     prune(doc)
     save(target, doc, compact(doc, b.blob))
     print(f"{car}: {os.path.basename(path)}{' (fitted to this car)' if key != car else ''}: {count['body']} body mesh node(s), "
-          f"{count['glass']} glass, steering {'yes' if 'Steering' in top else 'no'}, eye {'yes' if 'Eye' in top else 'no'}, "
+          f"{count['glass']} glass ({count.get('inner panes', 0)} inner pane triangles dropped), steering {'yes' if 'Steering' in top else 'no'}, eye {'yes' if 'Eye' in top else 'no'}, "
           f"dials {'yes' if 'Dials' in top else 'no'}, mirror {mirror_key or 'none'} -> {target}")
 
 
