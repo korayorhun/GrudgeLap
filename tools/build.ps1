@@ -25,6 +25,9 @@ if (-not $SkipTests) {
     if ($LASTEXITCODE -ne 0) { throw "tests failed" }
     dotnet test "$root/audio.tests/GrudgeLap.Audio.Tests.csproj" --nologo -v q
     if ($LASTEXITCODE -ne 0) { throw "audio tests failed" }
+    # The updater's download and release feed against an in-process stand-in for GitHub (loopback, about 10 s).
+    dotnet test "$root/update.tests/GrudgeLap.Update.Tests.csproj" --nologo -v q
+    if ($LASTEXITCODE -ne 0) { throw "update tests failed" }
 }
 
 dotnet build "$root/game/GrudgeLap.csproj" -c Release --nologo -v q

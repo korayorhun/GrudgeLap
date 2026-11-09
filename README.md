@@ -78,12 +78,18 @@ Or download `GrudgeLap-Setup-x.y.z.exe` (per-user install, no admin rights) or t
 `data_GrudgeLap_windows_x86_64` folder must stay next to it) from **[Releases](https://github.com/korayorhun/GrudgeLap/releases/latest)**. The
 package is not code-signed yet, so SmartScreen may say "unrecognized app": *More info → Run anyway*.
 
-**Auto-update:** every start the game asks GitHub Releases for a newer version; if there is one it downloads
-it in the background, checks its SHA-256 and, as soon as you are on the title screen (or the credit is over),
-installs it (the installed copy silently, the portable copy by unpacking over itself) and restarts on the new
-version, so an opened copy is always the latest. `F10` applies a ready update at once, or asks again. Nothing is
-sent anywhere. Under `[update]` in `%APPDATA%\Godot\app_userdata\GrudgeLap\settings.cfg`, `auto=false` goes
-back to only offering the update (then `F10` takes it) and `enabled=false` switches the check off.
+**Auto-update:** every start the game asks GitHub Releases for a newer version (the release's small `update.json`
+first, GitHub's API only when that is missing); if there is one it downloads it in the background, carrying on
+where it stopped when the connection drops (at the next start too), checks its size and SHA-256 and, as soon as you
+are on the title screen (or the credit is over and your initials are in), installs it (the installed copy through its
+own installer, silently; the portable copy by unpacking over itself) and restarts on the new version, so an opened
+copy is always the latest. `F10` applies a ready update at once, or asks again. What the updater is doing, and why
+when something fails, is shown on the title screen and over the race, and every step goes to `update.log` in
+`%APPDATA%\Godot\app_userdata\GrudgeLap` (never a proxy's password); an update that does not install twice is left to
+you (`F10` then opens its release page), and so is a download your antivirus removes or blocks: the game names the
+antivirus and does not download that version again until the next start. Nothing is sent anywhere. Under `[update]` in `settings.cfg` there, `auto=false` goes back to only
+offering the update (then `F10` takes it) and `enabled=false` switches the check at start off. A copy of 0.76 or
+older reaches this updater through its own once; if that keeps failing, install the latest `GrudgeLap-Setup` by hand.
 
 Starts windowed (1600x900); `F11` toggles full screen. Needs a Vulkan-capable GPU (any from the last ten years).
 One copy runs per computer: starting it again brings the running game to the front.
