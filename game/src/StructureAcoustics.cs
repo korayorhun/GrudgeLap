@@ -31,7 +31,10 @@ internal sealed class StructureAcoustics
 
     private readonly List<RoadFrame> _decks = [];
     private readonly Dictionary<TrackPath, List<float>> _joints = [];
+    // The echo's share, 0 in the open and while the car is not heard (silent); and how far the car is under a deck, heard
+    // or not (Covered).
     private float _amount;
+    private float _covered;
     private float _height = 6f;
     private TrackPath? _lastPath;
     private float _lastDistance;
@@ -43,7 +46,13 @@ internal sealed class StructureAcoustics
     public static bool Log { get; set; }
 
     /// <summary>How far the car is under a deck, smoothed: 0 in the open, 1 beneath one (0.54: no rain on the roof there).</summary>
-    public float Covered => _amount;
+    /// <remarks>
+    /// The deck over the car whether or not the car is heard (0.77). Until 0.77 it was the echo's share, which a silent
+    /// update takes to 0, and since 0.72 a finished credit is silent: one that ran out under a deck in the rain had the
+    /// roof drumming from the seat and the rain outside 5 dB up for the whole game-over screen (measured standing under
+    /// the speed route's overpass: the rain above 1 kHz 11 dB up).
+    /// </remarks>
+    public float Covered => _covered;
 
     public StructureAcoustics(TrackGeometry track)
     {
@@ -107,10 +116,12 @@ internal sealed class StructureAcoustics
             var over = deck.Origin.Y - position.Y;
             if (over > 2.5f && over < 30f) gap = MathF.Min(gap, over);
         }
-        var target = !silent && gap < 30f ? 1f : 0f;
+        var under = gap < 30f ? 1f : 0f;
+        var target = silent ? 0f : under;
         if (Log && (target > 0f) != _wasUnder) GD.Print(target > 0f ? $"acoustics: under a deck {gap:0.0} m up, echo {MathF.Max(gap - Underside, 0.8f) * 2f / SoundSpeed * 1000f:0} ms" : "acoustics: out from under the deck");
         _wasUnder = target > 0f;
         _amount += (target - _amount) * MathUtil.Clamp01(dt * 10f);
+        _covered += (under - _covered) * MathUtil.Clamp01(dt * 10f);
         if (gap < 30f) _height = gap;
         var index = AudioServer.GetBusIndex(BusName);
         if (index >= 0 && AudioServer.GetBusEffectCount(index) >= 2

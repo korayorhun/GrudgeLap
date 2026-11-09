@@ -35,6 +35,10 @@ internal sealed partial class EngineAudio : Node
     private float _bleep;
     private float _bleepPhase;
     private bool _running;
+    // The 1989 engine's level, 1 while it runs, dying away over SynthRelease once it stops being heard (0.77, Fill).
+    private float _synthLevel;
+    /// <summary>The 1989 engine's fall per sample once stopped: a quarter of a second's time constant, as GranularEngine's level.</summary>
+    private static readonly float SynthRelease = MathF.Exp(-1f / (0.25f * MixRate));
     private float _moo, _mooPhase, _mooPitch;
     private float _clang, _clangPhase, _clangPhase2;
     private float _trainLevel, _trainClock;
@@ -80,7 +84,10 @@ internal sealed partial class EngineAudio : Node
     public float Covered => _acoustics?.Covered ?? 0f;
     private float _rainLp, _rainLp2;
     private float _lastLoad;
-    private readonly float[] _lastCompression = new float[4];
+    // The car the voices last heard (0.77): a new session's car takes nothing over from it (Update).
+    private VehicleSim? _car;
+    // Each wheel's suspension travel at the last update, NaN when there is no reading to take a jolt from (Update).
+    private readonly float[] _lastCompression = [float.NaN, float.NaN, float.NaN, float.NaN];
     private readonly List<float> _popsPending = new();   // seconds until each scheduled pop
     private AudioStreamPlayer? _pops;
     private AudioStreamPlayer? _crashTakes;
@@ -502,6 +509,10 @@ internal sealed partial class EngineAudio : Node
         // through the replay and a finished credit's score (the owner, 8 November 2026: "the last sound of the game
         // stays stuck"; measured: a credit that ran out at 91 km/h held -14 dB of roar to the end of the recording).
         var live = !paused && session.Phase is SessionPhase.StartEngine or SessionPhase.Driving;
+        // A new session's car takes nothing over from the last one (0.77): neither its suspension's travel (the jolt
+        // below) nor the pops its exhaust had still to fire.
+        var newCar = !ReferenceEquals(car, _car);
+        _car = car;
         // The echo under a deck and the joints at its ends (0.40); none in 1989 mode, nor in the replay.
         if (!ReferenceEquals(_acousticsTrack, session.Track))
         {
@@ -598,9 +609,13 @@ internal sealed partial class EngineAudio : Node
             _clunkPhase = 0f;
         }
         _lastGear = gear;
-        // The train's clack of 1989 mode is heard when it runs within a couple of hundred metres.
+        // The train's clack of 1989 mode is heard when it runs within a couple of hundred metres, and only while the credit
+        // runs, as the placed steam of the other look is (WorldAudio.UpdateTrain): the replay, a finished credit and the
+        // title leave the train standing where it was with Running still set. Until 0.77 the clack went on at that level
+        // through the replay's tune and the game-over screen (a credit run out at the crossing with the train 49 m off
+        // held -35 dBFS of clack to the end of the recording, and the train that hit the car clacked over the replay).
         var trainTarget = 0f;
-        if (session.Track.Train is { Running: true } train)
+        if (session.Phase is SessionPhase.StartEngine or SessionPhase.Driving && session.Track.Train is { Running: true } train)
         {
             var nearest = float.MaxValue;
             foreach (var c in train.Cars) nearest = MathF.Min(nearest, SN.Vector3.Distance(c, car.Position));
@@ -609,12 +624,22 @@ internal sealed partial class EngineAudio : Node
         _trainLevel += (trainTarget - _trainLevel) * MathUtil.Clamp01(dt * 3f);
 
         // The wind is TyreAudio's (BodyNoise), calibrated against the tyres' roar; 1989 mode has none, as the cabinet had none.
-        // A sudden change of suspension travel is a bump: a low thump, louder for a harder hit.
+        // A sudden change of suspension travel is a bump: a low thump, louder for a harder hit; taken only between two states
+        // the simulation stepped the same car through (0.77). A car just placed (VehicleSim.Reset: a new session's car, or
+        // one put back on the road after the replay or off the road) has no wheel on the ground and yet is not in the air,
+        // which no step leaves it: its travel of 0 then is no reading, and the first one after it starts afresh. Until 0.77
+        // the jolt was taken across a placing: the old car's sag of about 0.1 m against the new car's 0 played a full thump
+        // on the title after NEW GAME (6 m/s against the 0.8 that sounds one), and 0 against the sag another at the first
+        // turn of the key after every placing: the start of every credit, the replay's end and a re-spot off the road
+        // (measured at the replay's end: 5.6 m/s as the car was set down, 5.7 at the key a frame later, 48 Hz at -17 dBFS).
+        var placed = !car.Airborne;
+        foreach (var w in car.Wheels) placed &= !w.InContact;
+        if (newCar || placed) System.Array.Fill(_lastCompression, float.NaN);
         var jolt = 0f;
-        for (var i = 0; i < 4 && i < car.Wheels.Length; i++)
+        for (var i = 0; i < 4 && i < car.Wheels.Length && !placed; i++)
         {
             var c = car.Wheels[i].InContact ? car.Wheels[i].Compression : 0f;
-            if (dt > 0f) jolt = MathF.Max(jolt, MathF.Abs(c - _lastCompression[i]) / dt);
+            if (dt > 0f && !float.IsNaN(_lastCompression[i])) jolt = MathF.Max(jolt, MathF.Abs(c - _lastCompression[i]) / dt);
             _lastCompression[i] = c;
         }
         if (jolt > 0.8f) _thump = MathF.Max(_thump, MathUtil.Clamp01((jolt - 0.8f) / 2.5f));
@@ -631,6 +656,10 @@ internal sealed partial class EngineAudio : Node
                 at += 0.08f + 0.16f * (float)_random.NextDouble();
             }
         }
+        // The pops are the running engine's (0.77): once it is not heard (the crash has stopped it, the time is up, a pause)
+        // or another car is, those still to come are dropped. Until 0.77 they fired on for up to 760 ms after the lift, over
+        // the wreck, a finished credit's frozen car or the next session's title.
+        if (!_running || newCar) _popsPending.Clear();
         for (var i = _popsPending.Count - 1; i >= 0; i--)
         {
             _popsPending[i] -= dt;
@@ -643,7 +672,7 @@ internal sealed partial class EngineAudio : Node
         _sampled.Interior = Interior;
         _sampled.Update(_follower.Rpm, _follower.Load, _follower.Cut, _running, muted: Retro);
         _tyres.Interior = Interior;
-        _tyres.Update(session, dt, muted: Retro || !live, running: _running);
+        _tyres.Update(session, dt, muted: Retro || !live);
         Fill();
     }
 
@@ -653,12 +682,16 @@ internal sealed partial class EngineAudio : Node
         var frames = _playback.GetFramesAvailable();
         if (frames <= 0) return;
 
-        // Twelve cylinders fire six times per revolution; the fundamental is rpm / 60 * 6.
-        var frequency = _running ? _follower.Rpm / 60.0 * 6.0 : 0.0;
+        // Twelve cylinders fire six times per revolution; the fundamental is rpm / 60 * 6. While the voice dies away (below)
+        // it keeps to the follower's revs, as the sampled engine's pulses do: held at a time-out or a pause, which leave the
+        // engine where it was, falling at a crash or a stall, which stop it (measured at the train's blow with the car
+        // idling: from 93 Hz to 23 Hz in a tenth of a second, under the crash's noise).
+        var frequency = _follower.Rpm / 60.0 * 6.0;
         var step = frequency / MixRate;
         // The synthesised engine only plays in 1989 mode; otherwise the recordings carry the engine note.
         var load = _synthLoad;
-        var engineGain = _running && Retro ? 0.22f + 0.28f * load : 0f;
+        var engineGain = 0.22f + 0.28f * load;
+        var synthOn = _running && Retro;
         var cutoff = 0.08f + 0.5f * load; // one-pole low-pass opens with the throttle: the "wide open" growl
         var buffer = new Vector2[frames];
         // The turbo for the whole block at once; silent in 1989 mode, which had no turbo.
@@ -679,7 +712,11 @@ internal sealed partial class EngineAudio : Node
             // Pulse train with a bit of second-harmonic rasp; soft-clipped so it never spikes.
             var pulse = MathF.Exp(-p * 9f) * 2f - 0.25f + 0.35f * MathF.Sin(p * MathF.Tau * 2f);
             _lowpass += (pulse - _lowpass) * cutoff;
-            var engine = MathF.Tanh(_lowpass * 1.6f) * engineGain;
+            // It starts at once, as it always did, and stops as the sampled engine does, dying away over a quarter of a
+            // second (0.77): until 0.77 it was cut from one sample to the next once the car stopped being driven, under the
+            // game-over tune's first note at a time-out (its partials fell 12 dB within 20 ms; now within 300 ms).
+            _synthLevel = synthOn ? 1f : _synthLevel > 1e-4f ? _synthLevel * SynthRelease : 0f;
+            var engine = MathF.Tanh(_lowpass * 1.6f) * engineGain * _synthLevel;
 
             var noise = (float)(_random.NextDouble() * 2.0 - 1.0);
             // Resonant band-pass around 1.6 kHz for tyre squeal.

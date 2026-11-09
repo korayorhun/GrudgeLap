@@ -44,6 +44,10 @@ internal sealed partial class TyreAudio : Node
     // The tyres' gain, eased towards Volume or silence (0.72): muted now also while the car stands frozen (the replay,
     // a finished credit), and a sliding tyre's scrub cut off in one frame clicked.
     private float _level;
+    // The body's noises' gain (0.77): eased towards the same target at the same rate, per sample (FillBody).
+    private float _bodyLevel;
+    /// <summary>The body's gain's step towards its target per sample: the loops' rate, 12 a second.</summary>
+    private static readonly float BodyFollow = 1f - MathF.Exp(-12f / MixRate);
     /// <summary>Heard from the driver's seat: the wind at the pillars, the gears through the tunnel, the anti-lock pump through the pedal.</summary>
     public bool Interior { get; set; }
 
@@ -91,9 +95,9 @@ internal sealed partial class TyreAudio : Node
 
     /// <summary>
     /// Reads the four wheels and sets the loops and the body's noises; <paramref name="muted"/> silences them (1989 mode
-    /// uses the synthesised squeal), <paramref name="running"/> is whether the engine turns the gears.
+    /// uses the synthesised squeal).
     /// </summary>
-    public void Update(RaceSession session, float dt, bool muted, bool running)
+    public void Update(RaceSession session, float dt, bool muted)
     {
         var car = session.Car;
         var spec = car.Spec;
@@ -129,11 +133,23 @@ internal sealed partial class TyreAudio : Node
             _echoes = new RoadsideEchoes(session.Track);
             _echoesTrack = session.Track;
         }
-        FillBody(car, muted, running);
+        FillBody(car, target);
     }
 
-    /// <summary>Tops up the generator with the body's noises for the car's state.</summary>
-    private void FillBody(VehicleSim car, bool muted, bool running)
+    /// <summary>
+    /// Tops up the generator with the body's noises for the car's state, at a gain that follows <paramref name="target"/>
+    /// (the loops') at the loops' rate, so that they are muted with the loops and fade as the loops do.
+    /// </summary>
+    /// <remarks>
+    /// Until 0.77 a muted car's noises were silenced from one chunk to the next (its state zeroed and every chunk taken to
+    /// nothing), the cut the loops' easing had been made against: the wind, the gears' whine and the anti-lock pump stopped
+    /// within a sample when the car stopped being driven. At a time-out at 126 km/h the band above 4 kHz, which the wind
+    /// carries there, fell 12 dB within 20 ms; now it takes 190 ms, as the roar. The state is the car's own all the while
+    /// and the gain alone mutes it. The gain moves per sample rather than per frame: a frame may top up many chunks at once
+    /// (seven under the dummy driver of the hidden runs, which drains the generator 80 ms at a time, or after a long frame),
+    /// and a level held across them stepped from one frame's value to the next.
+    /// </remarks>
+    private void FillBody(VehicleSim car, float target)
     {
         if (_body is null) return;
         var spec = car.Spec;
@@ -144,22 +160,26 @@ internal sealed partial class TyreAudio : Node
         for (var i = first; i < first + 2 && i < car.Wheels.Length; i++) wheelSpeed += MathF.Abs(car.Wheels[i].AngularVelocity) * 0.5f;
         var outputHz = wheelSpeed * spec.FinalDrive / MathF.Tau;
         // The teeth carry the engine's torque only with the clutch closed; on the overrun they are loaded the other way.
-        var torque = running && drivetrain.ClutchLocked ? MathF.Abs(drivetrain.Engine.LastTorque) / _peakTorque : 0f;
-        var (passing, gap) = muted || _echoes is null ? (0f, 2f) : _echoes.Passing(car.Position, car.Forward);
+        // Whether the engine runs is the engine's own state, not whether the car is heard (0.77): at a time-out or a pause
+        // it still runs with its last torque on the teeth, and the whine fades with the gain alone; a crash stops the engine
+        // and locks the wheels, and the gears with them. Until 0.77 the load followed whether the car is heard and fell to
+        // nothing within one chunk once the car stopped being driven, the loaded whine with it to a quarter: at a time-out
+        // in first gear under full throttle 13 dB within 15 ms, now 12 dB within 135 ms.
+        var torque = drivetrain.Engine.Running && drivetrain.ClutchLocked ? MathF.Abs(drivetrain.Engine.LastTorque) / _peakTorque : 0f;
+        var (passing, gap) = _echoes is null ? (0f, 2f) : _echoes.Passing(car.Position, car.Forward);
         var state = new BodyState(
-            Speed: muted ? 0f : MathF.Abs(car.Speed),
+            Speed: MathF.Abs(car.Speed),
             Interior: Interior,
-            Spray: muted ? 0f : _mix.Spray,
-            Abs: muted ? 0f : _mix.Abs,
+            Spray: _mix.Spray,
+            Abs: _mix.Abs,
             AbsCycle: _mix.AbsCycle,
-            GearRatio: muted ? 0f : spec.RatioForGear(drivetrain.Gear),
+            GearRatio: spec.RatioForGear(drivetrain.Gear),
             OutputShaftHz: outputHz,
             Torque: torque,
             Passing: passing,
             PassingGap: gap,
             // The wind's roar from the air's speed past the car (0.61, VehicleSim.Wind): a headwind and the gusts in it.
-            AirSpeed: muted ? 0f : (car.Velocity - car.Wind).Length());
-        var gain = muted ? 0f : Volume;
+            AirSpeed: (car.Velocity - car.Wind).Length());
         // Whole chunks only: the same two arrays every time, and what is left over waits for the next frame.
         while (_body.GetFramesAvailable() >= Chunk)
         {
@@ -167,9 +187,12 @@ internal sealed partial class TyreAudio : Node
             _noise.Render(_block, state);
             for (var i = 0; i < Chunk; i++)
             {
-                var s = _block[i] * gain;
+                _bodyLevel += (target - _bodyLevel) * BodyFollow;
+                var s = _block[i] * _bodyLevel;
                 _frames[i] = new Vector2(s, s);
             }
+            // Settled: exactly the target, so that silence is silence (and the gain no tiny number that slows the maths).
+            if (MathF.Abs(target - _bodyLevel) < 1e-4f) _bodyLevel = target;
             _body.PushBuffer(_frames);
         }
     }
