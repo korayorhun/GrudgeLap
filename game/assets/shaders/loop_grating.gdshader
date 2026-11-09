@@ -11,7 +11,9 @@
 // anti-aliasing did not settle, which would have glittered as the car moved; MSAA is off by default with the motion
 // blur on, so alpha to coverage would only dither; and a texture with alpha scissor lost the whole deck in its
 // mipmaps a few metres out. Blended, the deck writes no depth: it casts no shadow (WorldBuilder.BuildLoopDeck turns
-// that off; the steel under it casts the ladder) and the cars' glass, also blended, is sorted by object. The mesh is WorldBuilder.BuildLoopDeck: UV.x is
+// that off; the steel under it casts the ladder) and the cars' glass, also blended, is sorted by object. Nor is it in
+// Godot's screen texture, copied before the transparent pass: the windscreen reads its own copy taken after that pass
+// (0.77, WindscreenGlass), or its drops and water film showed the ground through the deck. The mesh is WorldBuilder.BuildLoopDeck: UV.x is
 // metres across from the left edge, UV.y metres along from the grating's first frame, the tangent the road's lateral,
 // the binormal its direction of travel, the normal the deck's up (towards the loop's centre). The physics never sees
 // this surface. Method after loop-grating research (C:\temp\log\grudgelap\v70\research\loop-grating.md, 8 Nov 2026).

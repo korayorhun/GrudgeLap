@@ -73,13 +73,11 @@ internal sealed partial class SkidMarks : MultiMeshInstance3D
         Visible = !retro;
         var car = session.Car;
         // Also through the wreck's slide after a crash (the replay phase's first seconds, simulated); the replay itself moves no wheel.
-        // Not on the loop's open steel grating (0.72): a strip would hang over its holes.
-        var marking = !retro && !(car.BodyHit is { HasSurface: true } hit && WorldBuilder.IsGrating(hit.Frame));
         for (var i = 0; i < car.Wheels.Length && i < _last.Length; i++)
         {
             var w = car.Wheels[i];
             var intensity = w.SlipIntensity;
-            if (!marking || !w.InContact || w.Surface != SurfaceType.Road || intensity < Threshold)
+            if (retro || !w.InContact || w.Surface != SurfaceType.Road || intensity < Threshold || OnGrating(car, w))
             {
                 _last[i] = null;
                 continue;
@@ -106,6 +104,18 @@ internal sealed partial class SkidMarks : MultiMeshInstance3D
             Add(from, point, normal, width, alpha);
             _last[i] = point;
         }
+    }
+
+    /// <summary>
+    /// Whether the wheel's contact lies on the loop's open steel grating (0.72), where a strip would hang over its holes.
+    /// Each wheel for itself (0.77): asked of the body's frame, under the centre of gravity, the grating counted only once
+    /// the body was on it, so a sliding front wheel marked up to 1.8 m of the grating's start and a rear one up to 1.7 m of
+    /// its end.
+    /// </summary>
+    private static bool OnGrating(VehicleSim car, WheelState w)
+    {
+        var cursor = car.Cursor;
+        return WorldBuilder.OnGrating(car.Track.Probe(w.ContactPoint, ref cursor, false));
     }
 
     private void Add(Vector3 from, Vector3 to, Vector3 normal, float width, float alpha)

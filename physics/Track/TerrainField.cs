@@ -44,6 +44,11 @@ public sealed class TerrainField
     private readonly Dictionary<(int, int), List<RoadFrame>> _deckCells = new();
     /// <summary>How far the ground keeps under a deck's surface (0.73): the asphalt's wear and the ground mesh's chord.</summary>
     private const float DeckClearance = 0.12f;
+    // The decks' spans (0.77, DeckCeiling), by every cell their footprint widened by DeckReach touches.
+    private readonly List<DeckSpan> _deckSpans = new();
+    private readonly Dictionary<(int, int), List<int>> _deckSpanCells = new();
+    /// <summary>Metres past a deck's asphalt and past its open ends over which its ceiling still rises 1 in 1 (DeckCeiling).</summary>
+    private const float DeckReach = 2f;
     private readonly List<int> _pathOfFrame = new();
     private readonly List<byte> _clampOfFrame = new();
     private readonly List<SkidPad> _pads;
@@ -69,7 +74,7 @@ public sealed class TerrainField
                 count++;
                 _minX = MathF.Min(_minX, f.Origin.X); _maxX = MathF.Max(_maxX, f.Origin.X);
                 _minZ = MathF.Min(_minZ, f.Origin.Z); _maxZ = MathF.Max(_maxZ, f.Origin.Z);
-                if (f.Surface == SurfaceType.Road && f.Normal.Y > 0.5f && f.Kind is SegmentKind.Overpass or SegmentKind.RampUp or SegmentKind.RampDown or SegmentKind.Loop)
+                if (IsDeck(f))
                 {
                     var deckKey = CellOf(f.Origin.X, f.Origin.Z);
                     if (!_deckCells.TryGetValue(deckKey, out var decks)) _deckCells[deckKey] = decks = new List<RoadFrame>();
@@ -89,6 +94,7 @@ public sealed class TerrainField
                 if (!_cells.TryGetValue(key, out var list)) _cells[key] = list = new List<int>();
                 list.Add(index);
             }
+            AddDeckSpans(frames);
         }
         foreach (var (kx, kz) in _cells.Keys)
         {
@@ -125,6 +131,14 @@ public sealed class TerrainField
          || f.Kind == SegmentKind.Loop && f.Normal.Y > 0.96f)
         && f.Surface == SurfaceType.Road;
 
+    /// <summary>
+    /// Frames of a deck the ground keeps under (0.73): the bridges, the drawbridge's ramps and the loop where its deck faces
+    /// up, its feet on the earthworks included: the earthworks' plane is level along each frame, so on the feet's climb of
+    /// up to 15 degrees the ground stood up to 13 cm over the asphalt between the frames (0.34-0.72).
+    /// </summary>
+    private static bool IsDeck(in RoadFrame f) =>
+        f.Surface == SurfaceType.Road && f.Normal.Y > 0.5f && f.Kind is SegmentKind.Overpass or SegmentKind.RampUp or SegmentKind.RampDown or SegmentKind.Loop;
+
     /// <summary>Ground height at a point.</summary>
     public float Height(float x, float z) => Height(x, z, out _);
 
@@ -159,6 +173,141 @@ public sealed class TerrainField
             }
         }
         return best;
+    }
+
+    /// <summary>
+    /// A span of a deck for <see cref="DeckCeiling"/>: two consecutive frames, the clearance the ground keeps under each
+    /// (none at a road on earth) and whether the ceiling carries on past either end (where no deck span adjoins it).
+    /// </summary>
+    private readonly record struct DeckSpan(RoadFrame A, RoadFrame B, float ClearanceA, float ClearanceB, bool OpenBehind, bool OpenAhead);
+
+    /// <summary>
+    /// The spans of a path's decks (0.77): every pair of consecutive deck frames, and the pair that joins a structure to a
+    /// road on earth, over which the clearance fades out. The loop's feet are on the earthworks themselves, so its decks
+    /// start and end there without such a pair: the helix turns its cross-section 10.5 degrees within that metre, and the
+    /// span would fold over at the asphalt's edge. Spans next to the drawbridge's gap end at the deck's lip.
+    /// </summary>
+    private void AddDeckSpans(IReadOnlyList<RoadFrame> frames)
+    {
+        var count = Math.Max(frames.Count - 1, 0);
+        var isSpan = new bool[count];
+        for (var i = 0; i < count; i++)
+        {
+            var a = frames[i];
+            var b = frames[i + 1];
+            isSpan[i] = IsDeck(a) && IsDeck(b)
+                || IsDeck(a) && !IsEarthwork(a) && IsEarthwork(b)
+                || IsDeck(b) && !IsEarthwork(b) && IsEarthwork(a);
+        }
+        for (var i = 0; i < count; i++)
+        {
+            if (!isSpan[i]) continue;
+            var a = frames[i];
+            var b = frames[i + 1];
+            var index = _deckSpans.Count;
+            _deckSpans.Add(new DeckSpan(a, b, IsDeck(a) ? DeckClearance : 0f, IsDeck(b) ? DeckClearance : 0f, i == 0 || !isSpan[i - 1], i + 1 >= count || !isSpan[i + 1]));
+            // The footprint widened by the reach, across and along, in the cells it touches.
+            var minX = float.MaxValue; var maxX = float.MinValue; var minZ = float.MaxValue; var maxZ = float.MinValue;
+            foreach (var f in new[] { a, b })
+            {
+                foreach (var side in new[] { -1f, 1f })
+                {
+                    var corner = f.Origin + f.Lateral * (side * (f.HalfWidth + DeckReach));
+                    minX = MathF.Min(minX, corner.X); maxX = MathF.Max(maxX, corner.X);
+                    minZ = MathF.Min(minZ, corner.Z); maxZ = MathF.Max(maxZ, corner.Z);
+                }
+            }
+            var (fromX, fromZ) = CellOf(minX - DeckReach, minZ - DeckReach);
+            var (toX, toZ) = CellOf(maxX + DeckReach, maxZ + DeckReach);
+            for (var cz = fromZ; cz <= toZ; cz++)
+            {
+                for (var cx = fromX; cx <= toX; cx++)
+                {
+                    if (!_deckSpanCells.TryGetValue((cx, cz), out var list)) _deckSpanCells[(cx, cz)] = list = new List<int>();
+                    list.Add(index);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// The highest the ground may stand at (x, z) for the decks over it, or <see cref="float.MaxValue"/> where none reaches
+    /// (0.77). Under a deck's asphalt, between its frames as at them, the ground keeps <see cref="DeckClearance"/> under the
+    /// surface; the clearance rolls off 1 in 1 over the asphalt's last 12 cm and fades out over the span that joins a
+    /// structure to a road on earth, and past the asphalt's edge and a deck's open ends the ceiling climbs 1 in 1 from the
+    /// surface. So the ground beside a deck and on the road it joins is never asked to sink below the road's plane: the
+    /// windows of 0.73, a hard rectangle about every frame 1.2 m along and the shoulder's 1.3 m past the asphalt on the
+    /// frame's slope, cut notches of up to 24 cm with steps into ground that met the road flush, beside the decks' low
+    /// ends, past the landing ramp's foot, beside the loop's feet and back onto the straight before the loop.
+    /// </summary>
+    internal float DeckCeiling(float x, float z)
+    {
+        if (!_deckSpanCells.TryGetValue(CellOf(x, z), out var list)) return float.MaxValue;
+        var best = float.MaxValue;
+        foreach (var index in list)
+        {
+            var span = _deckSpans[index];
+            var a = span.A;
+            var b = span.B;
+            // The cross-section through the point: the frames' origins and laterals interpolated by t, solved from
+            // cross(p - O(t), L(t)) = 0 in plan. A projection on the chord would leave wedges at the edges of a deck that
+            // turns between its frames (a bridge on a curve; the loop's helix, a third of a degree a frame); where the
+            // laterals are parallel, as on the straight bridges and ramps, the equation is linear.
+            var ex = b.Origin.X - a.Origin.X;
+            var ez = b.Origin.Z - a.Origin.Z;
+            var mx = b.Lateral.X - a.Lateral.X;
+            var mz = b.Lateral.Z - a.Lateral.Z;
+            var dx = x - a.Origin.X;
+            var dz = z - a.Origin.Z;
+            var c0 = dx * a.Lateral.Z - dz * a.Lateral.X;
+            var c1 = dx * mz - dz * mx - (ex * a.Lateral.Z - ez * a.Lateral.X);
+            var c2 = ez * mx - ex * mz;
+            if (MathF.Abs(c2) < 1e-6f)
+            {
+                if (MathF.Abs(c1) > 1e-9f) best = MathF.Min(best, SpanCeiling(span, -c0 / c1, x, z));
+                continue;
+            }
+            var disc = c1 * c1 - 4f * c2 * c0;
+            if (disc < 0f) continue;
+            // Both roots: past the point where the cross-sections cross a span folds over, and the lower ceiling holds.
+            var q = -0.5f * (c1 + MathF.CopySign(MathF.Sqrt(disc), c1));
+            best = MathF.Min(best, SpanCeiling(span, q / c2, x, z));
+            if (MathF.Abs(q) > 1e-9f) best = MathF.Min(best, SpanCeiling(span, c0 / q, x, z));
+        }
+        return best;
+    }
+
+    /// <summary>The ceiling one span puts at (x, z), which lies on its cross-section at <paramref name="t"/>.</summary>
+    private static float SpanCeiling(in DeckSpan span, float t, float x, float z)
+    {
+        // Past an end the next span answers, unless the deck ends there; a point on the frame between two spans is both's
+        // (a millimetre of slack, or float rounding lost it to both).
+        if (t < -1e-3f && !span.OpenBehind || t > 1f + 1e-3f && !span.OpenAhead) return float.MaxValue;
+        var a = span.A;
+        var b = span.B;
+        var ex = b.Origin.X - a.Origin.X;
+        var ez = b.Origin.Z - a.Origin.Z;
+        var at = MathUtil.Clamp01(t);
+        var beyondAlong = MathF.Abs(t - at) * MathF.Sqrt(ex * ex + ez * ez);
+        var ox = a.Origin.X + t * ex;
+        var oz = a.Origin.Z + t * ez;
+        var lx = a.Lateral.X + t * (b.Lateral.X - a.Lateral.X);
+        var ly = a.Lateral.Y + t * (b.Lateral.Y - a.Lateral.Y);
+        var lz = a.Lateral.Z + t * (b.Lateral.Z - a.Lateral.Z);
+        // Metres across the deck along its own lateral, which tilts (the loop's by up to 0.17 where its deck is steep: there
+        // the asphalt spans 8 cm less of the plan than its width) and is shorter than a unit between frames that turn.
+        var length = MathF.Max(MathF.Sqrt(lx * lx + ly * ly + lz * lz), 1e-3f);
+        var lateral = length * ((x - ox) * lx + (z - oz) * lz) / MathF.Max(lx * lx + lz * lz, 1e-6f);
+        var halfWidth = MathUtil.Lerp(a.HalfWidth, b.HalfWidth, at);
+        var beyondLateral = MathF.Abs(lateral) - halfWidth;
+        if (beyondAlong > DeckReach || beyondLateral > DeckReach) return float.MaxValue;
+        // For a point past an end, the surface of the end frame: its height and its lateral's rise per metre across.
+        var rise = t < 0f ? a.Lateral.Y : t > 1f ? b.Lateral.Y : ly / length;
+        var surface = MathUtil.Lerp(a.Origin.Y, b.Origin.Y, at) + MathUtil.Clamp(lateral, -halfWidth, halfWidth) * rise;
+        var clearance = MathUtil.Lerp(span.ClearanceA, span.ClearanceB, MathUtil.SmoothStep(at));
+        // The clearance under the asphalt, rolled off 1 in 1 to nothing at its edge; past the edge and an open end the
+        // ceiling climbs 1 in 1 from the surface, the rule the roads' own ceiling keeps.
+        return surface + MathF.Max(beyondLateral, -clearance) + beyondAlong;
     }
 
     /// <summary>Ground height at a point; <paramref name="roadWeight"/> is 1 at a road's edge and fades to 0 away from it.</summary>
@@ -270,8 +419,7 @@ public sealed class TerrainField
         roadWeight = weightMax;
         // Never above a deck (0.73): the decks are no road to the weights above, and on the stunt route's low return-leg
         // bridge the ground came up through the asphalt by up to 1.8 cm.
-        var deck = DeckHeight(x, z, Shoulder);
-        if (!float.IsNaN(deck)) ceiling = MathF.Min(ceiling, deck - DeckClearance);
+        ceiling = MathF.Min(ceiling, DeckCeiling(x, z));
         if (weightSum <= 0f) return MathF.Min(baseHeight, ceiling);
         return MathF.Min(baseHeight + weightMax * (offsetSum / weightSum), ceiling);
     }

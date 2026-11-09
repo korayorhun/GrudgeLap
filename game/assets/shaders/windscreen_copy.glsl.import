@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://drpf6cjabxd6y"
+path="res://.godot/imported/windscreen_copy.glsl-9ff27d4eb1dedc999b0a4c4fac2b85ad.res"
+
+[deps]
+
+source_file="res://assets/shaders/windscreen_copy.glsl"
+dest_files=["res://.godot/imported/windscreen_copy.glsl-9ff27d4eb1dedc999b0a4c4fac2b85ad.res"]
+
+[params]
+

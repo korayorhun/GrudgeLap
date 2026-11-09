@@ -180,9 +180,16 @@ public sealed class TrackTests
         Assert.True(worstGrade < 1f, $"the outer edge's grade breaks by {worstGrade:F2} %");
     }
 
+    /// <summary>A deck the ground keeps under (TerrainField.IsDeck): a bridge, a drawbridge ramp, the loop where it faces up.</summary>
+    private static bool IsDeck(in RoadFrame f) =>
+        f.Surface == SurfaceType.Road && f.Normal.Y > 0.5f && f.Kind is SegmentKind.Overpass or SegmentKind.RampUp or SegmentKind.RampDown or SegmentKind.Loop;
+
     /// <summary>
     /// The ground keeps under every deck (0.73): the decks were no road to the terrain, so on the stunt route's low
-    /// return-leg bridge the ground came up through the asphalt and the meadow and a fence stood on it.
+    /// return-leg bridge the ground came up through the asphalt and the meadow and a fence stood on it. Sampled between the
+    /// frames and out to the asphalt's edges (0.77): at the frames' own cross-sections, as until then, the test passed
+    /// whatever the cap did between them; a window of a tenth of a metre about each frame, which let the ground back up
+    /// over 80 % of every deck, passed it too.
     /// </summary>
     [Fact]
     public void Ground_stays_under_every_deck()
@@ -192,21 +199,95 @@ public sealed class TrackTests
         var where = "";
         foreach (var path in track.Paths)
         {
-            foreach (var f in path.Frames)
+            var frames = path.Frames;
+            for (var i = 0; i + 1 < frames.Count; i++)
             {
-                if (f.Surface != SurfaceType.Road || f.Normal.Y <= 0.5f || f.Kind is not (SegmentKind.Overpass or SegmentKind.RampUp or SegmentKind.RampDown or SegmentKind.Loop)) continue;
-                for (var lateral = -f.HalfWidth; lateral <= f.HalfWidth + 1e-3f; lateral += 0.5f)
+                if (!IsDeck(frames[i]) || !IsDeck(frames[i + 1])) continue;
+                for (var t = 0f; t <= 1.0001f; t += 0.1f)
                 {
-                    var p = f.Origin + f.Lateral * lateral;
-                    var over = track.Terrain.Height(p.X, p.Z) - p.Y;
-                    if (over <= worst) continue;
-                    worst = over;
-                    where = $"{path.Kind} {f.Distance:F0} m, lateral {lateral:F1} m";
+                    // Where the asphalt lies: BuildRoad lays its rows on the frames interpolated this way.
+                    var f = RoadFrame.Lerp(frames[i], frames[i + 1], t);
+                    for (var lateral = -f.HalfWidth; lateral <= f.HalfWidth + 1e-3f; lateral += 0.25f)
+                    {
+                        var p = f.Origin + f.Lateral * lateral;
+                        // 0.12 m under the asphalt, rolled off to nothing over its last 12 cm (TerrainField.DeckCeiling).
+                        var clearance = MathF.Min(0.12f, f.HalfWidth - MathF.Abs(lateral));
+                        var over = track.Terrain.Height(p.X, p.Z) - (p.Y - clearance);
+                        if (over <= worst) continue;
+                        worst = over;
+                        where = $"{path.Kind} {f.Distance:F2} m, lateral {lateral:F2} m";
+                    }
                 }
             }
         }
-        _out.WriteLine($"the ground comes at most {worst:F3} m from a deck's surface ({where})");
-        Assert.True(worst <= -0.05f, $"the ground stands {worst:F3} m from a deck's surface at {where}");
+        _out.WriteLine($"the ground comes at most {worst * 100f:F2} cm over its clearance under a deck ({where})");
+        Assert.True(worst <= 0.005f, $"the ground stands {worst * 100f:F2} cm over its clearance under a deck at {where}");
+    }
+
+    /// <summary>
+    /// The decks' cap keeps to the decks (0.77): beside a deck's asphalt, and on the road on earth past a bridge's or a
+    /// ramp's end, it never asks the ground to sink below the road's plane (TerrainField.DeckCeiling). 0.73's cap, a hard
+    /// rectangle 1.2 m along and 1.3 m past the asphalt about every deck frame on the frame's slope, cut notches of 7-24 cm
+    /// with a step into ground that met the road flush: past the landing ramp's foot, at both ends of the return-leg bridge,
+    /// beside the loop's feet and back onto the straight before the loop, where a wheel past the asphalt's edge dropped in.
+    /// </summary>
+    [Fact]
+    public void Deck_cap_keeps_off_the_ground_beside_and_past_the_decks()
+    {
+        var track = OriginalInspiredTrack.Build();
+        var terrain = track.Terrain;
+        var worst = 0f;
+        var where = "";
+        var joints = 0;
+        void Check(Vector3 p, float plane, string what)
+        {
+            var gap = plane - terrain.DeckCeiling(p.X, p.Z);
+            if (gap <= worst) return;
+            worst = gap;
+            where = what;
+        }
+        foreach (var path in track.Paths)
+        {
+            var frames = path.Frames;
+            for (var i = 0; i + 1 < frames.Count; i++)
+            {
+                var a = frames[i];
+                var b = frames[i + 1];
+                // A structure meeting a road on earth, ahead or behind (the loop's feet are on the earthworks themselves).
+                var earthAhead = IsDeck(a) && !TerrainField.IsEarthwork(a) && TerrainField.IsEarthwork(b) && !IsDeck(b);
+                var earthBehind = IsDeck(b) && !TerrainField.IsEarthwork(b) && TerrainField.IsEarthwork(a) && !IsDeck(a);
+                if (!(IsDeck(a) && IsDeck(b)) && !earthAhead && !earthBehind) continue;
+                // Beside the asphalt, out to 2.5 m, along the deck and over the joint: at or over the edge's height.
+                for (var t = 0f; t <= 1.0001f; t += 0.1f)
+                {
+                    var f = RoadFrame.Lerp(a, b, t);
+                    foreach (var side in new[] { -1f, 1f })
+                    {
+                        for (var off = 0.02f; off <= 2.5f; off += 0.12f)
+                        {
+                            var lateral = side * (f.HalfWidth + off);
+                            Check(f.Origin + f.Lateral * lateral, f.Origin.Y + side * f.HalfWidth * f.Lateral.Y, $"{path.Kind} {f.Distance:F2} m, {lateral:F2} m across");
+                        }
+                    }
+                }
+                if (!earthAhead && !earthBehind) continue;
+                // On the road on earth past the joint, across it and beside it: at or over its plane.
+                joints++;
+                var e = earthAhead ? b : a;
+                var onward = Vector3.Normalize((earthAhead ? b.Origin - a.Origin : a.Origin - b.Origin) with { Y = 0f });
+                for (var d = 0f; d <= 2.5f; d += 0.1f)
+                {
+                    for (var lateral = -e.HalfWidth - 2.5f; lateral <= e.HalfWidth + 2.5f; lateral += 0.25f)
+                    {
+                        var plane = e.Origin.Y + MathUtil.Clamp(lateral, -e.HalfWidth, e.HalfWidth) * e.Lateral.Y;
+                        Check(e.Origin + onward * d + e.Lateral * lateral, plane, $"{path.Kind} {d:F2} m past the joint at {e.Distance:F2} m, {lateral:F2} m across");
+                    }
+                }
+            }
+        }
+        _out.WriteLine($"beside the decks and past the {joints} joints with a road on earth the cap asks at most {worst * 100f:F2} cm below the road's plane ({where})");
+        Assert.Equal(6, joints);
+        Assert.True(worst <= 0.001f, $"the cap asks {worst * 100f:F2} cm below the road's plane at {where}");
     }
 
     /// <summary>

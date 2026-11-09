@@ -1,40 +1,70 @@
+#[vertex]
+#version 450
+
+// A triangle over the whole view, its corners from the vertex index alone (WindscreenGlass draws it with no vertex buffer).
+void main() {
+	vec2 corner = vec2(float((gl_VertexIndex << 1) & 2), float(gl_VertexIndex & 2));
+	gl_Position = vec4(corner * 2.0 - 1.0, 0.0, 1.0);
+}
+
+#[fragment]
+#version 450
+
 // The glass between the driver and the road (0.46, Windscreen): what a windscreen adds to the view through it. In the
 // rain the drops bead on the glass and bend the road behind them like little lenses, more of them the longer since the
 // wipers passed, and the blades sweep them off; between the sweeps a film of water softens the view. On a dry day the
-// glass's dust and the fine arcs the wipers have scratched into it light up into a haze when the sun stands ahead. A
-// quad over the whole view (drawn after everything, its depth test off): the cabin, nearer than the glass, is left
-// alone; the glass is wherever the view reaches past it. Premultiplied alpha: the drops replace what is behind them,
-// the haze adds to it.
-shader_type spatial;
-render_mode unshaded, cull_disabled, depth_test_disabled, depth_draw_never, blend_premul_alpha, shadows_disabled, fog_disabled;
+// glass's dust and the fine arcs the wipers have scratched into it light up into a haze when the sun stands ahead. Drawn
+// over the whole view after the transparent pass (WindscreenGlass, 0.77), from a copy of the scene taken then: the
+// spatial shader of 0.46-0.76 read Godot's screen texture, copied before the transparent pass, so every drop showed the
+// ground or the sky through the loop's blended grating and the water film faded the deck by up to 55 %. The cabin,
+// nearer than the glass, is left alone; the glass is wherever the view reaches past it. Premultiplied alpha: the drops
+// replace what is behind them, the haze adds to it.
 
-uniform sampler2D screen_texture : hint_screen_texture, filter_linear_mipmap, repeat_disable;
-uniform sampler2D depth_texture : hint_depth_texture, filter_nearest, repeat_disable;
+layout(location = 0) out vec4 frag_colour;
+
+// The scene behind the glass with its transparent surfaces, mipmapped.
+layout(set = 0, binding = 0) uniform sampler2D screen_texture;
+// Metres from the eye to what the opaque pass drew at each pixel (WindscreenGlass's pass before the transparent one, so
+// the ghost's depth-only shell is not taken for the cabin).
+layout(set = 0, binding = 1) uniform sampler2D distance_texture;
+layout(set = 0, binding = 2, std140) uniform Glass {
+	mat4 inv_projection;
+	vec4 sun_view_in;   // xyz: the sun in the camera's frame (towards it)
+	vec4 weather;       // rain, wet, drop_cover, wipers (0 or 1)
+	vec4 wiper;         // wiper_clock, wiper_sweep, wiper_period, speed
+	vec4 light;         // glare, glint, cabin_light
+	vec4 view;          // the view's size in pixels
+} glass;
+
 // How hard it rains, 0 to 1, and the water left on the glass after the rain, 0 to 1.
-uniform float rain = 0.0;
-uniform float wet = 0.0;
+#define rain glass.weather.x
+#define wet glass.weather.y
 // The share of the glass's places that can hold a drop: most in the rain, a few on a wet day.
-uniform float drop_cover = 0.85;
+#define drop_cover glass.weather.z
 // The wipers: their clock (seconds since they started), a sweep's length and the time from one sweep's start to the next.
-uniform bool wipers = false;
-uniform float wiper_clock = 0.0;
-uniform float wiper_sweep = 1.1;
-uniform float wiper_period = 1.1;
+#define wipers (glass.weather.w > 0.5)
+#define wiper_clock glass.wiper.x
+#define wiper_sweep glass.wiper.y
+#define wiper_period glass.wiper.z
 // The car's speed, m/s: the air pushes the drops up the glass and stretches them.
-uniform float speed = 0.0;
+#define speed glass.wiper.w
 // The sun in the camera's frame (towards it), its colour and how much of it the glass's dust takes (0 under cloud).
-uniform vec3 sun_view = vec3(0.0, 0.0, -1.0);
-uniform vec3 sun_colour : source_color = vec3(1.0, 0.95, 0.88);
-uniform float glare = 0.0;
+#define sun_view glass.sun_view_in.xyz
+#define glare glass.light.x
 // The sky's glint in each drop by the hour (0.63, WorldBuilder.GlassGlint): at night the drops caught a daylight sky's
 // glint and stood on the glass like snowflakes.
-uniform float glint = 1.0;
+#define glint glass.light.y
 // The cabin's light (0.66, WorldBuilder.CabinLight): the wiper blades are lit by it; at night their day grey stood out
 // light against a black sky once the night's exposure had lifted it.
-uniform float cabin_light = 1.0;
+#define cabin_light glass.light.z
+#define VIEWPORT_SIZE glass.view.xy
+
+// The spatial shader's source_color (1.0, 0.95, 0.88), which Godot handed it linear.
+const vec3 sun_colour = vec3(1.0, 0.890, 0.748);
 // Metres from the eye beyond which a pixel is seen through glass: the windscreen is 0.6 to 0.9 m off, the far end of the
 // dashboard 1.5 m, the bonnet from 1.7 m.
-uniform float glass_from = 1.7;
+const float glass_from = 1.7;
+const float PI = 3.14159265358979;
 
 // The wipers' pivots and blades, on the view with y up and x in heights (the driver's on the left of a left-hand-drive
 // car): parked pointing right along the foot of the glass, sweeping up to near upright.
@@ -141,20 +171,15 @@ vec4 drops(vec2 g, float cell, float rate, float cap, float seed, float since) {
 	return found;
 }
 
-void vertex() {
-	// A quad over the whole view, at the near plane.
-	POSITION = vec4(VERTEX.xy * 2.0, 0.5, 1.0);
-}
-
-void fragment() {
-	float depth = texture(depth_texture, SCREEN_UV).r;
-	vec4 view = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, depth, 1.0);
-	view.xyz /= view.w;
-	float distance_to = length(view.xyz);
+void main() {
+	vec2 SCREEN_UV = gl_FragCoord.xy / VIEWPORT_SIZE;
 	// The cabin (the dashboard, the pillars, the mirror) is nearer than the glass: nothing on it.
-	if (distance_to < glass_from) {
+	if (textureLod(distance_texture, SCREEN_UV, 0.0).r < glass_from) {
 		discard;
 	}
+	// The line of sight through this pixel, from any depth along it.
+	vec4 view = glass.inv_projection * vec4(SCREEN_UV * 2.0 - 1.0, 0.5, 1.0);
+	view.xyz /= view.w;
 	vec2 aspect = vec2(VIEWPORT_SIZE.x / VIEWPORT_SIZE.y, 1.0);
 	vec2 g = vec2(SCREEN_UV.x, 1.0 - SCREEN_UV.y) * aspect;
 	// Layers over the view in premultiplied alpha: the film, the drops over it, the blades over them.
@@ -232,6 +257,5 @@ void fragment() {
 		colour += sun_colour * glare * halo * (dust + 1.6 * arcs);
 		}
 	}
-	ALBEDO = colour;
-	ALPHA = alpha;
+	frag_colour = vec4(colour, alpha);
 }

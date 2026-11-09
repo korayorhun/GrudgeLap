@@ -392,7 +392,8 @@ internal static class WorldBuilder
             Name = "CarReflections",
             UpdateMode = ReflectionProbe.UpdateModeEnum.Once,
             Size = new Vector3(90f, 50f, 90f),
-            // Nor the windscreen's quad (Windscreen.Layer, 0.56), which would cover each face of the capture.
+            // Nor the windscreen's layer (Windscreen.Layer, 0.56), whose quad covered each face of the capture; empty since
+            // 0.77, when the glass moved to the cockpit camera's compositor.
             CullMask = 0xFFFFFu & ~2u & ~Windscreen.Layer,
             // The probe lights the player's car alone (its meshes are on layer 2, CarView.MarkPlayer), 0.36. Until then it
             // lit everything in its 90 m box: the road within 45 m of the car reflected the probe's dark capture of the
@@ -2011,7 +2012,9 @@ internal static class WorldBuilder
     /// <summary>
     /// White edge lines, 15 cm wide and 25 cm in from the asphalt's edge, as on a rural road of today (the 1989 circuit
     /// had only the yellow centre line, and 1989 mode hides them). Where the branches share the road at the fork and
-    /// the merge, the inner side's line is left out, like the shoulder there.
+    /// the merge, the inner side's line is left out, like the shoulder there. None on the loop's grating, where the
+    /// asphalt stops (0.77): 0.72 stopped the centre line there and left these, two opaque strips floating 12 mm over the
+    /// open steel all the way round.
     /// </summary>
     private static MeshInstance3D BuildEdgeLines(TrackGeometry track, TrackPath path)
     {
@@ -2021,7 +2024,7 @@ internal static class WorldBuilder
         {
             var a = frames[i];
             var b = frames[i + 1];
-            if (a.Surface == SurfaceType.Chasm || b.Surface == SurfaceType.Chasm) continue;
+            if (a.Surface == SurfaceType.Chasm || b.Surface == SurfaceType.Chasm || IsGrating(a) || IsGrating(b)) continue;
             var shared = SiblingSide(track, path, a);
             // The paint wears in patches.
             var tone = 0.78f + 0.22f * RoadWear.Hash((int)(a.Distance / 7f), (int)path.Kind, 47);
@@ -2610,11 +2613,28 @@ internal static class WorldBuilder
     }
 
     /// <summary>
-    /// The loop's frames that stand off the ground (0.72): the grating's (BuildLoopDeck), where the asphalt ribbon, the
-    /// centre line and the tyre marks stop. Its two ends sit on the earthworks (TerrainField.IsEarthwork: the deck's up
-    /// within 16 degrees of the vertical) and stay asphalt, the way onto the steel.
+    /// The loop's frames that stand off the ground (0.72): the grating's (BuildLoopDeck), where the asphalt ribbon, its
+    /// centre and edge lines and the tyre marks stop. Its two ends sit on the earthworks (TerrainField.IsEarthwork: the
+    /// deck's up within 16 degrees of the vertical) and stay asphalt, the way onto the steel.
     /// </summary>
     internal static bool IsGrating(in RoadFrame f) => f.Kind == SegmentKind.Loop && f.Normal.Y <= 0.96f;
+
+    /// <summary>
+    /// Whether a probe's point lies on the grating as BuildLoopDeck draws it (0.77): between two frames of which either is
+    /// a grating frame. Asked of the probe's interpolated frame, IsGrating missed the grating's first and last quarter of a
+    /// metre, where that frame's up is still within 16 degrees of the vertical.
+    /// </summary>
+    internal static bool OnGrating(in SurfaceHit hit)
+    {
+        if (hit.Path is not { } path || hit.FrameIndex < 0 || hit.FrameIndex >= path.Frames.Count) return false;
+        var frames = path.Frames;
+        var i = hit.FrameIndex;
+        // The probe leans its frame from the nearest one toward the neighbour on the point's side (TrackGeometry.Probe).
+        var j = hit.Frame.Distance > frames[i].Distance ? Math.Min(i + 1, frames.Count - 1)
+            : hit.Frame.Distance < frames[i].Distance ? Math.Max(i - 1, 0)
+            : i;
+        return IsGrating(frames[i]) || IsGrating(frames[j]);
+    }
 
     /// <summary>
     /// The loop's running surface (0.72, the owner's P16: perforated steel to see through, as in the original): a strip
@@ -2681,11 +2701,68 @@ internal static class WorldBuilder
             }
             previous = row;
         }
+        var mesh = st.Commit();
+        if (ExportMode)
+        {
+            // The export carries a material glTF can hold (0.77): from 0.72 it wrote the shader as an empty one, white and
+            // wholly metallic, a featureless white sheet in a glTF viewer, and in the Unreal level up to 0.74 (since 0.75
+            // build_scene.py puts its own grating on LoopDeck-* by name). The deck holds the material; its C# wrapper is
+            // released here, as GratingExportMaterial releases the image's and the texture's.
+            using var material = GratingExportMaterial();
+            return new MeshInstance3D { Mesh = mesh, MaterialOverride = material, Name = $"LoopDeck-{path.Kind}" };
+        }
         _loopGrating ??= new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/loop_grating.gdshader") };
         _loopGrating.SetShaderParameter("retro", _retro);
         // No shadow from the grating itself: blended, it would throw a solid one where 78 % of the light gets through;
         // its stringers and floor beams (BuildLoopFrame) throw the ladder a real grating's frame does.
-        return new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = _loopGrating, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Name = $"LoopDeck-{path.Kind}" };
+        return new MeshInstance3D { Mesh = mesh, MaterialOverride = _loopGrating, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Name = $"LoopDeck-{path.Kind}" };
+    }
+
+    /// <summary>
+    /// The grating for the glTF export (0.77): loop_grating.gdshader's bars as the alpha of its galvanised steel, one
+    /// pitch of each set of bars a tile (a bearing bar 10 mm thick every 60 mm across, a cross bar 6 mm every 102 mm along,
+    /// each centred on the tile's edge as the shader's are on the pitch's multiples), tiled over the deck's UV in metres by
+    /// the texture transform glTF carries. Blended (glTF BLEND), as the shader is and for its reason: a viewer's mipmaps
+    /// average the bars, so a far deck is a veil of their 21 % cover. An alpha scissor (MASK) lost the deck in them, the
+    /// mask 34 % opaque at mip 3 and clear from mip 4 on: in Blender's EEVEE at 1600 px and 72 degrees the loop's top seen
+    /// face-on faded from 16 m and was gone by 28 m. A sampler without mipmaps would not do: Blender's importer ignores it.
+    /// A flat texture does not close up at a grazing angle as the shader's deep bars do; the Unreal level puts its own
+    /// grating on the deck by name (unreal/Scripts/build_scene.py, since 0.75).
+    /// </summary>
+    private static StandardMaterial3D GratingExportMaterial()
+    {
+        const int across = 64;
+        const int along = 128;
+        // The image's and the texture's C# wrappers are released here, the material holding the texture (and the deck the
+        // material, whose wrapper BuildLoopDeck releases), not left to the finalizer, which at the export's quit runs
+        // alongside the engine's shutdown (WorldExport): left to it, neither of two exports quit once it had written the
+        // file (killed after five minutes), and none of the nine since has hung.
+        using var image = Image.CreateEmpty(across, along, false, Image.Format.Rgba8);
+        for (var y = 0; y < along; y++)
+        {
+            for (var x = 0; x < across; x++)
+            {
+                // Metres from the nearest bar's centre line, each way.
+                var u = MathF.Abs((x + 0.5f) / across - MathF.Round((x + 0.5f) / across)) * 0.060f;
+                var v = MathF.Abs((y + 0.5f) / along - MathF.Round((y + 0.5f) / along)) * 0.102f;
+                var bar = u < 0.005f || v < 0.003f;
+                // White under the holes as well: most viewers build their mipmaps without weighting the colour by alpha,
+                // so black there would darken a far deck's veil.
+                image.SetPixel(x, y, new Color(1f, 1f, 1f, bar ? 1f : 0f));
+            }
+        }
+        using var texture = ImageTexture.CreateFromImage(image);
+        return new StandardMaterial3D
+        {
+            AlbedoTexture = texture,
+            // The shader's galvanised steel (sRGB 0.62) dimmed as its bars' darker side walls show between the tops.
+            AlbedoColor = new Color(0.47f, 0.48f, 0.49f),
+            Metallic = 0.85f,
+            Roughness = 0.45f,
+            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+            CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+            Uv1Scale = new Vector3(1f / 0.060f, 1f / 0.102f, 1f),
+        };
     }
 
     /// <summary>
