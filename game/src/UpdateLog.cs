@@ -1,5 +1,7 @@
 using System.Globalization;
+using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace GrudgeLap.Game;
 
@@ -9,8 +11,11 @@ namespace GrudgeLap.Game;
 /// rotates at every start (after a few starts the log of a failed update was gone), and is capped: past
 /// <c>limit</c> bytes the file becomes update.old.log and a new one starts, so the two stay near half a megabyte.
 /// </summary>
-/// <remarks>Thread-safe: the download's worker and the main thread write to it alike. A log that cannot be written never stops an update.</remarks>
-internal sealed class UpdateLog(string filePath, long limit = 256 * 1024)
+/// <remarks>
+/// Thread-safe: the download's worker and the main thread write to it alike. A log that cannot be written never stops
+/// an update. No line keeps a sign-in (<see cref="Redact"/>): the log is the thing a player sends when an update fails.
+/// </remarks>
+internal sealed partial class UpdateLog(string filePath, long limit = 256 * 1024)
 {
     private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
     private readonly object _gate = new();
@@ -18,9 +23,23 @@ internal sealed class UpdateLog(string filePath, long limit = 256 * 1024)
     public string FilePath { get; } = filePath;
     public string OldPath => Path.Combine(Path.GetDirectoryName(FilePath) ?? "", Path.GetFileNameWithoutExtension(FilePath) + ".old" + Path.GetExtension(FilePath));
 
+    /// <summary>
+    /// The line with the user name and password of every address in it masked: <c>http://alice:s3cret@proxy:3128/</c>
+    /// becomes <c>http://***@proxy:3128/</c>. A proxy set up with its sign-in in its address (HTTPS_PROXY, or a PAC
+    /// that names one) hands that address to .NET, and .NET's errors quote it whole ("The proxy tunnel request to
+    /// proxy 'http://alice:s3cret@…' failed with status code '407'"), so the mask is applied to every line rather
+    /// than to the few that were written to name a proxy.
+    /// </summary>
+    public static string Redact(string line) => line.Contains('@') ? SignIn().Replace(line, "${scheme}***@") : line;
+
+    // The scheme, then everything up to the last '@' before the address's first '/' or a space: the user name and
+    // password, even when the password itself holds an '@' that was never escaped.
+    [GeneratedRegex(@"(?<scheme>\b[A-Za-z][A-Za-z0-9+.\-]*://)[^/\s]*@", RegexOptions.CultureInvariant)]
+    private static partial Regex SignIn();
+
     public void Write(string line)
     {
-        var stamped = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture) + " " + line + "\n";
+        var stamped = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture) + " " + Redact(line) + "\n";
         lock (_gate)
         {
             try
@@ -50,22 +69,46 @@ internal static class UpdateDiagnostics
         if (!OperatingSystem.IsWindows()) return "not Windows";
         try
         {
-            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Security Center\Provider\Av");
-            if (key is null) return "none registered";
-            var products = new List<string>();
-            foreach (var id in key.GetSubKeyNames())
-            {
-                using var product = key.OpenSubKey(id);
-                if (product?.GetValue("DISPLAYNAME") is not string name) continue;
-                var state = product.GetValue("STATE") is int s ? s : -1;
-                products.Add($"{name} ({StateText(state)})");
-            }
-            return products.Count > 0 ? string.Join(", ", products) : "none registered";
+            var products = AntivirusProducts();
+            return products.Count > 0 ? string.Join(", ", products.Select(p => $"{p.Name} ({StateText(p.State)})")) : "none registered";
         }
         catch (Exception ex)
         {
             return $"unknown ({ex.GetType().Name})";
         }
+    }
+
+    /// <summary>
+    /// The antivirus products Security Center reports switched on, by the name Windows Security shows ("Microsoft
+    /// Defender Antivirus", in the language of Windows), joined with "or"; null when none is known. A reason that names
+    /// the product tells the player where to look for the file it took.
+    /// </summary>
+    public static string? ActiveAntivirus()
+    {
+        try
+        {
+            var on = AntivirusProducts().Where(p => StateText(p.State) == "on").Select(p => p.Name).ToList();
+            return on.Count > 0 ? string.Join(" or ", on) : null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static List<(string Name, int State)> AntivirusProducts()
+    {
+        var products = new List<(string Name, int State)>();
+        if (!OperatingSystem.IsWindows()) return products;
+        using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Security Center\Provider\Av");
+        if (key is null) return products;
+        foreach (var id in key.GetSubKeyNames())
+        {
+            using var product = key.OpenSubKey(id);
+            if (product?.GetValue("DISPLAYNAME") is not string name) continue;
+            products.Add((name, product.GetValue("STATE") is int s ? s : -1));
+        }
+        return products;
     }
 
     /// <summary>Security Center's product state: its second byte says whether the scanner runs (0x10 on, 0x01 passive, 0x00 off, 0x11 expired).</summary>
@@ -78,15 +121,23 @@ internal static class UpdateDiagnostics
         var other => "state 0x" + other.ToString("X2", CultureInfo.InvariantCulture),
     };
 
-    /// <summary>The proxy Windows' settings choose for <paramref name="target"/> (a PAC script may run: call it off the main thread).</summary>
-    public static string Proxy(Uri target)
+    /// <summary>The proxy Windows' settings (or HTTPS_PROXY) choose for <paramref name="target"/> (a PAC script may run: call it off the main thread).</summary>
+    public static string Proxy(Uri target) => Proxy(target, HttpClient.DefaultProxy);
+
+    /// <summary>
+    /// The proxy <paramref name="proxy"/> chooses for <paramref name="target"/>: scheme, host and port only. The address
+    /// .NET hands back keeps the user name and password it was given in (HTTPS_PROXY=http://user:password@host:port),
+    /// so the line says only that there is a sign-in.
+    /// </summary>
+    internal static string Proxy(Uri target, IWebProxy proxy)
     {
         try
         {
-            var proxy = HttpClient.DefaultProxy;
             if (proxy.IsBypassed(target)) return "none (direct)";
             var through = proxy.GetProxy(target);
-            return through is null || through == target ? "none (direct)" : through.GetLeftPart(UriPartial.Authority);
+            if (through is null || through == target) return "none (direct)";
+            var address = through.GetComponents(UriComponents.SchemeAndServer, UriFormat.UriEscaped);
+            return through.UserInfo.Length > 0 ? address + " (with a sign-in in its address, not logged)" : address;
         }
         catch (Exception ex)
         {

@@ -85,8 +85,9 @@ are on the title screen (or the credit is over and your initials are in), instal
 own installer, silently; the portable copy by unpacking over itself) and restarts on the new version, so an opened
 copy is always the latest. `F10` applies a ready update at once, or asks again. What the updater is doing, and why
 when something fails, is shown on the title screen and over the race, and every step goes to `update.log` in
-`%APPDATA%\Godot\app_userdata\GrudgeLap`; an update that does not install twice is left to you (`F10` then opens its
-release page). Nothing is sent anywhere. Under `[update]` in `settings.cfg` there, `auto=false` goes back to only
+`%APPDATA%\Godot\app_userdata\GrudgeLap` (never a proxy's password); an update that does not install twice is left to
+you (`F10` then opens its release page), and so is a download your antivirus removes or blocks: the game names the
+antivirus and does not download that version again until the next start. Nothing is sent anywhere. Under `[update]` in `settings.cfg` there, `auto=false` goes back to only
 offering the update (then `F10` takes it) and `enabled=false` switches the check at start off. A copy of 0.76 or
 older reaches this updater through its own once; if that keeps failing, install the latest `GrudgeLap-Setup` by hand.
 

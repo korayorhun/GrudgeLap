@@ -98,6 +98,15 @@ internal static class UpdateSchedule
         2 => TimeSpan.FromMinutes(3),
         _ => null,
     };
+
+    /// <summary>
+    /// Whether an automatic check or download that failed with <paramref name="error"/> is tried again within the
+    /// session: only after a connection that was lost or fell silent (the .part keeps what came). A checksum that does
+    /// not match, a package an antivirus took, a full disk or a release without a package would end the same way, and
+    /// in the download each try costs the whole package: with every failure retried, one start could fetch a 480 MB
+    /// package six times over a checksum that did not match, or three times for an antivirus to delete.
+    /// </summary>
+    public static bool RetryHelps(Exception? error) => error is UpdateException { Transient: true };
 }
 
 /// <summary>
@@ -119,6 +128,9 @@ internal sealed partial class UpdateFeed(HttpClient http, UpdateEndpoints endpoi
     {
         UpdateException? failure = null;
         string? latestTag = null;
+        // Whether any route failed for a passing reason (a lost connection, a server error): the failure that is
+        // shown may be another route's (the API out of calls), yet trying again later has a chance.
+        var passing = false;
 
         // 1. update.json through github.com's "latest" redirect.
         try
@@ -131,6 +143,7 @@ internal sealed partial class UpdateFeed(HttpClient http, UpdateEndpoints endpoi
                 Log($"read the update.json of {release.Tag}");
                 return release;
             }
+            passing |= IsPassing(status);
             Log(status == HttpStatusCode.NotFound
                 ? $"the latest release{(latestTag is null ? "" : $" ({latestTag})")} has no update.json"
                 : $"update.json: HTTP {(int)status}");
@@ -138,6 +151,7 @@ internal sealed partial class UpdateFeed(HttpClient http, UpdateEndpoints endpoi
         catch (UpdateException ex)
         {
             Log($"update.json: {ex.Message}");
+            passing |= ex.Transient;
             failure = Remember(failure, ex);
         }
 
@@ -159,6 +173,7 @@ internal sealed partial class UpdateFeed(HttpClient http, UpdateEndpoints endpoi
         catch (UpdateException ex)
         {
             Log($"API latest release: {ex.Message}");
+            passing |= ex.Transient;
             failure = Remember(failure, ex);
         }
 
@@ -192,7 +207,10 @@ internal sealed partial class UpdateFeed(HttpClient http, UpdateEndpoints endpoi
         catch (UpdateException ex)
         {
             Log($"release list: {ex.Message}");
-            throw Remember(failure, ex);
+            var shown = Remember(failure, ex);
+            throw (passing || ex.Transient) && !shown.Transient
+                ? new UpdateException(shown.Kind, shown.Message, shown.InnerException) { RetryAt = shown.RetryAt, Transient = true }
+                : shown;
         }
     }
 
@@ -202,6 +220,9 @@ internal sealed partial class UpdateFeed(HttpClient http, UpdateEndpoints endpoi
     /// </summary>
     private static UpdateException Remember(UpdateException? earlier, UpdateException latest) =>
         earlier is null || latest.Kind == UpdateFailure.RateLimited && earlier.Kind != UpdateFailure.RateLimited ? latest : earlier;
+
+    /// <summary>Answers that mean "not now" rather than "not here": a server's error, too many requests, an expired signature.</summary>
+    private static bool IsPassing(HttpStatusCode status) => (int)status is 403 or 408 or 425 or 429 or >= 500;
 
     private static UpdatePackage Derived(UpdateEndpoints endpoints, string tag, string name) =>
         new(name, endpoints.Download(tag, name), null, null, endpoints.Download(tag, name + ".sha256"));

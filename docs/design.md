@@ -1740,14 +1740,24 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
     release-assets URL expires within minutes) with a `Range` for the rest; 45 s without a byte ends an attempt (a
     half-open connection never ends by itself), six attempts in a row that add nothing end the download, waits of
     1-3-10-30-60 s between them, Retry-After honoured up to 2 minutes; a 200 to a range request rewrites from the
-    start; size and SHA-256 are checked on the worker, a mismatch is fetched once more from the start, and only then
-    is the file renamed to its real name, so a file under that name is always a verified package and is reused
-    without a download. Free space is checked first (the portable copy keeps room for unpacking). Progress is read
-    from Interlocked counters; quitting cancels everything at once (cancelling HttpRequest on a dead connection had
-    blocked the main thread for good).
-  - When: at every start unless a check ran within 2 minutes (a last check in the future counts as due); a failed
-    automatic check or download is tried again after 30 s and 3 minutes (the .part keeps what came); F10 asks at
-    once. The browser is never opened by a start, only by F10.
+    start; size and SHA-256 are checked on the worker (a file pieced together from more than one answer that fails
+    is fetched once more from the start; one that came whole in a single answer is not, it would come the same way),
+    and only then is the file renamed to its real name, so a file under that name is always a verified package and
+    is reused without a download. Free space is checked first (the portable copy keeps room for unpacking). Progress
+    is read from Interlocked counters; quitting cancels everything at once (cancelling HttpRequest on a dead
+    connection had blocked the main thread for good).
+  - Antivirus: a fresh package another program holds shut (an antivirus scanning it) is waited for up to 30 s, the
+    HUD saying so; one that vanishes, is refused as a threat (`ERROR_VIRUS_INFECTED`) or stays locked fails as
+    blocked, naming the antivirus Security Center reports on ("Microsoft Defender Antivirus blocked the downloaded
+    installer as a threat"), and that version is not downloaded again in the session: F10 opens its page, where the
+    browser lets the player keep the file. An installer refused or removed when the game starts it is named the same
+    way. (Tried on the real game with a stand-in that held the .part, then deleted it, as a quarantine does.)
+  - When: at every start unless a check ran within 2 minutes (a last check in the future counts as due); an
+    automatic check or download that a lost or silent connection stopped is tried again after 30 s and 3 minutes
+    (the .part keeps what came; a check counts when any of its routes failed that way, even if the reason shown is
+    the API's limit). Any other failure would end the same way, and in the download cost the package again (retrying
+    every failure would fetch a package whose checksum keeps failing six times a start), so it waits for F10, which
+    asks at once. The browser is never opened by a start, only by F10.
   - Handing over: on the title screen, or once a credit is over and no initials are being typed. An installed copy
     starts the new installer itself, by its full path, with `/SILENT /NORESTART /SP- /NOCANCEL /UPDATE=1 /LOG=…`
     (until 0.76 a hidden PowerShell from %TEMP% ran it after the game had gone, what antivirus software watches
@@ -1764,8 +1774,12 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
     applying that version and F10 opens its release page.
   - `user://update.log` (outside Godot's rotated logs/, about 256 KB then `update.old.log`): versions, paths, free
     space, proxy, antivirus products and states (Security Center's records), every route, attempt, verification,
-    hand-over and the installer log's last lines. The HUD's notice line and the title panel show the status and every
-    failure's reason, also while the menu or the showroom is open.
+    hand-over and the installer log's last lines. No line keeps a sign-in: the proxy is logged as scheme, host and
+    port ("with a sign-in in its address, not logged"), and every line, Godot's own log's too, has the user name and
+    password of any address masked, since .NET's errors quote a proxy's address whole ("The proxy tunnel request to
+    proxy 'http://user:password@…' failed"). The HUD's notice line and the title panel show the status and every
+    failure's reason, also while the menu or the showroom is open; a long one wraps onto a second line (the title
+    panel grows upwards by it), and a reason is cut to 110 characters keeping its end, where the cause is.
   - The download folder holds one package at most: other versions' packages and parts go when a download starts,
     packages of the running version or older at every start, everything after a confirmed update (the development
     laptop had 1.45 GB of applied installers in it).
@@ -1779,8 +1793,9 @@ the clutch's lock/slip machine, and the low-speed fades of the slip angle (no ji
     `GRUDGELAP_UPDATE_DRYRUN=1` (find the release, download nothing), `GRUDGELAP_UPDATE_FEED=<url>` (a stand-in for
     GitHub). `update.tests` runs the feed and the client against an in-process HttpListener that drops at 40 %, falls
     silent, ignores ranges, expires its signed redirects, runs out of API calls, offers a non-version latest tag and
-    extra assets, serves a bad checksum, trickles, and against a nearly full disk; and the portable unpack script
-    for real on a folder of its own.
+    extra assets, serves a bad checksum, trickles, and against a nearly full disk, a fresh file held and then
+    removed as an antivirus does, and a proxy with a password that refuses the tunnel; and the portable unpack
+    script for real on a folder of its own.
 - One copy per computer (`SingleInstance`): the game holds a Global named mutex; a second launch signals a
   named event, which the running game polls every frame to restore and raise its window, and quits before
   building the world. `--invisible` runs neither take nor check the lock.

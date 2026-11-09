@@ -74,6 +74,9 @@ internal sealed partial class Updater : Node
     private string _installerLog = "";
     private string? _gaveUp;
     private string _gaveUpReason = "";
+    // A version whose download another program took (an antivirus, most likely): not downloaded again this session.
+    private string? _blocked;
+    private string _blockedReason = "";
     private bool _handOverFailed;
     private string _exePath = "";
     private bool _alone;
@@ -279,7 +282,7 @@ internal sealed partial class Updater : Node
             var reason = Reason(error);
             Log($"the check failed: {reason}");
             _stage = Stage.Failed;
-            FailWithRetry("update check failed: " + reason, code: 2);
+            FailWithRetry("update check failed: " + UpdateTexts.Fit(reason), code: 2, error.InnerException);
             return;
         }
         var release = task.Result;
@@ -304,7 +307,7 @@ internal sealed partial class Updater : Node
         }
         if (_gaveUp == release.VersionText)
         {
-            SetStatus(GaveUpText(release.VersionText, _gaveUpReason));
+            SetStatus(UpdateTexts.GaveUp(release.VersionText, _gaveUpReason));
             AloneDone(5);
             return;
         }
@@ -326,12 +329,20 @@ internal sealed partial class Updater : Node
             AloneDone(5);
             return;
         }
+        if (_blocked == release.VersionText)
+        {
+            // Another copy would only be taken again: the page instead, where the browser lets the player keep the file.
+            Log($"v{release.VersionText} is not downloaded again this session ({_blockedReason}): {release.Page}");
+            SetStatus(UpdateTexts.Blocked(_blockedReason));
+            if (browse) OS.ShellOpen(release.Page.AbsoluteUri);
+            AloneDone(3);
+            return;
+        }
         var installed = _installedCopy;
         if ((installed ? release.Setup : release.Portable) is not { } package)
         {
-            var what = installed ? "an installer" : "a portable zip";
-            Log($"v{release.VersionText} has no {what}");
-            SetStatus($"v{release.VersionText} has no {what} for this copy - F10 opens its page");
+            Log($"v{release.VersionText} has no {(installed ? "installer" : "portable zip")}");
+            SetStatus(UpdateTexts.NoPackage(release.VersionText, installed));
             if (browse) OS.ShellOpen(release.Page.AbsoluteUri);
             AloneDone(3);
             return;
@@ -364,7 +375,16 @@ internal sealed partial class Updater : Node
             var reason = Reason(error);
             Log($"the download failed: {reason}");
             _stage = Stage.Failed;
-            FailWithRetry("update failed: " + reason, code: 3);
+            if (error.InnerException is UpdateException { Kind: UpdateFailure.Blocked } && Available is { } release)
+            {
+                _blocked = release.VersionText;
+                _blockedReason = reason;
+                Log($"v{release.VersionText} is not downloaded again this session; F10 opens {release.Page}");
+                SetStatus(UpdateTexts.Blocked(reason));
+                AloneDone(3);
+                return;
+            }
+            FailWithRetry("update failed: " + UpdateTexts.Fit(reason), code: 3, error.InnerException);
             return;
         }
         _packagePath = task.Result;
@@ -389,10 +409,14 @@ internal sealed partial class Updater : Node
         };
     }
 
-    /// <summary>A failure of the check or the download: automatic ones are tried again in 30 s, then in 3 minutes (the .part keeps what came).</summary>
-    private void FailWithRetry(string text, int code)
+    /// <summary>
+    /// A failure of the check or the download. An automatic one that a lost or silent connection caused is tried again
+    /// in 30 s, then in 3 minutes (the .part keeps what came); any other would end the same way, and in the download
+    /// cost the whole package again, so it waits for F10.
+    /// </summary>
+    private void FailWithRetry(string text, int code, Exception? error)
     {
-        if (!_manual && !_alone && UpdateSchedule.RetryDelay(_retries + 1) is { } delay)
+        if (!_manual && !_alone && UpdateSchedule.RetryHelps(error) && UpdateSchedule.RetryDelay(_retries + 1) is { } delay)
         {
             _retries++;
             _retryAt = _clock + delay.TotalSeconds;
@@ -401,7 +425,8 @@ internal sealed partial class Updater : Node
             SetStatus($"{text} - trying again in {when}");
             return;
         }
-        SetStatus(text);
+        if (!_manual && !_alone && !UpdateSchedule.RetryHelps(error)) Log("not tried again by itself: it would end the same way");
+        SetStatus(_alone ? text : $"{text} - F10 to try again");
         AloneDone(code);
     }
 
@@ -469,9 +494,11 @@ internal sealed partial class Updater : Node
         }
         catch (Exception ex)
         {
-            // Win32Exception: a file an antivirus has blocked ("contains a virus or potentially unwanted software"),
-            // access denied, a package removed under our feet. The game stays, and says why.
-            FailToStart(release, $"the installer could not start ({ex.Message.TrimEnd('.')})");
+            // Win32Exception: a file an antivirus has blocked ("contains a virus or potentially unwanted software") or
+            // removed under our feet, access denied. The game stays, and says why, naming the antivirus it can.
+            FailToStart(release, _installedCopy
+                ? UpdateTexts.StartFailure(ex, System.IO.Path.GetFileName(package), UpdateDiagnostics.ActiveAntivirus())
+                : $"the unpack script could not start ({ex.Message.TrimEnd('.')})");
             return;
         }
         _installerStartedAt = _clock;
@@ -529,13 +556,13 @@ internal sealed partial class Updater : Node
             _gaveUp = release.VersionText;
             _gaveUpReason = reason;
             _stage = Stage.Idle;
-            SetStatus(GaveUpText(release.VersionText, reason), ResultHold);
+            SetStatus(UpdateTexts.GaveUp(release.VersionText, reason), ResultHold);
         }
         else
         {
             // The verified package stays: F10, or the next start, tries again without a download.
             _stage = Stage.Ready;
-            SetStatus($"update failed: {reason} - F10 to try again", ResultHold);
+            SetStatus($"update failed: {UpdateTexts.Fit(reason)} - F10 to try again", ResultHold);
         }
         AloneDone(4);
     }
@@ -574,7 +601,7 @@ internal sealed partial class Updater : Node
                 failedCount = RecordFailure(settings, applying, failedReason);
                 failedVersion = applying;
                 Log($"the update to v{applying} did not take ({failedCount} of {MaxApplyFailures} tries): {failedReason}");
-                if (failedCount < MaxApplyFailures) SetStatus($"the update to v{applying} did not install: {failedReason}", ResultHold);
+                if (failedCount < MaxApplyFailures) SetStatus($"the update to v{applying} did not install: {UpdateTexts.Fit(failedReason)}", ResultHold);
             }
             ClearApplying(settings);
             changed = true;
@@ -590,7 +617,7 @@ internal sealed partial class Updater : Node
         {
             _gaveUp = failedVersion;
             _gaveUpReason = failedReason;
-            SetStatus(GaveUpText(failedVersion, failedReason), ResultHold);
+            SetStatus(UpdateTexts.GaveUp(failedVersion, failedReason), ResultHold);
         }
         if (changed) settings.Save(SettingsFile);
         return updated;
@@ -621,10 +648,6 @@ internal sealed partial class Updater : Node
         }
     }
 
-    private static string GaveUpText(string version, string reason) => reason.Length == 0
-        ? $"v{version} did not install twice - F10 opens its download page"
-        : $"v{version} did not install twice ({(reason.Length > 70 ? reason[..67] + "..." : reason)}) - F10 opens its download page";
-
     /// <summary>The last lines of the installer's or the script's log (an install that failed rolls back for a dozen lines after the error), copied into update.log before the folder is cleared.</summary>
     private void LogTail(string? path)
     {
@@ -648,12 +671,13 @@ internal sealed partial class Updater : Node
         else Log($"  {what}: {package.Name}, {(package.Size is { } size ? UpdateHttp.Megabytes(size) : "size unknown")}, SHA-256 {(package.Sha256 ?? (package.ShaUrl is null ? "none" : "from its .sha256 file"))}");
     }
 
-    private static string Reason(AggregateException error) => error.InnerException switch
+    /// <summary>The failure's reason for the screen, the log and settings.cfg; an unexpected exception's own words could quote a proxy's address with its sign-in.</summary>
+    private static string Reason(AggregateException error) => UpdateLog.Redact(error.InnerException switch
     {
         UpdateException update => update.Message,
         { } other => $"{other.GetType().Name}: {other.Message}",
         null => error.Message,
-    };
+    });
 
     private void SetStatus(string text, double hold = 0)
     {
@@ -683,9 +707,10 @@ internal sealed partial class Updater : Node
         return settings;
     }
 
+    /// <summary>A line for update.log and Godot's own log, both without any sign-in (<see cref="UpdateLog.Redact"/>).</summary>
     private void Log(string line)
     {
         _log?.Write(line);
-        GD.Print("update: " + line);
+        GD.Print("update: " + UpdateLog.Redact(line));
     }
 }

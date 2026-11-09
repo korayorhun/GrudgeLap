@@ -181,6 +181,42 @@ internal static partial class InstallerOutcome
     private static partial Regex Trouble();
 }
 
+/// <summary>The updater's lines for the HUD and the title screen that carry a reason: engine-free, so the tests read them as a player would.</summary>
+internal static class UpdateTexts
+{
+    /// <summary>
+    /// The most of a reason a line shows: the HUD and the title panel wrap a long line onto a second one, which holds
+    /// this much with the words around it. The whole reason is in update.log.
+    /// </summary>
+    public const int ReasonLength = 110;
+
+    public static string NoPackage(string version, bool installed) =>
+        $"v{version} has no {(installed ? "installer" : "portable zip")} for this copy - F10 opens its page";
+
+    /// <summary>A version that did not install twice, which the game stops applying itself.</summary>
+    public static string GaveUp(string version, string reason) => reason.Length == 0
+        ? $"v{version} did not install twice - F10 opens its download page"
+        : $"v{version} did not install twice ({Fit(reason)}) - F10 opens its download page";
+
+    /// <summary>A package another program took: it is not downloaded again in the session, so F10 opens the page, where the browser lets the player keep the file.</summary>
+    public static string Blocked(string reason) => $"update failed: {Fit(reason)} - F10 opens its page";
+
+    /// <summary>Why the installer did not start: an antivirus that refused or removed it is named, anything else is told in Windows' words.</summary>
+    public static string StartFailure(Exception ex, string package, string? antivirus) => ex switch
+    {
+        _ when FileBlock.IsThreat(ex) => $"{antivirus ?? "an antivirus"} blocked the {FileBlock.What(package)} as a threat",
+        System.ComponentModel.Win32Exception { NativeErrorCode: 2 } or FileNotFoundException =>
+            $"the {FileBlock.What(package)} was gone when it was to start: {antivirus ?? "an antivirus"} most likely removed it",
+        _ => $"the installer could not start ({ex.Message.TrimEnd('.')})",
+    };
+
+    /// <summary>
+    /// A reason cut to <see cref="ReasonLength"/> characters, keeping its end: installers and Windows put the cause
+    /// last ("An error occurred while trying to replace the existing file: DeleteFile failed; code 5. Access is denied.").
+    /// </summary>
+    public static string Fit(string reason) => reason.Length <= ReasonLength ? reason : "..." + reason[^(ReasonLength - 3)..].TrimStart();
+}
+
 /// <summary>The command lines that hand an update over, and the portable copy's unpack script.</summary>
 internal static class UpdateCommands
 {

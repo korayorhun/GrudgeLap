@@ -1,4 +1,7 @@
 using System.Diagnostics;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
 using GrudgeLap.Game;
 using Xunit;
 using Xunit.Abstractions;
@@ -182,10 +185,166 @@ public sealed class UpdateClientTests(ITestOutputHelper output) : IDisposable
         var error = await Assert.ThrowsAsync<UpdateException>(() => Client().DownloadAsync(wrong, _folder, Within(30)));
 
         Assert.Equal(UpdateFailure.Checksum, error.Kind);
+        Assert.False(error.Transient);
+        Assert.False(UpdateSchedule.RetryHelps(error));
         Assert.Contains("SHA-256", error.Message);
         Assert.Empty(Directory.GetFiles(_folder));
-        // Fetched once more from the start before giving up: two resumed pieces of different uploads fail the same way.
-        Assert.Equal(2, BlobHits(server).Count);
+        // It came whole in one answer: another would bring the same bytes, so it is not fetched again.
+        Assert.Single(BlobHits(server));
+    }
+
+    [Fact]
+    public async Task Fetches_a_pieced_package_once_more_before_rejecting_its_checksum()
+    {
+        await using var server = new FakeGitHub();
+        var bytes = Payload(1_000_000, 70);
+        var release = server.AddRelease("v0.77.0");
+        release.Add(SetupName, bytes).DropAt = 0.4;
+        var wrong = Package(server, release, SetupName, bytes) with { Sha256 = FakeGitHub.Sha(Payload(10, 71)) };
+
+        var error = await Assert.ThrowsAsync<UpdateException>(() => Client().DownloadAsync(wrong, _folder, Within(30)));
+
+        Assert.Equal(UpdateFailure.Checksum, error.Kind);
+        // The drop, the resumed rest (two pieces that could come from two uploads), then once more whole from the start.
+        var blobs = BlobHits(server);
+        Assert.Equal(3, blobs.Count);
+        Assert.Null(blobs[0].Range);
+        Assert.NotNull(blobs[1].Range);
+        Assert.Null(blobs[2].Range);
+        Assert.Contains(_log, l => l == "downloading the package again from the start");
+    }
+
+    [Fact]
+    public async Task Waits_for_a_downloaded_file_another_program_holds()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        await using var server = new FakeGitHub();
+        var bytes = Payload(300_000, 72);
+        var release = server.AddRelease("v0.77.0");
+        release.Add(SetupName, bytes);
+        var part = Path.Combine(_folder, SetupName + ".part");
+        await File.WriteAllBytesAsync(part, bytes);
+        var client = Client(Fast with { HeldFileWait = TimeSpan.FromSeconds(10), Antivirus = () => "Test Antivirus" });
+
+        // An antivirus scanning the new file holds it shut for a moment, as some do.
+        var scan = new FileStream(part, FileMode.Open, FileAccess.Read, FileShare.None);
+        var download = client.DownloadAsync(Package(server, release, SetupName, bytes), _folder, Within(30));
+        await WaitForAsync(() => client.Phase == DownloadPhase.Waiting);
+        var note = client.Note;
+        await Task.Delay(400);
+        Assert.False(download.IsCompleted);
+        await scan.DisposeAsync();
+        var path = await download;
+
+        Assert.Equal(bytes, await File.ReadAllBytesAsync(path));
+        Assert.Equal("held by another program (an antivirus scan?) - waiting", note);
+        Assert.Equal("", client.Note);
+        // The complete .part was verified where it lay: nothing was downloaded again.
+        Assert.Empty(server.Hits);
+    }
+
+    [Fact]
+    public async Task Names_the_antivirus_when_the_download_vanishes_as_soon_as_it_is_saved()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        await using var server = new FakeGitHub();
+        var bytes = Payload(300_000, 73);
+        var release = server.AddRelease("v0.77.0");
+        release.Add(SetupName, bytes);
+        var part = Path.Combine(_folder, SetupName + ".part");
+        await File.WriteAllBytesAsync(part, bytes);
+        var client = Client(Fast with { HeldFileWait = TimeSpan.FromSeconds(10), Antivirus = () => "Test Antivirus" });
+
+        // What Defender does with a file it takes for a threat: holds it while it scans, then moves it to quarantine.
+        var scan = new FileStream(part, FileMode.Open, FileAccess.Read, FileShare.Delete);
+        var download = client.DownloadAsync(Package(server, release, SetupName, bytes), _folder, Within(30));
+        await WaitForAsync(() => client.Phase == DownloadPhase.Waiting);
+        File.Delete(part);
+        await scan.DisposeAsync();
+        var error = await Assert.ThrowsAsync<UpdateException>(() => download);
+
+        Assert.Equal(UpdateFailure.Blocked, error.Kind);
+        Assert.Equal("the downloaded installer vanished as soon as it was saved: Test Antivirus most likely removed it", error.Message);
+        Assert.False(UpdateSchedule.RetryHelps(error));
+        Assert.Empty(server.Hits);
+    }
+
+    [Fact]
+    public async Task Gives_up_a_download_that_stays_locked_as_blocked_and_keeps_it()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        await using var server = new FakeGitHub();
+        var bytes = Payload(300_000, 74);
+        var release = server.AddRelease("v0.77.0");
+        release.Add(SetupName, bytes);
+        var part = Path.Combine(_folder, SetupName + ".part");
+        await File.WriteAllBytesAsync(part, bytes);
+        var client = Client(Fast with { HeldFileWait = TimeSpan.FromSeconds(0.6), Antivirus = () => null });
+
+        UpdateException error;
+        await using (new FileStream(part, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            error = await Assert.ThrowsAsync<UpdateException>(() => client.DownloadAsync(Package(server, release, SetupName, bytes), _folder, Within(30)));
+        }
+
+        Assert.Equal(UpdateFailure.Blocked, error.Kind);
+        Assert.Equal("the downloaded installer stayed locked by another program (an antivirus?)", error.Message);
+        // The whole package stays: the next start verifies it without downloading.
+        Assert.Equal(bytes.Length, new FileInfo(part).Length);
+        Assert.Empty(server.Hits);
+    }
+
+    [Fact]
+    public async Task Writes_no_proxy_password_that_an_error_of_dotnet_quotes()
+    {
+        // A proxy set up with its sign-in in its address, refusing the tunnel: .NET's error quotes the address whole
+        // ("The proxy tunnel request to proxy 'http://alice:s3cret@…' failed with status code '407'").
+        using var proxy = new TcpListener(IPAddress.Loopback, 0);
+        proxy.Start();
+        var port = ((IPEndPoint)proxy.LocalEndpoint).Port;
+        using var stop = new CancellationTokenSource();
+        var refusing = Task.Run(async () =>
+        {
+            while (!stop.IsCancellationRequested)
+            {
+                using var connection = await proxy.AcceptTcpClientAsync(stop.Token);
+                var stream = connection.GetStream();
+                var head = new StringBuilder();
+                var buffer = new byte[1024];
+                while (!head.ToString().Contains("\r\n\r\n", StringComparison.Ordinal) && await stream.ReadAsync(buffer, stop.Token) is var n and > 0) head.Append(Encoding.ASCII.GetString(buffer, 0, n));
+                await stream.WriteAsync(Encoding.ASCII.GetBytes("HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"office\"\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"), stop.Token);
+            }
+        });
+        using var http = new HttpClient(new SocketsHttpHandler { Proxy = new WebProxy(new Uri($"http://alice:s3cret@127.0.0.1:{port}/")), UseProxy = true, AllowAutoRedirect = false });
+        var log = new UpdateLog(Path.Combine(_folder, "update.log"));
+        var client = new UpdateClient(http, Fast, line =>
+        {
+            log.Write(line);
+            lock (_log) _log.Add(UpdateLog.Redact(line));
+        });
+        var package = new UpdatePackage(SetupName, new Uri("https://example.invalid/" + SetupName), 10, null, new Uri("https://example.invalid/" + SetupName + ".sha256"));
+
+        var error = await Assert.ThrowsAsync<UpdateException>(() => client.DownloadAsync(package, _folder, Within(30)));
+        stop.Cancel();
+        proxy.Stop();
+        await Task.WhenAny(refusing, Task.Delay(2000));
+
+        Assert.Equal("the proxy refused the connection to example.invalid", error.Message);
+        var written = await File.ReadAllTextAsync(log.FilePath);
+        Assert.Contains("407", written);
+        Assert.DoesNotContain("s3cret", written);
+        Assert.DoesNotContain("alice", written);
+        Assert.Contains($"http://***@127.0.0.1:{port}/", written);
+    }
+
+    private static async Task WaitForAsync(Func<bool> condition)
+    {
+        var deadline = Stopwatch.StartNew();
+        while (!condition())
+        {
+            Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(10), "waited 10 s for the client");
+            await Task.Delay(10);
+        }
     }
 
     [Fact]

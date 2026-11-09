@@ -183,6 +183,38 @@ public sealed class UpdateFeedTests(ITestOutputHelper output) : IDisposable
         Assert.Equal(UpdateFailure.RateLimited, error.Kind);
         Assert.Matches(@"^GitHub's limit of update checks for this connection is used up \(until \d\d:\d\d\)$", error.Message);
         Assert.NotNull(error.RetryAt);
+        // The limit is what the player is told, but github.com's own 503 may pass: the check is worth trying again.
+        Assert.True(error.Transient);
+        Assert.True(UpdateSchedule.RetryHelps(error));
+    }
+
+    [Fact]
+    public async Task A_rate_limit_alone_is_not_worth_trying_again_soon()
+    {
+        await using var server = new FakeGitHub();
+        // The latest release is a car model release with no update.json, and the API is out of calls: nothing passing.
+        GameRelease(server, "v0.77.0", manifest: false, latest: false);
+        server.AddRelease("models-2026-11").Add("model.glb", [1]);
+        server.ApiRateLimited = true;
+
+        var error = await Assert.ThrowsAsync<UpdateException>(() => Feed(server).FindLatestAsync(Within(20)));
+
+        Assert.Equal(UpdateFailure.RateLimited, error.Kind);
+        Assert.False(error.Transient);
+        Assert.False(UpdateSchedule.RetryHelps(error));
+    }
+
+    [Fact]
+    public void Tries_again_by_itself_only_after_a_lost_or_silent_connection()
+    {
+        foreach (var kind in Enum.GetValues<UpdateFailure>())
+        {
+            var helps = UpdateSchedule.RetryHelps(new UpdateException(kind, "reason"));
+            Assert.True(helps == (kind is UpdateFailure.Network or UpdateFailure.Timeout), $"{kind}: {helps}");
+        }
+        Assert.True(UpdateSchedule.RetryHelps(new UpdateException(UpdateFailure.RateLimited, "limit") { Transient = true }));
+        Assert.False(UpdateSchedule.RetryHelps(new InvalidOperationException("a bug")));
+        Assert.False(UpdateSchedule.RetryHelps(null));
     }
 
     [Fact]
@@ -196,6 +228,7 @@ public sealed class UpdateFeedTests(ITestOutputHelper output) : IDisposable
 
         Assert.Equal(UpdateFailure.Network, error.Kind);
         Assert.Equal("no connection to 127.0.0.1", error.Message);
+        Assert.True(UpdateSchedule.RetryHelps(error));
     }
 
     [Fact]
@@ -209,7 +242,9 @@ public sealed class UpdateFeedTests(ITestOutputHelper output) : IDisposable
 
         Assert.Equal(UpdateFailure.BadData, error.Kind);
         Assert.Equal("update.json is not JSON (a sign-in page of a hotspot or a proxy?)", error.Message);
+        Assert.False(UpdateSchedule.RetryHelps(error));
     }
+
     [Fact]
     public async Task Says_when_no_release_has_packages()
     {
@@ -219,6 +254,7 @@ public sealed class UpdateFeedTests(ITestOutputHelper output) : IDisposable
         var error = await Assert.ThrowsAsync<UpdateException>(() => Feed(server).FindLatestAsync(Within(20)));
 
         Assert.Equal(UpdateFailure.NotFound, error.Kind);
+        Assert.False(UpdateSchedule.RetryHelps(error));
     }
 
     [Theory]

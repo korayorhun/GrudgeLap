@@ -1,5 +1,7 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO.Compression;
+using System.Net;
 using System.Text;
 using GrudgeLap.Game;
 using Xunit;
@@ -216,6 +218,96 @@ public sealed class UpdateApplyTests : IDisposable
         using var run = Process.Start(new ProcessStartInfo(UpdateCommands.PowerShell, UpdateCommands.CommandLine(args)) { CreateNoWindow = true, UseShellExecute = false })!;
         Assert.True(run.WaitForExit(60_000), "the unpack script did not finish within a minute");
         return run.ExitCode;
+    }
+
+    [Fact]
+    public void Logs_a_proxy_without_its_sign_in()
+    {
+        var github = new Uri("https://github.com/");
+
+        // A proxy given with its sign-in in its address, as HTTPS_PROXY=http://alice:s3cret@host:port makes .NET's.
+        var line = UpdateDiagnostics.Proxy(github, new WebProxy(new Uri("http://alice:s3cret@proxy.example:3128/")));
+        var escaped = UpdateDiagnostics.Proxy(github, new FixedProxy(new UriBuilder("http", "10.0.0.1", 8080) { UserName = "alice", Password = Uri.EscapeDataString("p@ss:w/rd") }.Uri));
+
+        Assert.Equal("http://proxy.example:3128 (with a sign-in in its address, not logged)", line);
+        Assert.Equal("http://10.0.0.1:8080 (with a sign-in in its address, not logged)", escaped);
+        Assert.Equal("http://proxy.example:3128", UpdateDiagnostics.Proxy(github, new WebProxy(new Uri("http://proxy.example:3128/"))));
+        Assert.Equal("none (direct)", UpdateDiagnostics.Proxy(github, new WebProxy()));
+    }
+
+    [Fact]
+    public void Masks_every_sign_in_a_logged_line_quotes()
+    {
+        Assert.Equal("The proxy tunnel request to proxy 'http://***@127.0.0.1:3128/' failed with status code '407'.",
+            UpdateLog.Redact("The proxy tunnel request to proxy 'http://alice:s3cret@127.0.0.1:3128/' failed with status code '407'."));
+        Assert.Equal("proxy http://***@host:3128 and https://***@other/path", UpdateLog.Redact("proxy http://alice:p@ss@host:3128 and https://bob@other/path"));
+        // Lines without a sign-in stay as they are, an address's '@' further on included.
+        foreach (var plain in new[] { "downloading GrudgeLap-Setup-0.77.0.exe from https://github.com/x/y", "mail me@example.com", "https://host/a@b", "" })
+        {
+            Assert.Equal(plain, UpdateLog.Redact(plain));
+        }
+
+        var log = new UpdateLog(Path.Combine(_folder, "update.log"));
+        log.Write("proxy for GitHub: http://alice:s3cret@127.0.0.1:3128/");
+        var written = File.ReadAllText(log.FilePath);
+        Assert.DoesNotContain("s3cret", written);
+        Assert.EndsWith(" proxy for GitHub: http://***@127.0.0.1:3128/\n", written);
+    }
+
+    [Fact]
+    public void Says_what_a_copy_misses_in_plain_words()
+    {
+        Assert.Equal("v0.77.0 has no installer for this copy - F10 opens its page", UpdateTexts.NoPackage("0.77.0", installed: true));
+        Assert.Equal("v0.77.0 has no portable zip for this copy - F10 opens its page", UpdateTexts.NoPackage("0.77.0", installed: false));
+    }
+
+    [Fact]
+    public void Keeps_the_cause_when_the_game_gives_an_update_up()
+    {
+        // The reason the game read from a real failed install's log (Reads_why_an_install_failed_from_its_log).
+        const string reason = "An error occurred while trying to replace the existing file: DeleteFile failed; code 5. Access is denied.";
+
+        Assert.Equal($"v0.77.0 did not install twice ({reason}) - F10 opens its download page", UpdateTexts.GaveUp("0.77.0", reason));
+        Assert.Equal("v0.77.0 did not install twice - F10 opens its download page", UpdateTexts.GaveUp("0.77.0", ""));
+        // Longer than a line can hold: the end, where Windows and installers put the cause, is what stays.
+        var longer = "the installer ended at once (exit code 4): " + reason;
+        var fitted = UpdateTexts.Fit(longer);
+        Assert.Equal(UpdateTexts.ReasonLength, fitted.Length);
+        Assert.StartsWith("...", fitted);
+        Assert.EndsWith("DeleteFile failed; code 5. Access is denied.", fitted);
+        Assert.Equal(reason, UpdateTexts.Fit(reason));
+    }
+
+    [Fact]
+    public void Names_the_antivirus_that_took_a_file()
+    {
+        const string setup = "GrudgeLap-Setup-0.77.0.exe";
+        var virus = new IOException("Operation did not complete successfully because the file contains a virus or potentially unwanted software.", unchecked((int)0x800700E1));
+        var sharing = new IOException("The process cannot access the file because it is being used by another process.", unchecked((int)0x80070020));
+
+        Assert.True(FileBlock.IsThreat(virus));
+        Assert.True(FileBlock.IsThreat(new Win32Exception(225)));
+        Assert.False(FileBlock.IsThreat(sharing));
+        Assert.True(FileBlock.IsHeld(sharing));
+        Assert.True(FileBlock.IsHeld(new UnauthorizedAccessException()));
+        Assert.False(FileBlock.IsHeld(new IOException("disk full", unchecked((int)0x80070070))));
+        Assert.False(FileBlock.IsHeld(new FileNotFoundException()));
+
+        Assert.Equal("Microsoft Defender Antivirus blocked the downloaded installer as a threat", FileBlock.Threat(setup, "Microsoft Defender Antivirus"));
+        Assert.Equal("the downloaded zip vanished as soon as it was saved: an antivirus most likely removed it", FileBlock.Vanished("GrudgeLap-Portable-0.77.0.zip", null));
+        Assert.Equal("Microsoft Defender Antivirus blocked the installer as a threat", UpdateTexts.StartFailure(new Win32Exception(225), setup, "Microsoft Defender Antivirus"));
+        Assert.Equal("the installer was gone when it was to start: an antivirus most likely removed it", UpdateTexts.StartFailure(new Win32Exception(2), setup, null));
+        Assert.Equal("the installer could not start (Access is denied)", UpdateTexts.StartFailure(new Win32Exception(5, "Access is denied."), setup, null));
+        Assert.Equal("update failed: Microsoft Defender Antivirus blocked the downloaded installer as a threat - F10 opens its page",
+            UpdateTexts.Blocked(FileBlock.Threat(setup, "Microsoft Defender Antivirus")));
+    }
+
+    /// <summary>A proxy that answers one address for everything, as .NET's HTTPS_PROXY one does.</summary>
+    private sealed class FixedProxy(Uri address) : IWebProxy
+    {
+        public ICredentials? Credentials { get; set; }
+        public Uri GetProxy(Uri destination) => address;
+        public bool IsBypassed(Uri host) => false;
     }
 
     [Fact]

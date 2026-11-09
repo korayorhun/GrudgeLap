@@ -28,6 +28,11 @@ internal enum UpdateFailure
     Changed,
     /// <summary>The release metadata could not be read.</summary>
     BadData,
+    /// <summary>
+    /// A package the updater had just written vanished, was refused as a threat, or stayed locked: an antivirus,
+    /// most likely. Another copy would go the same way, so that version is not downloaded again in the session.
+    /// </summary>
+    Blocked,
 }
 
 /// <summary>An update step that failed, with a reason short and plain enough for the HUD.</summary>
@@ -36,7 +41,12 @@ internal sealed class UpdateException(UpdateFailure kind, string reason, Excepti
     public UpdateFailure Kind { get; } = kind;
     /// <summary>When the server asked to be left alone until (Retry-After, X-RateLimit-Reset).</summary>
     public DateTimeOffset? RetryAt { get; init; }
-    public bool Transient => Kind is UpdateFailure.Network or UpdateFailure.Timeout;
+    /// <summary>
+    /// Whether the same step may well work a little later: a connection that was lost or fell silent. Only such a
+    /// failure is tried again without the player asking (<see cref="UpdateSchedule.RetryHelps"/>). The feed also sets
+    /// it when the reason it shows is another route's (the API out of calls) but one of its routes failed this way.
+    /// </summary>
+    public bool Transient { get; init; } = kind is UpdateFailure.Network or UpdateFailure.Timeout;
 }
 
 /// <summary>The updater's HTTP: one client for the session, and redirects followed by hand.</summary>
@@ -144,6 +154,45 @@ internal sealed record UpdateClientOptions
     /// <summary>Free space wanted on the download's drive beyond the download itself (the portable copy unpacks there too).</summary>
     public long Reserve { get; init; } = 64L << 20;
     public int BufferSize { get; init; } = 1 << 20;
+    /// <summary>
+    /// How long a downloaded file that another program holds is waited for before the download counts as blocked.
+    /// An antivirus scans a new file as it is closed, and some hold it shut meanwhile: a 480 MB executable can take a while.
+    /// </summary>
+    public TimeSpan HeldFileWait { get; init; } = TimeSpan.FromSeconds(30);
+    /// <summary>The antivirus to name when a downloaded file is taken or refused; Security Center's active products by default.</summary>
+    public Func<string?> Antivirus { get; init; } = UpdateDiagnostics.ActiveAntivirus;
+}
+
+/// <summary>
+/// The signs that another program has a file the updater has just written, and the words for each. A fresh, unsigned
+/// executable of 480 MB is exactly what antivirus software looks at hardest (Godot exports are known false positives),
+/// and such a file used to fail as "could not be read back" with no hint of what took it.
+/// </summary>
+internal static class FileBlock
+{
+    // HRESULT_FROM_WIN32 of ERROR_SHARING_VIOLATION, ERROR_LOCK_VIOLATION, ERROR_VIRUS_INFECTED and ERROR_VIRUS_DELETED.
+    private const int SharingViolation = unchecked((int)0x80070020);
+    private const int LockViolation = unchecked((int)0x80070021);
+    private const int VirusInfected = unchecked((int)0x800700E1);
+    private const int VirusDeleted = unchecked((int)0x800700E2);
+
+    /// <summary>Another program has the file open, or access is refused for now: worth waiting a little.</summary>
+    public static bool IsHeld(Exception ex) => ex is UnauthorizedAccessException or IOException { HResult: SharingViolation or LockViolation };
+
+    /// <summary>Windows refused the file as "a virus or potentially unwanted software", opening it or starting it.</summary>
+    public static bool IsThreat(Exception ex) =>
+        ex.HResult is VirusInfected or VirusDeleted || ex is System.ComponentModel.Win32Exception { NativeErrorCode: 225 or 226 };
+
+    /// <summary>What the player calls the package: "installer" or "zip".</summary>
+    public static string What(string name) =>
+        name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ? "zip" : name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? "installer" : "file";
+
+    public static string Vanished(string name, string? antivirus) =>
+        $"the downloaded {What(name)} vanished as soon as it was saved: {antivirus ?? "an antivirus"} most likely removed it";
+
+    public static string Threat(string name, string? antivirus) => $"{antivirus ?? "an antivirus"} blocked the downloaded {What(name)} as a threat";
+
+    public static string Locked(string name, string? antivirus) => $"the downloaded {What(name)} stayed locked by another program ({antivirus ?? "an antivirus"}?)";
 }
 
 /// <summary>Where a download stands, for the HUD.</summary>
@@ -199,38 +248,39 @@ internal sealed class UpdateClient(HttpClient http, UpdateClientOptions? options
 
         if (File.Exists(final))
         {
-            if (package.Size is not { } size || new FileInfo(final).Length == size)
+            if ((package.Size is not { } size || new FileInfo(final).Length == size) && await VerifyAsync(final, package.Name, expected, fresh: false, ct).ConfigureAwait(false))
             {
-                if (await VerifyAsync(final, expected, ct).ConfigureAwait(false))
-                {
-                    Log($"reusing the package downloaded earlier: {final}");
-                    SetPhase(DownloadPhase.Done);
-                    return final;
-                }
+                Log($"reusing the package downloaded earlier: {final}");
+                SetPhase(DownloadPhase.Done);
+                return final;
             }
-            Log("the package downloaded earlier does not verify: deleted");
+            Log(File.Exists(final) ? "the package downloaded earlier does not verify: deleted" : "the package downloaded earlier is gone");
             Delete(final);
         }
 
-        // A resumed download is only as good as every attempt's piece: two pieces from different uploads of the same
-        // name would join into a file that fails the checksum. Such a file is fetched once more from the start.
         for (var round = 1; ; round++)
         {
-            await FetchAsync(package, part, folder, ct).ConfigureAwait(false);
-            if (await VerifyAsync(part, expected, ct).ConfigureAwait(false))
+            var whole = await FetchAsync(package, part, folder, ct).ConfigureAwait(false);
+            if (await VerifyAsync(part, package.Name, expected, fresh: true, ct).ConfigureAwait(false))
             {
-                await MoveIntoPlaceAsync(part, final, ct).ConfigureAwait(false);
+                await MoveIntoPlaceAsync(part, final, package.Name, ct).ConfigureAwait(false);
                 SetPhase(DownloadPhase.Done);
                 return final;
             }
             Delete(part);
-            if (round == 2) throw new UpdateException(UpdateFailure.Checksum, "the download does not match its published SHA-256 checksum");
+            // A resumed download is only as good as every attempt's piece: two pieces from different uploads of the
+            // same name join into a file that fails the checksum, and such a file is fetched once more from the start.
+            // One that came whole in a single answer would only come the same way again: 480 MB for nothing.
+            if (round == 2 || whole) throw new UpdateException(UpdateFailure.Checksum, "the download does not match its published SHA-256 checksum");
             Log("downloading the package again from the start");
         }
     }
 
-    /// <summary>Brings <paramref name="part"/> to the package's full length, attempt after attempt.</summary>
-    private async Task FetchAsync(UpdatePackage package, string part, string folder, CancellationToken ct)
+    /// <summary>
+    /// Brings <paramref name="part"/> to the package's full length, attempt after attempt. True when the last attempt
+    /// wrote the whole file from its first byte (one answer, nothing joined to it).
+    /// </summary>
+    private async Task<bool> FetchAsync(UpdatePackage package, string part, string folder, CancellationToken ct)
     {
         var withoutProgress = 0;
         for (var attempt = 1; ; attempt++)
@@ -239,7 +289,8 @@ internal sealed class UpdateClient(HttpClient http, UpdateClientOptions? options
             var have = File.Exists(part) ? new FileInfo(part).Length : 0L;
             if (package.Size is { } size)
             {
-                if (have == size) return;
+                // Complete from an earlier session: its pieces are not known, so a checksum failure fetches it once more.
+                if (have == size) return false;
                 if (have > size)
                 {
                     Delete(part);
@@ -249,8 +300,7 @@ internal sealed class UpdateClient(HttpClient http, UpdateClientOptions? options
             }
             try
             {
-                await AttemptAsync(package, part, folder, have, ct).ConfigureAwait(false);
-                return;
+                return await AttemptAsync(package, part, folder, have, ct).ConfigureAwait(false);
             }
             catch (UpdateException ex) when (ex.Transient && !ct.IsCancellationRequested)
             {
@@ -270,8 +320,11 @@ internal sealed class UpdateClient(HttpClient http, UpdateClientOptions? options
         }
     }
 
-    /// <summary>One request for the rest of the package: returns once the file is complete, throws otherwise.</summary>
-    private async Task AttemptAsync(UpdatePackage package, string part, string folder, long have, CancellationToken ct)
+    /// <summary>
+    /// One request for the rest of the package: returns once the file is complete (true when this answer wrote all of
+    /// it from the first byte), throws otherwise.
+    /// </summary>
+    private async Task<bool> AttemptAsync(UpdatePackage package, string part, string folder, long have, CancellationToken ct)
     {
         using var idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
         idle.CancelAfter(_options.Inactivity);
@@ -306,7 +359,7 @@ internal sealed class UpdateClient(HttpClient http, UpdateClientOptions? options
                     break;
                 case HttpStatusCode.RequestedRangeNotSatisfiable when package.Size is null && response.Content.Headers.ContentRange?.Length == have:
                     // Without a size from the release the file's own length says it is complete.
-                    return;
+                    return false;
                 case HttpStatusCode.RequestedRangeNotSatisfiable:
                     Delete(part);
                     throw new UpdateException(UpdateFailure.Network, $"{host} could not resume the download");
@@ -352,6 +405,7 @@ internal sealed class UpdateClient(HttpClient http, UpdateClientOptions? options
             {
                 throw new UpdateException(UpdateFailure.Network, $"the connection closed at {UpdateHttp.Megabytes(length)} of {UpdateHttp.Megabytes(expected)}");
             }
+            return start == 0;
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -418,15 +472,19 @@ internal sealed class UpdateClient(HttpClient http, UpdateClientOptions? options
         }
     }
 
-    /// <summary>The file's SHA-256 against <paramref name="expected"/>, read on this worker thread (485 MB took the main thread seconds on a slow disk).</summary>
-    private async Task<bool> VerifyAsync(string path, string expected, CancellationToken ct)
+    /// <summary>
+    /// The file's SHA-256 against <paramref name="expected"/>, read on this worker thread (485 MB took the main thread
+    /// seconds on a slow disk). <paramref name="fresh"/>: the file was just downloaded, so one that is gone was taken
+    /// (<see cref="UpdateFailure.Blocked"/>); a package kept from an earlier session that is gone just does not verify.
+    /// </summary>
+    private async Task<bool> VerifyAsync(string path, string name, string expected, bool fresh, CancellationToken ct)
     {
-        SetPhase(DownloadPhase.Verifying);
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         var buffer = ArrayPool<byte>.Shared.Rent(_options.BufferSize);
         try
         {
-            await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1, FileOptions.Asynchronous | FileOptions.SequentialScan);
+            await using var stream = await WhileHeldAsync(path, () => new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1, FileOptions.Asynchronous | FileOptions.SequentialScan), ct).ConfigureAwait(false);
+            SetPhase(DownloadPhase.Verifying);
             Interlocked.Exchange(ref _total, stream.Length);
             Interlocked.Exchange(ref _done, 0);
             int read;
@@ -436,10 +494,13 @@ internal sealed class UpdateClient(HttpClient http, UpdateClientOptions? options
                 Interlocked.Add(ref _done, read);
             }
         }
+        catch (FileNotFoundException) when (!fresh)
+        {
+            return false;
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // An antivirus that holds the fresh file can make it unreadable for a while; the next check tries again.
-            throw new UpdateException(UpdateFailure.Disk, $"the download could not be read back ({ex.Message})", ex);
+            throw Unusable(ex, name, "the download could not be read back");
         }
         finally
         {
@@ -451,23 +512,81 @@ internal sealed class UpdateClient(HttpClient http, UpdateClientOptions? options
         return ok;
     }
 
-    /// <summary>The checked .part under its real name; an antivirus still scanning the new file can hold it for a moment.</summary>
-    private async Task MoveIntoPlaceAsync(string part, string final, CancellationToken ct)
+    /// <summary>The checked .part under its real name.</summary>
+    private async Task MoveIntoPlaceAsync(string part, string final, string name, CancellationToken ct)
     {
-        for (var attempt = 1; ; attempt++)
+        try
         {
-            try
+            await WhileHeldAsync(part, () =>
             {
                 File.Move(part, final, overwrite: true);
-                Log($"verified package ready: {final}");
-                return;
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                return true;
+            }, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw Unusable(ex, name, "the verified download could not be renamed");
+        }
+        Log($"verified package ready: {final}");
+    }
+
+    /// <summary>
+    /// Runs <paramref name="step"/> on a file another program may hold for a moment (an antivirus scans a new file as
+    /// it is closed, and some keep it shut meanwhile), again every quarter of a second for up to
+    /// <see cref="UpdateClientOptions.HeldFileWait"/>; the HUD says what it waits for. Anything else, and a hold that
+    /// outlasts the wait, is the caller's to judge.
+    /// </summary>
+    private async Task<T> WhileHeldAsync<T>(string path, Func<T> step, CancellationToken ct)
+    {
+        var waited = System.Diagnostics.Stopwatch.StartNew();
+        var said = false;
+        var phase = Phase;
+        try
+        {
+            while (true)
             {
-                if (attempt == 10) throw new UpdateException(UpdateFailure.Disk, $"the verified download could not be renamed ({ex.Message})", ex);
-                await Task.Delay(300, ct).ConfigureAwait(false);
+                try
+                {
+                    return step();
+                }
+                catch (Exception ex) when (FileBlock.IsHeld(ex) && waited.Elapsed < _options.HeldFileWait)
+                {
+                    if (!said)
+                    {
+                        said = true;
+                        Log($"{Path.GetFileName(path)} is held by another program ({ex.Message}): waiting up to {Seconds(_options.HeldFileWait)}");
+                        Volatile.Write(ref _note, "held by another program (an antivirus scan?) - waiting");
+                        SetPhase(DownloadPhase.Waiting);
+                    }
+                    await Task.Delay(250, ct).ConfigureAwait(false);
+                }
             }
         }
+        finally
+        {
+            if (said)
+            {
+                Volatile.Write(ref _note, "");
+                SetPhase(phase);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Why a file the updater has just written cannot be used. Gone, refused as a threat or still held after the wait:
+    /// another program took it (an antivirus, named when Security Center knows it), and downloading it again would
+    /// only feed it another copy. Anything else is the disk's.
+    /// </summary>
+    private UpdateException Unusable(Exception ex, string name, string what)
+    {
+        if (ex is FileNotFoundException)
+        {
+            Log($"{name} vanished as soon as it was written ({ex.Message})");
+            return new UpdateException(UpdateFailure.Blocked, FileBlock.Vanished(name, _options.Antivirus()), ex);
+        }
+        if (FileBlock.IsThreat(ex)) return new UpdateException(UpdateFailure.Blocked, FileBlock.Threat(name, _options.Antivirus()), ex);
+        if (FileBlock.IsHeld(ex)) return new UpdateException(UpdateFailure.Blocked, FileBlock.Locked(name, _options.Antivirus()), ex);
+        return new UpdateException(UpdateFailure.Disk, $"{what} ({ex.Message})", ex);
     }
 
     private void CheckFreeSpace(string folder, long remaining)
