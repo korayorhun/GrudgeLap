@@ -3830,6 +3830,23 @@ The puddles were the view's alone: a mirror-flat patch on the asphalt, under the
 - **Tried and dropped:** the volumetric clouds' shadows on the ground (the sun's `cast_cloud_shadows`): no measurable change
   with the template's clouds.
 
+### The updater made reliable, and the review's sound and grating findings (0.77.0)
+
+- **The updater** (R2; `UpdateClient.cs`, `UpdateFeed.cs`, `UpdateApply.cs`, `UpdateLog.cs`, `Updater.cs`, the
+  installer's `PrepareToInstall`, `tools/release.ps1`'s `update.json`): see the updater notes above. Built and
+  independently checked in its own worktree (`update.tests`, 70 cases against an in-process server with faults injected).
+- **The sounds** (review findings 4-8): the 1989 train's clack only while the session moves the train; the roof's rain
+  under a deck follows the deck overhead, not the echo's level, which a finished credit zeroes; no suspension jolt from a
+  car just placed; the tyres and the gear whine fade over a time-out or a pause (the gears' load follows the engine's own
+  state), as the engine does.
+- **The grating, the decks and the export** (findings 9, 10, 12, 14, 16, 17): the ground's cap under the decks is solved
+  per span of deck frames with the 12 cm clearance under the asphalt only (0.73's box cut 7-24 cm notches beside and
+  past the decks; the deck tests now sample spans, sides and joints, mutation-checked); no edge lines on grating frames;
+  the windscreen drawn by the cockpit camera's compositor after the transparent pass (`WindscreenGlass`,
+  `windscreen.glsl`), so its drops and film show the loop's grating (the drops' contents now carry the motion blur); a
+  sliding wheel's own contact point decides whether it marks the grating; `--export-world` writes the deck as a blended
+  textured material (a masked one vanished in viewers that mipmap).
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

@@ -8,7 +8,7 @@ Yeni bir istek gelince buraya satır olarak eklenir. Bir sürüm bir isteği kar
 - **Durum:** `Tamam` karşılandı, `Kısmen` bir kısmı karşılandı, `Açık` henüz yapılmadı, `Karar` yön belirlendi, `Ertelendi` bilerek sonraya bırakıldı.
 - **Ayrıntı:** teknik gerekçeler [design.md](design.md)'de, sürüm notları GitHub Releases'te.
 
-Son güncelleme: 9 Kasım 2026 (sürüm 0.76.0).
+Son güncelleme: 9 Kasım 2026 (sürüm 0.77.0).
 
 ## 1. Hedef
 
@@ -127,7 +127,7 @@ Son güncelleme: 9 Kasım 2026 (sürüm 0.76.0).
 | No | İster | Kaynak | Durum |
 |---|---|---|---|
 | R1 | Oyun açılınca kendini güncellesin; her açılışta en yeni sürüm gelsin. | 26 Eki: "açtığımda en güceli gelsin her zaman" | Tamam (0.6.0) |
-| R2 | Otomatik güncelleme çoğu zaman başarısız oluyor. | 3 Kas; 8 Kas: evde yine başarısız | Tamam (0.26.0): paketler 200 MB'yi geçince 60 saniyelik süre doluyordu. 0.17-0.25 kurulu kopyalar 0.26.0'ı bir kez elle kurmalı. Güncelleyici baştan yazıldı (night/updater, yayın bekliyor): kopan indirme kaldığı yerden sürüyor, sürüm bilgisi update.json'dan (GitHub API sınırı yok), kurulum oyunun kapanmasını bekliyor, başarısızlığın nedeni ekranda ve update.log'da, iki başarısızlıktan sonra F10 sürüm sayfasını açıyor; antivirüsün sildiği ya da engellediği indirme antivirüsün adıyla söyleniyor ve o oturumda yeniden indirilmiyor, yalnız kopan bağlantı kendiliğinden yeniden deneniyor. 0.76 ve öncesi bir kez eski yoldan gelir; olmazsa son Setup elle bir kez kurulur |
+| R2 | Otomatik güncelleme çoğu zaman başarısız oluyor. | 3 Kas; 8 Kas: evde yine başarısız | Tamam (0.26.0): paketler 200 MB'yi geçince 60 saniyelik süre doluyordu. 0.17-0.25 kurulu kopyalar 0.26.0'ı bir kez elle kurmalı. Güncelleyici baştan yazıldı (0.77.0): kopan indirme kaldığı yerden sürüyor, sürüm bilgisi update.json'dan (GitHub API sınırı yok), kurulum oyunun kapanmasını bekliyor, başarısızlığın nedeni ekranda ve update.log'da, iki başarısızlıktan sonra F10 sürüm sayfasını açıyor; antivirüsün sildiği ya da engellediği indirme antivirüsün adıyla söyleniyor ve o oturumda yeniden indirilmiyor, yalnız kopan bağlantı kendiliğinden yeniden deneniyor. 0.76 ve öncesi bir kez eski yoldan gelir; olmazsa son Setup elle bir kez kurulur |
 | R3 | Her iş bitince yayınlansın (GitHub Release). | 29 Eki: "çalışman bitince her zaman publish de yap" | Kural |
 | R4 | winget ve benzeri mağaza yayınları 1.0 kararlı sürüme kadar beklesin. | 22 Eki | Ertelendi |
 
@@ -208,6 +208,9 @@ Son güncelleme: 9 Kasım 2026 (sürüm 0.76.0).
 73. **BRZ: sahibin Avrupa otomatiği** (A10, 0.76.0): Tamam. BRZ artık otomatik seçilince kendi 6 ileri tork konvertörlü şanzımanıyla sürülüyor (Aisin A960E oranları, kilitleme kavraması, gaza göre vites noktaları, kickdown); 0-100 km/s 8,2 s, son hız 212 km/s, 100-0 fren 38,6 m. Araştırmanın yay, viraj demiri, tork eğrisi ve fren düzeltmeleri her şanzımanda geçerli. Diğer arabaların sürüşü değişmedi (bütün testler aynı).
 74. **Hayalet araba düzgün** (G11, 0.76.0): Tamam. Hayaletin derinlik geçişi artık arkasındaki saydam şeyleri (ızgara, yağmur, cam) silmiyor; arabanın iki yüzü de çiziliyor, ters modellenmiş parçalar (estate, Testarossa, BRZ) delik bırakmıyor.
 75. **Unreal: net ön cam, yol kenarı, rüzgâr, toz ve yağmur** (H5, 0.76.0): Tamam. Bazı modellerde cam iç ve dış yüzüyle iki kat çizildiğinden ön camdan yol ışığının onda biriyle görünüyordu; artık tek kat (Testarossa, BRZ, saloon, turbo hatch). Yol kenarında Godot'taki ahşap çitler, elektrik direkleri ve telleri, kilometre kazıkları; ovada Godot'un renk lekeleri ve yol boyunca adaçayı çalıları; otlar, çalılar ve ağaçlar rüzgârda sallanıyor. Fren lambaları yanıyor (trafiğinkiler de), kayan teker iz bırakıyor, çimde toz, kaymada beyaz lastik dumanı, ıslak yolda su serpintisi (trafikte de). Yağmur ince, ışık alan çizgiler; kamera titremesi yumuşak, çarpınca kafa sarsılıyor, takip kamerası loop'ta arabayı izliyor. Başlık ekranında Unreal Engine ve NVIDIA DLSS adları.
+76. **Güncelleyici evde de çalışsın** (R2, 0.77.0): Tamam. Kopan indirme kaldığı yerden sürüyor, sürüm bilgisi update.json'dan okunuyor (GitHub'ın saatlik API sınırına takılmıyor), kurulum oyunun kapanmasını bekliyor, başarısızlığın nedeni ekranda ve update.log'da; uygulanmış kurulum dosyaları siliniyor. 0.76 ve öncesi bir kez eski yoldan güncellenir; evde yine olmazsa GrudgeLap-Setup-0.77.0.exe bir kez elle kurulur.
+77. **Ses hataları** (0.77.0): Tamam. Duran trenin 1989 tıkırtısı, süre bitince köprü altında tavana yağmur sesi, başlık ekranında ve tekrarın sonunda süspansiyon gümlemesi kalktı; lastik sesi ve vites uğultusu kesilmek yerine sönerek kapanıyor.
+78. **Loop ızgarası, zemin ve ön cam** (0.77.0): Tamam. Köprü ve rampa uçlarında zeminde 7-24 cm'lik basamaklar kalktı; loop'un ızgarasının üstünde beyaz kenar çizgileri ve lastik izleri yok; yağmurda ön camdaki damlalar loop'un ızgarasını da gösteriyor; dışa aktarılan loop zemini başka programlarda da ızgara.
 
 ## 11. Çalışma kuralları
 
