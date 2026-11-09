@@ -6,11 +6,14 @@
 #include "Components/SceneCaptureComponent2D.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
+#include "Components/SkyAtmosphereComponent.h"
+#include "Components/SpotLightComponent.h"
 #include "Components/VolumetricCloudComponent.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/ExponentialHeightFog.h"
 #include "Engine/PostProcessVolume.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/TextureLightProfile.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "EngineUtils.h"
 #include "Kismet/KismetMaterialLibrary.h"
@@ -34,6 +37,7 @@
 #endif
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "RenderUtils.h"
 #include "UnrealClient.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGlpGame, Log, All);
@@ -90,6 +94,26 @@ namespace
 	bool Event(const glp_state& State, int32 Event)
 	{
 		return (State.events & (1u << Event)) != 0;
+	}
+
+	/**
+	 * A car's beams by its era (0.77), linear: halogen (the Godot version's sRGB 1, 0.95, 0.86), xenon on the 2000s and
+	 * 2010s saloons and the 458, LED on the McLaren, the Leon Cupra and the BRZ (catalogue indices, VehicleSpec.Catalogue).
+	 */
+	FLinearColor BeamColour(int32 Catalogue)
+	{
+		switch (Catalogue)
+		{
+		case 1:
+		case 11:
+		case 12:
+			return FLinearColor::FromSRGBColor(FColor(235, 245, 255));
+		case 7:
+		case 8:
+			return FLinearColor::FromSRGBColor(FColor(245, 250, 255));
+		default:
+			return FLinearColor::FromSRGBColor(FColor(255, 242, 219));
+		}
 	}
 }
 
@@ -160,10 +184,75 @@ void AGlpGame::BeginPlay()
 	bTraffic = !FParse::Param(FCommandLine::Get(), TEXT("GlpNoTraffic"));
 	bSpeedRoute = FParse::Param(FCommandLine::Get(), TEXT("GlpSpeedRoute"));
 	FParse::Value(FCommandLine::Get(), TEXT("GlpWeather="), FixedWeather);
+	// The hour for automated runs (0.77), by the Godot version's --light= names. Not -GlpTime: Godot's --time= is the
+	// credit's clock, not the hour.
+	if (FString Light; FParse::Value(FCommandLine::Get(), TEXT("GlpLight="), Light))
+	{
+		FixedLight = GlpLook::ParseChoice(Light);
+		if (FixedLight < 0)
+		{
+			UE_LOG(LogGlpGame, Warning, TEXT("-GlpLight=%s: day, sunrise, dusk, night or random wanted; the player's choice stands"), *Light);
+		}
+	}
+	// MegaLights for the night's lamps (0.77): the night's score of lights at a flat cost, the yards' lamps with ray-traced
+	// shadows, where the classic path pays for each light and each shadow. It needs hardware ray tracing (this engine does
+	// not allow its software tracing); without it, or with -GlpNoMegaLights for a comparison, the lamps take the classic
+	// path and only the player's two beams cast shadows, as in Godot.
+	bMegaLightsAvailable = IsRayTracingEnabled() && !FParse::Param(FCommandLine::Get(), TEXT("GlpNoMegaLights"));
+	auto Numbers = [](const FString& Text)
+	{
+		TArray<FString> Parts;
+		Text.ParseIntoArray(Parts, TEXT(","));
+		TArray<double> Values;
+		for (const FString& Part : Parts)
+		{
+			Values.Add(FCString::Atod(*Part));
+		}
+		return Values;
+	};
+	if (FString Text; FParse::Value(FCommandLine::Get(), TEXT("GlpCamera="), Text, false))
+	{
+		// The Godot version's --camera= (Bootstrap): an eye and a point looked at in simulation metres, and a vertical
+		// field of view (50 by default).
+		const TArray<double> V = Numbers(Text);
+		if (V.Num() >= 6)
+		{
+			FGlpShot Shot;
+			Shot.Location = GlpSpace::SimToUnreal(FVector(V[0], V[1], V[2]));
+			Shot.Rotation = FRotationMatrix::MakeFromXZ(GlpSpace::SimToUnreal(FVector(V[3], V[4], V[5])) - Shot.Location, FVector::UpVector).ToQuat();
+			Shot.HorizontalFov = GlpSpace::HorizontalFov(V.Num() > 6 ? static_cast<float>(V[6]) : 50.f);
+			FixedCamera = Shot;
+		}
+		else
+		{
+			UE_LOG(LogGlpGame, Warning, TEXT("-GlpCamera=%s: six or seven numbers wanted"), *Text);
+		}
+	}
+	if (FString Text; FParse::Value(FCommandLine::Get(), TEXT("GlpOrbit="), Text, false))
+	{
+		const TArray<double> V = Numbers(Text);
+		if (V.Num() == 3)
+		{
+			Orbit = FVector(V[0], V[1], V[2]);
+		}
+	}
+	if (FString Text; FParse::Value(FCommandLine::Get(), TEXT("GlpRainAir="), Text, false))
+	{
+		const TArray<double> V = Numbers(Text);
+		if (V.Num() == 2)
+		{
+			RainAir = FVector2f(static_cast<float>(V[0]), static_cast<float>(V[1]));
+		}
+	}
 	FString View;
 	if (FParse::Value(FCommandLine::Get(), TEXT("GlpView="), View))
 	{
 		Rig.bCockpit = !View.Equals(TEXT("chase"), ESearchCase::IgnoreCase);
+	}
+	if (FixedCamera || Orbit)
+	{
+		// A view from outside: the car is drawn whole, as for the chase camera.
+		Rig.bCockpit = false;
 	}
 	FString Shots;
 	if (FParse::Value(FCommandLine::Get(), TEXT("GlpShots="), Shots, false))
@@ -207,6 +296,34 @@ void AGlpGame::BeginPlay()
 		}
 		TrainCars.Add(Car);
 	}
+	// The night's lamps (0.77): their assets by the level's soft references (cooked with the game), held while it runs.
+	LampAssets.Glow = LampGlowMaterial.LoadSynchronous();
+	LampAssets.LowBeam = LowBeamProfile.LoadSynchronous();
+	LampAssets.Plane = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane"));
+	NightAssets = { LampAssets.Glow, LampAssets.LowBeam, LampAssets.Plane };
+	NightCollection = LoadObject<UMaterialParameterCollection>(nullptr, TEXT("/Game/GrudgeLap/Materials/MPC_Night.MPC_Night"));
+	if (!LampAssets.Glow || !LampAssets.LowBeam || !NightCollection)
+	{
+		UE_LOG(LogGlpGame, Warning, TEXT("night assets missing (glow %d, low beam %d, MPC_Night %d): build the level again with this module"),
+			LampAssets.Glow ? 1 : 0, LampAssets.LowBeam ? 1 : 0, NightCollection ? 1 : 0);
+	}
+	// -GlpRainGain=<x> (0.77): the share of a rain streak the beams light (MPC_Night's RainGain, Scripts/build_scene.py
+	// RAIN_GAIN), for checks.
+	if (float RainGain = 0.f; NightCollection && FParse::Value(FCommandLine::Get(), TEXT("GlpRainGain="), RainGain))
+	{
+		UKismetMaterialLibrary::SetScalarParameterValue(GetWorld(), NightCollection, TEXT("RainGain"), RainGain);
+	}
+	// The stars (0.77): one instance, added to the look on a clear night (ApplyWeather); -GlpStarGain=<x> sets their gain for
+	// checks (the material's 10; 1 is the catalogue's own brightness).
+	if (UMaterialInterface* Stars = NightSkyMaterial.LoadSynchronous())
+	{
+		NightStars = UMaterialInstanceDynamic::Create(Stars, this);
+		if (float StarGain = 1.f; FParse::Value(FCommandLine::Get(), TEXT("GlpStarGain="), StarGain))
+		{
+			NightStars->SetScalarParameterValue(TEXT("StarGain"), StarGain);
+		}
+	}
+	BuildNightLamps();
 
 	Instruments = NewObject<UGlpInstruments>(this);
 	Instruments->Create(this);
@@ -282,10 +399,12 @@ void AGlpGame::BeginPlay()
 
 void AGlpGame::ApplyWeather()
 {
-	// What the credit's weather does to the level (0.13), as WorldBuilder.ApplyWeather does in Godot: under any
-	// weather but a clear day the sun drops to a wide soft source behind the cloud, the clouds close over, the air
-	// thickens and the camera opens up; a wet road darkens and shines through MPC_Weather (the ground materials,
-	// Scripts/build_scene.py); rain is streaks falling past the camera (FallRain).
+	// What the credit's weather and hour do to the level (0.13, the hours 0.77), as WorldBuilder.ApplyWeather does in
+	// Godot: under any weather but a clear sky the light drops to a wide soft source behind the cloud, the clouds close
+	// over, the air thickens and the camera opens up; a wet road darkens and shines through MPC_Weather (the ground
+	// materials, Scripts/build_scene.py); rain is streaks falling past the camera (FallRain). The hour turns the one
+	// directional light into the low sun or the moon, dims the night's sky, and sets the exposure, the clouds and the
+	// lens's finish (GlpLookFor). The clear day keeps every value the level was built with.
 	UWorld* World = GetWorld();
 	if (!World)
 	{
@@ -294,11 +413,27 @@ void AGlpGame::ApplyWeather()
 	const int32 Weather = Current.weather;
 	const bool bOvercast = Weather != GLP_WEATHER_DRY;
 	const bool bRaining = Weather == GLP_WEATHER_RAIN;
+	const FGlpLook Look = GlpLookFor(Hour, Weather);
 	if (UMaterialParameterCollection* Collection = LoadObject<UMaterialParameterCollection>(nullptr, TEXT("/Game/GrudgeLap/Materials/MPC_Weather.MPC_Weather")))
 	{
 		UKismetMaterialLibrary::SetScalarParameterValue(World, Collection, TEXT("Wetness"), Current.wetness);
 		UKismetMaterialLibrary::SetScalarParameterValue(World, Collection, TEXT("Rain"), bRaining ? 1.f : 0.f);
 	}
+	USkyAtmosphereComponent* Sky = nullptr;
+	for (ASkyAtmosphere* SkyActor : TActorRange<ASkyAtmosphere>(World))
+	{
+		Sky = SkyActor->GetComponent();
+		if (Sky)
+		{
+			if (!SkyFactor.IsSet())
+			{
+				SkyFactor = Sky->SkyAndAerialPerspectiveLuminanceFactor;
+			}
+			Sky->SetSkyAndAerialPerspectiveLuminanceFactor(SkyFactor.GetValue() * Look.SkyFactor);
+			break;
+		}
+	}
+	float LightLux = 0.f;
 	for (ADirectionalLight* Sun : TActorRange<ADirectionalLight>(World))
 	{
 		UDirectionalLightComponent* Light = Cast<UDirectionalLightComponent>(Sun->GetLightComponent());
@@ -309,10 +444,24 @@ void AGlpGame::ApplyWeather()
 		if (SunLux < 0.f)
 		{
 			SunLux = Light->Intensity;
+			DayRotation = Sun->GetActorRotation();
 		}
-		Light->SetIntensity(bOvercast ? SunLux * 0.12f : SunLux);
-		Light->SetLightColor(bOvercast ? FLinearColor(0.86f, 0.89f, 0.95f) : FLinearColor::White);
-		Light->SetLightSourceAngle(bOvercast ? 12.f : 0.5357f);
+		// Godot's (x, y, z) is Unreal's (x, z, y) (GlpSpace); the light shines away from where it is.
+		const FVector Towards = FVector(Look.Towards.X, Look.Towards.Z, Look.Towards.Y).GetSafeNormal();
+		Sun->SetActorRotation(Look.bLevelSun ? DayRotation.GetValue() : FRotationMatrix::MakeFromX(-Towards).Rotator());
+		LightLux = SunLux * Look.SunShare;
+		if (Look.GroundLux > 0.f)
+		{
+			// The moon's light is given on the ground, as an eye or a light meter would read it; the light's own value is
+			// the illuminance above the atmosphere, which a low light loses most of on its way down.
+			const FVector Direction = -Sun->GetActorForwardVector();
+			LightLux = Sky ? Sky->GetAtmosphericLightToMatchIlluminanceOnGround(Direction, Look.GroundLux) : Look.GroundLux;
+		}
+		Light->SetIntensity(LightLux);
+		Light->SetLightColor(Look.Colour);
+		Light->SetLightSourceAngle(Look.SourceAngle);
+		// A sun behind the overcast at the day's height shows no disc through the deck's gaps (the day keeps its 0.76 sky).
+		Light->SetAtmosphereSunDiskColorScale(Look.bDisc ? FLinearColor::White : FLinearColor::Black);
 	}
 	for (AExponentialHeightFog* FogActor : TActorRange<AExponentialHeightFog>(World))
 	{
@@ -325,9 +474,29 @@ void AGlpGame::ApplyWeather()
 		{
 			FogDensity = Fog->FogDensity;
 			FogColour = Fog->FogInscatteringLuminance;
+			bLevelVolumetricFog = Fog->bEnableVolumetricFog;
 		}
 		Fog->SetFogDensity(bOvercast ? FogDensity * (bRaining ? 4.5f : 2.5f) : FogDensity);
-		Fog->SetFogInscatteringColor(bOvercast ? FLinearColor(0.42f, 0.44f, 0.48f) : FogColour);
+		// The overcast's grey air is a luminance added to the sky's share of the fog: invisible at a grey day's exposure,
+		// it would be a grey veil over the night. Scaled with the exposure from the day's under the same weather, it keeps
+		// the same shade at every hour and the day's exactly.
+		const float Shade = FMath::Pow(2.f, Look.EvOffset - GlpLookFor(EGlpHour::Day, Weather).EvOffset);
+		Fog->SetFogInscatteringColor(bOvercast ? FLinearColor(0.42f, 0.44f, 0.48f) * Shade : FogColour);
+		// The rain's air at night (Godot's RainNightAir): volumetric fog, in which the beams' cones show (GlpLookFor's
+		// AirExtinction and AirAnisotropy; -GlpRainAir for checks).
+		Fog->SetVolumetricFog(Look.bVolumetricFog || bLevelVolumetricFog);
+		if (Look.bVolumetricFog)
+		{
+			const FVector2f Air = RainAir.Get(FVector2f(Look.AirExtinction, Look.AirAnisotropy));
+			Fog->SetVolumetricFogDistance(10000.f);
+			Fog->SetVolumetricFogScatteringDistribution(Air.Y);
+			Fog->SetVolumetricFogAlbedo(FColor::White);
+			Fog->SetVolumetricFogExtinctionScale(Air.X);
+			// The air starts past the bonnet and comes in over 1.5 m (0.77): inside the cabin the grid's cells took the
+			// beams' light through the car, a lit veil over the dashboard and dark blocks at its edges.
+			Fog->SetVolumetricFogStartDistance(250.f);
+			Fog->SetVolumetricFogNearFadeInDistance(150.f);
+		}
 	}
 	for (AVolumetricCloud* CloudActor : TActorRange<AVolumetricCloud>(World))
 	{
@@ -339,44 +508,54 @@ void AGlpGame::ApplyWeather()
 		if (!CloudMaterial)
 		{
 			CloudMaterial = Cloud->Material.LoadSynchronous();
+			CloudLayer = FVector2f(Cloud->LayerBottomAltitude, Cloud->LayerHeight);
 		}
 		if (!CloudMaterial)
 		{
 			continue;
 		}
-		if (bOvercast)
-		{
-			// The template's cloud material is closed over through whatever coverage parameter it has.
-			UMaterialInstanceDynamic* Overcast = UMaterialInstanceDynamic::Create(CloudMaterial, this);
-			TArray<FMaterialParameterInfo> Infos;
-			TArray<FGuid> Ids;
-			CloudMaterial->GetAllScalarParameterInfo(Infos, Ids);
-			for (const FMaterialParameterInfo& Info : Infos)
-			{
-				const FString Name = Info.Name.ToString();
-				if (Name.Contains(TEXT("overage")))
-				{
-					Overcast->SetScalarParameterValue(Info.Name, 0.95f);
-				}
-				else if (Name.Contains(TEXT("xtinction")) || Name.Contains(TEXT("ensity")))
-				{
-					float Value = 0.f;
-					if (CloudMaterial->GetScalarParameterValue(Info, Value))
-					{
-						Overcast->SetScalarParameterValue(Info.Name, Value * 3.f);
-					}
-				}
-				UE_LOG(LogGlpGame, Log, TEXT("cloud parameter %s"), *Name);
-			}
-			Cloud->SetMaterial(Overcast);
-			Cloud->SetLayerBottomAltitude(1.2f);
-			Cloud->SetLayerHeight(6.f);
-		}
-		else
+		if (!bOvercast && Look.CloudOffset == 0.f)
 		{
 			Cloud->SetMaterial(CloudMaterial);
+			Cloud->SetLayerBottomAltitude(CloudLayer.X);
+			Cloud->SetLayerHeight(CloudLayer.Y);
+			continue;
 		}
+		if (!CloudInstance)
+		{
+			CloudInstance = UMaterialInstanceDynamic::Create(CloudMaterial, this);
+		}
+		// The template's cloud material is closed over, or thinned, through whatever coverage parameter it has.
+		TArray<FMaterialParameterInfo> Infos;
+		TArray<FGuid> Ids;
+		CloudMaterial->GetAllScalarParameterInfo(Infos, Ids);
+		for (const FMaterialParameterInfo& Info : Infos)
+		{
+			const FString Name = Info.Name.ToString();
+			float Value = 0.f;
+			if (!CloudMaterial->GetScalarParameterValue(Info, Value))
+			{
+				continue;
+			}
+			if (Name.Contains(TEXT("overage")))
+			{
+				if (CloudCoverage < 0.f)
+				{
+					CloudCoverage = Value;
+					UE_LOG(LogGlpGame, Log, TEXT("cloud coverage %s %.3f"), *Name, Value);
+				}
+				CloudInstance->SetScalarParameterValue(Info.Name, bOvercast ? 0.95f : Value + Look.CloudOffset);
+			}
+			else if (Name.Contains(TEXT("xtinction")) || Name.Contains(TEXT("ensity")))
+			{
+				CloudInstance->SetScalarParameterValue(Info.Name, bOvercast ? Value * 3.f : Value);
+			}
+		}
+		Cloud->SetMaterial(CloudInstance);
+		Cloud->SetLayerBottomAltitude(bOvercast ? 1.2f : CloudLayer.X);
+		Cloud->SetLayerHeight(bOvercast ? 6.f : CloudLayer.Y);
 	}
+	const bool bMegaLights = LampsLit() && bMegaLightsAvailable;
 	for (APostProcessVolume* Volume : TActorRange<APostProcessVolume>(World))
 	{
 		if (!Volume->bUnbound)
@@ -386,12 +565,41 @@ void AGlpGame::ApplyWeather()
 		if (ExposureEv < 0.f)
 		{
 			ExposureEv = Volume->Settings.AutoExposureMinBrightness;
+			DayBloom = Volume->Settings.BloomIntensity;
+			DayFlare = Volume->Settings.LensFlareIntensity;
+			DayGrain = Volume->Settings.FilmGrainIntensity;
 		}
 		// A grey day is two or three stops dimmer than a sunny one: the eye, and the camera, open up (the sun above is
-		// down to an eighth; at 1.6 stops the first wet runs came out as dusk).
-		const float Ev = bOvercast ? ExposureEv - (bRaining ? 2.8f : 2.4f) : ExposureEv;
+		// down to an eighth; at 1.6 stops the first wet runs came out as dusk). The hours by their light (GlpLookFor).
+		const float Ev = ExposureEv + Look.EvOffset;
 		Volume->Settings.AutoExposureMinBrightness = Ev;
 		Volume->Settings.AutoExposureMaxBrightness = Ev;
+		// The lens's finish by the hour: at night a lamp's bloom and flare are the picture's brightest things, and a
+		// daylight setting drowned the road in them.
+		Volume->Settings.BloomIntensity = Look.Bloom >= 0.f ? Look.Bloom : DayBloom;
+		Volume->Settings.LensFlareIntensity = Look.Flare >= 0.f ? Look.Flare : DayFlare;
+		Volume->Settings.FilmGrainIntensity = Look.Grain >= 0.f ? Look.Grain : DayGrain;
+		// Only while the lamps are lit; the day keeps the project's lighting path.
+		Volume->Settings.bOverride_bMegaLights = bMegaLights;
+		Volume->Settings.bMegaLights = bMegaLights;
+		// The stars on a clear night (0.77), added to the sky's pixels after the upscaler; the other hours keep the level's
+		// blendables as they were.
+		bStarsShown = NightStars && Hour == EGlpHour::Night && !bOvercast;
+		Volume->Settings.WeightedBlendables.Array.RemoveAll([this](const FWeightedBlendable& Blendable) { return Blendable.Object == NightStars; });
+		if (bStarsShown)
+		{
+			Volume->Settings.WeightedBlendables.Array.Add(FWeightedBlendable(1.f, NightStars));
+		}
+	}
+	ShowNightLamps();
+	const FString Shown = FString::Printf(TEXT("%s, weather %d"), GlpLook::HourName(Hour), Weather);
+	if (Shown != LookShown)
+	{
+		LookShown = Shown;
+		UE_LOG(LogGlpGame, Log, TEXT("light %s (choice %s), weather %d, light %.3g lux, EV100 %.1f, lamps %s, MegaLights %s, stars %s"),
+			GlpLook::HourName(Hour), LightName(), Weather, LightLux, ExposureEv + Look.EvOffset, LampsLit() ? TEXT("lit") : TEXT("off"),
+			bMegaLights ? TEXT("on") : bMegaLightsAvailable ? TEXT("off") : TEXT("not available"),
+			bStarsShown ? TEXT("shown") : NightStars ? TEXT("hidden") : TEXT("missing (build the level again)"));
 	}
 	if (!Rain)
 	{
@@ -431,6 +639,143 @@ void AGlpGame::ApplyWeather()
 	{
 		WeatherShown = Weather;
 		UE_LOG(LogGlpGame, Log, TEXT("weather %d (wetness %.2f)"), Weather, Current.wetness);
+	}
+}
+
+FGlpLampState AGlpGame::LampState(int32 Catalogue, bool bPlayer) const
+{
+	// The Godot version's rule (WorldBuilder.LampsLit, CarLampsLit): the beams dusk to dawn, the lamps' glows also in the
+	// rain at any hour. By day in the rain a beam's light would not show, and MegaLights stays off by day.
+	FGlpLampState State;
+	State.bBeams = LampsLit();
+	State.bCards = State.bBeams || Current.weather == GLP_WEATHER_RAIN;
+	State.bPlayer = bPlayer;
+	State.BeamColour = BeamColour(Catalogue);
+	return State;
+}
+
+void AGlpGame::BuildNightLamps()
+{
+	// The train's headlamp (the Godot version's TrainView.Night): 3.8 m up and 5.95 m towards the cowcatcher (the
+	// locomotive's local +Y, Godot's +Z), 2 degrees down, a narrow beam down the line; its glow on the lamp.
+	const FLinearColor TrainWhite = FLinearColor::FromSRGBColor(FColor(255, 235, 191));   // sRGB 1, 0.92, 0.75
+	if (AActor* Locomotive = TrainCars.IsEmpty() ? nullptr : TrainCars[0].Get())
+	{
+		const FTransform At(FRotator(-2.f, 90.f, 0.f), GlpSpace::GodotLocalToUnreal(0.0, 3.8, 5.95));
+		TrainLamp = GlpLamps::Spot(Locomotive, Locomotive->GetRootComponent(), At, 60000.f, TrainWhite, 6.f, 18.f, 20000.f, false, nullptr, false);
+		TrainGlow = GlpLamps::Glow(Locomotive, Locomotive->GetRootComponent(), At, LampAssets, TrainWhite,
+			GlpLamps::DiscLuminance(60000.f, 12.f), 12.f, GlpLamps::EGlow::Tail);
+		if (USpotLightComponent* Lamp = TrainLamp.Get())
+		{
+			Lamp->SetVisibility(false);
+		}
+		if (UStaticMeshComponent* Glow = TrainGlow.Get())
+		{
+			Glow->SetVisibility(false);
+		}
+	}
+	// The coaches' windows (M_TrainWindow, Scripts/build_scene.py rig_world): one dynamic instance for all, lit at night.
+	int32 Windows = 0;
+	for (AActor* Band : TActorRange<AActor>(GetWorld()))
+	{
+		if (!Band->ActorHasTag(TEXT("GLP.TrainWindows")))
+		{
+			continue;
+		}
+		TArray<UStaticMeshComponent*> Meshes;
+		Band->GetComponents<UStaticMeshComponent>(Meshes);
+		for (UStaticMeshComponent* Mesh : Meshes)
+		{
+			if (!TrainWindowLight && Mesh->GetMaterial(0))
+			{
+				TrainWindowLight = UMaterialInstanceDynamic::Create(Mesh->GetMaterial(0), this);
+			}
+			if (TrainWindowLight)
+			{
+				Mesh->SetMaterial(0, TrainWindowLight);
+				Windows++;
+			}
+		}
+	}
+	// The farms' yard lamps (the Godot version's NightLamps.YardLamp): on the export's poles (tag GLP.YardLamp, the
+	// node's frame the Godot one's), a sodium dusk-to-dawn lamp under the head at 6.3 m, 1.05 m out on the arm: a 100 W
+	// high-pressure sodium lamp's 750 cd straight down through a refractor's spread (about 19 lux under it, 1 lux 15 m
+	// out), and its glow all round.
+	const FLinearColor Sodium = FLinearColor::FromSRGBColor(FColor(255, 158, 71));   // sRGB 1, 0.62, 0.28
+	for (AActor* Pole : TActorRange<AActor>(GetWorld()))
+	{
+		if (!Pole->ActorHasTag(TEXT("GLP.YardLamp")) || !Pole->GetRootComponent())
+		{
+			continue;
+		}
+		FYardLamp Lamp;
+		Lamp.Light = GlpLamps::Spot(Pole, Pole->GetRootComponent(), FTransform(FRotator(-90.f, 0.f, 0.f), GlpSpace::GodotLocalToUnreal(0.0, 6.3, 1.05)),
+			750.f, Sodium, 60.f, 80.f, 4500.f, false, nullptr);
+		Lamp.Glow = GlpLamps::Glow(Pole, Pole->GetRootComponent(), FTransform(FRotator(-90.f, 0.f, 0.f), GlpSpace::GodotLocalToUnreal(0.0, 6.45, 1.05)),
+			LampAssets, Sodium, 20000.f, 15.f, GlpLamps::EGlow::AllRound);
+		if (USpotLightComponent* Light = Lamp.Light.Get())
+		{
+			Light->SetMaxDrawDistance(60000.f);
+			Light->SetMaxDistanceFadeRange(10000.f);
+			Light->SetVisibility(false);
+		}
+		if (UStaticMeshComponent* Glow = Lamp.Glow.Get())
+		{
+			Glow->SetVisibility(false);
+		}
+		YardLamps.Add(Lamp);
+	}
+	UE_LOG(LogGlpGame, Log, TEXT("night lamps: train %s, %d lit windows, %d yard lamps"), TrainLamp.IsValid() ? TEXT("lamp made") : TEXT("no lamp"), Windows, YardLamps.Num());
+}
+
+void AGlpGame::ShowNightLamps()
+{
+	// The yards' lamps and the train's windows dusk to dawn (WorldBuilder.LampsLit); the yards' shadows only through
+	// MegaLights (the Godot version's cast none: a shadowed lamp each cost too much on the classic path). The train's lamp
+	// casts none: it stands a few centimetres off the locomotive's front.
+	const bool bLit = LampsLit();
+	const bool bShadows = bLit && bMegaLightsAvailable;
+	for (const FYardLamp& Lamp : YardLamps)
+	{
+		if (USpotLightComponent* Light = Lamp.Light.Get())
+		{
+			Light->SetVisibility(bLit);
+			Light->SetCastShadows(bShadows);
+		}
+		if (UStaticMeshComponent* Glow = Lamp.Glow.Get())
+		{
+			Glow->SetVisibility(bLit);
+		}
+	}
+	if (TrainWindowLight)
+	{
+		TrainWindowLight->SetScalarParameterValue(TEXT("Lit"), bLit ? 1.f : 0.f);
+	}
+}
+
+void AGlpGame::SyncRetroreflection()
+{
+	// The marker posts' reflectors and the road paint's glass beads return the player's beams to them (M_Reflector,
+	// M_RoadPaint): retroreflected light goes back to its source, so the drones' lamps return to the drones and only the
+	// player's two count. Written every frame while they are lit, once when they go out.
+	const FGlpCarView* Car = PlayerCar();
+	const USpotLightComponent* Left = Car ? Car->BeamLight(0) : nullptr;
+	const USpotLightComponent* Right = Car ? Car->BeamLight(1) : nullptr;
+	const bool bOn = Left && Right;
+	if (!NightCollection || (!bOn && !bRetroShown))
+	{
+		return;
+	}
+	bRetroShown = bOn;
+	UWorld* World = GetWorld();
+	UKismetMaterialLibrary::SetScalarParameterValue(World, NightCollection, TEXT("LampOn"), bOn ? 1.f : 0.f);
+	if (bOn)
+	{
+		auto Vector = [](const FVector& V) { return FLinearColor(static_cast<float>(V.X), static_cast<float>(V.Y), static_cast<float>(V.Z), 0.f); };
+		UKismetMaterialLibrary::SetVectorParameterValue(World, NightCollection, TEXT("LampLeft"), Vector(Left->GetComponentLocation()));
+		UKismetMaterialLibrary::SetVectorParameterValue(World, NightCollection, TEXT("LampRight"), Vector(Right->GetComponentLocation()));
+		UKismetMaterialLibrary::SetVectorParameterValue(World, NightCollection, TEXT("LampForward"), Vector(Left->GetForwardVector()));
+		UKismetMaterialLibrary::SetVectorParameterValue(World, NightCollection, TEXT("LampUp"), Vector(Left->GetUpVector()));
 	}
 }
 
@@ -844,6 +1189,8 @@ void AGlpGame::NewSession()
 		FColor(18, 56, 33), FColor(194, 173, 133), FColor(9, 9, 10), FColor(107, 148, 189), FColor(84, 13, 18), FColor(204, 153, 41),
 		FColor(84, 87, 89), FColor(71, 46, 28) };
 	const int32 Drones = Library->Traffic(Session, nullptr, 0);
+	TrafficModels.Reset();
+	bRetroShown = true;   // written again on the first frame
 	Bodies.SetNum(FMath::Max(Drones, 1));
 	Library->Traffic(Session, Bodies.GetData(), Bodies.Num());
 	for (int32 i = 0; i < Drones; i++)
@@ -857,9 +1204,13 @@ void AGlpGame::NewSession()
 		{
 			Copy->Root()->Tags.Add(TEXT("GLP.Copy"));
 			TrafficCars.Add(MoveTemp(Copy));
+			TrafficModels.Add(Index);
 		}
 	}
 	Library->GetState(Session, &Current);
+	// The credit's hour (0.77), as the Godot version's: -GlpLight for an automated run, otherwise the player's choice (the
+	// day by default; random draws one of the four for every credit).
+	Hour = GlpLook::HourOf(FixedLight >= 0 ? FixedLight : LightChoice);
 	ApplyWeather();
 	if (Current.grudge_match)
 	{
@@ -1201,6 +1552,19 @@ bool AGlpGame::HandleMenu()
 		}
 		return false;
 	}
+	// L steps the hour the same way (0.77, the Godot version's LIGHT): day, sunrise, dusk, night, random.
+	if (Input.Pressed(EKeys::L))
+	{
+		LightChoice = GlpLook::NextChoice(LightChoice);
+		FixedLight = -1;
+		SaveSettings();
+		NewSession();
+		if (Audio)
+		{
+			Audio->Chime();
+		}
+		return false;
+	}
 	// M opens the folder for the player's own replay music (replay.wav, read when a car is chosen), made if missing.
 	if (Input.Pressed(EKeys::M))
 	{
@@ -1373,10 +1737,31 @@ void AGlpGame::SyncViews(float DeltaSeconds)
 		Shot = Rig.Follow(Car->Root()->GetActorTransform(), FMath::Abs(Current.speed),
 			FVector2f(Current.lateral_acceleration, Current.longitudinal_acceleration), bRough ? 1.f : 0.f, DeltaSeconds);
 	}
+	if (FixedCamera)
+	{
+		Shot = FixedCamera.GetValue();
+	}
+	else if (Orbit && Car->Root())
+	{
+		// The Godot version's orbit camera (CameraRig, Mode Orbit): round a point 0.6 m over the road under the centre of
+		// gravity, yaw 0 from behind and 90 from the car's right, through a 40 degree lens.
+		const FVector O = Orbit.GetValue();
+		const double Yaw = FMath::DegreesToRadians(O.X);
+		const double Pitch = FMath::DegreesToRadians(O.Y);
+		const FTransform& Body = Car->Root()->GetActorTransform();
+		const FVector Centre = Body.GetLocation() + FVector(0.0, 0.0, (0.6 - CarSpec.cg_height) * 100.0);
+		const FVector Offset = Body.GetRotation().RotateVector(GlpSpace::GodotLocalToUnreal(FMath::Sin(Yaw) * FMath::Cos(Pitch), FMath::Sin(Pitch), FMath::Cos(Yaw) * FMath::Cos(Pitch)) * O.Z);
+		Shot.Location = Centre + Offset;
+		Shot.Rotation = FRotationMatrix::MakeFromXZ(Centre - Shot.Location, FVector::UpVector).ToQuat();
+		Shot.HorizontalFov = GlpSpace::HorizontalFov(40.f);
+	}
 	Camera->SetWorldLocationAndRotation(Shot.Location, Shot.Rotation);
 	Camera->SetFieldOfView(Shot.HorizontalFov);
 
+	// The player's lamps (0.77), lit dusk to dawn, the glows also in the rain; the drones' in SyncTrafficAndTrain.
+	Car->SetLamps(LampState(CarIndex, true), LampAssets);
 	SyncTrafficAndTrain(DeltaSeconds);
+	SyncRetroreflection();
 	LaySkidMarks();
 	ThrowPuffs(DeltaSeconds, Shot.Location);
 	FallRain(DeltaSeconds, Shot.Location, Shot.Rotation);
@@ -1415,6 +1800,7 @@ void AGlpGame::SyncTrafficAndTrain(float DeltaSeconds)
 		}
 		DroneSpeeds[i] = Bodies[i].speed;
 		TrafficCars[i]->SetBraking(DroneBraking[i] > 0.f ? 1.f : 0.f);
+		TrafficCars[i]->SetLamps(LampState(TrafficModels.IsValidIndex(i) ? TrafficModels[i] : 0, false), LampAssets);
 	}
 
 	TrainDistance = 1e9f;
@@ -1433,6 +1819,19 @@ void AGlpGame::SyncTrafficAndTrain(float DeltaSeconds)
 		{
 			// The train waits off the circuit between runs; it is only drawn while it runs (TrainView).
 			HideTree(Car, !bShown);
+			if (i == 0)
+			{
+				// Its lamp goes out with it: a hidden actor's light is told so itself (0.77).
+				const bool bLit = bShown && LampsLit();
+				if (USpotLightComponent* Lamp = TrainLamp.Get(); Lamp && Lamp->IsVisible() != bLit)
+				{
+					Lamp->SetVisibility(bLit);
+				}
+				if (UStaticMeshComponent* Glow = TrainGlow.Get(); Glow && Glow->IsVisible() != bLit)
+				{
+					Glow->SetVisibility(bLit);
+				}
+			}
 			if (bShown)
 			{
 				Car->SetActorLocationAndRotation(GlpSpace::SimToUnreal(TrainBodies[i].position), GlpSpace::SimRotation(TrainBodies[i].orientation));
@@ -1575,6 +1974,10 @@ void AGlpGame::LoadSettings()
 		{
 			WeatherChoice = FMath::Clamp(FCString::Atoi(*Value), 0, 4);
 		}
+		else if (Key == TEXT("light"))
+		{
+			LightChoice = FMath::Clamp(FCString::Atoi(*Value), 0, 4);
+		}
 		else if (Key == TEXT("units"))
 		{
 			// Metric by default since 0.14: the old "kmh" key is left unread, so a copy that never chose gets km/h once.
@@ -1585,7 +1988,7 @@ void AGlpGame::LoadSettings()
 
 void AGlpGame::SaveSettings() const
 {
-	const FString Text = FString::Printf(TEXT("car=%d\ntransmission=%d\nunits=%s\nweather=%d\n"), CarIndex, Transmission, bKmh ? TEXT("kmh") : TEXT("mph"), WeatherChoice);
+	const FString Text = FString::Printf(TEXT("car=%d\ntransmission=%d\nunits=%s\nweather=%d\nlight=%d\n"), CarIndex, Transmission, bKmh ? TEXT("kmh") : TEXT("mph"), WeatherChoice, LightChoice);
 	FFileHelper::SaveStringToFile(Text, *SavedFile(TEXT("settings.ini")));
 }
 

@@ -81,13 +81,14 @@ Run these from the repository root.
 | --- | --- | --- |
 | `unreal\Scripts\drive.cmd chase 3+8+15 16` | The scripted driver takes the car round without a window; `cockpit` or `chase` view. A fourth argument plays keys instead (`2:Enter+4-20:Up+9:E`) or stays on the title screen (`title`). | Screenshots in `Saved\Screenshots\Glp`, the car's state every second in the log |
 | `unreal\Scripts\render.cmd` | Movie Render Queue stills: cockpit, chase, the meadow view, the cockpit at an evening sun. | `Saved\Renders` |
-| `unreal\Scripts\perf.cmd` | Frame rate of the attract-mode lap in the cockpit at 1920×1080, 900 frames. | CSV in `Saved\Profiling\CSV` |
+| `unreal\Scripts\perf.cmd` | Frame rate of the attract-mode lap in the cockpit at 1920×1080, 900 frames; `PERF_ARGS` adds the game's switches (`set PERF_ARGS=-GlpLight=night -GlpWeather=3`). | CSV in `Saved\Profiling\CSV` |
 | `python unreal/Scripts/compare.py out.jpg Cockpit godot.png unreal.png …` | Godot and Unreal pictures of the same shot side by side. | `out.jpg` |
 
 To play, open `unreal\GrudgeLapUE.uproject` in the editor and press Play, or start the editor binary with the
 project and `-game`. The keys are the Godot version's: left and right choose the car on the title screen, 1, 2 and
-3 the gearbox, Enter starts; then the arrow keys or WASD drive, E and Q (or 1 to 7, N, R) change gear, Shift is
-the clutch, Space skips the replay or puts the car back on the road, C switches the camera, U the units, F5
+3 the gearbox, H the weather, L the hour (day, sunrise, dusk, night, random), Enter starts; then the arrow keys or
+WASD drive, E and Q (or 1 to 7, N, R) change gear, Shift is the clutch, Space skips the replay or puts the car back on
+the road, C switches the camera, U the units, F5
 starts a new game, F9 the attract mode, F11 full screen and F12 takes a screenshot. A gamepad has the Godot
 version's layout (left stick steers, the triggers are the pedals, RB / LB shift and pick the gearbox on the title
 screen, X clutch, A starts, B skips, Y camera, Back new game, the d-pad stands in for all). At the end of a
@@ -99,7 +100,12 @@ GPU ran flat out and its driver timed out. Runs with `-RenderOffScreen` (the scr
 
 For automated checks, `-GlpAudioDump=<file.wav>` records the sound mix and `-GlpMute` keeps the speakers silent;
 `-GlpHold` keeps the simulation from stepping (with `-GlpTitleShots` the shots' clock runs anyway), so two shots differ by
-what the renderer moves alone (the wind, the clouds, the rain).
+what the renderer moves alone (the wind, the clouds, the rain). `-GlpLight=day|sunrise|dusk|night|random` fixes the hour
+and `-GlpWeather=0..3` the weather; `-GlpCamera=x,y,z,tx,ty,tz[,fov]` (simulation metres, a vertical field of view) and
+`-GlpOrbit=yaw,pitch,distance` (on the car: 0 from behind, 90 from its right) hold the camera as the Godot version's
+`--camera=` and `--orbit=` do, so the two versions can be shot alike; `-GlpNoMegaLights` keeps the night's lamps on the
+classic lighting path, `-GlpStarGain=<x>` sets the stars' gain, and `-GlpRainAir=<extinction>,<anisotropy>` and
+`-GlpRainGain=<x>` the night rain's air and the share of its streaks the beams light (0.77).
 `drive.cmd` holds its runs to 60 fps (`t.MaxFPS`: off screen the game sets no cap of its own, and the development laptop's
 GPU has dropped out under an uncapped loop), keeps the editor's on-screen notes out of the shots
 (`DisableAllScreenMessages`) and passes further console commands from `GLP_EXEC` (each after a comma, e.g.
@@ -120,6 +126,113 @@ DLSS plugin the game also turns on **DLSS Ray Reconstruction** (`AGlpGame::Enabl
 `DLSS Ray Reconstruction: on`, and `-GlpNoRR` keeps the built-in denoisers for a comparison.
 
 On an RTX card with the plugin (step 4) DLSS takes TSR's place (`r.NGX.DLSS.Enable` in `Config/DefaultEngine.ini`) in its Quality mode: the frame is rendered at a fixed 75 % of the window and upscaled. Dynamic resolution is off: the plugin picks its mode by the top of the dynamic range and took DLAA, which takes 99 to 100 % only, and the packaged game stopped on DLSS's assertion the first time a frame was rendered below that. The log says `LogDLSS: NVIDIA NGX DLSS supported 1`; `-ExecCmds="r.NGX.DLSS.Enable 0"` puts TSR back for a comparison.
+
+**Times of day and the night (0.77).** The Godot version's four hours, by the numbers it stores them (`light=` in
+`settings.ini`: 0 day, 1 sunrise, 2 random, 3 night, 4 dusk): **L** on the title screen steps day, sunrise, dusk, night
+and random (a draw for every credit), as **H** steps the weather (H and M were missing from the keys the game reads, so
+until 0.77 they only ever worked from a script). Without a choice the day is the level's own, value for value. The
+hour's numbers are one table, `GlpLookFor` in `Source/GrudgeLapUE/GlpLook.h`, applied with the weather by
+`AGlpGame::ApplyWeather`:
+
+- **Sun and moon:** the level's one directional light, the sky atmosphere's sun, turned to the Godot version's
+  `SunriseDirection` (5.85° up), `DuskDirection` (behind the Tetons, the circuit in their shadow) or `MoonDirection` (17°
+  up). The sun keeps its 75 000 lux at every hour: the atmosphere reddens and dims a low sun by itself, which the Godot
+  version's hand-picked sunrise and dusk colours stood in for. The moon gives 0.9 lux on the ground (the light's own
+  value is what the atmosphere needs for that: `GetAtmosphericLightToMatchIlluminanceOnGround`) in Godot's bluish
+  `MoonLight`; the sky draws its disc. The night's sky and aerial perspective are at 0.6, so the far mountains are not
+  veiled in pale blue. Under cloud the light comes from the day's direction without a disc (Godot's rule), at 1800 lux
+  at sunrise, 900 at dusk and 0.6 on the ground at night.
+- **Exposure** (fixed, EV100): day 14, sunrise 12, dusk 10.6, night 1; grey 11.6, 9.9, 10.2 and 1, rain 11.2, 9.6, 10.0
+  and 1, so the grey sunrise's picture is 0.9 stops under the grey day's and the grey dusk's 3.1, as Godot's are (worked
+  out from Godot's light and exposure numbers, 0.4 and 1.4, they came out a stop too bright). Bloom and grain step down
+  at dusk and at night, the lens flare at sunrise and dusk too (0.04 against the day's 0.12: the low sun dead ahead threw
+  a green ghost and a blue disc across the road and the windscreen). Measured on the start-line view against the Godot
+  version (`-GlpCamera=-10,1.6,0,200,8,0,50`, both versions), in stops over Godot's for the sky, the mountains and the
+  plain: the day (as in 0.76) +0.4, +0.8, +0.1; sunrise +0.2, +0.3, +0.8; dusk +0.3, +0.2, −0.2; night +0.1, +0.7,
+  +1.0; under grey and rain every hour keeps the grey or the rainy day's own differences (−0.9, −0.4, −0.3 and +0.5,
+  +0.9, +0.2) to within 0.4. The first estimates, EV 10.5 and 9.5 and a 1 lux moon at EV 0, came out two to three stops
+  too bright.
+- **Clouds:** the template's `Cloud_GlobalCoverage` is an offset on its noise (the level's −0.2, the overcast's 0.95),
+  so a clear sunrise, dusk and night take the Godot version's steps from its day: −0.19, −0.09, −0.11. The game keeps
+  one dynamic instance of the cloud material for every other sky and puts the level's cloud layer back for a clear
+  credit (until 0.77 a clear credit after a grey one kept the overcast's lower, thicker layer).
+- **Stars** (`M_NightStars`, `STARS_HLSL`): on a clear night a post-process material adds about 9 200 procedural stars to
+  the sky's pixels after the upscaler (the Yale catalogue's count to magnitude 6.5, each a gaussian a pixel and a half
+  wide holding all of its light, dimmed by the air mass, none on the land, fading where the sky is brighter than a clear
+  night's: the clouds, the moon's glow), at ten times the catalogue's brightness, as the night's exposure is set for the
+  lamps. A sky dome did not work in this engine: an Is Sky mesh never showed over the sky (the atmosphere drew its own
+  sky over it), and a plain dome was not drawn past 15 to 30 km.
+- **Lamps**, dusk to dawn (the cars' glows and tail lamps also in the rain, as Godot's `CarLampsLit`):
+  - the low beam is an IES light profile (`IES_LowBeam`, written by `write_low_beam_ies` from `LOW_BEAM`): a flat
+    cut-off 0.57° down on the oncoming side stepping up 15° over the verge, 20 000 cd at the hot spot, the foreground
+    kept down (about 940 cd 7° down), the ECE R112 class B points checked;
+  - each car's lamp sockets sit on its own lamps' lenses (`prepare_model_car.py lamp_sockets`; tags `GLP.LampHeadL` … in
+    `rig_car`): the front `GLP_Lens`, a cluster at a headlamp's height before a fog lamp under it; the red of the rear
+    `GLP_Brake` (a textured lens's amber and white parts left out), else the rear lenses; or the materials `LAMP_MATERIALS`
+    names for a model (the BRZ's LED projectors, the estate's `Phare_avt`, the saloon's tail lamps). The socket is on the
+    lens under its cluster's middle: the first ones, at the middle's height but the lens's tip, hung up to 23 cm in the
+    air in front of a swept lamp. The 205's lamps, regions of its body's texture, and the saloon's outer round headlamps
+    are measured (`MEASURED_LAMPS`); the Godot version's box rule, its width now taken at the car's ends without the side
+    mirrors, is left for a model without any;
+  - the player's car: two beams 8 cm ahead of the body, their shadows from the virtual shadow maps (traced against the
+    ray-tracing scene's coarser stand-in of the car's own nose, every shadow ray was blocked and the road went dark 7 m
+    out), and the tail lamps' red on the road behind (3 cd, 12 braking); each drone one beam between its lamps, without
+    shadows, as in Godot; the train's lamp and its coaches' lit windows (`M_TrainWindow`); the seven farms' sodium yard
+    lamps on the export's poles (`GLP.YardLamp`, 750 cd straight down);
+  - every lit lamp shows its glow (`M_LampGlow`, the Godot version's `lamp_glow.gdshader` in real units): a card turned to
+    the camera carrying the lamp's luminance, never under a pixel and a half wide, seen from each side as its pattern
+    sends the light, held under the half floats' range; the brake lamps' lenses glow at a tail lamp's level while lit and
+    flare with the brake, each as its part of the car (`prepare_model_car.py brake_parts`, `BRAKE_LAMP_HLSL`): a centre
+    high-mounted stop lamp (the Clio's, the 458's) with the brake alone, a front marker made of the same material (the
+    V8's, the five's indicators) never, and a textured lens (the estate's, the five's) only in its red;
+  - the marker posts' reflectors (`M_Reflector`, 500 cd per lux per m²) and the road paint's glass beads (`M_RoadPaint`,
+    0.15) send the player's beams back (`MPC_Night`, written every frame): bright ahead, fading close up as real ones do.
+  - **Rain at night:** the beams stay out of the translucency lighting volume (its cells are a metre or two across, and a
+    20 kcd lamp in one lit the rain's streaks and the wheels' spray white all round the car), so `M_Rain` lights each
+    streak from the player's two beams itself (`RAIN_BEAMS_HLSL` on `MPC_Night`, as the retroreflectors: the beam's
+    pattern over the distance squared, a drop sending a share of it back towards the lamps and more on along the beam,
+    `RainGain` 0.05 for the part of its streak a real drop fills). The height fog's volumetric fog carries the beams' glow
+    in the air: twice the rain's density, scattering about evenly (anisotropy 0.2, the Godot version's; at 0.7 the light
+    went on along the beams and almost none came back to the seat), from 2.5 m out and in over 1.5 m (nearer, its cells
+    lit the cabin through the car). Its cost is in the frame times below.
+- **MegaLights** is on in the post-process volume while the lamps are lit and hardware ray tracing is available: about
+  twenty lights at a flat cost, the yards' with ray-traced shadows. Without it, or with `-GlpNoMegaLights`, the lamps take
+  the classic path and only the player's two beams cast shadows, as in Godot.
+- **Shadows' cache:** a virtual shadow map keeps a page until something in it moves, and a page drawn while Nanite was
+  still streaming a mesh in kept that mesh's coarse shadow: in 0.76's level too, and in every 0.77 build, a shadow some
+  20 m across lay over the road and the verges at the start line with nothing to cast it (gone with
+  `r.Shadow.Virtual.Cache 0`). `r.Nanite.VSMInvalidateOnLODDelta=1` (`Config/DefaultEngine.ini`) has the clusters that
+  stream in invalidate the pages they were drawn into; it costs nothing measurable on `perf.cmd`'s lap.
+
+Frame times (`perf.cmd` with `PERF_ARGS`: the hot hatch's attract lap in the cockpit, 1920×1080, DLSS Quality, hardware
+ray tracing, RTX 5060 Laptop; milliseconds, median and 95th percentile; the frame is held by the render thread):
+
+| Cell | Frame | Render thread | GPU |
+| --- | --- | --- | --- |
+| clear day (`-GlpLight=day`; 0.76: 16.45) | 16.4 to 16.9, p95 20.4 to 21.6 | 16.4 to 16.9 | 15.5 to 16.0 |
+| clear dusk | 17.2, p95 21.1 | 17.2 | 16.3 |
+| clear night, MegaLights | 17.6 to 18.1, p95 23.0 to 24.4 | 17.7 to 18.1 | 16.7 to 17.1 |
+| clear night, `-GlpNoMegaLights` | 17.1 to 17.4, p95 22.5 to 22.6 | 17.1 to 17.3 | 16.3 |
+| night rain | 17.9 to 18.2, p95 23.0 to 23.8 | 17.9 to 18.2 | 17.1 to 17.2 |
+| day rain | 16.4 to 16.5, p95 20.0 to 21.3 | 16.5 | 15.3 to 15.5 |
+
+With twenty-odd lights the classic path is still 0.5 to 0.7 ms cheaper than MegaLights' flat cost; MegaLights buys the
+yards' shadows and room for more lamps. The night rain costs 1.4 to 1.8 ms over the day rain (p95 1.7 to 2.5): the
+night's lamps as on a clear night (MegaLights 0.9 ms of GPU, the beams' virtual shadow maps 0.4) and the volumetric
+fog, 0.6 ms of GPU plus 0.1 in MegaLights' volume. With the fog's grid at 16 pixels (`r.VolumetricFog.GridPixelSize`,
+8 by default) it took 0.3 ms, but the frame, held by the render thread, was no shorter (18.4 ms), so the grid stays.
+
+Not yet as in Godot: the clouds at dusk are white where Godot's are pink, the moonlit plain is a stop brighter than
+Godot's (both all but black), the signs are not retroreflective, and in the rain at night the streaks catch the player's
+beams and the yards' lamps (through the translucency volume) but not the oncoming drones' beams, which stay out of that
+volume as the player's do.
+The dusk's afterglow stands over the sun, right of the start straight (bearing 285, Godot's `DuskDirection`), where
+Godot's sky photo glows left of it; looking into it, the meadow's rocks shine white (their 0.76 material's specular, kept
+as the day has it). The train's lamp is where Godot's is, at the locomotive's cowcatcher, but in both versions the
+locomotive runs cab first and the lamp faces back over the first coach (the model's turn in the export and TrainView, a
+Godot-side change). The lightning's and the windscreen's hour values wait for a storm and a windscreen of their own, and
+the night's sounds for an ambience in `GlpAudio`.
+
 
 ## Packaging
 

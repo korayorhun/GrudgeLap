@@ -406,11 +406,9 @@ def surface_material(name, folder, u_tiling, v_tiling, tint=(1.0, 1.0, 1.0), mac
 
 
 def weather_assets():
-    """MPC_Weather (Wetness and Rain, set by the game from the simulation's weather, AGlpGame::ApplyWeather), the
-    puddle mask the wet ground reads, and M_Rain, the rain's streaks (AGlpGame::FallRain): as the Godot version's
-    rain.gdshader, a faint lit streak (alpha 0.3, sRGB 0.78, 0.82, 0.90) gone within 1.2 m of the eye and whole from
-    4.5 m; until 0.76 an unlit sheet panning down a cylinder round the camera. Made before the ground materials, which
-    read the collection."""
+    """MPC_Weather (Wetness and Rain, set by the game from the simulation's weather, AGlpGame::ApplyWeather) and the
+    puddle mask the wet ground reads. Made before the ground materials, which read the collection; the rain's streaks
+    (rain_material) come after the night's collection, which they read too (0.77)."""
     path = f"{GAME}/Materials/MPC_Weather"
     if eal.does_asset_exist(path):
         eal.delete_asset(path)
@@ -426,7 +424,15 @@ def weather_assets():
     WEATHER["collection"] = collection
     decals = os.path.join(IMPORT, "Decals")
     WEATHER["puddles"] = import_texture("Decals", "puddles", "mask", path=os.path.join(decals, "puddles.png"))
+    log("weather assets made: MPC_Weather, the puddle mask")
 
+
+def rain_material():
+    """M_Rain, the rain's streaks (AGlpGame::FallRain): as the Godot version's rain.gdshader, a faint lit streak (alpha
+    0.3, sRGB 0.78, 0.82, 0.90) gone within 1.2 m of the eye and whole from 4.5 m; until 0.76 an unlit sheet panning down
+    a cylinder round the camera. At night the player's two low beams light it here (0.77, RAIN_BEAMS_HLSL, MPC_Night):
+    they are kept out of the translucency lighting volume, which lit every streak round the car, and the streaks took
+    none of their light."""
     rain_path = f"{GAME}/Materials/M_Rain"
     if eal.does_asset_exist(rain_path):
         eal.delete_asset(rain_path)
@@ -455,9 +461,540 @@ def weather_assets():
     rough = mel.create_material_expression(rain, unreal.MaterialExpressionConstant, -500, 400)
     rough.set_editor_property("r", 1.0)
     mel.connect_material_property(rough, "", unreal.MaterialProperty.MP_ROUGHNESS)
+    beams = custom_node(rain, LOW_BEAM_HLSL + RAIN_BEAMS_HLSL,
+                        [("Colour", colour), ("P", node(rain, unreal.MaterialExpressionWorldPosition, -1400, 600)),
+                         ("Cam", node(rain, unreal.MaterialExpressionCameraPositionWS, -1400, 700)),
+                         ("LampLeft", collection(rain, "LampLeft", -1400, 800)), ("LampRight", collection(rain, "LampRight", -1400, 900)),
+                         ("Forward", collection(rain, "LampForward", -1400, 1000)), ("Upward", collection(rain, "LampUp", -1400, 1100)),
+                         ("Candela", collection(rain, "LampCandela", -1400, 1200)), ("On", collection(rain, "LampOn", -1400, 1300)),
+                         ("Gain", collection(rain, "RainGain", -1400, 1400)),
+                         ("Exposure", node(rain, unreal.MaterialExpressionEyeAdaptation, -1400, 1500))],
+                        -800, 800, description="GrudgeLap rain in the beams")
+    mel.connect_material_property(beams, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
     mel.recompile_material(rain)
     eal.save_loaded_asset(rain)
-    log("weather assets made: MPC_Weather, the puddle mask, M_Rain")
+    log("rain made: M_Rain, lit by the player's beams at night")
+
+
+# ---- the night (0.77) ------------------------------------------------------------------------------------
+
+NIGHT = {}   # night_assets: MPC_Night and the night's materials and light profile, by name
+
+# The low beam: one set of numbers for the IES light profile the spot lights cast (write_low_beam_ies) and for the glows
+# and the retroreflectors that read the same pattern in their shaders (LOW_BEAM_HLSL). Degrees, beta up and gamma right
+# of the lamp's axis; right-hand traffic: the flat cut-off on the oncoming left, the step up over the verge on the right.
+# Against ECE R112 class B at 20 000 cd: B50L (3.43 L, 0.57 U) 164 cd (at most 350), 50V (0, 0.86 D) about 18 kcd (at
+# least 5 100), 75R (1.15 R, 0.57 D) about 17 kcd (at least 10 100), 25L (9 L, 1.72 D) about 5 kcd (at least 1 700).
+LOW_BEAM = {
+    "peak_cd": 20000.0,              # per lamp at the hot spot (GlpLamps.h LowBeamCandela)
+    "cut_left": -0.57,               # the cut-off on the oncoming side, 1 % down
+    "cut_rise": 0.268,               # tan 15 degrees: the step's rise per degree right of the axis
+    "cut_top": 2.0,                  # where the step levels off
+    "edge": 0.2,                     # the cut-off's softness either side of it
+    "hot": (1.5, -1.6, 6.0, 1.8),    # the hot spot: gamma, beta, and their sigmas
+    "fill": (0.06, 18.0, -3.0, 8.0), # the broad fill: level, gamma width, beta centre, beta width
+    "above": (0.012, 3.0),           # the glare over the cut-off and its fall per degree
+    "side": (45.0, 90.0),            # gone towards the sides between these
+}
+# The hot spot plus the fill there, so the peak is 1. The first pattern (fill 0.15 centred 5 degrees down, the hot spot's
+# beta sigma 2.5) put 3600 cd on the road 5 m ahead, which came out white at the night's exposure while the road past
+# 20 m was in the dark: a real low beam keeps its foreground down so the eye can see far.
+LOW_BEAM["norm"] = 1.0 + LOW_BEAM["fill"][0] * math.exp(-((LOW_BEAM["hot"][0] / LOW_BEAM["fill"][1]) ** 2
+                                                         + ((LOW_BEAM["hot"][1] - LOW_BEAM["fill"][2]) / LOW_BEAM["fill"][3]) ** 2))
+
+
+def smoothstep(low, high, x):
+    t = min(max((x - low) / (high - low), 0.0), 1.0)
+    return t * t * (3.0 - 2.0 * t)
+
+
+def low_beam(beta, gamma):
+    """The low beam's intensity relative to its peak, beta degrees up and gamma degrees right of the lamp's axis."""
+    b = LOW_BEAM
+    cut = b["cut_left"] if gamma <= 0.0 else min(b["cut_left"] + b["cut_rise"] * gamma, b["cut_top"])
+    hot = math.exp(-0.5 * (((gamma - b["hot"][0]) / b["hot"][2]) ** 2 + ((beta - b["hot"][1]) / b["hot"][3]) ** 2))
+    fill = b["fill"][0] * math.exp(-((gamma / b["fill"][1]) ** 2 + ((beta - b["fill"][2]) / b["fill"][3]) ** 2))
+    above = b["above"][0] * math.exp(-max(beta - cut, 0.0) / b["above"][1])
+    under = 1.0 - smoothstep(cut - b["edge"], cut + b["edge"], beta)
+    side = 1.0 - smoothstep(b["side"][0], b["side"][1], abs(gamma))
+    return (above + ((hot + fill) / b["norm"] - above) * under) * side
+
+
+LOW_BEAM_HLSL = """struct FGlpLowBeam
+{
+    // The low beam's intensity relative to its peak, b degrees up and g degrees right of the lamp's axis
+    // (build_scene.py LOW_BEAM, the IES profile's own numbers).
+    float Relative(float b, float g)
+    {
+        float cut = g <= 0.0 ? CUT_LEFT : min(CUT_LEFT + CUT_RISE * g, CUT_TOP);
+        float hg = (g - HOT_G) / HOT_SG;
+        float hb = (b - HOT_B) / HOT_SB;
+        float hot = exp(-0.5 * (hg * hg + hb * hb));
+        float fg = g / FILL_W;
+        float fb = (b - FILL_C) / FILL_H;
+        float fill = FILL_LEVEL * exp(-(fg * fg + fb * fb));
+        float above = ABOVE_LEVEL * exp(-max(b - cut, 0.0) / ABOVE_FALL);
+        float under = 1.0 - smoothstep(cut - EDGE, cut + EDGE, b);
+        float side = 1.0 - smoothstep(SIDE_0, SIDE_1, abs(g));
+        return lerp(above, (hot + fill) / NORM, under) * side;
+    }
+};
+"""
+for _key, _value in (("CUT_LEFT", LOW_BEAM["cut_left"]), ("CUT_RISE", LOW_BEAM["cut_rise"]), ("CUT_TOP", LOW_BEAM["cut_top"]),
+                     ("HOT_G", LOW_BEAM["hot"][0]), ("HOT_B", LOW_BEAM["hot"][1]), ("HOT_SG", LOW_BEAM["hot"][2]), ("HOT_SB", LOW_BEAM["hot"][3]),
+                     ("FILL_LEVEL", LOW_BEAM["fill"][0]), ("FILL_W", LOW_BEAM["fill"][1]), ("FILL_C", LOW_BEAM["fill"][2]), ("FILL_H", LOW_BEAM["fill"][3]),
+                     ("ABOVE_LEVEL", LOW_BEAM["above"][0]), ("ABOVE_FALL", LOW_BEAM["above"][1]), ("EDGE", LOW_BEAM["edge"]),
+                     ("SIDE_0", LOW_BEAM["side"][0]), ("SIDE_1", LOW_BEAM["side"][1]), ("NORM", LOW_BEAM["norm"])):
+    LOW_BEAM_HLSL = LOW_BEAM_HLSL.replace(_key, f"({_value:.6g})")
+
+
+def write_low_beam_ies(path):
+    """The low beam as an IES light profile (LM-63-2002, photometry type C) for the spot lights. Unreal reads the vertical
+    angle from the light's +X axis and the horizontal one as atan2 of its local Z (up) over Y (right) plus 180 degrees
+    (IESLightProfilesCommon.ush; its callers pass the light's +X as the direction): so for every (V, H) the direction is
+    (cos V, sin V cos psi, sin V sin psi) in (forward, right, up) with psi = H - 180. Nothing goes backwards."""
+    vertical = [i * 0.25 for i in range(49)] + [12.5 + i * 0.5 for i in range(56)] + [41.0 + i for i in range(50)] + [92.0 + 2.0 * i for i in range(45)]
+    horizontal = [float(h) for h in range(361)]
+    values = []
+    for h in horizontal:
+        psi = math.radians(h - 180.0)
+        row = []
+        for v in vertical:
+            rad = math.radians(v)
+            forward, right, up = math.cos(rad), math.sin(rad) * math.cos(psi), math.sin(rad) * math.sin(psi)
+            if forward <= 1e-6:
+                row.append(0.0)
+                continue
+            beta = math.degrees(math.asin(max(-1.0, min(1.0, up))))
+            gamma = math.degrees(math.atan2(right, forward))
+            row.append(LOW_BEAM["peak_cd"] * low_beam(beta, gamma))
+        values.append(row)
+
+    def lines(numbers, per_line=12):
+        return ["  ".join(f"{n:.4g}" for n in numbers[i:i + per_line]) for i in range(0, len(numbers), per_line)]
+
+    text = ["IESNA:LM-63-2002", "[TEST] GrudgeLap low beam (unreal/Scripts/build_scene.py LOW_BEAM)", "[MANUFAC] GrudgeLap",
+            "[LUMINAIRE] a 1980s halogen low beam, right-hand traffic", "TILT=NONE",
+            f"1 -1 1 {len(vertical)} {len(horizontal)} 1 2 0 0 0", "1 1 55"]
+    text += lines(vertical) + lines(horizontal)
+    for row in values:
+        text += lines(row)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="ascii", newline="\r\n") as f:
+        f.write("\n".join(text) + "\n")
+    return max(max(row) for row in values)
+
+
+def import_light_profile(path, name):
+    """The IES file as a TextureLightProfile in the level's materials folder."""
+    task = unreal.AssetImportTask()
+    task.filename = path
+    task.destination_path = f"{GAME}/Materials"
+    task.destination_name = name
+    task.automated = True
+    task.replace_existing = True
+    task.save = True
+    asset_tools.import_asset_tasks([task])
+    asset_path = f"{GAME}/Materials/{name}"
+    profile = eal.load_asset(asset_path) if eal.does_asset_exist(asset_path) else None
+    if not isinstance(profile, unreal.TextureLightProfile):
+        raise RuntimeError(f"{path} did not import as a light profile ({type(profile).__name__ if profile else 'nothing'})")
+    return profile
+
+
+def node(material, cls, x, y, **props):
+    """One material expression with its properties set."""
+    made = mel.create_material_expression(material, cls, x, y)
+    for key, value in props.items():
+        made.set_editor_property(key, value)
+    return made
+
+
+def link(source, target, pin="", output=""):
+    mel.connect_material_expressions(source, output, target, pin)
+
+
+def custom_node(material, code, inputs, x, y, output_type=unreal.CustomMaterialOutputType.CMOT_FLOAT3, description="GrudgeLap"):
+    """A Custom HLSL node fed by inputs, a list of (name, expression) or (name, expression, its output's name)."""
+    custom = node(material, unreal.MaterialExpressionCustom, x, y, code=code, output_type=output_type, description=description)
+    entries = []
+    for name, *_ in inputs:
+        entry = unreal.CustomInput()
+        entry.set_editor_property("input_name", name)
+        entries.append(entry)
+    custom.set_editor_property("inputs", entries)
+    for name, source, *output in inputs:
+        link(source, custom, name, output[0] if output else "")
+    return custom
+
+
+def constant3(material, value, x, y):
+    return node(material, unreal.MaterialExpressionConstant3Vector, x, y, constant=unreal.LinearColor(*value, 1.0))
+
+
+def transformed(material, value, source, target, x, y):
+    """A constant direction carried from one space to another (the view's right and up, a lamp's axes)."""
+    made = node(material, unreal.MaterialExpressionTransform, x, y, transform_source_type=source, transform_type=target)
+    link(constant3(material, value, x - 200, y), made)
+    return made
+
+
+def collection(material, name, x, y, kind="night"):
+    return node(material, unreal.MaterialExpressionCollectionParameter, x, y,
+                collection=NIGHT["collection"] if kind == "night" else WEATHER["collection"], parameter_name=name)
+
+
+def primitive_scalar(material, name, index, default, x, y):
+    """A scalar read from the component's custom primitive data (the game sets it per lamp)."""
+    return node(material, unreal.MaterialExpressionScalarParameter, x, y, parameter_name=name, default_value=default,
+                use_custom_primitive_data=True, primitive_data_index=index)
+
+
+GLOW_WPO_HLSL = """// The card turned to the camera about its centre, as wide as the lamp's disc or MinPixels pixels, whichever is more: a
+// distant lamp stays a point a pixel and a half across instead of flickering in and out under the upscaler.
+float d = max(length(Centre - Cam), 1.0);
+float pixel = 2.0 * TanHalf.y / max(ViewSize.y, 1.0);
+float R = max(Radius, MinPixels * pixel * d);
+float3 p = Centre + (Local.x / 50.0) * R * normalize(CamRight) + (Local.y / 50.0) * R * normalize(CamUp);
+return p - World;"""
+
+GLOW_HLSL = """// A lit lamp's glow in its real brightness (cd/m2): the lamp's disc of radius Radius at luminance Colour.a, spread over
+// the card as 10 (1 - r)^3 times (Radius / R)^2, which carries the same light whatever the card's size R; seen from the
+// lamp's side as its pattern sends it (Kind 1 the low beam, Kind 2 a tail lamp's Godot facing, 0 all round).
+float3 toCam = Cam - Centre;
+float d = max(length(toCam), 1.0);
+float3 v = toCam / d;
+float pixel = 2.0 * TanHalf.y / max(ViewSize.y, 1.0);
+float R = max(Radius, MinPixels * pixel * d);
+float r = saturate(length(UV - 0.5) * 2.0);
+float k = 1.0;
+if (Kind > 0.5 && Kind < 1.5)
+{
+    FGlpLowBeam Beam;
+    float fx = dot(v, normalize(LampForward));
+    float b = degrees(asin(clamp(dot(v, normalize(LampUp)), -1.0, 1.0)));
+    float g = degrees(atan2(dot(v, normalize(LampRight)), fx));
+    // A lit lamp shows a little from the side too; nothing from behind.
+    k = abs(g) < 100.0 ? max(Beam.Relative(b, g), 0.002) : 0.0;
+}
+else if (Kind > 1.5)
+{
+    k = smoothstep(-0.15, 0.6, dot(v, normalize(LampForward)));
+}
+float s = Radius / R;
+float L = Colour.a * k * s * s * 10.0 * pow(1.0 - r, 3.0);
+// Scene colour is kept pre-exposed in half floats: a 20 kcd lamp through a 7 cm disc is a million cd/m2, a million times
+// the night's white, past their range. Held under 4000 there it still blooms white; at 30000, the first ceiling, the
+// lamps' bloom spread a metre round them at 7 m and their ghosts crossed the frame.
+L = min(L * Exposure, 4000.0) / max(Exposure, 1e-8);
+return Colour.rgb * L;"""
+
+RETRO_HLSL = """// Retroreflection (0.77): the light of the player's two low beams (MPC_Night) sent back towards them, seen from the eye
+// beside them. Per lamp the illuminance its pattern puts here (lux, perpendicular to the beam), times the reflector's
+// coefficient and a lobe of ALPHA0 degrees round the direction back to the lamp; a cd/m2 emissive, guarded like the glows.
+FGlpLowBeam Beam;
+float3 F = normalize(Forward.xyz);
+float3 U = normalize(Upward.xyz);
+float3 Rt = cross(U, F);
+float3 v = normalize(Cam - P);
+float sum = 0.0;
+for (int i = 0; i < 2; i++)
+{
+    float3 toL = (i == 0 ? LampLeft.xyz : LampRight.xyz) - P;
+    float d2 = max(dot(toL, toL), 1.0);
+    float3 l = toL * rsqrt(d2);
+    float3 e = -l;
+    float fx = dot(e, F);
+    if (fx > 0.0)
+    {
+        float alpha = degrees(acos(saturate(dot(l, v))));
+        float b = degrees(asin(clamp(dot(e, U), -1.0, 1.0)));
+        float g = degrees(atan2(dot(e, Rt), fx));
+        float E = Candela * Beam.Relative(b, g) / (d2 * 1e-4);
+        float a = alpha / ALPHA0;
+        sum += E * exp(-a * a) * (ENTRANCE);
+    }
+}
+float L = On * Gain * COEFFICIENT * sum * (EXTRA);
+return min(L * Exposure, 4000.0) / max(Exposure, 1e-8);"""
+
+RAIN_GAIN = 0.05   # MPC_Night RainGain's default: RAIN_BEAMS_HLSL's share of a streak a drop fills (-GlpRainGain for checks)
+
+RAIN_BEAMS_HLSL = """// The player's two low beams on the rain's streaks (0.77, MPC_Night), per pixel: kept out of the translucency lighting
+// volume, whose cells are a metre or two across (a 20 kcd lamp in one lit every streak round the car white), the streaks
+// took none of their light and a rainy night looked dry from the seat. Per lamp the illuminance its pattern puts on the
+// drop (lux), as the retroreflectors read it. A drop is a small round lens (the Godot version's rain.gdshader): it sends
+// a lamp's light about evenly, a share straight back the way it came (seen from the seat or the chase camera, beside the
+// lamps: a cos^12 lobe five times that) and more on along the beam (seen facing it: a cos^8 lobe four times that). Gain
+// (MPC_Night RainGain) is the share of a streak a real drop fills: the streak, 1.4 cm wide and 42 cm long at alpha 0.3,
+// stands for a drop a couple of millimetres across smeared down its fall.
+const float BackGain = 5.0;
+const float AheadGain = 4.0;
+FGlpLowBeam Beam;
+float3 F = normalize(Forward.xyz);
+float3 U = normalize(Upward.xyz);
+float3 Rt = cross(U, F);
+float3 v = normalize(Cam - P);
+float sum = 0.0;
+for (int i = 0; i < 2; i++)
+{
+    float3 toL = (i == 0 ? LampLeft.xyz : LampRight.xyz) - P;
+    float d2 = max(dot(toL, toL), 2500.0);
+    float3 l = toL * rsqrt(d2);
+    float3 e = -l;
+    float fx = dot(e, F);
+    if (fx > 0.0)
+    {
+        float b = degrees(asin(clamp(dot(e, U), -1.0, 1.0)));
+        float g = degrees(atan2(dot(e, Rt), fx));
+        float E = Candela * Beam.Relative(b, g) / (d2 * 1e-4);
+        float back = pow(saturate(dot(l, v)), 12.0);
+        float ahead = pow(saturate(dot(e, v)), 8.0);
+        sum += E * (1.0 + BackGain * back + AheadGain * ahead);
+    }
+}
+float L = On * Gain * sum / 3.14159265;
+// Held under the half floats' range like the glows: a drop at the lamp would otherwise be a million times the night's white.
+return Colour * min(L * Exposure, 4000.0) / max(Exposure, 1e-8);"""
+
+STARS_HLSL = """// The stars (0.77), added to the sky's pixels after the upscaler (a post-process blendable): a procedural field the size of
+// the Yale catalogue's (about 9200 stars to magnitude 6.5), even over the sphere (one in a cube-face cell of 160 x 160 with
+// a chance weighted by the cell's solid angle), magnitudes 3 times more numerous each step fainter, colours from orange to
+// blue-white. Each a gaussian a pixel and a half across holding all of the star's illuminance, so its brightness does not
+// depend on the resolution; dimmed by the air mass towards the horizon, none below it, none on the land (the depth) and
+// fading where the sky is brighter than a clear night's (clouds, the moon's glow), whose pixels carry no depth either.
+struct FGlpStars
+{
+    float3 Hash3(float3 p)
+    {
+        p = frac(p * float3(0.1031, 0.1030, 0.0973));
+        p += dot(p, p.yxz + 33.33);
+        return frac((p.xxy + p.yxx) * p.zyx);
+    }
+    float2 Face(float3 d, out float face)
+    {
+        float3 a = abs(d);
+        if (a.x >= a.y && a.x >= a.z) { face = d.x > 0.0 ? 0.0 : 1.0; return d.yz / a.x; }
+        if (a.y >= a.z) { face = d.y > 0.0 ? 2.0 : 3.0; return d.xz / a.y; }
+        face = d.z > 0.0 ? 4.0 : 5.0;
+        return d.xy / a.z;
+    }
+    float3 Direction(float face, float2 uv)
+    {
+        float s = fmod(face, 2.0) < 0.5 ? 1.0 : -1.0;
+        if (face < 1.5) return normalize(float3(s, uv.x, uv.y));
+        if (face < 3.5) return normalize(float3(uv.x, s, uv.y));
+        return normalize(float3(uv.x, uv.y, s));
+    }
+};
+FGlpStars S;
+float3 d = normalize(-ToCamera);
+if (d.z <= 0.0 || Depth.r < 5.0e6) return Scene.rgb;
+float face;
+float2 uv = S.Face(d, face);
+const float N = 160.0;
+float2 cell = floor((uv * 0.5 + 0.5) * N);
+float sigma = 0.75 * 2.0 * TanHalf.y / max(ViewSize.y, 1.0);
+float3 sum = float3(0.0, 0.0, 0.0);
+for (int j = -1; j <= 1; j++)
+{
+    for (int i = -1; i <= 1; i++)
+    {
+        float2 c = cell + float2(i, j);
+        if (any(c < 0.0) || any(c >= N)) continue;
+        float3 h = S.Hash3(float3(c, face * 17.0 + 3.0));
+        float2 middle = (c + 0.5) / N * 2.0 - 1.0;
+        // 0.5236: the mean of the cell's solid-angle weight over a face (its solid angle, 4 pi / 6, over its area, 4).
+        if (h.x > 0.06 * pow(1.0 + dot(middle, middle), -1.5) / 0.5236) continue;
+        float3 star = S.Direction(face, (c + 0.1 + 0.8 * h.yz) / N * 2.0 - 1.0);
+        float3 h2 = S.Hash3(float3(c.yx + 7.3, face + 41.0));
+        float magnitude = 6.5 + log10(max(h2.x, 1e-4)) / 0.48;
+        float E = 2.54e-6 * pow(10.0, -0.4 * magnitude);
+        // The angle by the cross product: an acos of a dot this close to 1 has not the precision.
+        float delta = length(cross(d, star));
+        float3 colour = h2.y < 0.5 ? lerp(float3(1.0, 0.70, 0.45), float3(1.0, 0.96, 0.92), h2.y * 2.0)
+                                   : lerp(float3(1.0, 0.96, 0.92), float3(0.75, 0.83, 1.0), h2.y * 2.0 - 1.0);
+        sum += colour * E * exp(-delta * delta / (2.0 * sigma * sigma)) / (6.2831853 * sigma * sigma);
+    }
+}
+float altitude = degrees(asin(d.z));
+float airmass = 1.0 / (d.z + 0.50572 * pow(altitude + 6.07995, -1.6364));
+float sky = dot(Scene.rgb, float3(0.2126, 0.7152, 0.0722)) / max(Exposure, 1e-8);
+float visible = saturate(2.0 - sky / SkyLimit);
+return Scene.rgb + sum * exp(-0.25 * (airmass - 1.0)) * Gain * visible * Exposure;"""
+
+
+def lamp_glow_material():
+    """M_LampGlow: a lit lamp's glow (the Godot version's lamp_glow.gdshader in physical units), additive and unlit on the
+    engine's unit plane, which the game hangs at each lamp; the card's size, brightness and pattern come from the
+    component's custom primitive data (0-3 the linear colour and the disc's luminance in cd/m2, 4 the disc's radius cm, 5
+    the kind, 6 the least width in pixels). Its vertices are moved to face the camera (GLOW_WPO_HLSL)."""
+    m = asset_tools.create_asset("M_LampGlow", f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    m.set_editor_property("blend_mode", unreal.BlendMode.BLEND_ADDITIVE)
+    m.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    m.set_editor_property("two_sided", True)
+    try:
+        m.set_editor_property("output_translucent_velocity", True)
+    except Exception as error:  # a renamed setting must not stop the build
+        log(f"lamp glow velocity: {error}")
+    colour = node(m, unreal.MaterialExpressionVectorParameter, -1400, -300, parameter_name="Colour",
+                  default_value=unreal.LinearColor(1.0, 0.9, 0.7, 0.0), use_custom_primitive_data=True, primitive_data_index=0)
+    radius = primitive_scalar(m, "Radius", 4, 7.0, -1400, -150)
+    kind = primitive_scalar(m, "Kind", 5, 0.0, -1400, -50)
+    pixels = primitive_scalar(m, "MinPixels", 6, 1.5, -1400, 50)
+    centre = node(m, unreal.MaterialExpressionTransformPosition, -1400, 200,
+                  transform_source_type=unreal.MaterialPositionTransformSource.TRANSFORMPOSSOURCE_LOCAL,
+                  transform_type=unreal.MaterialPositionTransformSource.TRANSFORMPOSSOURCE_WORLD)
+    link(constant3(m, (0.0, 0.0, 0.0), -1600, 200), centre)
+    camera = node(m, unreal.MaterialExpressionCameraPositionWS, -1400, 300)
+    tan_half = node(m, unreal.MaterialExpressionViewProperty, -1400, 400, property=unreal.MaterialExposedViewProperty.MEVP_TAN_HALF_FIELD_OF_VIEW)
+    view_size = node(m, unreal.MaterialExpressionViewProperty, -1400, 500, property=unreal.MaterialExposedViewProperty.MEVP_VIEW_SIZE)
+    view, world, local = (unreal.MaterialVectorCoordTransformSource.TRANSFORMSOURCE_VIEW, unreal.MaterialVectorCoordTransform.TRANSFORM_WORLD,
+                          unreal.MaterialVectorCoordTransformSource.TRANSFORMSOURCE_LOCAL)
+    cam_right = transformed(m, (1.0, 0.0, 0.0), view, world, -1400, 650)
+    cam_up = transformed(m, (0.0, 1.0, 0.0), view, world, -1400, 750)
+    # The lamp's facing, right and up: the card stands across its facing (GlpLamps::Glow), its local Z forward, X right, Y up.
+    axes = [transformed(m, axis, local, world, -1400, 900 + 100 * i) for i, axis in enumerate(((0.0, 0.0, 1.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)))]
+    wpo = custom_node(m, GLOW_WPO_HLSL, [("Local", node(m, unreal.MaterialExpressionLocalPosition, -1000, 600)), ("Centre", centre),
+                                         ("Cam", camera), ("CamRight", cam_right), ("CamUp", cam_up), ("TanHalf", tan_half),
+                                         ("ViewSize", view_size), ("Radius", radius), ("MinPixels", pixels),
+                                         ("World", node(m, unreal.MaterialExpressionWorldPosition, -1000, 700))],
+                      -600, 500, description="GrudgeLap glow card")
+    mel.connect_material_property(wpo, "", unreal.MaterialProperty.MP_WORLD_POSITION_OFFSET)
+    glow = custom_node(m, LOW_BEAM_HLSL + GLOW_HLSL, [("UV", node(m, unreal.MaterialExpressionTextureCoordinate, -1000, -400)),
+                                                      ("Colour", colour, "RGBA"), ("Radius", radius), ("Kind", kind), ("MinPixels", pixels),
+                                                      ("Centre", centre), ("Cam", camera), ("TanHalf", tan_half), ("ViewSize", view_size),
+                                                      ("LampForward", axes[0]), ("LampRight", axes[1]), ("LampUp", axes[2]),
+                                                      ("Exposure", node(m, unreal.MaterialExpressionEyeAdaptation, -1000, -300))],
+                       -600, -200, description="GrudgeLap lamp glow")
+    mel.connect_material_property(glow, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    mel.recompile_material(m)
+    eal.save_loaded_asset(m)
+    return m
+
+
+def retro_material(name, coefficient, alpha0, entrance, extra, setup):
+    """A retroreflecting surface (0.77): setup(material) wires its own base colour, roughness and metallic and returns the
+    tint the returned light takes; its emissive is the player's beams sent back (RETRO_HLSL) times that tint."""
+    m = asset_tools.create_asset(name, f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    tint = setup(m)
+    code = LOW_BEAM_HLSL + RETRO_HLSL.replace("ALPHA0", f"({alpha0:.6g})").replace("COEFFICIENT", f"({coefficient:.6g})") \
+        .replace("ENTRANCE", entrance).replace("EXTRA", extra)
+    inputs = [("P", node(m, unreal.MaterialExpressionWorldPosition, -1400, 600)),
+              ("N", node(m, unreal.MaterialExpressionVertexNormalWS, -1400, 700)),
+              ("Cam", node(m, unreal.MaterialExpressionCameraPositionWS, -1400, 800)),
+              ("LampLeft", collection(m, "LampLeft", -1400, 900)), ("LampRight", collection(m, "LampRight", -1400, 1000)),
+              ("Forward", collection(m, "LampForward", -1400, 1100)), ("Upward", collection(m, "LampUp", -1400, 1200)),
+              ("Candela", collection(m, "LampCandela", -1400, 1300)), ("On", collection(m, "LampOn", -1400, 1400)),
+              ("Gain", collection(m, "RetroGain", -1400, 1500)),
+              ("Wetness", collection(m, "Wetness", -1400, 1600, kind="weather")),
+              ("Exposure", node(m, unreal.MaterialExpressionEyeAdaptation, -1400, 1700))]
+    returned = custom_node(m, code, inputs, -800, 900, output_type=unreal.CustomMaterialOutputType.CMOT_FLOAT1, description=f"GrudgeLap {name}")
+    emissive = node(m, unreal.MaterialExpressionMultiply, -400, 700)
+    link(tint, emissive, "A")
+    link(returned, emissive, "B")
+    mel.connect_material_property(emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    mel.recompile_material(m)
+    eal.save_loaded_asset(m)
+    return m
+
+
+def night_assets():
+    """The night's shared assets (0.77), made before the track is dressed: MPC_Night (the player's beams, which the game
+    writes every frame: LampOn, LampCandela, RetroGain, LampLeft and LampRight in world cm, LampForward and LampUp), the
+    low beam's light profile (IES_LowBeam, written from LOW_BEAM), M_LampGlow, the retroreflectors of the marker posts
+    (M_Reflector) and of the road's paint (M_RoadPaint), the train's lit windows (M_TrainWindow) and the stars
+    (M_NightStars, a post-process material). Each keeps the day's look as the export had it: the glow, the windows and the
+    reflection are dark by day, and the stars are added only on a clear night."""
+    path = f"{GAME}/Materials/MPC_Night"
+    if eal.does_asset_exist(path):
+        eal.delete_asset(path)
+    mpc = asset_tools.create_asset("MPC_Night", f"{GAME}/Materials", unreal.MaterialParameterCollection, unreal.MaterialParameterCollectionFactoryNew())
+    scalars = []
+    for name, value in (("LampOn", 0.0), ("LampCandela", LOW_BEAM["peak_cd"]), ("RetroGain", 1.0), ("RainGain", RAIN_GAIN)):
+        parameter = unreal.CollectionScalarParameter()
+        parameter.set_editor_property("parameter_name", name)
+        parameter.set_editor_property("default_value", value)
+        scalars.append(parameter)
+    vectors = []
+    for name, value in (("LampLeft", (0.0, 0.0, -1e6, 0.0)), ("LampRight", (0.0, 0.0, -1e6, 0.0)), ("LampForward", (1.0, 0.0, 0.0, 0.0)),
+                        ("LampUp", (0.0, 0.0, 1.0, 0.0))):
+        parameter = unreal.CollectionVectorParameter()
+        parameter.set_editor_property("parameter_name", name)
+        parameter.set_editor_property("default_value", unreal.LinearColor(*value))
+        vectors.append(parameter)
+    mpc.set_editor_property("scalar_parameters", scalars)
+    mpc.set_editor_property("vector_parameters", vectors)
+    eal.save_loaded_asset(mpc)
+    NIGHT["collection"] = mpc
+
+    ies = os.path.join(IMPORT, "Night", "IES_LowBeam.ies")
+    peak = write_low_beam_ies(ies)
+    NIGHT["profile"] = import_light_profile(ies, "IES_LowBeam")
+    NIGHT["glow"] = lamp_glow_material()
+
+    # The marker posts' reflectors (prismatic sheeting, 500 cd per lux per m2, a 1.5 degree lobe): bright from far in the
+    # beams, fading within ten metres as the angle to the eye opens, dark from behind and from the oncoming side (the
+    # entrance, twice the cosine to the lamp). The plate keeps the export's finish (metallic 0.4, roughness 0.25).
+    def plate(m):
+        tint = node(m, unreal.MaterialExpressionVectorParameter, -900, -300, parameter_name="Tint", default_value=unreal.LinearColor(1.0, 0.31, 0.007, 1.0))
+        base = node(m, unreal.MaterialExpressionMultiply, -500, -300)
+        link(tint, base, "A")
+        link(linear_vertex_colour(m, -900, -150), base, "B")
+        mel.connect_material_property(base, "", unreal.MaterialProperty.MP_BASE_COLOR)
+        mel.connect_material_property(node(m, unreal.MaterialExpressionConstant, -500, -100, r=0.4), "", unreal.MaterialProperty.MP_METALLIC)
+        mel.connect_material_property(node(m, unreal.MaterialExpressionConstant, -500, 0, r=0.25), "", unreal.MaterialProperty.MP_ROUGHNESS)
+        return tint
+    NIGHT["reflector"] = retro_material("M_Reflector", 500.0, 1.5, "saturate(2.0 * dot(normalize(N), l))", "1.0", plate)
+
+    # The road's paint with glass beads (new white paint, EN 1436 R3 to R4: 0.15 cd per lux per m2, a 3 degree lobe; less
+    # under water): the lines run on past the beams' pool. The paint keeps the export's finish (Roughness per mesh).
+    def paint(m):
+        colour = linear_vertex_colour(m, -900, -300)
+        mel.connect_material_property(colour, "", unreal.MaterialProperty.MP_BASE_COLOR)
+        mel.connect_material_property(node(m, unreal.MaterialExpressionScalarParameter, -500, 0, parameter_name="Roughness", default_value=0.7), "",
+                                      unreal.MaterialProperty.MP_ROUGHNESS)
+        return colour
+    NIGHT["paint"] = retro_material("M_RoadPaint", 0.15, 3.0, "1.0", "lerp(1.0, 0.25, saturate(Wetness))", paint)
+
+    # The train's windows (Godot's windows: dark glass, metallic 0.6, roughness 0.2), lit from within by Lit: a warm
+    # 4 cd/m2, which only the night's exposure shows (the dusk's EV 10.6 leaves it dark).
+    window = asset_tools.create_asset("M_TrainWindow", f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    mel.connect_material_property(constant3(window, (0.010, 0.0134, 0.0196), -500, -200), "", unreal.MaterialProperty.MP_BASE_COLOR)
+    mel.connect_material_property(node(window, unreal.MaterialExpressionConstant, -500, -50, r=0.6), "", unreal.MaterialProperty.MP_METALLIC)
+    mel.connect_material_property(node(window, unreal.MaterialExpressionConstant, -500, 50, r=0.2), "", unreal.MaterialProperty.MP_ROUGHNESS)
+    lit = node(window, unreal.MaterialExpressionScalarParameter, -700, 200, parameter_name="Lit", default_value=0.0)
+    warm = node(window, unreal.MaterialExpressionMultiply, -400, 200)
+    link(constant3(window, (0.89 * 4.0, 0.57 * 4.0, 0.21 * 4.0), -700, 300), warm, "A")
+    link(lit, warm, "B")
+    mel.connect_material_property(warm, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    mel.recompile_material(window)
+    eal.save_loaded_asset(window)
+    NIGHT["window"] = window
+
+    # The stars: a post-process material the game adds to the look on a clear night. A sky dome (an Is Sky mesh drawing the
+    # atmosphere, the moon's disc and the stars) was tried first and never showed over the sky: the atmosphere drew its
+    # sky over the dome's pixels, and a plain dome pushed out past the land was not drawn beyond 15 to 30 km. StarGain 10
+    # (2.5 magnitudes over the catalogue): at the night's exposure, set for the lamps, the true stars showed a handful of
+    # dots where the Godot version's night photo shows a field of them.
+    sky = asset_tools.create_asset("M_NightStars", f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    sky.set_editor_property("material_domain", unreal.MaterialDomain.MD_POST_PROCESS)
+    sky.set_editor_property("blendable_location", unreal.BlendableLocation.BL_SCENE_COLOR_BEFORE_BLOOM)
+    scene = node(sky, unreal.MaterialExpressionSceneTexture, -1100, -200, scene_texture_id=unreal.SceneTextureId.PPI_POST_PROCESS_INPUT0)
+    depth = node(sky, unreal.MaterialExpressionSceneTexture, -1100, -50, scene_texture_id=unreal.SceneTextureId.PPI_SCENE_DEPTH)
+    stars = custom_node(sky, STARS_HLSL, [("ToCamera", node(sky, unreal.MaterialExpressionCameraVectorWS, -1100, 100)),
+                                          ("TanHalf", node(sky, unreal.MaterialExpressionViewProperty, -1100, 200, property=unreal.MaterialExposedViewProperty.MEVP_TAN_HALF_FIELD_OF_VIEW)),
+                                          ("ViewSize", node(sky, unreal.MaterialExpressionViewProperty, -1100, 300, property=unreal.MaterialExposedViewProperty.MEVP_VIEW_SIZE)),
+                                          ("Gain", node(sky, unreal.MaterialExpressionScalarParameter, -1100, 400, parameter_name="StarGain", default_value=10.0)),
+                                          ("SkyLimit", node(sky, unreal.MaterialExpressionScalarParameter, -1100, 500, parameter_name="SkyLimit", default_value=0.02)),
+                                          ("Scene", scene, "Color"), ("Depth", depth, "Color"),
+                                          ("Exposure", node(sky, unreal.MaterialExpressionEyeAdaptation, -1100, 600))],
+                        -700, 100, description="GrudgeLap stars")
+    mel.connect_material_property(stars, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    mel.recompile_material(sky)
+    eal.save_loaded_asset(sky)
+    NIGHT["sky"] = sky
+    log(f"night assets made: MPC_Night, IES_LowBeam ({peak:.0f} cd peak), M_LampGlow, M_Reflector, M_RoadPaint, M_TrainWindow, M_NightStars")
 
 
 def decal_material(name, texture, roughness, opacity):
@@ -683,6 +1220,13 @@ def rig_car(car, root_tag):
     glass = mirror_glass(car)
     if glass is not None:
         tag(glass, "GLP.MirrorGlass")
+    # The lamps' places (0.77, prepare_model_car.py lamp_sockets): the game hangs the beams and the glows there.
+    lamps = 0
+    for name in ("LampHeadL", "LampHeadR", "LampTailL", "LampTailR"):
+        socket = next((a for a in parts if a.get_actor_label() == name or a.get_actor_label().startswith(f"{name}_")), None)
+        if socket is not None:
+            tag(socket, f"GLP.{name}")
+            lamps += 1
     # The outside mirrors' glass (CarView: on the A-pillar of the early car, on the doors of the later one) is
     # named only by number; its polished-metal material gives it away. From the seat it shows the mirror's view.
     side = 0
@@ -702,14 +1246,17 @@ def rig_car(car, root_tag):
                 break
     log(f"{root_tag} tagged: {wheels} wheels, steering {'found' if steering else 'missing'}, eye {'found' if eye else 'table'}, {len(exterior)} exterior "
         f"parts, dials {'found' if dials else 'missing'}, mirror glass {glass.get_actor_label() if glass else 'missing'}, "
-        f"{side} side mirror(s)")
+        f"{side} side mirror(s), {lamps} lamp socket(s)")
 
 
 def rig_world(actors):
     """Tags the train's cars (GLP.Train0..n: the locomotive, then Wagon1, Wagon2... as TrainView names them) and the
-    signs and crossbucks the car can knock over (GLP.Prop), and makes them movable."""
+    signs and crossbucks the car can knock over (GLP.Prop), and makes them movable. The night's (0.77): each coach's band
+    of windows (GLP.TrainWindows, M_TrainWindow: the child 3.04 m wide, 12.6 m long and 0.6 m tall the Godot version's
+    TrainView makes) and the farms' yard-lamp poles (GLP.YardLamp: the export keeps the poles, YardLamp to YardLamp7,
+    and the game hangs the sodium lamps on them)."""
     train = actors.get("Train")
-    cars = 0
+    cars = windows = 0
     if train is not None:
         movable(train)
         labels = {a.get_actor_label(): a for a in descendants(train)}
@@ -722,14 +1269,27 @@ def rig_world(actors):
                 break
             tag(wagon, f"GLP.Train{index}")
             cars += 1
+            if index > 0:
+                for child in wagon.get_attached_actors():
+                    origin, extent = child.get_actor_bounds(False)
+                    if abs(extent.x - 152.0) < 6.0 and abs(extent.y - 630.0) < 6.0 and abs(extent.z - 30.0) < 6.0:
+                        tag(child, "GLP.TrainWindows")
+                        for component in child.get_components_by_class(unreal.StaticMeshComponent):
+                            for slot in range(component.get_num_materials()):
+                                component.set_material(slot, NIGHT["window"])
+                        windows += 1
             index += 1
-    props = 0
+    props = yards = 0
     for label, actor in actors.items():
         if label.startswith("Sign-") or label.startswith("Crossbuck-"):
             movable(actor)
             tag(actor, "GLP.Prop")
             props += 1
-    log(f"world tagged: {cars} train cars, {props} signs")
+    for actor in actor_sub.get_all_level_actors():
+        if actor.get_actor_label().startswith("YardLamp"):
+            tag(actor, "GLP.YardLamp")
+            yards += 1
+    log(f"world tagged: {cars} train cars ({windows} with lit windows), {props} signs, {yards} yard lamps")
 
 
 def import_car(name):
@@ -781,6 +1341,13 @@ def place_game(car, materials):
     game.set_editor_property("puff_material", puff_material())
     # The rain sheet (weather_assets) by a soft reference, so the package cooks it.
     game.set_editor_property("rain_material", eal.load_asset(f"{GAME}/Materials/M_Rain"))
+    # The night's lamps (0.77, night_assets): their glow and the low beam's profile, by soft references for the same reason.
+    try:
+        game.set_editor_property("lamp_glow_material", NIGHT["glow"])
+        game.set_editor_property("low_beam_profile", NIGHT["profile"])
+        game.set_editor_property("night_sky_material", NIGHT["sky"])
+    except Exception as error:  # a module built before 0.77 has not the properties: the level builds, the night has no lamps
+        log(f"game: no lamp properties ({error}); build the module first")
     log("game placed")
 
 
@@ -993,10 +1560,21 @@ def skid_material():
     return m
 
 
+BRAKE_LAMP_HLSL = """// A lens lights as its part of the car (0.77, prepare_model_car.py brake_parts): a tail lamp with the brake (Glow) and while
+// the lamps are lit (Tail), a centre high-mounted stop lamp (TailLamp 0) with the brake alone, a front marker made of the
+// same material (StopLamp and TailLamp 0) never. On a textured lens (RedOnly) only its red lights: the estate's and the
+// five's clusters hold amber indicators and white reversing lamps, whose linear green or blue is 7 % of the red and more
+// where the lamps' red stays under 3 %.
+float level = max(Glow * StopLamp, Tail * TailLamp);
+float red = 1.0 - smoothstep(0.035, 0.06, max(Colour.g, Colour.b) / max(Colour.r, 1e-4));
+return Colour * level * lerp(1.0, red, RedOnly);"""
+
+
 def brake_lamp_material():
     """A prepared model's brake lamp lens (GLP_Brake, 0.76): its own colour and texture (Lens, Texture), lit by the Glow
-    parameter, which the game (FGlpCarView::SetBraking) raises while the car brakes. The glow is in the screen's light
-    units (as the instruments'), so a lit lamp reads bright red in daylight at the level's fixed exposure."""
+    parameter, which the game (FGlpCarView::SetBraking) raises while the car brakes, and by Tail while the lamps are lit
+    (0.77), each as the lens's part says (BRAKE_LAMP_HLSL). The glow is in the screen's light units (as the instruments'),
+    so a lit lamp reads bright red in daylight at the level's fixed exposure."""
     m = asset_tools.create_asset("M_BrakeLamp", f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
     texture = mel.create_material_expression(m, unreal.MaterialExpressionTextureSampleParameter2D, -800, -100)
     texture.set_editor_property("parameter_name", "Texture")
@@ -1007,12 +1585,9 @@ def brake_lamp_material():
     mel.connect_material_expressions(texture, "RGB", colour, "A")
     mel.connect_material_expressions(lens, "", colour, "B")
     mel.connect_material_property(colour, "", unreal.MaterialProperty.MP_BASE_COLOR)
-    glow = mel.create_material_expression(m, unreal.MaterialExpressionScalarParameter, -800, 300)
-    glow.set_editor_property("parameter_name", "Glow")
-    glow.set_editor_property("default_value", 0.0)
-    lit = mel.create_material_expression(m, unreal.MaterialExpressionMultiply, -550, 250)
-    mel.connect_material_expressions(colour, "", lit, "A")
-    mel.connect_material_expressions(glow, "", lit, "B")
+    scalars = [(name, node(m, unreal.MaterialExpressionScalarParameter, -800, 300 + 100 * i, parameter_name=name, default_value=value))
+               for i, (name, value) in enumerate((("Glow", 0.0), ("Tail", 0.0), ("StopLamp", 1.0), ("TailLamp", 1.0), ("RedOnly", 0.0)))]
+    lit = custom_node(m, BRAKE_LAMP_HLSL, [("Colour", colour)] + scalars, -450, 300, description="GrudgeLap brake lamp")
     mel.connect_material_property(lit, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
     screen_units_emissive(m)
     roughness = mel.create_material_expression(m, unreal.MaterialExpressionConstant, -300, 400)
@@ -1301,21 +1876,32 @@ def dress_prepared_model(car, parts, materials):
                 component.set_material(slot, materials["glass"])
                 glazed += 1
             elif name.startswith(("GLP_Brake", "MI_GLP_Brake")) and isinstance(material, unreal.MaterialInstance):
-                # The brake lamp's lens in its own colour and texture, lit by the game when braking (0.76).
+                # The brake lamp's lens in its own colour and texture, lit by the game when braking (0.76); and, as its part
+                # of the car says (0.77, prepare_model_car.py brake_parts), while the lamps are lit (a tail lamp), with the
+                # brake alone (GLP_BrakeStop, a centre stop lamp) or never (GLP_BrakeOff, a front marker); a textured lens
+                # lights its red alone (BRAKE_LAMP_HLSL).
+                part = "stop" if "BrakeStop" in name else "off" if "BrakeOff" in name else "tail"
                 try:
                     texture = mel.get_material_instance_texture_parameter_value(material, "BaseColorTexture")
                     colour = mel.get_material_instance_vector_parameter_value(material, "BaseColorFactor")
                 except Exception:
                     texture, colour = None, None
-                key = ("brake", texture.get_path_name() if texture else "", round(colour.r, 4) if colour else 0, round(colour.g, 4) if colour else 0)
+                key = ("brake", part, texture.get_path_name() if texture else "", round(colour.r, 4) if colour else 0, round(colour.g, 4) if colour else 0)
                 if key not in paints:
                     instance = asset_tools.create_asset(f"MI_Brake_{car.get_actor_label()}_{len(paints)}", f"{GAME}/Materials",
                                                         unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
                     mel.set_material_instance_parent(instance, materials["brake"])
                     if texture is not None:
                         mel.set_material_instance_texture_parameter_value(instance, "Texture", texture)
+                    # The model's own texture came in with the car; a plain lens reads its parent's default.
+                    textured = texture is not None and texture.get_path_name().startswith("/Game/")
+                    if textured:
+                        mel.set_material_instance_scalar_parameter_value(instance, "RedOnly", 1.0)
+                    log(f"{car.get_actor_label()}: brake lens {instance.get_name()}, {part}, {texture.get_path_name() if textured else 'no texture'}")
                     if colour is not None:
                         mel.set_material_instance_vector_parameter_value(instance, "Lens", unreal.LinearColor(colour.r, colour.g, colour.b, 1.0))
+                    mel.set_material_instance_scalar_parameter_value(instance, "StopLamp", 0.0 if part == "off" else 1.0)
+                    mel.set_material_instance_scalar_parameter_value(instance, "TailLamp", 1.0 if part == "tail" else 0.0)
                     mel.update_material_instance(instance)
                     eal.save_loaded_asset(instance)
                     paints[key] = instance
@@ -1764,8 +2350,20 @@ def dress_track(actors):
     earth = surface_material("M_Earth", "dirt_floor", 5000 / 4.0, 5000 / 4.0, tint=(0.62, 0.58, 0.52), macro=23.0)
     land = land_material() if "Land" in actors else None
     grating = grating_material() if any(label.startswith("LoopDeck-") for label in actors) else None
+    # The road's paint (0.77): the export's white and yellow, its roughness as the export gives it (0.70 the lines, 0.65 the
+    # edge lines), with the glass beads' retroreflection at night (M_RoadPaint).
+    paints = {}
+    for key, roughness in (("Lines", 0.70), ("Edges", 0.65)):
+        paints[key] = asset_tools.create_asset(f"MI_RoadPaint_{key}", f"{GAME}/Materials", unreal.MaterialInstanceConstant,
+                                               unreal.MaterialInstanceConstantFactoryNew())
+        mel.set_material_instance_parent(paints[key], NIGHT["paint"])
+        mel.set_material_instance_scalar_parameter_value(paints[key], "Roughness", roughness)
+        mel.update_material_instance(paints[key])
+        eal.save_loaded_asset(paints[key])
     for label, actor in actors.items():
         material = ground if label == "Terrain" else earth if label == "TerrainEarth" else asphalt if label.startswith("Road-") else verge if label.startswith("Shoulder-") else land if label == "Land" else grating if label.startswith("LoopDeck-") else None
+        if label.startswith("Lines-") or label.startswith("EdgeLines-"):
+            material = paints["Edges" if label.startswith("EdgeLines-") else "Lines"]
         if material is None:
             continue
         for component in mesh_components(actor):
@@ -1881,12 +2479,15 @@ def place_instanced(placements, actors):
     tints = {}
 
     def tinted(material, colour, key):
+        # The reflector's plate in its colour (0.77: on M_Reflector, which returns the player's beams at night; it keeps the
+        # export's finish, so the day's posts are as they were).
         if key not in tints:
             instance = asset_tools.create_asset(f"MI_Reflector_{key}", f"{GAME}/Materials", unreal.MaterialInstanceConstant,
                                                 unreal.MaterialInstanceConstantFactoryNew())
-            mel.set_material_instance_parent(instance, material)
+            mel.set_material_instance_parent(instance, NIGHT.get("reflector") or material)
             try:
-                mel.set_material_instance_vector_parameter_value(instance, "BaseColorFactor", unreal.LinearColor(*colour, 1.0))
+                mel.set_material_instance_vector_parameter_value(instance, "Tint" if NIGHT.get("reflector") else "BaseColorFactor",
+                                                                 unreal.LinearColor(*colour, 1.0))
             except Exception:
                 pass
             mel.update_material_instance(instance)
@@ -1915,6 +2516,9 @@ def place_instanced(placements, actors):
                 for slot, material in enumerate(materials):
                     if material is not None:
                         component.set_material(slot, tinted(material, tint[1], tint[0]) if tint else material)
+                if tint:
+                    # A reflector's glow at night is not a light: Lumen leaves it out (0.77).
+                    component.set_editor_property("affect_dynamic_indirect_lighting", False)
             counts[group] = counts.get(group, 0) + len(subset)
 
     # The wires between neighbouring poles, in the order the export lists them along each line.
@@ -2344,7 +2948,10 @@ def prepare_materials():
                 if "/M_Decal_" in path:
                     continue   # decals are neither Nanite nor instanced (the rain's streaks are instanced since 0.76)
                 material = eal.load_asset(path)
-                translucent = material.get_editor_property("blend_mode") == unreal.BlendMode.BLEND_TRANSLUCENT
+                if material.get_editor_property("material_domain") != unreal.MaterialDomain.MD_SURFACE:
+                    continue   # the stars (0.77) are a post-process material
+                # Additive too (the lamps' glow, 0.77): Nanite draws no translucency.
+                translucent = material.get_editor_property("blend_mode") not in (unreal.BlendMode.BLEND_OPAQUE, unreal.BlendMode.BLEND_MASKED)
                 for usage in USAGES[1:] if translucent else USAGES:
                     mel.set_material_usage(material, usage)
                 mel.recompile_material(material)
@@ -2571,6 +3178,8 @@ def main():
     actors = label_map()
     calibrate(placements, actors)
     weather_assets()
+    night_assets()
+    rain_material()
     dress_track(actors)
     materials = car_materials()
     car = actors.get("PlayerCar")

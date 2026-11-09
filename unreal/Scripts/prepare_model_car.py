@@ -22,12 +22,17 @@ versions show the same car inside and out:
 - RearMirror: the glass (MirrorGlass) on the prepared Mirror node, sized by its x and y scale (RearMirror.FitGlass);
   where the game hangs its own mirror (MirrorHung, the model's is missing or out of view) a housing and a stalk too,
   as RearMirror.cs builds them.
+- LampHeadL, LampHeadR, LampTailL, LampTailR (0.77): empty nodes on the lamps' lenses, where the Unreal night hangs its
+  beams and glows (lamp_sockets); the parts of the brake lamps' material that are no tail lamp get materials of their own
+  (brake_parts: GLP_BrakeStop a centre stop lamp, GLP_BrakeOff a front marker).
 
 Mesh nodes are named Mdl_<n> (Mdl_Wheel_<n>, Mdl_Steer_<n>), so the level's checks for a lofted car's parts (the side
 mirrors found by their polished material, the cabin's triplanar photos) leave them alone; build_scene.py gives the
 model's GLP_Paint, GLP_Glass and GLP_Lens materials the level's clear-coated paint and clear glass. A car without a
 prepared model passes through unchanged and keeps whatever it had.
 """
+import copy
+import io
 import json
 import math
 import os
@@ -302,10 +307,25 @@ class Merger:
     importer to compute. A 205 came in as 160 actors, each a draw and a ray-tracing instance of its own, and with eight
     drones the render thread took 19 ms a frame; a car is now a handful."""
 
-    def __init__(self, model, blob):
+    def __init__(self, model, blob, parts=None):
         self.model = model
         self.blob = blob
         self.buckets = {}
+        # brake_parts (0.77): {material: [(another material, boxes in the car's frame)]}, the triangles whose middle lies in
+        # one of the boxes going to the other material.
+        self.parts = parts or {}
+
+    def split(self, material, world, indices):
+        """The primitive's triangles by material: [(material, its indices)], the brake_parts boxes taking theirs."""
+        if material not in self.parts:
+            return [(material, indices)]
+        triangles = indices.reshape(-1, 3)
+        middle = world[triangles].mean(axis=1)
+        owner = np.full(len(triangles), material)
+        for other, boxes in self.parts[material]:
+            for low, high in boxes:
+                owner[np.all((middle >= low) & (middle <= high), axis=1)] = other
+        return [(int(m), triangles[owner == m].ravel()) for m in np.unique(owner)]
 
     def add(self, mesh_index, matrix):
         linear = matrix[:3, :3]
@@ -332,19 +352,33 @@ class Merger:
             indices = indices[: len(indices) // 3 * 3]
             if flip:
                 indices = indices.reshape(-1, 3)[:, ::-1].ravel()
-            bucket = self.buckets.setdefault(primitive.get("material", -1), {
-                "position": [], "normal": [], "uv0": [], "uv1": [], "colour": [], "indices": [], "count": 0,
-                "normals": True, "uv1s": True, "colours": False})
-            bucket["position"].append((position @ linear.T + matrix[:3, 3]).astype(np.float32))
-            bucket["normal"].append(normal if normal is not None else np.zeros((count, 3), np.float32))
-            bucket["uv0"].append(uv0)
-            bucket["uv1"].append(uv1 if uv1 is not None else np.zeros((count, 2), np.float32))
-            bucket["colour"].append(colour if colour is not None else np.ones((count, 4), np.float32))
-            bucket["indices"].append(indices + bucket["count"])
-            bucket["count"] += count
-            bucket["normals"] &= normal is not None
-            bucket["uv1s"] &= uv1 is not None
-            bucket["colours"] |= colour is not None
+            world = (position @ linear.T + matrix[:3, 3]).astype(np.float32)
+            groups = self.split(primitive.get("material", -1), world, indices)
+            for material, subset in groups:
+                if not len(subset):
+                    continue
+                if len(groups) == 1:
+                    used, local = slice(None), subset
+                else:
+                    # A primitive split between materials: each keeps only the vertices its triangles use.
+                    used = np.unique(subset)
+                    remap = np.full(count, -1, np.int64)
+                    remap[used] = np.arange(len(used))
+                    local = remap[subset].astype(np.uint32)
+                kept = world[used]
+                bucket = self.buckets.setdefault(material, {
+                    "position": [], "normal": [], "uv0": [], "uv1": [], "colour": [], "indices": [], "count": 0,
+                    "normals": True, "uv1s": True, "colours": False})
+                bucket["position"].append(kept)
+                bucket["normal"].append(normal[used] if normal is not None else np.zeros((len(kept), 3), np.float32))
+                bucket["uv0"].append(uv0[used])
+                bucket["uv1"].append(uv1[used] if uv1 is not None else np.zeros((len(kept), 2), np.float32))
+                bucket["colour"].append(colour[used] if colour is not None else np.ones((len(kept), 4), np.float32))
+                bucket["indices"].append(local + bucket["count"])
+                bucket["count"] += len(kept)
+                bucket["normals"] &= normal is not None
+                bucket["uv1s"] &= uv1 is not None
+                bucket["colours"] |= colour is not None
 
     def build(self, builder, name, material_offset):
         """The baked mesh's index in the builder's document, or None when the group drew nothing."""
@@ -462,6 +496,331 @@ def inner_layer(positions, triangles, eye, reach=0.035, cell=0.1):
     return inner
 
 
+LAMPS = ("LampHeadL", "LampHeadR", "LampTailL", "LampTailR")
+
+# Lamps a model's GLP_Lens and GLP_Brake do not mark (0.77), by the prepared model's file name (MODEL_KEYS): the materials
+# its heads or its tails are made of instead, and the cells its lamps' triangles are joined into clusters by where one
+# lamp unit holds several lamps (lens_clusters).
+LAMP_MATERIALS = {
+    # The 2021 BRZ's GLP_Lens is the fog lamps in its bumper, 0.42 m up, and its head glows and beams sat 23 cm under its
+    # dark headlamps. Those are LED emitters in a chrome housing under a GLP_Glass cover (emission_white.001: the low
+    # beam's projector, a small inner lamp and the running-light strip), which 3 cm cells tell apart; 6 cm cells joined
+    # them round the housing's middle, 9 cm inboard of the projector.
+    "brz": {"heads": ("emission_white.001",), "cell": 0.03},
+    # The estate's headlamps are a material of their own (Phare_avt, French for headlamp); its tails are its GLP_Brake.
+    "estate": {"heads": ("Phare_avt",)},
+    # The saloon's lamps, front and rear, are one textured material (Headlights) under GLP_Glass covers; its heads are
+    # measured (MEASURED_LAMPS).
+    "saloon": {"tails": ("Headlights",)},
+}
+
+# Lamps measured on the model where neither a material nor its clusters tell them (0.77): in the car's frame (x right,
+# y up, -z forward), on the lens. The hot hatch's lamps are regions of its body's texture (uv_2), found by their colour on
+# the surface seen from each end: the headlamps' pale lens (the box rule put the glows on the amber indicators outboard of
+# them) and the tail lamps' red (the box rule put those glows 18 cm over it, at the edge of the body), leaving out the
+# amber and white lamps under the red. The saloon's heads are its outer round lamps, the dipped beams of a four-lamp
+# front: its inner pair is the main beam alone, and its material's clusters join all four at any cell size.
+MEASURED_LAMPS = {
+    "hothatch": {"LampHeadL": (-0.520, -0.010, -1.438), "LampHeadR": (0.520, -0.010, -1.438),
+                 "LampTailL": (-0.622, 0.022, 1.987), "LampTailR": (0.622, 0.022, 1.987)},
+    "saloon": {"LampHeadL": (-0.613, 0.031, -1.632), "LampHeadR": (0.598, 0.030, -1.632)},
+}
+
+# A dipped beam stands at least half a metre up (ECE R48); a cluster lower in front is a fog lamp and gives way to one
+# at a headlamp's height (0.77: the BRZ's only GLP_Lens is its fog lamps).
+HEADLAMP_HEIGHT = 0.48
+
+
+def texture_image(model, blob, index, cache):
+    """A texture's image as linear RGB floats (the glb's own, from its buffer view), or None."""
+    if index not in cache:
+        cache[index] = None
+        source = model["textures"][index].get("source")
+        image = model["images"][source] if source is not None else {}
+        if "bufferView" in image:
+            from PIL import Image   # the build's other scripts (make_decals.py, prepare_foliage.py) use it too
+            view = model["bufferViews"][image["bufferView"]]
+            start = view.get("byteOffset", 0)
+            data = bytes(blob[start:start + view["byteLength"]])
+            srgb = np.asarray(Image.open(io.BytesIO(data)).convert("RGB"), dtype=np.float32) / 255.0
+            cache[index] = np.where(srgb <= 0.04045, srgb / 12.92, ((srgb + 0.055) / 1.055) ** 2.4)
+    return cache[index]
+
+
+def lens_triangles(model, blob, nodes, worlds, names, colours=False):
+    """The triangles (n, 3, 3) of the mesh nodes' primitives whose material name starts with one of names, in the car's
+    frame. With colours, also each triangle's linear colour (its texture at the triangle's middle times the material's
+    factor, or the factor alone) and whether a texture gave it (0.77)."""
+    found, tints, textured = [], [], []
+    cache = {}
+    for i in nodes:
+        for primitive in model["meshes"][model["nodes"][i]["mesh"]]["primitives"]:
+            if primitive.get("mode", 4) != 4 or "material" not in primitive or "POSITION" not in primitive["attributes"]:
+                continue
+            material = model["materials"][primitive["material"]]
+            if not (material.get("name") or "").startswith(names):
+                continue
+            position = read_accessor(model, blob, primitive["attributes"]["POSITION"])
+            indices = read_accessor(model, blob, primitive["indices"]).astype(np.int64).ravel() if "indices" in primitive else np.arange(len(position))
+            indices = indices[: len(indices) // 3 * 3].reshape(-1, 3)
+            world = (np.hstack([position, np.ones((len(position), 1))]) @ worlds[i].T)[:, :3]
+            found.append(world[indices])
+            if not colours:
+                continue
+            pbr = material.get("pbrMetallicRoughness", {})
+            factor = np.array(pbr.get("baseColorFactor", [1.0, 1.0, 1.0, 1.0])[:3], dtype=np.float32)
+            texture = pbr.get("baseColorTexture")
+            uv = primitive["attributes"].get(f"TEXCOORD_{texture.get('texCoord', 0)}") if texture else None
+            image = texture_image(model, blob, texture["index"], cache) if uv is not None else None
+            if image is None:
+                tints.append(np.tile(factor, (len(indices), 1)))
+                textured.append(np.zeros(len(indices), bool))
+                continue
+            middle = read_accessor(model, blob, uv)[indices].mean(axis=1)
+            h, w = image.shape[:2]
+            texel = image[np.mod(np.floor(middle[:, 1] * h).astype(np.int64), h), np.mod(np.floor(middle[:, 0] * w).astype(np.int64), w)]
+            tints.append(texel * factor)
+            textured.append(np.ones(len(indices), bool))
+    triangles = np.concatenate(found) if found else np.zeros((0, 3, 3))
+    if not colours:
+        return triangles
+    return triangles, (np.concatenate(tints) if tints else np.zeros((0, 3))), (np.concatenate(textured) if textured else np.zeros(0, bool))
+
+
+def lens_clusters(triangles, cell=0.06):
+    """The triangles joined into clusters by their centres' neighbouring cells (6 cm unless given): each (members, area
+    m2, the area-weighted centre)."""
+    centre = triangles.mean(axis=1)
+    area = 0.5 * np.linalg.norm(np.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0]), axis=1)
+    parent = list(range(len(triangles)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    cells = {}
+    for i, key in enumerate(map(tuple, np.floor(centre / cell).astype(np.int64))):
+        cells.setdefault(key, []).append(i)
+    for key, members in cells.items():
+        root = find(members[0])
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for dz in (-1, 0, 1):
+                    for j in cells.get((key[0] + dx, key[1] + dy, key[2] + dz), ()):
+                        other = find(j)
+                        if other != root:
+                            parent[other] = root
+    groups = {}
+    for i in range(len(triangles)):
+        groups.setdefault(find(i), []).append(i)
+    return [(np.array(g), float(area[g].sum()), (centre[g] * area[g][:, None]).sum(0) / max(area[g].sum(), 1e-12)) for g in groups.values()]
+
+
+def on_surface(triangles, x, y, front):
+    """The lens's surface seen at (x, y) along the car (0.77): where the line through it along z crosses the triangles
+    first from ahead (front) or from behind. Where the line passes through a lamp round the point instead (the 458's
+    ring of a tail lamp), the point keeps its place in the ring at the depth of the ring's nearest part. The cluster's
+    middle at the extreme z of its tip, as before, left a swept lamp's socket up to 23 cm in the air ahead of the lens
+    (the 458's heads), its glow outboard of the lamp at the body's edge."""
+    a, b, c = triangles[:, 0], triangles[:, 1], triangles[:, 2]
+    e0, e1, p = b[:, :2] - a[:, :2], c[:, :2] - a[:, :2], np.array([x, y]) - a[:, :2]
+    d00, d01, d11 = (e0 * e0).sum(1), (e0 * e1).sum(1), (e1 * e1).sum(1)
+    d20, d21 = (p * e0).sum(1), (p * e1).sum(1)
+    det = d00 * d11 - d01 * d01
+    edge_on = np.abs(det) < 1e-14
+    det = np.where(edge_on, 1.0, det)
+    v = (d11 * d20 - d01 * d21) / det
+    w = (d00 * d21 - d01 * d20) / det
+    u = 1.0 - v - w
+    hit = ~edge_on & (u >= -1e-6) & (v >= -1e-6) & (w >= -1e-6)
+    if hit.any():
+        z = (u * a[:, 2] + v * b[:, 2] + w * c[:, 2])[hit]
+        return (float(x), float(y), float(z.min() if front else z.max()))
+    points = triangles.reshape(-1, 3)
+    reach = np.hypot(points[:, 0] - x, points[:, 1] - y)
+    near = points[reach <= reach.min() + 0.03, 2]
+    return (float(x), float(y), float(near.min() if front else near.max()))
+
+
+def end_width(doc, blob, nodes, matrices, low, high):
+    """The body's sides at its ends, the front and the rear fifth of its length (0.77): its box round the side mirrors,
+    which stand out from the doors, put the 205's head glows on its indicators outboard of its headlamps and its tail
+    glows at the edge of the body. Returns (left, right) in x."""
+    length = high[2] - low[2]
+    left, right = np.inf, -np.inf
+    for i in nodes:
+        for primitive in doc["meshes"][doc["nodes"][i]["mesh"]]["primitives"]:
+            if "POSITION" not in primitive["attributes"]:
+                continue
+            points = read_accessor(doc, blob, primitive["attributes"]["POSITION"]) @ matrices[i][:3, :3].T + matrices[i][:3, 3]
+            ends = (points[:, 2] < low[2] + 0.2 * length) | (points[:, 2] > high[2] - 0.2 * length)
+            if ends.any():
+                left, right = min(left, float(points[ends, 0].min())), max(right, float(points[ends, 0].max()))
+    return (left, right) if left < right else (float(low[0]), float(high[0]))
+
+
+def box_rule(left, right, ground, front, rear):
+    """The Godot version's lamp rule (CarView.BuildLamps): a quarter of a metre in from the sides, 0.65 m up 2 cm ahead of
+    the nose, 0.82 m up 5 cm in from the tail, the tails a little wider."""
+    centre_x = (left + right) / 2.0
+    side = max((right - left) / 2.0 - 0.25, 0.3)
+    return {"LampHeadL": (centre_x - side, ground + 0.65, front - 0.02), "LampHeadR": (centre_x + side, ground + 0.65, front - 0.02),
+            "LampTailL": (centre_x - side * 1.05, ground + 0.82, rear - 0.05), "LampTailR": (centre_x + side * 1.05, ground + 0.82, rear - 0.05)}
+
+
+def is_red(tints, textured):
+    """A textured lens's red parts (0.77): the estate's and the five's brake lamp clusters hold amber indicators and white
+    reversing lamps in their textures (linear green and blue at most 4.5 % of the red: their reds reach 3 %, their ambers
+    7 % and more). A plain lens is its lamp's colour, whatever its hue (the V8's is a dark orange)."""
+    r = tints[:, 0]
+    return ~textured | ((r > 1e-3) & (np.maximum(tints[:, 1], tints[:, 2]) < 0.045 * r))
+
+
+def lamp_sockets(model, blob, worlds, body_nodes, wheel_nodes, hubs, key=None):
+    """Where a car's lamps are (0.77), for the Unreal night's beams and glows: the four empty nodes LampHeadL,
+    LampHeadR, LampTailL and LampTailR (the car's frame: x right, y up, -z forward). From the model's own lamps where it
+    has them: the heads from its GLP_Lens triangles in the front 30 % of its length, the tails from the red of its
+    GLP_Brake (else its rear GLP_Lens) in the rear 30 %, or the materials LAMP_MATERIALS names for the model; all 5 cm
+    over the hubs' plane (the turbo hatch's rims at hub height carry a lens material). A side's cluster is chosen by its
+    area times its distance from the centre line (the five's outer lamps over its inner pair, a tail lamp over the Clio's
+    high brake lamp), a head at a headlamp's height first (HEADLAMP_HEIGHT); the socket is on its lens, under the
+    cluster's area-weighted middle (on_surface). MEASURED_LAMPS overrides any. Otherwise the Godot version's rule from
+    the body's box without its mirrors (box_rule, end_width). Returns [(name, position, source)]."""
+    low, high = np.full(3, np.inf), np.full(3, -np.inf)
+    for i in body_nodes:
+        lo, hi = mesh_bounds(model, model["nodes"][i]["mesh"], worlds[i])
+        low, high = np.minimum(low, lo), np.maximum(high, hi)
+    ground = min((mesh_bounds(model, model["nodes"][i]["mesh"], worlds[i])[0][1] for i in wheel_nodes), default=low[1])
+    hub = float(np.mean([h[1] for h in hubs])) if hubs else low[1] + 0.3
+    length = high[2] - low[2]
+    centre_x = (low[0] + high[0]) / 2.0
+    own = LAMP_MATERIALS.get(key, {})
+    cell = own.get("cell", 0.06)
+    found = {}
+    for front in (True, False):
+        if front:
+            sources = ((own["heads"][0], own["heads"]),) if "heads" in own else (("lens", ("GLP_Lens",)),)
+        else:
+            sources = ((own["tails"][0], own["tails"]),) if "tails" in own else (("brake", ("GLP_Brake",)), ("lens", ("GLP_Lens",)))
+        for source, names in sources:
+            triangles, tints, textured = lens_triangles(model, blob, body_nodes, worlds, names, colours=True)
+            if not len(triangles):
+                continue
+            centre = triangles.mean(axis=1)
+            area = 0.5 * np.linalg.norm(np.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0]), axis=1)
+            keep = (centre[:, 2] < low[2] + 0.3 * length) if front else (centre[:, 2] > high[2] - 0.3 * length)
+            keep &= centre[:, 1] > hub + 0.05
+            red = is_red(tints, textured) if source == "brake" else np.ones(len(triangles), bool)
+            picked = {}
+            for name, on_side in zip(("LampHeadL", "LampHeadR") if front else ("LampTailL", "LampTailR"), (centre[:, 0] < centre_x, centre[:, 0] > centre_x)):
+                chosen = keep & on_side
+                if area[chosen & red].sum() >= 0.002:
+                    chosen &= red
+                side = triangles[chosen]
+                if not len(side):
+                    continue
+                groups = [g for g in lens_clusters(side, cell) if g[1] >= 0.002]   # 20 cm2 and more
+                if front:
+                    groups = [g for g in groups if g[2][1] - ground >= HEADLAMP_HEIGHT] or groups
+                if not groups:
+                    continue
+                members, _, middle = max(groups, key=lambda g: g[1] * abs(g[2][0] - centre_x))
+                picked[name] = on_surface(side[members], middle[0], middle[1], front)
+            if len(picked) == 2:
+                for name, position in picked.items():
+                    found[name] = (position, source)
+                break
+    for name, position in MEASURED_LAMPS.get(key, {}).items():
+        found[name] = (position, "measured")
+    box = {}
+    if len(found) < len(LAMPS):
+        box = box_rule(*end_width(model, blob, body_nodes, worlds, low, high), ground, low[2], high[2])
+    return [(name, *(found[name] if name in found else (box[name], "box"))) for name in LAMPS]
+
+
+def box_lamp_sockets(doc, blob, root):
+    """The Godot version's lamp rule for a car with no prepared model (CarView.MeasureLamps on its lofted shell): the
+    body's box from the lofted Shell, Bonnet and Outside meshes in the car's frame, its sides at its ends (end_width), the
+    ground under its wheels."""
+    worlds, _ = world_matrices(doc)
+    inverse = np.linalg.inv(worlds[root])
+    body, wheels = [], []
+    stack = [(c, None) for c in doc["nodes"][root].get("children", [])]
+    while stack:
+        i, group = stack.pop()
+        name = doc["nodes"][i].get("name", "")
+        group = group or ("body" if name in ("Shell", "Bonnet", "Outside", "ModelShell") else "wheel" if name.startswith("Wheel") and name[5:].isdigit() else None)
+        if "mesh" in doc["nodes"][i] and group:
+            (body if group == "body" else wheels).append(i)
+        stack.extend((c, group) for c in doc["nodes"][i].get("children", []))
+    local = {i: inverse @ worlds[i] for i in body + wheels}
+    if not body:
+        return []
+    low, high = np.full(3, np.inf), np.full(3, -np.inf)
+    for i in body:
+        lo, hi = mesh_bounds(doc, doc["nodes"][i]["mesh"], local[i])
+        low, high = np.minimum(low, lo), np.maximum(high, hi)
+    ground = min((mesh_bounds(doc, doc["nodes"][i]["mesh"], local[i])[0][1] for i in wheels), default=low[1])
+    rule = box_rule(*end_width(doc, blob, body, local, low, high), ground, low[2], high[2])
+    return [(name, rule[name], "box") for name in LAMPS]
+
+
+def brake_parts(model, blob, worlds, body_nodes):
+    """The parts of a model's brake lamps' material that are no tail lamp (0.77), each given a copy of the material of
+    its own, appended to the model's: a cluster in the front half of the car (the V8's side markers, the five's front
+    indicators and repeaters) GLP_BrakeOff, which never lights; one on the centre line behind (the Clio's high-mounted
+    stop lamp, the 458's) GLP_BrakeStop, which lights with the brake alone. The tail lamps keep GLP_Brake, lit while the
+    lamps are (M_BrakeLamp: until 0.77 every slot of the material lit as a tail lamp all night, the Clio's as if it braked
+    all the time, and red with the brake by day). Returns the Merger's parts, {material: [(part's material, boxes)]},
+    and a count of the parts' clusters."""
+    low, high = np.full(3, np.inf), np.full(3, -np.inf)
+    for i in body_nodes:
+        lo, hi = mesh_bounds(model, model["nodes"][i]["mesh"], worlds[i])
+        low, high = np.minimum(low, lo), np.maximum(high, hi)
+    centre_x, middle_z = (low[0] + high[0]) / 2.0, (low[2] + high[2]) / 2.0
+    parts, counts = {}, {"GLP_BrakeStop": 0, "GLP_BrakeOff": 0}
+    for index, material in enumerate(list(model.get("materials", []))):
+        if (material.get("name") or "") != "GLP_Brake":
+            continue
+        triangles = []
+        for i in body_nodes:
+            for primitive in model["meshes"][model["nodes"][i]["mesh"]]["primitives"]:
+                if primitive.get("material") != index or primitive.get("mode", 4) != 4 or "POSITION" not in primitive["attributes"]:
+                    continue
+                position = read_accessor(model, blob, primitive["attributes"]["POSITION"])
+                indices = read_accessor(model, blob, primitive["indices"]).astype(np.int64).ravel() if "indices" in primitive else np.arange(len(position))
+                indices = indices[: len(indices) // 3 * 3].reshape(-1, 3)
+                triangles.append(((np.hstack([position, np.ones((len(position), 1))]) @ worlds[i].T)[:, :3])[indices])
+        if not triangles:
+            continue
+        triangles = np.concatenate(triangles)
+        boxes = {"GLP_BrakeStop": [], "GLP_BrakeOff": []}
+        for members, _, middle in lens_clusters(triangles):
+            points = triangles[members].reshape(-1, 3)
+            box = (points.min(0) - 0.005, points.max(0) + 0.005)
+            if middle[2] < middle_z:
+                boxes["GLP_BrakeOff"].append(box)
+            elif abs(middle[0] - centre_x) < 0.2 and points[:, 0].max() - points[:, 0].min() < 1.0:
+                boxes["GLP_BrakeStop"].append(box)
+        for name, found in boxes.items():
+            if found:
+                model["materials"].append(dict(copy.deepcopy(material), name=name))
+                parts.setdefault(index, []).append((len(model["materials"]) - 1, found))
+                counts[name] += len(found)
+    return parts, counts
+
+
+def describe_lamps(sockets, parts=None):
+    """One line for the build's log: where the heads and tails came from, and the brake lamps' other parts."""
+    kinds = {name: source for name, _, source in sockets}
+    line = f"lamps: heads {kinds.get('LampHeadL', '-')}, tails {kinds.get('LampTailL', '-')}"
+    if parts:
+        line += f", brake lens parts: {parts['GLP_BrakeStop']} stop lamp(s), {parts['GLP_BrakeOff']} front marker(s)"
+    return line
+
+
 def compact(doc, blob):
     """The binary chunk with only what the remaining meshes and images use: the model's own meshes, baked into new ones,
     would otherwise travel in the file a second time (a 205 went from 46 to 110 MB)."""
@@ -558,9 +917,16 @@ def main():
     doc, blob = load(source)
     key, path = model_path(folder, car)
     if path is None:
-        if source != target:
+        # The lamps' places from the lofted body's box (0.77), the rest as it was.
+        root = find_node(doc, "PlayerCar")
+        names = {doc["nodes"][c].get("name", "") for c in doc["nodes"][root].get("children", [])}
+        sockets = [] if "LampHeadL" in names else box_lamp_sockets(doc, blob, root)
+        for name, position, _ in sockets:
+            doc["nodes"].append({"name": name, "translation": [float(v) for v in position]})
+            doc["nodes"][root].setdefault("children", []).append(len(doc["nodes"]) - 1)
+        if source != target or sockets:
             save(target, doc, blob)
-        print(f"{car}: no prepared model in {folder}, the car stays as it was")
+        print(f"{car}: no prepared model in {folder}, the car stays as it was{', ' + describe_lamps(sockets) if sockets else ''}")
         return
     model, model_blob = load(path)
     worlds, _ = world_matrices(model)
@@ -577,6 +943,11 @@ def main():
     doc["nodes"][root]["children"] = []
     for material in model.get("materials", []):
         correct_material(material)
+    special = {"Wheel0", "Wheel1", "Wheel2", "Wheel3", "Steering", "Eye", "Dials", "Mirror", "MirrorHung"}
+    body_nodes = [i for name, c in top.items() if name not in special for i in mesh_nodes(model, c)]
+    # The brake lamps' material's parts that are no tail lamp get materials of their own before the model's are merged
+    # (0.77); the body's bake sorts their triangles out.
+    brake, brake_counts = brake_parts(model, model_blob, worlds, body_nodes)
     # GLP_DEBUG_COLOURS="name=r,g,b;...": paints the named materials flat, to find which one a pixel is (a diagnosis aid).
     for item in filter(None, os.environ.get("GLP_DEBUG_COLOURS", "").split(";")):
         name, rgb = item.split("=")
@@ -597,10 +968,11 @@ def main():
     count = {"body": 0, "glass": 0}
     glass_materials = {i for i, m in enumerate(model.get("materials", [])) if glassy(m)}
 
-    def baked(label, items, eye=None):
+    def baked(label, items, eye=None, parts=None):
         """One node per kind of surface: the opaque parts (Nanite) and the glass (translucent, which Nanite cannot draw).
-        With the driver's eye (the body), a window drawn as two layers keeps the outer one (Merger.drop_inner_panes)."""
-        opaque, glass = Merger(model, model_blob), Merger(model, model_blob)
+        With the driver's eye (the body), a window drawn as two layers keeps the outer one (Merger.drop_inner_panes);
+        with parts, the brake lamps' material is split (brake_parts)."""
+        opaque, glass = Merger(model, model_blob, parts), Merger(model, model_blob, parts)
         for i, matrix in items:
             mesh = model["meshes"][model["nodes"][i]["mesh"]]
             solid = [p for p in mesh["primitives"] if p.get("material", -1) not in glass_materials]
@@ -620,12 +992,10 @@ def main():
                 count["glass" if prefix == "Mdl_Glass_" else "body"] += 1
         return nodes
 
-    special = {"Wheel0", "Wheel1", "Wheel2", "Wheel3", "Steering", "Eye", "Dials", "Mirror", "MirrorHung"}
     children = []
 
     # The body, its cabin and whatever else hangs on it (arch liners, the plate), baked in the car's frame.
-    body = baked("Body", [(i, worlds[i]) for name, c in top.items() if name not in special for i in mesh_nodes(model, c)],
-                 worlds[top["Eye"]][:3, 3] if "Eye" in top else None)
+    body = baked("Body", [(i, worlds[i]) for i in body_nodes], worlds[top["Eye"]][:3, 3] if "Eye" in top else None, brake)
     children.append(b.node("ModelBody", None, None, body))
 
     # The wheels on their hubs, each spinning in a Spin node of its own; another car's model is fitted to these tyres.
@@ -678,12 +1048,19 @@ def main():
             parts.insert(1, b.node("MirrorHousing", None, b.box("MirrorHousing", (glass_w + 0.02, glass_h + 0.02, 0.03), housing)))
         children.append(b.node("RearMirror", orthonormal(frame) @ translation(0.0, 0.0, -MIRROR_OFFSET), None, parts))
 
+    # The lamps' places (0.77): empty nodes the level tags for the game's beams and glows (build_scene.py rig_car).
+    wheel_nodes = [i for w in range(4) for i in mesh_nodes(model, top[f"Wheel{w}"])]
+    hubs = [worlds[top[f"Wheel{w}"]][:3, 3] for w in range(4)]
+    sockets = lamp_sockets(model, model_blob, worlds, body_nodes, wheel_nodes, hubs, key)
+    for name, position, _ in sockets:
+        children.append(b.node(name, translation(*position)))
+
     doc["nodes"][root]["children"] = children
     prune(doc)
     save(target, doc, compact(doc, b.blob))
     print(f"{car}: {os.path.basename(path)}{' (fitted to this car)' if key != car else ''}: {count['body']} body mesh node(s), "
           f"{count['glass']} glass ({count.get('inner panes', 0)} inner pane triangles dropped), steering {'yes' if 'Steering' in top else 'no'}, eye {'yes' if 'Eye' in top else 'no'}, "
-          f"dials {'yes' if 'Dials' in top else 'no'}, mirror {mirror_key or 'none'} -> {target}")
+          f"dials {'yes' if 'Dials' in top else 'no'}, mirror {mirror_key or 'none'}, {describe_lamps(sockets, brake_counts)} -> {target}")
 
 
 if __name__ == "__main__":

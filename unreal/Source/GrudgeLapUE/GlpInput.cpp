@@ -12,6 +12,9 @@ namespace
 		EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five, EKeys::Six, EKeys::Seven,
 		EKeys::N, EKeys::R, EKeys::Enter, EKeys::SpaceBar, EKeys::C, EKeys::U, EKeys::F5, EKeys::F8, EKeys::F9,
 		EKeys::F11, EKeys::F12, EKeys::Escape,
+		// The title screen's weather, hour and music folder (0.77): until the hour came the keyboard's H and M were never
+		// read, as they were missing here; only a scripted run could press them.
+		EKeys::H, EKeys::L, EKeys::M,
 		// The pad's buttons (InputSetup): the stick and the triggers are read as axes.
 		EKeys::Gamepad_DPad_Left, EKeys::Gamepad_DPad_Right, EKeys::Gamepad_DPad_Up, EKeys::Gamepad_DPad_Down,
 		EKeys::Gamepad_LeftStick_Left, EKeys::Gamepad_LeftStick_Right,

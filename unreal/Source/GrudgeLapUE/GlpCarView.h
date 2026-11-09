@@ -1,13 +1,32 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GlpLamps.h"
 #include "grudgelap_physics.h"
 
 class AActor;
 class UMaterialInterface;
 class UPrimitiveComponent;
 class USceneComponent;
+class USpotLightComponent;
+class UStaticMeshComponent;
 class UWorld;
+
+/** What a car's lamps show (0.77, FGlpCarView::SetLamps). */
+struct FGlpLampState
+{
+	/** The glows and the tail lamps (dusk to dawn, and in the rain: the Godot version's CarLampsLit). */
+	bool bCards = false;
+	/** The low beams' light (dusk to dawn): by day in the rain it would not show, and MegaLights stays off by day. */
+	bool bBeams = false;
+	/**
+	 * The player's car: two shadowed beams and the tail lamps' red on the road; a drone one beam between its lamps and
+	 * without shadows, under MegaLights too (FGlpCarView::BuildLamps).
+	 */
+	bool bPlayer = false;
+	/** The beams' linear colour by the car's era: halogen, xenon, LED. */
+	FLinearColor BeamColour = FLinearColor::White;
+};
 
 /**
  * A car on screen: its body, the four wheel pivots (the suspension and the steering), the parts that roll, and
@@ -43,8 +62,23 @@ public:
 
 	void SetVisible(bool bVisible);
 
-	/** The brake lamps' glow (0 off, 1 lit): every material of this car with a Glow parameter (M_BrakeLamp, 0.76). */
+	/**
+	 * The brake lamps' glow (0 off, 1 lit): every material of this car with a Glow parameter (M_BrakeLamp, 0.76), and at
+	 * night the tail lamps' glows and the red on the road behind (0.77). Each lens lights as its part of the car says
+	 * (M_BrakeLamp's StopLamp and TailLamp, 0.77): a centre stop lamp with the brake only, a front marker cut from the same
+	 * material never.
+	 */
 	void SetBraking(float Glow);
+
+	/**
+	 * The lamps (0.77), as the Godot version's CarView.Headlights: made the first time they are lit, at the lamp sockets
+	 * Scripts/prepare_model_car.py measured (tags GLP.LampHeadL, GLP.LampHeadR, GLP.LampTailL, GLP.LampTailR; the Godot
+	 * version's box rule where a level lacks them). Only a change touches the components.
+	 */
+	void SetLamps(const FGlpLampState& State, const FGlpLampAssets& Assets);
+
+	/** The player's beam I (0 left, 1 right) while lit, for the retroreflectors (MPC_Night); null otherwise. */
+	const USpotLightComponent* BeamLight(int32 Index) const;
 
 	/**
 	 * From the driver's seat the body shell, the outside details and the wheels are not drawn, only their shadows
@@ -78,4 +112,22 @@ private:
 	/** Gives a mesh's brake-lamp slots dynamic instances of their own and keeps them in BrakeLamps. */
 	void TakeBrakeLamps(class UStaticMeshComponent* Mesh);
 	float RollAngle = 0.f;
+
+	// The lamps (0.77). Their places in the root's frame (cm: x right, y back, the nose at -y, z up), the body's box there
+	// and the ground under the wheels, measured once on the level's car and handed to its copies.
+	FVector LampRest[4] = {};   // head left, head right, tail left, tail right
+	FBox Body = FBox(ForceInit);
+	float Ground = -60.f;
+	void MeasureLamps();
+	void BuildLamps(const FGlpLampAssets& Assets, bool bPlayer, const FLinearColor& BeamColour);
+	void ShowLamps();
+	void ApplyTail();
+	TArray<TWeakObjectPtr<USpotLightComponent>> Beams;      // the player's two, or a drone's one
+	TWeakObjectPtr<USpotLightComponent> TailPool;           // the player's red on the road behind
+	TArray<TWeakObjectPtr<UStaticMeshComponent>> HeadGlows;
+	TArray<TWeakObjectPtr<UStaticMeshComponent>> TailGlows;
+	FGlpLampState Lamps;
+	bool bLampsBuilt = false;
+	bool bShown = true;
+	bool bBraking = false;
 };
