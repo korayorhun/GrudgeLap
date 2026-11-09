@@ -171,7 +171,8 @@ internal sealed partial class Hud : Control
             var ghost = s.GhostVisible ? "GHOST  " : "";
             DrawString(font, new Vector2(size.X - 320f, 84f), $"{ghost}BEST {RaceSession.FormatLapTime(s.BestLapTime)}", HorizontalAlignment.Right, 300f, 16, new Color(0.6f, 0.9f, 1f));
         }
-        if (Notice != "") DrawString(font, new Vector2(size.X - 520f, 104f), Notice, HorizontalAlignment.Right, 500f, 14, new Color(1f, 0.85f, 0.4f));
+        // The updater's line; on the title screen it sits in the panel instead (below). Wide enough for a failure's reason.
+        if (Notice != "" && s.Phase != SessionPhase.SelectTransmission) DrawString(font, new Vector2(size.X - 820f, 104f), Notice, HorizontalAlignment.Right, 800f, 14, new Color(1f, 0.85f, 0.4f));
         var leftLine = 84f;
         if (s.Damage > 0.004f && s.Phase is SessionPhase.Driving or SessionPhase.StartEngine)
         {
@@ -245,6 +246,8 @@ internal sealed partial class Hud : Control
             // Each car its own best lap and ghost (0.73).
             Centred(font, s.GrudgeMatch ? $"grudge match: your best lap in this car, {RaceSession.FormatLapTime(s.BestLapTime)}, races you as a ghost" : "finish a lap in this car and its ghost will race you next time", y + 312f, 18, new Color(0.6f, 0.9f, 1f));
             Centred(font, $"v{Updater.CurrentVersionText}   ESC menu and quit   F6 fps   F7 graphics   F8 1989 mode   F10 check for updates   F11 full screen", y + 346f, 15, grey);
+            // What the updater is doing, or why it failed: the title screen is where an update is applied.
+            if (Notice != "") Centred(font, Notice, y + 370f, 15, new Color(1f, 0.85f, 0.4f));
         }
         else if (s.Phase == SessionPhase.Finished)
         {

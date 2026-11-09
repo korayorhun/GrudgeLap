@@ -5,6 +5,10 @@
 #define MyAppPublisher "Koray Orhun"
 #define MyAppURL "https://github.com/korayorhun/GrudgeLap"
 #define MyAppExeName "GrudgeLap.exe"
+; The game's one-copy lock (game/src/SingleInstance.cs): it exists while a copy runs. A test build may name another.
+#ifndef GameMutex
+  #define GameMutex "Global\GrudgeLap.SingleInstance"
+#endif
 
 [Setup]
 AppId={{871E561A-E89E-41ED-870A-A635D3E789C2}
@@ -73,17 +77,62 @@ Filename: "{app}\{#MyAppExeName}"; Flags: nowait; Check: IsSelfUpdate
 Filename: "{sys}\taskkill.exe"; Parameters: "/IM {#MyAppExeName} /F"; Flags: runhidden; RunOnceId: "KillGrudgeLap"
 
 [Code]
-// The game's updater runs the new installer with /UPDATE=1 and quits; the installer then relaunches the game.
+// The game's updater starts this installer itself (/SILENT /NOCANCEL /LOG=...) and then quits through its normal
+// shutdown. /UPDATE=1: start the game again afterwards; /UPDATE=2: do not (an update applied as the game closes, or
+// the updater run on its own with --update-only=apply). Up to 0.76 the game quit first and a PowerShell script ran this
+// installer with /UPDATE=1 once the game had gone; both ways work.
+function StartedByGame: Boolean;
+begin
+  Result := ExpandConstant('{param:UPDATE|0}') <> '0';
+end;
+
 function IsSelfUpdate: Boolean;
 begin
   Result := ExpandConstant('{param:UPDATE|0}') = '1';
 end;
 
+// True when nothing holds the game's executable, so that it can be replaced.
+function ExeFree(const Exe: String): Boolean;
+var
+  Stream: TFileStream;
+begin
+  Result := True;
+  if not FileExists(Exe) then Exit;
+  try
+    Stream := TFileStream.Create(Exe, fmOpenReadWrite or fmShareExclusive);
+    Stream.Free;
+  except
+    Result := False;
+  end;
+end;
+
+function GameRunning(const Exe: String): Boolean;
+begin
+  Result := CheckForMutexes('{#GameMutex}') or not ExeFree(Exe);
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
-  ResultCode: Integer;
+  ResultCode, Waited: Integer;
+  Exe: String;
 begin
-  Exec(ExpandConstant('{sys}\taskkill.exe'), '/IM {#MyAppExeName} /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Sleep(500);
+  Exe := ExpandConstant('{app}\{#MyAppExeName}');
+  Waited := 0;
+  // Started by the game: it is on its way out (saving, letting go of its lock; its executable stays held for a second
+  // or two after its process ends), so it is waited for rather than killed. A copy still there after a minute, or any
+  // copy when the installer was started by hand, is closed as before.
+  if StartedByGame then
+    while GameRunning(Exe) and (Waited < 60000) do
+    begin
+      Sleep(250);
+      Waited := Waited + 250;
+    end;
+  Log(Format('Waited %d ms for the game to exit', [Waited]));
+  if GameRunning(Exe) then
+  begin
+    Log('The game is still running: closing it');
+    Exec(ExpandConstant('{sys}\taskkill.exe'), '/IM {#MyAppExeName} /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Sleep(500);
+  end;
   Result := '';
 end;

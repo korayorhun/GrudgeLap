@@ -127,7 +127,7 @@ Son güncelleme: 9 Kasım 2026 (sürüm 0.76.0).
 | No | İster | Kaynak | Durum |
 |---|---|---|---|
 | R1 | Oyun açılınca kendini güncellesin; her açılışta en yeni sürüm gelsin. | 26 Eki: "açtığımda en güceli gelsin her zaman" | Tamam (0.6.0) |
-| R2 | Otomatik güncelleme çoğu zaman başarısız oluyor. | 3 Kas | Tamam (0.26.0): paketler 200 MB'yi geçince 60 saniyelik süre doluyordu. 0.17-0.25 kurulu kopyalar 0.26.0'ı bir kez elle kurmalı |
+| R2 | Otomatik güncelleme çoğu zaman başarısız oluyor. | 3 Kas; 8 Kas: evde yine başarısız | Tamam (0.26.0): paketler 200 MB'yi geçince 60 saniyelik süre doluyordu. 0.17-0.25 kurulu kopyalar 0.26.0'ı bir kez elle kurmalı. Güncelleyici baştan yazıldı (night/updater, yayın bekliyor): kopan indirme kaldığı yerden sürüyor, sürüm bilgisi update.json'dan (GitHub API sınırı yok), kurulum oyunun kapanmasını bekliyor, başarısızlığın nedeni ekranda ve update.log'da, iki başarısızlıktan sonra F10 sürüm sayfasını açıyor. 0.76 ve öncesi bir kez eski yoldan gelir; olmazsa son Setup elle bir kez kurulur |
 | R3 | Her iş bitince yayınlansın (GitHub Release). | 29 Eki: "çalışman bitince her zaman publish de yap" | Kural |
 | R4 | winget ve benzeri mağaza yayınları 1.0 kararlı sürüme kadar beklesin. | 22 Eki | Ertelendi |
 

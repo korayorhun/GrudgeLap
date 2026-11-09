@@ -55,6 +55,22 @@ $zipSha = (Get-FileHash $portable -Algorithm SHA256).Hash
 Write-Host "setup  $setup  SHA256=$setupSha"
 Write-Host "zip    $portable  SHA256=$zipSha"
 
+# ---- update.json: what the game's updater reads first ---------------------------------------------------
+# Read through github.com's releases/latest/download/ route, outside the REST API's 60 calls an hour per address
+# (a home connection behind a carrier's shared address can find them used up), with the packages' exact names,
+# sizes and SHA-256. Games up to 0.76 read the API and ignore this asset; a release without it still updates through the API.
+$manifest = Join-Path $root 'dist\update.json'
+$manifestText = [ordered]@{
+    version   = $Version
+    tag       = "v$Version"
+    published = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+    setup     = [ordered]@{ name = (Split-Path -Leaf $setup); size = (Get-Item $setup).Length; sha256 = $setupSha.ToLowerInvariant() }
+    portable  = [ordered]@{ name = (Split-Path -Leaf $portable); size = (Get-Item $portable).Length; sha256 = $zipSha.ToLowerInvariant() }
+} | ConvertTo-Json -Depth 4
+# Without a byte-order mark, whatever PowerShell runs this (Windows PowerShell's UTF8 writes one; the game reads either).
+[System.IO.File]::WriteAllText($manifest, $manifestText, [System.Text.UTF8Encoding]::new($false))
+Write-Host "update.json  $manifest"
+
 # ---- winget manifests kept in the repo, regenerated for this version ---------------------------------
 $wingetDir = Join-Path $root 'winget'
 $releaseDate = (Get-Date).ToString('yyyy-MM-dd')
@@ -101,8 +117,25 @@ git tag "v$Version"
 git push -q
 git push -q --tags
 if (-not $Notes) { $Notes = "GrudgeLap $Version" }
-gh release create "v$Version" $setup "$setup.sha256" $portable "$portable.sha256" --title "GrudgeLap $Version" --notes $Notes
+# --latest said outright: the updater follows "latest", and a car model release (created with --latest=false) must
+# never take that place from a game version.
+gh release create "v$Version" $setup "$setup.sha256" $portable "$portable.sha256" $manifest --title "GrudgeLap $Version" --notes $Notes --latest
+if ($LASTEXITCODE -ne 0) { throw "gh release create failed" }
 Write-Host "Released v$Version"
+
+# The route the games read first must give this version before they ask; GitHub can take a few seconds to switch.
+$latestManifest = 'https://github.com/korayorhun/GrudgeLap/releases/latest/download/update.json'
+$seen = $null
+for ($attempt = 1; $attempt -le 24 -and $seen -ne $Version; $attempt++) {
+    try {
+        $response = Invoke-WebRequest -Uri $latestManifest -UseBasicParsing -TimeoutSec 20
+        $text = if ($response.Content -is [byte[]]) { [System.Text.Encoding]::UTF8.GetString($response.Content) } else { [string]$response.Content }
+        $seen = ($text.TrimStart([char]0xFEFF) | ConvertFrom-Json).version
+    } catch { $seen = $null }
+    if ($seen -ne $Version) { Start-Sleep -Seconds 5 }
+}
+if ($seen -ne $Version) { throw "$latestManifest gives '$seen', not ${Version}: the games' updaters would not see this release first (they fall back to the API)" }
+Write-Host "update.json check: $latestManifest gives $seen"
 if ($NoStores) { Write-Host "NoStores: Scoop and winget left as they were."; exit 0 }
 
 # ---- scoop: personal bucket (korayorhun/scoop-bucket) ---------------------------------------------

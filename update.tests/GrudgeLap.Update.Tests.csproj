@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The updater's engine-free parts (the release feed, the download client, the log, the apply helpers) tested
+       against an in-process stand-in for GitHub that drops, stalls, ignores ranges, expires its signed redirects and
+       runs out of API calls on purpose. The sources are the game's own, compiled in here: the game's assembly needs
+       Godot, these files do not. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>GrudgeLap.Update.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\game\src\UpdateClient.cs" Link="Game\UpdateClient.cs" />
+    <Compile Include="..\game\src\UpdateFeed.cs" Link="Game\UpdateFeed.cs" />
+    <Compile Include="..\game\src\UpdateLog.cs" Link="Game\UpdateLog.cs" />
+    <Compile Include="..\game\src\UpdateApply.cs" Link="Game\UpdateApply.cs" />
+  </ItemGroup>
+
+</Project>

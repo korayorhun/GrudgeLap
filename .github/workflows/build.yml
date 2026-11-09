@@ -29,6 +29,9 @@ jobs:
       - name: Audio tests
         run: dotnet test audio.tests/GrudgeLap.Audio.Tests.csproj --nologo -v q
 
+      - name: Update tests
+        run: dotnet test update.tests/GrudgeLap.Update.Tests.csproj --nologo -v q
+
       - name: Godot .NET editor and export templates
         shell: pwsh
         run: |

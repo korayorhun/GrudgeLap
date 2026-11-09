@@ -22,7 +22,9 @@ namespace GrudgeLap.Game;
 /// the Esc menu's CAR line; <c>--turn=&lt;degrees&gt;</c> the turntable held at that angle; <c>--showroom-paint=&lt;paint&gt;</c>
 /// its car in that paint, as if chosen there; <c>--picker</c> the colour picker open), <c>--paint-book-test</c> (the
 /// per-car paint settings written, read back and migrated in a file of their own, then quit with 0 when every check
-/// holds) and <c>--quit-after=&lt;seconds&gt;</c>.
+/// holds), <c>--update-only[=apply]</c> (the updater alone, no world built and no claim on the lock: the check, the
+/// download and its verification, with <c>=apply</c> the installer started; GRUDGELAP_UPDATE_DRYRUN=1 stops after the
+/// check; the exit code is the result, see <see cref="Updater.RunAlone"/>) and <c>--quit-after=&lt;seconds&gt;</c>.
 /// </summary>
 public sealed partial class Bootstrap : Node3D
 {
@@ -117,6 +119,8 @@ public sealed partial class Bootstrap : Node3D
     private string? _showroomPaint;     // automation: the showroom's car in this paint (--showroom-paint=)
     private bool _showroomPicker;       // automation: the colour picker open (--picker)
     private bool _paintBookTest;        // automation: the paint settings' round trip, then quit (--paint-book-test)
+    private bool _updateOnly;           // automation: the updater alone, then quit with its result (--update-only[=apply])
+    private bool _updateApply;
     private bool _startChase;
     private bool _retro;
     private GraphicsQuality _quality = GraphicsQuality.High;
@@ -193,6 +197,17 @@ public sealed partial class Bootstrap : Node3D
         _weatherChoice = Math.Clamp(LoadChoice("weather", 0), 0, 4);
         _lightChoice = Math.Clamp(LoadChoice("light", 0), 0, 4);
         ParseArgs();   // may override the saved car with --car= and the paint with --paint=
+        if (_updateOnly)
+        {
+            // The updater alone, before anything is built or locked: checks of the update without a player,
+            // e.g. `--headless -- --update-only` with GRUDGELAP_UPDATE_DRYRUN=1 against the real releases.
+            _leaving = true;
+            HideWindow();
+            _updater = new Updater();
+            AddChild(_updater);
+            _updater.RunAlone(_updateApply, code => GetTree().Quit(code));
+            return;
+        }
         // The paints (0.21, per car since 0.25): every car in its own colour by default; the showroom and the menu
         // choose another, and keep it. An automated run reads them but never writes the player's file.
         _automated = _invisible || _screenshotPath is not null || _quitAfter >= 0f;
@@ -314,6 +329,9 @@ public sealed partial class Bootstrap : Node3D
         if (_perfLog) StartMark("engine audio");
         _updater = new Updater();
         AddChild(_updater);
+        // An installer that has started gets the game out of its way through the normal quit, which lets go of the
+        // one-copy lock it waits for (until 0.76 the updater quit the tree itself).
+        _updater.RequestQuit = Shutdown;
         SubViewport panel;
         (panel, _instruments) = InstrumentCluster.Create();
         // Metric by default since 0.14; U or the menu switches, and the choice is kept ("units": 1 km/h, 0 mph).
@@ -504,6 +522,7 @@ public sealed partial class Bootstrap : Node3D
             else if (arg.StartsWith("--showroom-paint=", System.StringComparison.Ordinal)) _showroomPaint = arg["--showroom-paint=".Length..];
             else if (arg == "--picker") _showroomPicker = true;
             else if (arg == "--paint-book-test") _paintBookTest = true;
+            else if (arg is "--update-only" or "--update-only=apply") (_updateOnly, _updateApply) = (true, arg.EndsWith("=apply", System.StringComparison.Ordinal));
             else if (arg == "--lofted") CarView.UseModels = false;
             else if (arg == "--perf-log") _perfLog = true;
             else if (arg == "--dent-test") _dentTest = true;
@@ -896,6 +915,8 @@ public sealed partial class Bootstrap : Node3D
         _elapsed += dt;
         if (SingleInstance.ActivationRequested()) BringToFront();
         HandleGlobalKeys();
+        // Every frame, the menu's and the showroom's included: a download goes on under them and its line stays current.
+        _hud.Notice = _updater.Status;
         Showroom.CollectAbandoned();
         if (_collectAfterShowroom)
         {
@@ -1031,12 +1052,12 @@ public sealed partial class Bootstrap : Node3D
             _scores.Update(dt);
         }
         UpdateSound(dt);
-        _hud.Notice = _updater.Status;
         SyncView();
 
         AutomationAfterFrame();
-        // A downloaded update restarts the game only between credits: on the title screen or once the time is up.
-        _updater.ApplyWhenIdle(_session.Phase is SessionPhase.SelectTransmission or SessionPhase.Finished);
+        // A downloaded update restarts the game only between credits: on the title screen or once the time is up, and
+        // not while initials are being typed into the high-score table (until 0.76 it quit the moment the time was up).
+        _updater.ApplyWhenIdle(_session.Phase is SessionPhase.SelectTransmission || _session.Phase is SessionPhase.Finished && !_scores.Entering);
     }
 
     /// <summary>
