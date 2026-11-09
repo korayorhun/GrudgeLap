@@ -3846,6 +3846,8 @@ The puddles were the view's alone: a mirror-flat patch on the asphalt, under the
   `windscreen.glsl`), so its drops and film show the loop's grating (the drops' contents now carry the motion blur); a
   sliding wheel's own contact point decides whether it marks the grating; `--export-world` writes the deck as a blended
   textured material (a masked one vanished in viewers that mipmap).
+- **The Unreal times of day and night** (added to 0.77.0 after the game): see `unreal/README.md` (hours, lamps,
+  MegaLights, the beams in the rain, the frame times); designed from the Godot game, built, independently checked and repaired.
 
 ## Unreal Engine version (`unreal/`)
 
