@@ -32,6 +32,8 @@ public:
 	decltype(&glp_abort) Abort = nullptr;
 	decltype(&glp_scripted_inputs) ScriptedInputs = nullptr;
 	decltype(&glp_step) Step = nullptr;
+	decltype(&glp_feather_inputs) FeatherInputs = nullptr;
+	decltype(&glp_ground_height) GroundHeight = nullptr;
 	decltype(&glp_get_state) GetState = nullptr;
 	decltype(&glp_message) MessageText = nullptr;
 	decltype(&glp_traffic) Traffic = nullptr;

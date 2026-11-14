@@ -311,6 +311,7 @@ class Merger:
         self.model = model
         self.blob = blob
         self.buckets = {}
+        self.turned = 0   # triangles whose normals were turned to follow their winding
         # brake_parts (0.77): {material: [(another material, boxes in the car's frame)]}, the triangles whose middle lies in
         # one of the boxes going to the other material.
         self.parts = parts or {}
@@ -353,6 +354,38 @@ class Merger:
             if flip:
                 indices = indices.reshape(-1, 3)[:, ::-1].ravel()
             world = (position @ linear.T + matrix[:3, 3]).astype(np.float32)
+            if normal is not None and len(indices):
+                # The normals follow the winding (0.78). A face is drawn by its winding; its normal has to stand on the
+                # side it is seen from. The estate's source model has the normals of all its glass, its lamps and a
+                # quarter of its paint turned inwards under faces wound outwards: the Godot game's lighting forgave it,
+                # the Unreal version's two-sided glass turned such a normal once more and shaded the windscreen as a
+                # mirror facing the cabin, a milky sheet over the road (the owner's report of 14 November 2026). A vertex
+                # only such faces use has its normal turned; one shared with a sound face is copied for them.
+                triangles = indices.reshape(-1, 3)
+                corners = world[triangles].astype(np.float64)
+                face = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+                against = np.einsum("ij,ij->i", face, normal[triangles].sum(axis=1)) < 0.0
+                if against.any():
+                    turned = np.zeros(count, bool)
+                    turned[triangles[against].ravel()] = True
+                    sound = np.zeros(count, bool)
+                    sound[triangles[~against].ravel()] = True
+                    shared = np.flatnonzero(turned & sound)
+                    normal[turned & ~sound] *= -1.0
+                    if len(shared):
+                        copy_of = np.arange(count)
+                        copy_of[shared] = count + np.arange(len(shared))
+                        triangles = triangles.copy()
+                        triangles[against] = copy_of[triangles[against]]
+                        indices = triangles.ravel().astype(np.uint32)
+                        position = np.vstack([position, position[shared]])
+                        world = np.vstack([world, world[shared]])
+                        normal = np.vstack([normal, -normal[shared]])
+                        uv0 = np.vstack([uv0, uv0[shared]])
+                        uv1 = np.vstack([uv1, uv1[shared]]) if uv1 is not None else None
+                        colour = np.vstack([colour, colour[shared]]) if colour is not None else None
+                        count = len(position)
+                    self.turned += int(against.sum())
             groups = self.split(primitive.get("material", -1), world, indices)
             for material, subset in groups:
                 if not len(subset):
@@ -401,6 +434,46 @@ class Merger:
         self.builder_doc = builder.doc
         builder.doc.setdefault("meshes", []).append({"name": name, "primitives": primitives})
         return len(builder.doc["meshes"]) - 1
+
+    def cowl(self, eye):
+        """The windscreen's lower edge, as a point on the car's middle line (0.78): the lowest glass the eye looks through
+        ahead of it. Rays leave the eye in a fan, 20 degrees to either side and from 10 degrees up to 40 down, and the
+        first glass each meets within 1.6 m counts (the lamps' lenses, of the same material, lie further off or behind
+        the dashboard's line). None when no ray meets glass."""
+        triangles = []
+        for material, bucket in self.buckets.items():
+            if not bucket["indices"] or material < 0 or not (self.model["materials"][material].get("name") or "").startswith("GLP_Glass"):
+                continue
+            position = np.vstack(bucket["position"]).astype(np.float64)
+            corners = position[np.concatenate(bucket["indices"]).astype(np.int64).reshape(-1, 3)]
+            centre = corners.mean(axis=1)
+            near = (centre[:, 2] < eye[2]) & (np.linalg.norm(centre - eye, axis=1) < 1.7)
+            if near.any():
+                triangles.append(corners[near])
+        if not triangles:
+            return None
+        triangles = np.vstack(triangles)
+        origin = np.asarray(eye, np.float64)
+        e1, e2 = triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0]
+        offset = origin - triangles[:, 0]
+        cross_offset = np.cross(offset, e1)
+        lowest = None
+        for yaw in np.radians(np.arange(-20.0, 20.1, 2.0)):
+            for pitch in np.radians(np.arange(10.0, -40.1, -1.0)):
+                way = np.array([math.sin(yaw) * math.cos(pitch), math.sin(pitch), -math.cos(yaw) * math.cos(pitch)])
+                h = np.cross(way, e2)
+                a = np.einsum("ij,ij->i", e1, h)
+                sound = np.abs(a) > 1e-12
+                f = np.where(sound, 1.0 / np.where(sound, a, 1.0), 0.0)
+                u = f * np.einsum("ij,ij->i", offset, h)
+                v = f * (cross_offset @ way)
+                t = f * np.einsum("ij,ij->i", e2, cross_offset)
+                hit = sound & (u >= 0.0) & (v >= 0.0) & (u + v <= 1.0) & (t > 0.05) & (t < 1.6)
+                if hit.any():
+                    point = origin + way * float(t[hit].min())
+                    if lowest is None or point[1] < lowest[1]:
+                        lowest = point
+        return None if lowest is None else np.array([0.0, float(lowest[1]), float(lowest[2])])
 
     def drop_inner_panes(self, eye):
         """Keeps one face of each window the model draws as two parallel layers (0.76): the level's glass is a thin
@@ -966,6 +1039,7 @@ def main():
             material["name"] = "GLP_PaintTex" if textured else "GLP_PaintFlat"
     b = Builder(doc, blob)
     count = {"body": 0, "glass": 0}
+    cowl = {}
     glass_materials = {i for i, m in enumerate(model.get("materials", [])) if glassy(m)}
 
     def baked(label, items, eye=None, parts=None):
@@ -982,8 +1056,10 @@ def main():
                     model["meshes"].append({"primitives": primitives})
                     target.add(len(model["meshes"]) - 1, matrix)
                     model["meshes"].pop()
+        count["turned"] = count.get("turned", 0) + opaque.turned + glass.turned
         if eye is not None:
             count["inner panes"] = glass.drop_inner_panes(eye)
+            cowl["point"] = glass.cowl(eye)
         nodes = []
         for prefix, merger in (("Mdl_", opaque), ("Mdl_Glass_", glass)):
             mesh = merger.build(b, prefix + label, offsets["materials"])
@@ -1026,6 +1102,9 @@ def main():
 
     if "Eye" in top:
         children.append(b.node("Eye", translation(*worlds[top["Eye"]][:3, 3])))
+    # The windscreen's lower edge (0.78): from the seat the paint above it is the cabin's lining (build_scene.py paint_finish).
+    if cowl.get("point") is not None:
+        children.append(b.node("Cowl", translation(*cowl["point"])))
 
     # The instrument panel's face, as CarView.MountModelDials hangs it.
     if "Dials" in top:
@@ -1059,8 +1138,10 @@ def main():
     prune(doc)
     save(target, doc, compact(doc, b.blob))
     print(f"{car}: {os.path.basename(path)}{' (fitted to this car)' if key != car else ''}: {count['body']} body mesh node(s), "
-          f"{count['glass']} glass ({count.get('inner panes', 0)} inner pane triangles dropped), steering {'yes' if 'Steering' in top else 'no'}, eye {'yes' if 'Eye' in top else 'no'}, "
-          f"dials {'yes' if 'Dials' in top else 'no'}, mirror {mirror_key or 'none'}, {describe_lamps(sockets, brake_counts)} -> {target}")
+          f"{count['glass']} glass ({count.get('inner panes', 0)} inner pane triangles dropped), {count.get('turned', 0)} triangles' normals turned to their winding, steering {'yes' if 'Steering' in top else 'no'}, eye {'yes' if 'Eye' in top else 'no'}, "
+          f"dials {'yes' if 'Dials' in top else 'no'}, mirror {mirror_key or 'none'}, "
+          f"windscreen's lower edge {'%.2f m under the eye' % (worlds[top['Eye']][1, 3] - cowl['point'][1]) if cowl.get('point') is not None else 'not found'}, "
+          f"{describe_lamps(sockets, brake_counts)} -> {target}")
 
 
 if __name__ == "__main__":

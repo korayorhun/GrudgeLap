@@ -1,5 +1,7 @@
 #include "GlpAudio.h"
 
+#include "GlpInstance.h"
+
 #include "GlpLibrary.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformMisc.h"
@@ -118,7 +120,8 @@ void UGlpAudio::EndPlay(const EEndPlayReason::Type Reason)
 
 FString UGlpAudio::MusicFolder()
 {
-	return FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("GrudgeLap"), TEXT("music"));
+	// In the player's data folder (0.78, GlpInstance::DataDir): until 0.77 in the game's own Saved/GrudgeLap.
+	return FPaths::Combine(GlpInstance::DataDir(), TEXT("music"));
 }
 
 FString UGlpAudio::AudioDirectory()
@@ -712,6 +715,20 @@ int32 UGlpAudio::OnGenerateAudio(float* OutAudio, int32 NumSamples)
 		for (int32 i = 0; i < NumSamples; i++)
 		{
 			Dump.Add(static_cast<int16>(OutAudio[i] * 32767.f));
+		}
+	}
+	// The Esc menu holds the game (SetHush): the mix is faded out and in, never cut, under the voices that go on beneath.
+	const float HushTarget = bHush.load(std::memory_order_relaxed) ? 0.f : 1.f;
+	if (HushGain != HushTarget || HushTarget == 0.f)
+	{
+		for (int32 i = 0; i < NumSamples; i++)
+		{
+			HushGain += (HushTarget - HushGain) * 0.004f;
+			OutAudio[i] *= HushGain;
+		}
+		if (FMath::Abs(HushGain - HushTarget) < 1e-4f)
+		{
+			HushGain = HushTarget;
 		}
 	}
 	if (bMute)

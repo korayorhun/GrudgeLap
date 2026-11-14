@@ -5,6 +5,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/Actor.h"
+#include "GlpCockpits.h"
 #include "GlpSpace.h"
 #include "Materials/MaterialInstanceDynamic.h"
 
@@ -94,11 +95,24 @@ TUniquePtr<FGlpCarView> FGlpCarView::FromLevel(UWorld* World, FName RootTag)
 			View->Steering = Part->GetRootComponent();
 			View->SteeringRest = Part->GetRootComponent()->GetRelativeTransform();
 		}
+		if (HasTag(Part, TEXT("GLP.Dials")))
+		{
+			View->Dials = Part->GetRootComponent();
+			View->DialsRest = Part->GetRootComponent()->GetRelativeTransform();
+		}
 		TArray<UStaticMeshComponent*> PartMeshes;
 		Part->GetComponents<UStaticMeshComponent>(PartMeshes);
 		for (UStaticMeshComponent* Mesh : PartMeshes)
 		{
 			View->TakeBrakeLamps(Mesh);
+			// The windows and the lenses, by the level's one glass (Scripts/build_scene.py car_materials).
+			for (int32 Slot = 0; Slot < Mesh->GetNumMaterials(); Slot++)
+			{
+				if (UMaterialInterface* Material = Mesh->GetMaterial(Slot); Material && Material->GetFName() == TEXT("M_Glass"))
+				{
+					View->Glass.Add({ Mesh, Slot, Material });
+				}
+			}
 		}
 	}
 	View->MeasureLamps();
@@ -603,7 +617,7 @@ void FGlpCarView::SetVisible(bool bVisible)
 	ShowLamps();
 }
 
-void FGlpCarView::SetInside(bool bInside)
+void FGlpCarView::SetInside(bool bInside, UMaterialInterface* InsideGlass)
 {
 	for (const TWeakObjectPtr<UPrimitiveComponent>& Component : OutsideOnly)
 	{
@@ -613,6 +627,44 @@ void FGlpCarView::SetInside(bool bInside)
 			Primitive->SetRenderInMainPass(!bInside);
 		}
 	}
+	const bool bWear = bInside && InsideGlass != nullptr;
+	if (bWear == bInsideGlass)
+	{
+		return;
+	}
+	bInsideGlass = bWear;
+	for (const FGlassSlot& Pane : Glass)
+	{
+		UStaticMeshComponent* Mesh = Pane.Mesh.Get();
+		UMaterialInterface* Outside = Pane.Outside.Get();
+		if (Mesh && Outside)
+		{
+			Mesh->SetMaterial(Pane.Slot, bWear ? InsideGlass : Outside);
+		}
+	}
+}
+
+void FGlpCarView::SetCockpit(const FGlpCockpit& Cockpit)
+{
+	const AActor* Root = RootActor.Get();
+	if (!Root)
+	{
+		return;
+	}
+	auto Place = [Root](USceneComponent* Part, const FTransform& Rest, const FVector3f& Move, float Scale)
+	{
+		if (!Part)
+		{
+			return;
+		}
+		// The move is given in the car's frame; the part hangs in its parent's (the column's, the binnacle's).
+		const FVector World = Root->GetActorTransform().TransformVector(GlpSpace::GodotLocalToUnreal(Move.X, Move.Y, Move.Z));
+		const USceneComponent* Parent = Part->GetAttachParent();
+		Part->SetRelativeLocation(Rest.GetLocation() + (Parent ? Parent->GetComponentTransform().InverseTransformVector(World) : World));
+		Part->SetRelativeScale3D(Rest.GetScale3D() * Scale);
+	};
+	Place(Steering.Get(), SteeringRest, Cockpit.Wheel, Cockpit.WheelScale);
+	Place(Dials.Get(), DialsRest, Cockpit.Dials, Cockpit.DialsScale);
 }
 
 AActor* FGlpCarView::Find(const TCHAR* Tag) const

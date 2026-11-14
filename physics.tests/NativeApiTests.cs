@@ -48,6 +48,50 @@ public sealed unsafe class NativeApiTests
         Assert.True(state.Elapsed > 11f);
     }
 
+    /// <summary>ABI 9: a key's pedal is eased as the Godot host's KeyboardDriver eased it; a trigger's position is left alone.</summary>
+    [Fact]
+    public void KeyPedalsAreFeatheredAndTriggersAreNot()
+    {
+        // The V8 on the stop in first gear, the throttle key held: its rear wheels spin, and the key's throttle comes off.
+        var native = NativeApi.Create(1, 0);
+        NativeApi.ChooseTransmission(native, (int)TransmissionMode.Automatic);
+        var least = 1f;
+        var spun = false;
+        for (var i = 0; i < 60 * 6; i++)
+        {
+            var keys = new NativeInputs { Throttle = 1f, Gear = DriverInputs.NoGearChange, Ignition = i == 0 ? 1 : 0 };
+            var eased = NativeApi.FeatherInputs(native, keys, throttleFromKey: true, brakeFromKey: true);
+            var trigger = NativeApi.FeatherInputs(native, keys, throttleFromKey: false, brakeFromKey: false);
+            Assert.Equal(1f, trigger.Throttle);
+            Assert.Equal(ScriptedDriver.FeatherThrottle(native.Session.Car, 1f), eased.Throttle);
+            Assert.InRange(eased.Throttle, 0.2f, 1f);
+            least = MathF.Min(least, eased.Throttle);
+            NativeApi.Step(native, eased, Dt);
+            var state = NativeApi.State(native);
+            spun |= state.WheelSlipRatio[2] > 0.15f || state.WheelSlipRatio[3] > 0.15f;
+        }
+        _out.WriteLine($"least throttle held on the key: {least:F2}; wheels spun: {spun}");
+        // Eased in a closed loop, the wheels never get far past their peak, so the throttle only has to come off a little.
+        Assert.True(spun && least < 1f, "the key's throttle was never eased on a full-throttle launch");
+        Assert.Equal((int)SessionPhase.Driving, NativeApi.State(native).Phase);
+    }
+
+    /// <summary>ABI 9: the ground under a point is the track's terrain, and the car at the start stands on it.</summary>
+    [Fact]
+    public void GroundHeightIsTheTerrains()
+    {
+        var native = NativeApi.Create(0, 0);
+        var track = native.Session.Track;
+        foreach (var (x, z) in new[] { (0f, 0f), (250f, -300f), (-420f, 615f), (1500f, 1500f) })
+        {
+            Assert.Equal(track.Terrain.Height(x, z), NativeApi.GroundHeight(native, x, z));
+        }
+        var state = NativeApi.State(native);
+        var ground = NativeApi.GroundHeight(native, state.Position[0], state.Position[2]);
+        _out.WriteLine($"the car's centre of gravity {state.Position[1] - ground:F2} m over the ground at the start");
+        Assert.InRange(state.Position[1] - ground, 0.2f, 1.2f);
+    }
+
     [Fact]
     public void TrafficAndTrainAndPropsAreReported()
     {

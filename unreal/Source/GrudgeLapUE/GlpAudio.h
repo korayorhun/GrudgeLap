@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+
 #include "CoreMinimal.h"
 #include "Components/SynthComponent.h"
 #include "grudgelap_physics.h"
@@ -34,6 +36,12 @@ public:
 
 	/** The cabinet's chime for a choice made on the title screen. */
 	void Chime();
+
+	/**
+	 * Holds the sound while the Esc menu holds the game (0.78; the Godot version muted its Master bus): the mix fades
+	 * out within a few milliseconds and comes back the same way.
+	 */
+	void SetHush(bool bQuiet) { bHush.store(bQuiet, std::memory_order_relaxed); }
 
 	/**
 	 * Takes the frame's simulation state. TrainDistance is the distance in metres from the car to the nearest
@@ -223,6 +231,8 @@ private:
 	// Automated checks (see the class comment); the recording is shared between the threads under DumpLock.
 	FString DumpFile;
 	bool bMute = false;
+	std::atomic<bool> bHush{ false };   // game thread to audio thread
+	float HushGain = 1.f;               // audio thread
 	FCriticalSection DumpLock;
 	TArray<int16> Dump;
 };

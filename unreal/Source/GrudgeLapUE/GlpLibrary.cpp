@@ -45,6 +45,8 @@ bool FGlpLibrary::Load()
 	Resolve(Abort, TEXT("glp_abort"));
 	Resolve(ScriptedInputs, TEXT("glp_scripted_inputs"));
 	Resolve(Step, TEXT("glp_step"));
+	Resolve(FeatherInputs, TEXT("glp_feather_inputs"));
+	Resolve(GroundHeight, TEXT("glp_ground_height"));
 	Resolve(GetState, TEXT("glp_get_state"));
 	Resolve(MessageText, TEXT("glp_message"));
 	Resolve(Traffic, TEXT("glp_traffic"));

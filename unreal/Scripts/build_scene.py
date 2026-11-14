@@ -1325,7 +1325,7 @@ def import_car(name):
     return root
 
 
-def place_game(car, materials):
+def place_game(car, materials, inside_glass=None):
     """Places the game (AGlpGame) with the materials it sets at run time. Without the compiled module
     (Source/GrudgeLapUE) the level still builds, only without the game."""
     game_class = unreal.load_class(None, "/Script/GrudgeLapUE.GlpGame")
@@ -1348,6 +1348,11 @@ def place_game(car, materials):
         game.set_editor_property("night_sky_material", NIGHT["sky"])
     except Exception as error:  # a module built before 0.77 has not the properties: the level builds, the night has no lamps
         log(f"game: no lamp properties ({error}); build the module first")
+    # The windows' glass from the driver's seat (0.78, inside_glass_material), by a soft reference too.
+    try:
+        game.set_editor_property("inside_glass_material", inside_glass)
+    except Exception as error:  # a module built before 0.78: the seat keeps the level's glass
+        log(f"game: no inside glass property ({error}); build the module first")
     log("game placed")
 
 
@@ -1397,35 +1402,66 @@ def paint_material():
 
 
 def paint_finish(material, attributes, colour):
-    """The clear-coated paint's finish, and its dark lining (0.75): a back face inside the cabin (CabinMin..CabinMax, the
-    car's own frame in centimetres, set per car from its eye: CarView.SetPaintCabin's box) is the lining, matt and
-    near-black, as the Godot game's ModelPaint draws it. The models draw their panels from both faces and few have a
-    headlining, so from the seat the roof's underside and the pillars' inner faces showed in the body's colour. Outside
-    the box a back face stays paint, for the panels wound the wrong way (the Renault 12's doors)."""
+    """The clear-coated paint's finish, and its dark lining. The models draw their panels from both faces and few have a
+    headlining, so from the seat the roof's underside and the pillars' inner faces showed in the body's colour; the
+    Godot game's ModelPaint draws a back face inside the cabin as a matt, near-black lining. The cabin is a box in the
+    car's own frame (CabinMin..CabinMax, centimetres, set per car from its eye: CarView.SetPaintCabin's box).
+
+    0.78, the rule as it stands. 0.75 took the engine's two-sided sign for the back face, and on the body's Nanite mesh
+    that never came out as one: the lining did not show at all, and from the seat the windscreen stood in a frame of
+    bright orange, red or blue (found with GLP_DEBUG_LINING). The side of a face is no longer asked for:
+    - From the seat (the camera inside the box) every painted face in the box and above the windscreen's lower edge
+      (CabinMin's fourth value, Scripts/prepare_model_car.py's Cowl) is lining: the pillars, the roof, the header and
+      the door frames, whichever skin of them the model drew. So is one under that edge that lies behind it (CabinMax's
+      fourth value) and more than 50 cm from the middle line: the doors' inner faces. The bonnet, the scuttle and the
+      wings, which the seat sees through the glass, lie under that edge and ahead of it and stay paint; the mirrors'
+      housings stand outside the box.
+    - From outside, a face in the box that looks into the cabin is lining: one whose normal points to a point low
+      between the seats (30 cm behind the eye and 60 cm under it), or which looks at the eye from within 75 cm of it.
+      That is the inner skin of the roof and the pillars and the door tops seen through the windows; the outer skins
+      look away and stay paint."""
     position = mel.create_material_expression(material, unreal.MaterialExpressionWorldPosition, -1100, 450)
     local = mel.create_material_expression(material, unreal.MaterialExpressionTransformPosition, -900, 450)
     local.set_editor_property("transform_source_type", unreal.MaterialPositionTransformSource.TRANSFORMPOSSOURCE_WORLD)
     local.set_editor_property("transform_type", unreal.MaterialPositionTransformSource.TRANSFORMPOSSOURCE_LOCAL)
     mel.connect_material_expressions(position, "", local, "")
-    side = mel.create_material_expression(material, unreal.MaterialExpressionTwoSidedSign, -900, 550)
+    camera = mel.create_material_expression(material, unreal.MaterialExpressionTransformPosition, -900, 550)
+    camera.set_editor_property("transform_source_type", unreal.MaterialPositionTransformSource.TRANSFORMPOSSOURCE_WORLD)
+    camera.set_editor_property("transform_type", unreal.MaterialPositionTransformSource.TRANSFORMPOSSOURCE_LOCAL)
+    mel.connect_material_expressions(mel.create_material_expression(material, unreal.MaterialExpressionCameraPositionWS, -1100, 550), "", camera, "")
+    facing = mel.create_material_expression(material, unreal.MaterialExpressionTransform, -900, 850)
+    facing.set_editor_property("transform_source_type", unreal.MaterialVectorCoordTransformSource.TRANSFORMSOURCE_WORLD)
+    facing.set_editor_property("transform_type", unreal.MaterialVectorCoordTransform.TRANSFORM_LOCAL)
+    mel.connect_material_expressions(mel.create_material_expression(material, unreal.MaterialExpressionVertexNormalWS, -1100, 850), "", facing, "")
     low = mel.create_material_expression(material, unreal.MaterialExpressionVectorParameter, -900, 650)
     low.set_editor_property("parameter_name", "CabinMin")
     low.set_editor_property("default_value", unreal.LinearColor(1.0, 1.0, 1.0, 0.0))
     high = mel.create_material_expression(material, unreal.MaterialExpressionVectorParameter, -900, 750)
     high.set_editor_property("parameter_name", "CabinMax")
     high.set_editor_property("default_value", unreal.LinearColor(-1.0, -1.0, -1.0, 0.0))
+    # The box is (eye - 110, eye + 75) along the car and (eye - 55, eye + 60) upright (dress_prepared_model): the point
+    # between the seats is 140 cm behind its front and 5 cm under its floor, the eye 110 cm behind its front, 55 cm over
+    # its floor and 35 cm left of the middle (every car here is left-hand drive).
+    rule = ("float3 Seats = float3(0.0, Low.y + 140.0, Low.z - 5.0);\n"
+            "float3 ToEye = float3(-35.0, Low.y + 110.0, Low.z + 55.0) - Local;\n"
+            "bool inside = all(Local > Low.xyz) && all(Local < High.xyz);\n"
+            "bool seated = all(Camera > Low.xyz) && all(Camera < High.xyz);\n"
+            "bool above = Local.z > Sill || (Local.y > Cowl && abs(Local.x) > 50.0);\n"
+            "bool looks = (dot(ToEye, ToEye) < 5625.0 && dot(Normal, ToEye) > 0.0) || dot(Normal, Seats - Local) > 0.0;\n")
     custom = mel.create_material_expression(material, unreal.MaterialExpressionCustom, -650, 600)
     custom.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT1)
     custom.set_editor_property("description", "GrudgeLap lining")
-    custom.set_editor_property("code", "return (Side < 0.0 && all(Local > Low.xyz) && all(Local < High.xyz)) ? 1.0 : 0.0;")
+    custom.set_editor_property("code", rule + "return (inside && (seated ? above : looks)) ? 1.0 : 0.0;")
     inputs = []
-    for name in ("Local", "Side", "Low", "High"):
+    for name in ("Local", "Camera", "Low", "High", "Normal", "Sill", "Cowl"):
         entry = unreal.CustomInput()
         entry.set_editor_property("input_name", name)
         inputs.append(entry)
     custom.set_editor_property("inputs", inputs)
-    for node, pin in ((local, "Local"), (side, "Side"), (low, "Low"), (high, "High")):
-        mel.connect_material_expressions(node, "", custom, pin)
+    wires = ((local, "", "Local"), (camera, "", "Camera"), (low, "", "Low"), (high, "", "High"), (facing, "", "Normal"), (low, "A", "Sill"),
+             (high, "A", "Cowl"))
+    for node, output, pin in wires:
+        mel.connect_material_expressions(node, output, custom, pin)
     lining = mel.create_material_expression(material, unreal.MaterialExpressionConstant3Vector, -650, 300)
     lining.set_editor_property("constant", unreal.LinearColor(0.045, 0.045, 0.05, 1.0))
     mix = mel.create_material_expression(material, unreal.MaterialExpressionLinearInterpolate, -300, 0)
@@ -1433,6 +1469,17 @@ def paint_finish(material, attributes, colour):
     mel.connect_material_expressions(lining, "", mix, "B")
     mel.connect_material_expressions(custom, "", mix, "Alpha")
     mel.connect_material_expressions(mix, "", attributes, "BaseColor")
+    if os.environ.get("GLP_DEBUG_LINING"):
+        # A diagnosis aid: every painted face in the colours of what the rule sees of it: red from the seat and above the
+        # windscreen's lower edge, green in the cabin's box, blue a face that looks into the cabin.
+        debug = mel.create_material_expression(material, unreal.MaterialExpressionCustom, -650, 1000)
+        debug.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT3)
+        debug.set_editor_property("description", "GrudgeLap lining debug")
+        debug.set_editor_property("code", rule + "return float3(seated && above ? 1.0 : 0.0, inside ? 1.0 : 0.0, looks ? 1.0 : 0.0);")
+        debug.set_editor_property("inputs", inputs)
+        for node, output, pin in wires:
+            mel.connect_material_expressions(node, output, debug, pin)
+        mel.connect_material_expressions(debug, "", attributes, "BaseColor")
     for y, (pin, paint_value, lining_value) in enumerate((("Metallic", 0.35, 0.0), ("Roughness", 0.38, 0.9),
                                                          ("ClearCoat", 1.0, 0.0), ("ClearCoatRoughness", 0.04, 0.04))):
         value = mel.create_material_expression(material, unreal.MaterialExpressionLinearInterpolate, -250, 200 + y * 100)
@@ -1820,8 +1867,36 @@ def car_materials():
                                           mp.MP_ROUGHNESS: 0.03, mp.MP_SPECULAR: 0.5, mp.MP_METALLIC: 0.0}, glassy)
     return {"paint": paint_material(), "paint_solid": paint_solid_material(), "paint_textured": paint_textured_material(),
             "brake": brake_lamp_material(),
-            "glass": glass, "mirror": mirror_material(),
+            "glass": glass, "glass_inside": inside_glass_material(), "mirror": mirror_material(),
             "cabin": cabin_material(), "cabin_instances": {}}
+
+
+def inside_glass_material():
+    """M_GlassInside (0.78): the glass the player's windows wear from the driver's seat (AGlpGame::InsideGlassMaterial,
+    FGlpCarView::SetInside). M_Glass is a car's glass seen from the road: tinted, with a pane's full reflection. Thin
+    translucency takes the tint along the slanted path through the pane and the reflection off twice, so a windscreen
+    raked 60 degrees let through about half of the road's light, and under an exposure held for the open road the seat
+    saw a dim road with the dashboard's reflection laid over it (the owner's report of 14 November 2026). An eye behind
+    a windscreen is adapted to the road and focused on it, and hardly sees the pane: this glass lets 96 % through
+    along its normal and reflects a sixth as much (Specular 0.08: F0 0.0064, where glass has 0.04). Its values are
+    parameters, so the game can try others (-GlpGlass)."""
+    mp = unreal.MaterialProperty
+    material = asset_tools.create_asset("M_GlassInside", f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    material.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+    material.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_THIN_TRANSLUCENT)
+    material.set_editor_property("translucency_lighting_mode", unreal.TranslucencyLightingMode.TLM_SURFACE_PER_PIXEL_LIGHTING)
+    material.set_editor_property("two_sided", True)
+    mel.connect_material_property(constant3(material, (0.0, 0.0, 0.0), -500, 0), "", mp.MP_BASE_COLOR)
+    for y, (name, value, prop) in enumerate((("Opacity", 0.01, mp.MP_OPACITY), ("Specular", 0.08, mp.MP_SPECULAR))):
+        mel.connect_material_property(node(material, unreal.MaterialExpressionScalarParameter, -500, 150 + 150 * y,
+                                           parameter_name=name, default_value=value), "", prop)
+    mel.connect_material_property(node(material, unreal.MaterialExpressionConstant, -500, 450, r=0.03), "", mp.MP_ROUGHNESS)
+    transmittance = node(material, unreal.MaterialExpressionVectorParameter, -500, 600, parameter_name="Transmittance",
+                         default_value=unreal.LinearColor(0.96, 0.96, 0.96, 1.0))
+    link(transmittance, node(material, unreal.MaterialExpressionThinTranslucentMaterialOutput, -200, 600))
+    mel.recompile_material(material)
+    eal.save_loaded_asset(material)
+    return material
 
 
 
@@ -1862,7 +1937,14 @@ def dress_prepared_model(car, parts, materials):
     cabin = None
     if "Eye" in parts:
         eye = car.get_actor_transform().inverse_transform_location(parts["Eye"].get_actor_location())
-        cabin = (unreal.LinearColor(-86.0, eye.y - 110.0, eye.z - 55.0, 0.0), unreal.LinearColor(86.0, eye.y + 75.0, eye.z + 60.0, 0.0))
+        # The fourth value (0.78): the height of the windscreen's lower edge, 3 cm added (prepare_model_car.py's Cowl): from
+        # the seat the paint above it is the cabin's lining (paint_finish). A model without it: 25 cm under the eye.
+        # CabinMax's fourth value: how far along the car that edge lies, 5 cm added (the car's nose is at -y).
+        sill, behind = eye.z - 25.0, eye.y - 60.0
+        if "Cowl" in parts:
+            edge = car.get_actor_transform().inverse_transform_location(parts["Cowl"].get_actor_location())
+            sill, behind = edge.z + 3.0, edge.y + 5.0
+        cabin = (unreal.LinearColor(-86.0, eye.y - 110.0, eye.z - 55.0, sill), unreal.LinearColor(86.0, eye.y + 75.0, eye.z + 60.0, behind))
     paints = {}
     painted = glazed = plain = 0
     for component in mesh_components(car):
@@ -3197,7 +3279,7 @@ def main():
             dress_car(other, materials)
             rig_car(other, f"GLP.Car{index}")
     rig_world(actors)
-    place_game(car, game_materials(materials["paint"]))
+    place_game(car, game_materials(materials["paint"]), materials["glass_inside"])
     scatter(placements, extra, actors)
     place_instanced(placements, actors)
     road_decals(placements)

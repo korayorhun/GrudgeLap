@@ -10,6 +10,8 @@
 #include "Components/SpotLightComponent.h"
 #include "Components/VolumetricCloudComponent.h"
 #include "Engine/DirectionalLight.h"
+#include "Engine/Engine.h"
+#include "Engine/GameViewportClient.h"
 #include "Engine/ExponentialHeightFog.h"
 #include "Engine/PostProcessVolume.h"
 #include "Engine/StaticMesh.h"
@@ -19,11 +21,13 @@
 #include "Kismet/KismetMaterialLibrary.h"
 #include "Materials/MaterialParameterCollection.h"
 #include "GameFramework/GameUserSettings.h"
+#include "GeneralProjectSettings.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformProcess.h"
 #include "GlpAudio.h"
 #include "GlpHud.h"
+#include "GlpInstance.h"
 #include "GlpInstruments.h"
 #include "GlpLibrary.h"
 #include "GlpSpace.h"
@@ -96,6 +100,21 @@ namespace
 		return (State.events & (1u << Event)) != 0;
 	}
 
+	// The upscaler's modes as the settings and -GlpUpscaling name them, in AGlpGame::UpscaleChoice's order.
+	const TCHAR* const UpscaleTags[] = { TEXT("off"), TEXT("native"), TEXT("quality"), TEXT("balanced"), TEXT("performance"), TEXT("ultra") };
+
+	int32 UpscaleOf(const FString& Tag, int32 Fallback)
+	{
+		for (int32 i = 0; i < UE_ARRAY_COUNT(UpscaleTags); i++)
+		{
+			if (Tag.Equals(UpscaleTags[i], ESearchCase::IgnoreCase))
+			{
+				return i;
+			}
+		}
+		return Fallback;
+	}
+
 	/**
 	 * A car's beams by its era (0.77), linear: halogen (the Godot version's sRGB 1, 0.95, 0.86), xenon on the 2000s and
 	 * 2010s saloons and the 458, LED on the McLaren, the Leon Cupra and the BRZ (catalogue indices, VehicleSpec.Catalogue).
@@ -128,32 +147,94 @@ AGlpGame::AGlpGame()
 	Audio->SetupAttachment(Camera);
 }
 
-void AGlpGame::EnableRayReconstruction()
+void AGlpGame::ProbeUpscaler()
 {
 #if WITH_GLP_DLSS
-	// DLSS Ray Reconstruction (0.74): on an RTX card with hardware ray tracing one trained denoiser takes the place of
-	// Lumen's reflection denoisers and the shadow denoiser, which keeps the hit-lit reflections sharp where those
-	// smeared them. The plugin's switch turns those denoisers off itself; the bilateral filter of Lumen's reflections
-	// is NVIDIA's further recommendation (safe to change at run time since 5.4). Any other card keeps every
-	// built-in denoiser, as DefaultEngine.ini leaves them. -GlpNoRR keeps them on an RTX card too, for a comparison.
-	if (FParse::Param(FCommandLine::Get(), TEXT("GlpNoRR")))
-	{
-		UE_LOG(LogGlpGame, Log, TEXT("DLSS Ray Reconstruction: off (-GlpNoRR)"));
-		return;
-	}
-	if (!UDLSSLibrary::IsDLSSRRSupported() || !UDLSSLibrary::IsRayTracingAvailable())
-	{
-		UE_LOG(LogGlpGame, Log, TEXT("DLSS Ray Reconstruction: not available (RR %d, ray tracing %d)"),
-			UDLSSLibrary::IsDLSSRRSupported() ? 1 : 0, UDLSSLibrary::IsRayTracingAvailable() ? 1 : 0);
-		return;
-	}
-	UDLSSLibrary::EnableDLSSRR(true);
-	if (IConsoleVariable* Bilateral = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Lumen.Reflections.BilateralFilter")))
-	{
-		Bilateral->Set(0, ECVF_SetByGameSetting);
-	}
-	UE_LOG(LogGlpGame, Log, TEXT("DLSS Ray Reconstruction: %s"), UDLSSLibrary::IsDLSSRREnabled() ? TEXT("on") : TEXT("requested, not enabled"));
+	// DLSS needs an RTX card and a driver that knows this DLSS; its Ray Reconstruction (0.74) hardware ray tracing as
+	// well. -GlpNoRR leaves Ray Reconstruction out of a run, for a comparison with the engine's own denoisers.
+	bDlss = UDLSSLibrary::IsDLSSSupported();
+	bDlssRR = bDlss && UDLSSLibrary::IsDLSSRRSupported() && UDLSSLibrary::IsRayTracingAvailable() && !FParse::Param(FCommandLine::Get(), TEXT("GlpNoRR"));
+	UE_LOG(LogGlpGame, Log, TEXT("upscaler: DLSS %s, Ray Reconstruction %s (supported %d, ray tracing %d)"), bDlss ? TEXT("available") : TEXT("not available"),
+		bDlssRR ? TEXT("available") : TEXT("not available"), UDLSSLibrary::IsDLSSRRSupported() ? 1 : 0, UDLSSLibrary::IsRayTracingAvailable() ? 1 : 0);
 #endif
+}
+
+void AGlpGame::ApplyUpscaling()
+{
+	// The share of the window's width and height that is rendered, per cent; the upscaler makes the window's picture of
+	// it. TSR's are the game's own: 75 % is the share every picture since 0.44 was judged at (DefaultEngine.ini).
+	static const float TsrPercent[] = { 75.f, 100.f, 75.f, 62.f, 50.f, 50.f };
+	const int32 Choice = FMath::Clamp(UpscaleChoice, bDlss ? 0 : 1, bDlss ? 5 : 4);
+	float Percent = TsrPercent[Choice];
+	bool bReconstruct = false;
+#if WITH_GLP_DLSS
+	if (bDlss)
+	{
+		// OFF hands the upscaling back to TSR, at the 75 % it has on any other card.
+		const bool bOn = Choice != 0;
+		UDLSSLibrary::EnableDLSS(bOn);
+		if (bOn)
+		{
+			static const UDLSSMode Modes[] = { UDLSSMode::Off, UDLSSMode::DLAA, UDLSSMode::Quality, UDLSSMode::Balanced, UDLSSMode::Performance, UDLSSMode::UltraPerformance };
+			FVector2D Screen(1920.0, 1080.0);
+			if (GEngine && GEngine->GameViewport)
+			{
+				GEngine->GameViewport->GetViewportSize(Screen);
+			}
+			bool bSupported = false;
+			bool bFixed = false;
+			float Optimal = 0.f, Lowest = 0.f, Highest = 0.f, Sharpness = 0.f;
+			UDLSSLibrary::GetDLSSModeInformation(Modes[Choice], Screen, bSupported, Optimal, bFixed, Lowest, Highest, Sharpness);
+			if (bSupported && Optimal > 0.f)
+			{
+				// The plugin picks its mode by the share rendered. QUALITY keeps the game's 75 %, which lies inside that
+				// mode's range and above NVIDIA's own 67 %: the picture the game has had on an RTX card since 0.44.
+				Percent = Choice == 2 ? FMath::Clamp(75.f, Lowest, Highest) : Optimal;
+			}
+		}
+		// Ray Reconstruction (0.74): one trained denoiser in the place of Lumen's reflection denoisers and the shadow
+		// denoiser, which keeps the hit-lit reflections sharp where those smeared them. The plugin's switch turns those
+		// denoisers off and on itself; the bilateral filter of Lumen's reflections is NVIDIA's further recommendation
+		// (safe to change at run time since 5.4) and goes back to what it was with Ray Reconstruction off.
+		bReconstruct = bOn && bDlssRR && bRayReconstruction;
+		UDLSSLibrary::EnableDLSSRR(bReconstruct);
+		if (IConsoleVariable* Bilateral = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Lumen.Reflections.BilateralFilter")))
+		{
+			if (BilateralBefore < 0)
+			{
+				BilateralBefore = Bilateral->GetInt();
+			}
+			Bilateral->Set(bReconstruct ? 0 : BilateralBefore, ECVF_SetByGameSetting);
+		}
+	}
+#endif
+	if (IConsoleVariable* Share = IConsoleManager::Get().FindConsoleVariable(TEXT("r.ScreenPercentage")))
+	{
+		// Over the project's own value, under a console command's (an automated run's -ExecCmds stays the last word).
+		Share->Set(Percent, ECVF_SetByCode);
+	}
+	UE_LOG(LogGlpGame, Log, TEXT("upscaler: %s, %.0f %% of the window a side, Ray Reconstruction %s"), *UpscalingLine(), Percent, bReconstruct ? TEXT("on") : TEXT("off"));
+}
+
+void AGlpGame::StepUpscaling(int32 Direction)
+{
+	// A card without DLSS has no OFF (TSR is its upscaler) and no ULTRA PERFORMANCE (a third a side is DLSS's alone).
+	const int32 First = bDlss ? 0 : 1;
+	const int32 Count = (bDlss ? 5 : 4) - First + 1;
+	UpscaleChoice = First + (FMath::Clamp(UpscaleChoice, First, First + Count - 1) - First + (Direction < 0 ? Count - 1 : 1)) % Count;
+	ApplyUpscaling();
+	SaveSettings();
+}
+
+FString AGlpGame::UpscalingLine() const
+{
+	static const TCHAR* const Names[] = { TEXT("OFF"), TEXT("DLAA"), TEXT("QUALITY"), TEXT("BALANCED"), TEXT("PERFORMANCE"), TEXT("ULTRA PERFORMANCE") };
+	const int32 Choice = FMath::Clamp(UpscaleChoice, bDlss ? 0 : 1, bDlss ? 5 : 4);
+	if (bDlss)
+	{
+		return FString::Printf(TEXT("DLSS: %s"), Names[Choice]);
+	}
+	return FString::Printf(TEXT("UPSCALING: TSR %s"), Choice == 1 ? TEXT("NATIVE") : Names[Choice]);
 }
 
 void AGlpGame::BeginPlay()
@@ -178,8 +259,10 @@ void AGlpGame::BeginPlay()
 		FrameCapBefore = GEngine->GetMaxFPS();
 		ApplyFrameCap();
 	}
-	EnableRayReconstruction();
+	ProbeUpscaler();
 	bAttract = FParse::Param(FCommandLine::Get(), TEXT("GlpAttract"));
+	// What the earlier versions kept comes over before anything is read (0.78).
+	GlpInstance::Import();
 	LoadScores();
 	bTraffic = !FParse::Param(FCommandLine::Get(), TEXT("GlpNoTraffic"));
 	bSpeedRoute = FParse::Param(FCommandLine::Get(), TEXT("GlpSpeedRoute"));
@@ -244,16 +327,58 @@ void AGlpGame::BeginPlay()
 			RainAir = FVector2f(static_cast<float>(V[0]), static_cast<float>(V[1]));
 		}
 	}
-	FString View;
-	if (FParse::Value(FCommandLine::Get(), TEXT("GlpView="), View))
+	// The driver's seat (0.78, see the class comment).
+	FParse::Value(FCommandLine::Get(), TEXT("GlpFov="), FixedFov);
+	FParse::Value(FCommandLine::Get(), TEXT("GlpDrop="), FixedDrop);
+	FParse::Value(FCommandLine::Get(), TEXT("GlpCockpit="), CockpitText, false);
+	if (FString File; FParse::Value(FCommandLine::Get(), TEXT("GlpCockpits="), File, false))
 	{
-		Rig.bCockpit = !View.Equals(TEXT("chase"), ESearchCase::IgnoreCase);
+		CockpitFile = GlpCockpits::Load(File);
+		UE_LOG(LogGlpGame, Log, TEXT("-GlpCockpits: %d seat(s) read from %s"), CockpitFile.Num(), *File);
 	}
-	if (FixedCamera || Orbit)
+	if (FString Text; FParse::Value(FCommandLine::Get(), TEXT("GlpLocal="), Text, false))
 	{
-		// A view from outside: the car is drawn whole, as for the chase camera.
-		Rig.bCockpit = false;
+		const TArray<double> V = Numbers(Text);
+		if (V.Num() >= 2)
+		{
+			CabinShadow = static_cast<float>(V[0]);
+			CabinHighlight = static_cast<float>(V[1]);
+			CabinDetail = V.Num() > 2 ? static_cast<float>(V[2]) : CabinDetail;
+		}
 	}
+	FParse::Value(FCommandLine::Get(), TEXT("GlpCabinEv="), CabinEv);
+	FParse::Value(FCommandLine::Get(), TEXT("GlpTour="), TourSeconds);
+	// The windows' glass from the seat: by the level's soft reference (cooked with the game); a level built before 0.78
+	// has none and the windows keep their glass.
+	if (UMaterialInterface* Glass = InsideGlassMaterial.LoadSynchronous())
+	{
+		InsideGlass = UMaterialInstanceDynamic::Create(Glass, this);
+		if (FString Text; FParse::Value(FCommandLine::Get(), TEXT("GlpGlass="), Text, false))
+		{
+			const TArray<double> V = Numbers(Text);
+			if (V.Num() == 3)
+			{
+				InsideGlass->SetVectorParameterValue(TEXT("Transmittance"), FLinearColor(static_cast<float>(V[0]), static_cast<float>(V[0]), static_cast<float>(V[0])));
+				InsideGlass->SetScalarParameterValue(TEXT("Specular"), static_cast<float>(V[1]));
+				InsideGlass->SetScalarParameterValue(TEXT("Opacity"), static_cast<float>(V[2]));
+			}
+		}
+	}
+	else
+	{
+		UE_LOG(LogGlpGame, Warning, TEXT("no glass for the seat (M_GlassInside): build the level again with this module"));
+	}
+	// The cameras outside the car stay over the ground (0.78): the level has no collision to trace, the core knows its
+	// terrain. Unreal's (x, y) is the simulation's (x, -z) in centimetres (GlpSpace).
+	Rig.Ground = [this](const FVector& Point) -> TOptional<double>
+	{
+		float Height = 0.f;
+		if (!Session || !Library || Library->GroundHeight(Session, static_cast<float>(Point.X / 100.0), static_cast<float>(-Point.Y / 100.0), &Height) != 0)
+		{
+			return {};
+		}
+		return Height * 100.0;
+	};
 	FString Shots;
 	if (FParse::Value(FCommandLine::Get(), TEXT("GlpShots="), Shots, false))
 	{
@@ -388,11 +513,58 @@ void AGlpGame::BeginPlay()
 	}
 
 	LoadSettings();
+	// The upscaler's mode (0.78): the player's (the settings), -GlpUpscaling for a run.
+	if (FString Mode; FParse::Value(FCommandLine::Get(), TEXT("GlpUpscaling="), Mode))
+	{
+		UpscaleChoice = UpscaleOf(Mode, UpscaleChoice);
+	}
+	ApplyUpscaling();
+	// This copy's version and its updater (0.78), which contacts nobody until the player asks.
+	VersionText = GetDefault<UGeneralProjectSettings>()->ProjectVersion;
+	Updater.Start(VersionText, GlpInstance::DataDir());
+	// The view: the player's last (the settings), -GlpView for an automated run.
+	if (FString View; FParse::Value(FCommandLine::Get(), TEXT("GlpView="), View))
+	{
+		Rig.View = View.Equals(TEXT("chase"), ESearchCase::IgnoreCase) ? EGlpView::Chase
+			: View.Equals(TEXT("film"), ESearchCase::IgnoreCase) ? EGlpView::Film : EGlpView::Cockpit;
+	}
+	if (FixedCamera || Orbit)
+	{
+		// A view from outside: the car is drawn whole, as for the chase camera.
+		Rig.View = EGlpView::Chase;
+	}
 	// -GlpCar=<catalogue index> drives that car (automation: the off-screen shots of each car, 0.74).
 	FParse::Value(FCommandLine::Get(), TEXT("GlpCar="), CarIndex);
 	if (!Cars.IsValidIndex(CarIndex) || !Cars[CarIndex] || !IsDrivable(CarIndex))
 	{
 		CarIndex = 0;
+	}
+	if (TourSeconds > 0.f)
+	{
+		// The tour (0.78): every car to drive in the catalogue's order, or -GlpTourCars' ("1+8": cmd splits at commas).
+		if (FString List; FParse::Value(FCommandLine::Get(), TEXT("GlpTourCars="), List, false))
+		{
+			TArray<FString> Parts;
+			const TCHAR* Separators[] = { TEXT(","), TEXT("+") };
+			List.ParseIntoArray(Parts, Separators, UE_ARRAY_COUNT(Separators));
+			for (const FString& Part : Parts)
+			{
+				TourCars.Add(FCString::Atoi(*Part));
+			}
+		}
+		else
+		{
+			for (int32 i = 0; i < Cars.Num(); i++)
+			{
+				TourCars.Add(i);
+			}
+		}
+		TourCars.RemoveAll([this](int32 Index) { return !Cars.IsValidIndex(Index) || !Cars[Index] || !IsDrivable(Index); });
+		if (!TourCars.IsEmpty())
+		{
+			CarIndex = TourCars[0];
+			TourCars.RemoveAt(0);
+		}
 	}
 	NewSession();
 }
@@ -571,9 +743,8 @@ void AGlpGame::ApplyWeather()
 		}
 		// A grey day is two or three stops dimmer than a sunny one: the eye, and the camera, open up (the sun above is
 		// down to an eighth; at 1.6 stops the first wet runs came out as dusk). The hours by their light (GlpLookFor).
-		const float Ev = ExposureEv + Look.EvOffset;
-		Volume->Settings.AutoExposureMinBrightness = Ev;
-		Volume->Settings.AutoExposureMaxBrightness = Ev;
+		// The view has its say on top (ApplyViewLook, below).
+		LookEv = ExposureEv + Look.EvOffset;
 		// The lens's finish by the hour: at night a lamp's bloom and flare are the picture's brightest things, and a
 		// daylight setting drowned the road in them.
 		Volume->Settings.BloomIntensity = Look.Bloom >= 0.f ? Look.Bloom : DayBloom;
@@ -591,6 +762,7 @@ void AGlpGame::ApplyWeather()
 			Volume->Settings.WeightedBlendables.Array.Add(FWeightedBlendable(1.f, NightStars));
 		}
 	}
+	ApplyViewLook();
 	ShowNightLamps();
 	const FString Shown = FString::Printf(TEXT("%s, weather %d"), GlpLook::HourName(Hour), Weather);
 	if (Shown != LookShown)
@@ -640,6 +812,61 @@ void AGlpGame::ApplyWeather()
 		WeatherShown = Weather;
 		UE_LOG(LogGlpGame, Log, TEXT("weather %d (wetness %.2f)"), Weather, Current.wetness);
 	}
+}
+
+void AGlpGame::ApplyViewLook()
+{
+	// What the view asks of the picture (0.78). The exposure is held for the open road (EV100 14 on a clear day), and
+	// from the driver's seat that left a cabin in the shade four or five stops under it: a black dashboard, black
+	// pillars and a black wheel round a bright windscreen (the owner's report of 14 November 2026: "very dark from some
+	// angles"). The eye sees both at once, so the seat gets local exposure, the engine's local tone mapping, which
+	// scales the contrast below middle grey (the cabin comes up, the road stays), and a quarter of a stop more
+	// exposure. The night keeps its picture: it lies far under middle grey as a whole, and lifting it greys the dark.
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	bViewLookInside = InCockpit();
+	const bool bLift = bViewLookInside && Hour != EGlpHour::Night;
+	for (APostProcessVolume* Volume : TActorRange<APostProcessVolume>(World))
+	{
+		if (!Volume->bUnbound)
+		{
+			continue;
+		}
+		FPostProcessSettings& Settings = Volume->Settings;
+		const float Ev = LookEv - (bLift ? CabinEv : 0.f);
+		Settings.AutoExposureMinBrightness = Ev;
+		Settings.AutoExposureMaxBrightness = Ev;
+		Settings.bOverride_LocalExposureMethod = true;
+		Settings.LocalExposureMethod = ELocalExposureMethod::Bilateral;
+		Settings.bOverride_LocalExposureShadowContrastScale = true;
+		Settings.LocalExposureShadowContrastScale = bLift ? CabinShadow : 1.f;
+		Settings.bOverride_LocalExposureHighlightContrastScale = true;
+		Settings.LocalExposureHighlightContrastScale = bLift ? CabinHighlight : 1.f;
+		Settings.bOverride_LocalExposureDetailStrength = true;
+		Settings.LocalExposureDetailStrength = bLift ? CabinDetail : 1.f;
+	}
+}
+
+FGlpCockpit AGlpGame::Cockpit() const
+{
+	FGlpCockpit Seat = GlpCockpits::For(CarIndex);
+	if (const FGlpCockpit* Tried = CockpitFile.Find(CarIndex))
+	{
+		Seat = *Tried;
+	}
+	Seat.Read(CockpitText);
+	return Seat;
+}
+
+void AGlpGame::StepView(int32 Direction)
+{
+	// EGlpView's order: the seat, behind the car, the film view.
+	Rig.View = static_cast<EGlpView>((static_cast<int32>(Rig.View) + (Direction < 0 ? 2 : 1)) % 3);
+	Rig.Reset();
+	SaveSettings();
 }
 
 FGlpLampState AGlpGame::LampState(int32 Catalogue, bool bPlayer) const
@@ -783,6 +1010,7 @@ void AGlpGame::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	// The world is going away with every actor in it: only the simulation's session needs closing.
 	CloseSession(false);
+	Updater.Shutdown();
 	if (bFrameCap && GEngine)
 	{
 		// Play in the editor: the editor gets its own frame rate back.
@@ -1159,6 +1387,15 @@ void AGlpGame::NewSession()
 			Rig.Eye = FVector3f(static_cast<float>(Local.X), static_cast<float>(Local.Z), static_cast<float>(Local.Y));
 		}
 	}
+	// The seat as the game corrects it (0.78): the eye, the lens, and the dials and the wheel where they stood wrong.
+	const FGlpCockpit Seat = Cockpit();
+	Rig.Eye += Seat.Eye;
+	Rig.CockpitFov = FixedFov > 0.f ? FixedFov : Seat.Fov > 0.f ? Seat.Fov : FGlpCameraRig::SeatFov;
+	Rig.CockpitDrop = FixedDrop >= 0.f ? FixedDrop : Seat.Drop >= 0.f ? Seat.Drop : FGlpCameraRig::SeatDrop;
+	if (FGlpCarView* Car = PlayerCar())
+	{
+		Car->SetCockpit(Seat);
+	}
 	Rig.CgHeight = CarSpec.cg_height;
 	Rig.Reset();
 	Input.Reset();
@@ -1211,6 +1448,8 @@ void AGlpGame::NewSession()
 	// The credit's hour (0.77), as the Godot version's: -GlpLight for an automated run, otherwise the player's choice (the
 	// day by default; random draws one of the four for every credit).
 	Hour = GlpLook::HourOf(FixedLight >= 0 ? FixedLight : LightChoice);
+	SessionWeather = WeatherChoice;
+	SessionLight = LightChoice;
 	ApplyWeather();
 	if (Current.grudge_match)
 	{
@@ -1232,7 +1471,7 @@ void AGlpGame::NewSession()
 	Library->GetState(Session, &Current);
 	MessageText = Library->Message(Session);
 	UE_LOG(LogGlpGame, Log, TEXT("new session: %s, %d drones, %s, %s view"), *CarNameText, Drones,
-		Current.grudge_match ? TEXT("ghost of the best lap") : TEXT("no ghost"), Rig.bCockpit ? TEXT("cockpit") : TEXT("chase"));
+		Current.grudge_match ? TEXT("ghost of the best lap") : TEXT("no ghost"), ViewTag());
 }
 
 void AGlpGame::BuildGhost()
@@ -1364,7 +1603,12 @@ void AGlpGame::ShowSideMirrors(bool bInside)
 
 bool AGlpGame::InCockpit() const
 {
-	return Rig.bCockpit && Current.phase != GLP_PHASE_REPLAY;
+	return Rig.Cockpit() && Current.phase != GLP_PHASE_REPLAY;
+}
+
+bool AGlpGame::InFilmView() const
+{
+	return Rig.View == EGlpView::Film && Current.phase != GLP_PHASE_REPLAY && !FixedCamera && !Orbit;
 }
 
 UTexture* AGlpGame::InstrumentPanel() const
@@ -1393,9 +1637,38 @@ void AGlpGame::Tick(float DeltaSeconds)
 		Player->SetViewTarget(this);
 	}
 	Input.Update(Player, Time);
-	HandleGlobalKeys();
+	RunUpdater();
+	if (GlpInstance::Summoned())
+	{
+		// The player started the game a second time: that copy has gone and this one comes to the front.
+		GlpInstance::ComeForward();
+	}
+	const bool bMenuWasOpen = PauseMenu.bOpen;
+	if (bMenuWasOpen)
+	{
+		RunMenu(Player);
+	}
+	else
+	{
+		HandleGlobalKeys();
+	}
 	if (!Session)
 	{
+		return;
+	}
+	if (bMenuWasOpen || PauseMenu.bOpen)
+	{
+		// The menu holds the game: the session is not stepped and nothing moves (the frame that opens or closes it
+		// included, so that its key is not also the game's). A choice that changes the picture behind the menu, the
+		// camera, the car or the title screen's weather, is shown at once.
+		if (bRefreshViews)
+		{
+			bRefreshViews = false;
+			Library->GetState(Session, &Current);
+			MessageText = Library->Message(Session);
+			SyncViews(0.f);
+		}
+		Automate(DeltaSeconds);
 		return;
 	}
 
@@ -1418,6 +1691,10 @@ void AGlpGame::Tick(float DeltaSeconds)
 	else
 	{
 		Controls = Input.Drive(DeltaSeconds, FMath::Abs(Current.speed));
+		// A key is all or nothing: the core eases a held key at the limit of grip, as the Godot version's keyboard
+		// driver does (0.78: the Unreal version spun its wheels and locked its brakes under the same keys). A pad's
+		// trigger is a position the player holds, and stays his.
+		Library->FeatherInputs(Session, &Controls, Input.ThrottleFromKey() ? 1 : 0, Input.BrakeFromKey() ? 1 : 0);
 		if (HandleMenu())
 		{
 			Controls.ignition = 1;
@@ -1523,17 +1800,7 @@ bool AGlpGame::HandleMenu()
 	const bool bLeft = Input.Pressed(EKeys::Left) || Input.Pressed(EKeys::A) || Input.Pressed(EKeys::Gamepad_DPad_Left) || Input.Pressed(EKeys::Gamepad_LeftStick_Left);
 	if (bLeft || Input.Pressed(EKeys::Right) || Input.Pressed(EKeys::D) || Input.Pressed(EKeys::Gamepad_DPad_Right) || Input.Pressed(EKeys::Gamepad_LeftStick_Right))
 	{
-		for (int32 i = 1; i < Cars.Num(); i++)
-		{
-			const int32 Candidate = (CarIndex + (bLeft ? -i : i) + Cars.Num() * i) % Cars.Num();
-			if (Cars[Candidate] && IsDrivable(Candidate))
-			{
-				CarIndex = Candidate;
-				break;
-			}
-		}
-		SaveSettings();
-		NewSession();
+		StepCar(bLeft ? -1 : 1);
 		if (Audio)
 		{
 			Audio->Chime();
@@ -1625,15 +1892,14 @@ void AGlpGame::HandleGlobalKeys()
 {
 	if (Input.Pressed(EKeys::C) || Input.Pressed(EKeys::Gamepad_FaceButton_Top))
 	{
-		Rig.bCockpit = !Rig.bCockpit;
-		Rig.Reset();
+		StepView();
 	}
 	if (Input.Pressed(EKeys::U))
 	{
 		bKmh = !bKmh;
 		SaveSettings();
 	}
-	if (Input.Pressed(EKeys::F5) || Input.Pressed(EKeys::Gamepad_Special_Left))
+	if (Input.Pressed(EKeys::F5))
 	{
 		NewSession();
 	}
@@ -1647,24 +1913,26 @@ void AGlpGame::HandleGlobalKeys()
 	}
 	if (Input.Pressed(EKeys::F11))
 	{
-		if (UGameUserSettings* Settings = GEngine ? GEngine->GetGameUserSettings() : nullptr)
-		{
-			Settings->SetFullscreenMode(Settings->GetFullscreenMode() == EWindowMode::Windowed ? EWindowMode::WindowedFullscreen : EWindowMode::Windowed);
-			Settings->ApplyResolutionSettings(false);
-		}
+		ToggleFullScreen();
 	}
-	// Esc (0.74): the Unreal version had no way out but Alt+F4. Until it has the Godot version's menu, Esc on the title
-	// screen quits and during a credit goes back to the title screen.
-	if (Input.Pressed(EKeys::Escape))
+	// Esc or the pad's Back opens the menu (0.78, the Godot version's PauseMenu). From 0.74 to 0.77 Esc quit from the
+	// title screen and went back to it from a credit; the pad's Back started a new game.
+	if (Input.Pressed(EKeys::Escape) || Input.Pressed(EKeys::Gamepad_Special_Left))
 	{
-		if (Current.phase == GLP_PHASE_SELECT_TRANSMISSION)
+		OpenMenu();
+	}
+	// F10 looks for a newer release, as in the Godot version. With one known, or a download on its way, it opens the
+	// menu at the updater's line instead: what happens next is the player's choice there.
+	if (Input.Pressed(EKeys::F10))
+	{
+		const int32 Phase = Updater.Phase();
+		if (Updater.Running() && (Phase == GLP_UPDATE_IDLE || Phase == GLP_UPDATE_UP_TO_DATE || (Phase == GLP_UPDATE_FAILED && Updater.State().can_retry == GLP_UPDATE_RETRY_CHECK)))
 		{
-			SaveSettings();
-			FPlatformMisc::RequestExit(false);
+			Updater.Check();
 		}
 		else
 		{
-			NewSession();
+			OpenMenu(EGlpMenuLine::Update);
 		}
 	}
 	if (Input.Pressed(EKeys::F12))
@@ -1700,7 +1968,7 @@ void AGlpGame::SyncViews(float DeltaSeconds)
 	const bool bInside = InCockpit();
 	if (bInside != bInsideShown)
 	{
-		Car->SetInside(bInside);
+		Car->SetInside(bInside, InsideGlass);
 		if (Puffs)
 		{
 			// From the seat every puff is beyond the glass; from outside the young smoke is between the eye and the car.
@@ -1713,6 +1981,10 @@ void AGlpGame::SyncViews(float DeltaSeconds)
 		}
 		ShowSideMirrors(bInside);
 		bInsideShown = bInside;
+	}
+	if (bInside != bViewLookInside)
+	{
+		ApplyViewLook();
 	}
 	if (Mirror && bInside && (++MirrorFrame & 1) == 0)
 	{
@@ -1734,7 +2006,7 @@ void AGlpGame::SyncViews(float DeltaSeconds)
 		{
 			bRough |= Current.wheel_contact[i] && Current.wheel_surface[i] != GLP_SURFACE_ROAD;
 		}
-		Shot = Rig.Follow(Car->Root()->GetActorTransform(), FMath::Abs(Current.speed),
+		Shot = Rig.Follow(Car->Root()->GetActorTransform(), GlpSpace::SimToUnreal(Current.velocity), FMath::Abs(Current.speed),
 			FVector2f(Current.lateral_acceleration, Current.longitudinal_acceleration), bRough ? 1.f : 0.f, DeltaSeconds);
 	}
 	if (FixedCamera)
@@ -1928,10 +2200,41 @@ void AGlpGame::Automate(float DeltaSeconds)
 	{
 		const FString Directory = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Screenshots"), TEXT("Glp"));
 		IFileManager::Get().MakeDirectory(*Directory, true);
-		const FString File = FPaths::Combine(Directory, FString::Printf(TEXT("%s_%02d.png"), InCockpit() ? TEXT("cockpit") : TEXT("chase"), FMath::RoundToInt(ShotTimes[NextShot])));
+		const FString File = FPaths::Combine(Directory, FString::Printf(TEXT("%s_%02d.png"), ViewTag(), FMath::RoundToInt(ShotTimes[NextShot])));
 		FScreenshotRequest::RequestScreenshot(File, true, false);
 		UE_LOG(LogGlpGame, Log, TEXT("screenshot requested: %s"), *File);
 		NextShot++;
+	}
+	if (TourSeconds > 0.f)
+	{
+		// The tour (0.78): this car's picture TourSeconds into its credit, then the next car's credit, and out after the last.
+		TourClock += DeltaSeconds;
+		if (!bTourShot && TourClock >= TourSeconds)
+		{
+			const FString Directory = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Screenshots"), TEXT("Glp"));
+			IFileManager::Get().MakeDirectory(*Directory, true);
+			const FString File = FPaths::Combine(Directory, FString::Printf(TEXT("tour_%02d_%s.png"), CarIndex, ViewTag()));
+			FScreenshotRequest::RequestScreenshot(File, true, false);
+			UE_LOG(LogGlpGame, Log, TEXT("tour: %s photographed: %s"), *CarNameText, *File);
+			bTourShot = true;
+		}
+		else if (bTourShot && TourClock >= TourSeconds + 0.5f)
+		{
+			bTourShot = false;
+			TourClock = 0.f;
+			if (TourCars.IsEmpty())
+			{
+				UE_LOG(LogGlpGame, Log, TEXT("tour: done"));
+				TourSeconds = 0.f;
+				FPlatformMisc::RequestExit(false);
+			}
+			else
+			{
+				CarIndex = TourCars[0];
+				TourCars.RemoveAt(0);
+				NewSession();
+			}
+		}
 	}
 	if (QuitAfter > 0.f && DriveTime >= QuitAfter)
 	{
@@ -1943,7 +2246,8 @@ void AGlpGame::Automate(float DeltaSeconds)
 
 FString AGlpGame::SavedFile(const TCHAR* Name) const
 {
-	return FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("GrudgeLap"), Name);
+	// The player's data folder (0.78, GlpInstance::DataDir): until 0.77 the game's own Saved/GrudgeLap.
+	return FPaths::Combine(GlpInstance::DataDir(), Name);
 }
 
 void AGlpGame::LoadSettings()
@@ -1978,17 +2282,31 @@ void AGlpGame::LoadSettings()
 		{
 			LightChoice = FMath::Clamp(FCString::Atoi(*Value), 0, 4);
 		}
+		else if (Key == TEXT("view"))
+		{
+			// The camera's view is kept since 0.78 (the Godot version started every run in the seat).
+			Rig.View = Value == TEXT("chase") ? EGlpView::Chase : Value == TEXT("film") ? EGlpView::Film : EGlpView::Cockpit;
+		}
 		else if (Key == TEXT("units"))
 		{
 			// Metric by default since 0.14: the old "kmh" key is left unread, so a copy that never chose gets km/h once.
 			bKmh = !Value.Equals(TEXT("mph"), ESearchCase::IgnoreCase);
+		}
+		else if (Key == TEXT("upscaling"))
+		{
+			UpscaleChoice = UpscaleOf(Value, UpscaleChoice);
+		}
+		else if (Key == TEXT("rr"))
+		{
+			bRayReconstruction = FCString::Atoi(*Value) != 0;
 		}
 	}
 }
 
 void AGlpGame::SaveSettings() const
 {
-	const FString Text = FString::Printf(TEXT("car=%d\ntransmission=%d\nunits=%s\nweather=%d\nlight=%d\n"), CarIndex, Transmission, bKmh ? TEXT("kmh") : TEXT("mph"), WeatherChoice, LightChoice);
+	const FString Text = FString::Printf(TEXT("car=%d\ntransmission=%d\nunits=%s\nweather=%d\nlight=%d\nview=%s\nupscaling=%s\nrr=%d\n"), CarIndex, Transmission, bKmh ? TEXT("kmh") : TEXT("mph"),
+		WeatherChoice, LightChoice, ViewTag(), UpscaleTags[FMath::Clamp(UpscaleChoice, 0, 5)], bRayReconstruction ? 1 : 0);
 	FFileHelper::SaveStringToFile(Text, *SavedFile(TEXT("settings.ini")));
 }
 
@@ -2042,4 +2360,400 @@ bool AGlpGame::LoadBestLap()
 		return false;
 	}
 	return true;
+}
+
+void AGlpGame::StepCar(int32 Direction)
+{
+	for (int32 i = 1; i < Cars.Num(); i++)
+	{
+		const int32 Candidate = (CarIndex + (Direction < 0 ? -i : i) + Cars.Num() * i) % Cars.Num();
+		if (Cars[Candidate] && IsDrivable(Candidate))
+		{
+			CarIndex = Candidate;
+			break;
+		}
+	}
+	SaveSettings();
+	NewSession();
+}
+
+void AGlpGame::ToggleFullScreen()
+{
+	if (UGameUserSettings* Settings = GEngine ? GEngine->GetGameUserSettings() : nullptr)
+	{
+		Settings->SetFullscreenMode(Settings->GetFullscreenMode() == EWindowMode::Windowed ? EWindowMode::WindowedFullscreen : EWindowMode::Windowed);
+		Settings->ApplyResolutionSettings(false);
+	}
+}
+
+void AGlpGame::OpenMenu(EGlpMenuLine At)
+{
+	// The Godot version's PauseMenu: Esc or the pad's Back, any time. The game holds still behind it.
+	PauseMenu.bOpen = true;
+	FillMenu();
+	PauseMenu.Cursor = FMath::Max(PauseMenu.Find(At), 0);
+	MenuMouse = FVector2f(-1.f, -1.f);
+	Input.Reset();
+	if (Audio)
+	{
+		Audio->SetHush(true);
+	}
+	if (APlayerController* Player = GetWorld()->GetFirstPlayerController())
+	{
+		// The mouse chooses too: its pointer shows while the menu is open, and the window lets go of it.
+		FInputModeGameAndUI Mode;
+		Mode.SetHideCursorDuringCapture(false);
+		Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		Player->SetInputMode(Mode);
+		Player->SetShowMouseCursor(true);
+	}
+}
+
+void AGlpGame::CloseMenu()
+{
+	PauseMenu.bOpen = false;
+	Input.Reset();
+	if (Audio)
+	{
+		Audio->SetHush(false);
+	}
+	if (APlayerController* Player = GetWorld()->GetFirstPlayerController())
+	{
+		Player->SetInputMode(FInputModeGameOnly());
+		Player->SetShowMouseCursor(false);
+	}
+}
+
+void AGlpGame::FillMenu()
+{
+	TArray<FGlpMenu::FLine>& Lines = PauseMenu.Lines;
+	Lines.Reset();
+	auto Add = [&Lines](EGlpMenuLine Kind, FString Text) { Lines.Add({ Kind, MoveTemp(Text) }); };
+	Add(EGlpMenuLine::Continue, TEXT("CONTINUE"));
+	Add(EGlpMenuLine::NewGame, TEXT("NEW GAME"));
+	Add(EGlpMenuLine::Car, FString::Printf(TEXT("CAR: %s"), *CarNameText));
+	Add(EGlpMenuLine::Camera, FString::Printf(TEXT("CAMERA: %s"), ViewName()));
+	Add(EGlpMenuLine::Upscaling, UpscalingLine());
+	if (bDlssRR)
+	{
+		Add(EGlpMenuLine::RayReconstruction, FString::Printf(TEXT("DLSS RAY RECONSTRUCTION: %s"), UpscaleChoice == 0 ? TEXT("OFF (NEEDS DLSS)") : bRayReconstruction ? TEXT("ON") : TEXT("OFF")));
+	}
+	// The weather and the hour are a credit's: chosen during one, they come with the next game.
+	const bool bTitle = OnTitle();
+	Add(EGlpMenuLine::Weather, FString::Printf(TEXT("WEATHER: %s%s"), WeatherName(), !bTitle && WeatherChoice != SessionWeather ? TEXT("   (NEXT GAME)") : TEXT("")));
+	Add(EGlpMenuLine::Light, FString::Printf(TEXT("LIGHT: %s%s"), LightName(), !bTitle && LightChoice != SessionLight ? TEXT("   (NEXT GAME)") : TEXT("")));
+	Add(EGlpMenuLine::Units, FString::Printf(TEXT("UNITS: %s"), bKmh ? TEXT("KM/H") : TEXT("MPH")));
+	const UGameUserSettings* Settings = GEngine ? GEngine->GetGameUserSettings() : nullptr;
+	Add(EGlpMenuLine::FullScreen, FString::Printf(TEXT("FULL SCREEN: %s"), Settings && Settings->GetFullscreenMode() != EWindowMode::Windowed ? TEXT("ON") : TEXT("OFF")));
+	Add(EGlpMenuLine::Update, UpdateLine());
+	Add(EGlpMenuLine::Quit, TEXT("QUIT GAME"));
+	PauseMenu.Cursor = FMath::Clamp(PauseMenu.Cursor, 0, Lines.Num() - 1);
+
+	// Under the lines: this copy's version and what its updater says.
+	FString Says = Updater.Running() ? Updater.Status() : Updater.Why();
+	if (Updater.Running() && Says.IsEmpty() && !Updater.Refusal().IsEmpty())
+	{
+		Says = Updater.Refusal();
+	}
+	PauseMenu.Note = Says.IsEmpty() ? FString::Printf(TEXT("GrudgeLap v%s"), *VersionText) : FString::Printf(TEXT("v%s   %s"), *VersionText, *Says);
+	PauseMenu.bNoteWarns = Updater.Running() && Updater.Phase() == GLP_UPDATE_FAILED;
+}
+
+void AGlpGame::RunMenu(APlayerController* Player)
+{
+	FillMenu();
+	const int32 Count = PauseMenu.Lines.Num();
+	// Back to the game: Esc, Space, the pad's B or its Back.
+	if (Input.Pressed(EKeys::Escape) || Input.Pressed(EKeys::SpaceBar) || Input.Pressed(EKeys::Gamepad_FaceButton_Right) || Input.Pressed(EKeys::Gamepad_Special_Left))
+	{
+		CloseMenu();
+		return;
+	}
+	if (Input.Pressed(EKeys::Up) || Input.Pressed(EKeys::W) || Input.Pressed(EKeys::Gamepad_DPad_Up))
+	{
+		PauseMenu.Cursor = (PauseMenu.Cursor + Count - 1) % Count;
+	}
+	if (Input.Pressed(EKeys::Down) || Input.Pressed(EKeys::S) || Input.Pressed(EKeys::Gamepad_DPad_Down))
+	{
+		PauseMenu.Cursor = (PauseMenu.Cursor + 1) % Count;
+	}
+	// The mouse: the line under it once it has moved (a mouse lying still does not take the keys' line), a click takes it.
+	bool bClicked = false;
+	if (GEngine && GEngine->GameViewport)
+	{
+		FVector2D Viewport(0.0, 0.0);
+		GEngine->GameViewport->GetViewportSize(Viewport);
+		if (Viewport.X > 0.0 && Viewport.Y > 0.0)
+		{
+			// The HUD's canvas: 1600 x 900 scaled to the window (GlpHud).
+			const float Scale = static_cast<float>(FMath::Min(Viewport.X / 1600.0, Viewport.Y / 900.0));
+			const FVector2f Canvas(static_cast<float>(Viewport.X) / Scale, static_cast<float>(Viewport.Y) / Scale);
+			FVector2f Point = FVector2f::ZeroVector;
+			bool bPress = false;
+			// A scripted run's mouse (-GlpMouse) stands in for the real one, which a hidden window never has.
+			bool bKnown = Input.ScriptedMouse(Point, bPress);
+			if (float X = 0.f, Y = 0.f; !bKnown && Player && Player->GetMousePosition(X, Y))
+			{
+				Point = FVector2f(X / Scale, Y / Scale);
+				bPress = Player->WasInputKeyJustPressed(EKeys::LeftMouseButton);
+				bKnown = true;
+			}
+			if (bKnown)
+			{
+				const int32 Line = PauseMenu.LineAt(Canvas, Point);
+				const bool bMoved = MenuMouse.X >= 0.f && !Point.Equals(MenuMouse, 0.5f);
+				MenuMouse = Point;
+				if (Line != INDEX_NONE && (bMoved || bPress))
+				{
+					PauseMenu.Cursor = Line;
+					bClicked = bPress;
+				}
+			}
+		}
+	}
+	const EGlpMenuLine Kind = PauseMenu.Lines[PauseMenu.Cursor].Kind;
+	if (bClicked || Input.Pressed(EKeys::Enter) || Input.Pressed(EKeys::Gamepad_FaceButton_Bottom) || Input.Pressed(EKeys::Gamepad_Special_Right))
+	{
+		TakeMenuLine(Kind, 0);
+	}
+	else if (Input.Pressed(EKeys::Left) || Input.Pressed(EKeys::A) || Input.Pressed(EKeys::Gamepad_DPad_Left) || Input.Pressed(EKeys::Gamepad_LeftStick_Left))
+	{
+		TakeMenuLine(Kind, -1);
+	}
+	else if (Input.Pressed(EKeys::Right) || Input.Pressed(EKeys::D) || Input.Pressed(EKeys::Gamepad_DPad_Right) || Input.Pressed(EKeys::Gamepad_LeftStick_Right))
+	{
+		TakeMenuLine(Kind, 1);
+	}
+	if (PauseMenu.bOpen)
+	{
+		// The lines as they read after the choice.
+		FillMenu();
+	}
+}
+
+void AGlpGame::TakeMenuLine(EGlpMenuLine Line, int32 Direction)
+{
+	// Enter steps a choice on as right does; a line that is a button takes Enter only.
+	const int32 Step = Direction < 0 ? -1 : 1;
+	switch (Line)
+	{
+	case EGlpMenuLine::Continue:
+		if (Direction == 0)
+		{
+			CloseMenu();
+		}
+		break;
+	case EGlpMenuLine::NewGame:
+		if (Direction == 0)
+		{
+			CloseMenu();
+			NewSession();
+		}
+		break;
+	case EGlpMenuLine::Car:
+		// The car is a credit's: the session is rebuilt around the new one, on the title screen.
+		StepCar(Step);
+		bRefreshViews = true;
+		break;
+	case EGlpMenuLine::Camera:
+		StepView(Step);
+		bRefreshViews = true;
+		break;
+	case EGlpMenuLine::Upscaling:
+		StepUpscaling(Step);
+		break;
+	case EGlpMenuLine::RayReconstruction:
+		bRayReconstruction = !bRayReconstruction;
+		ApplyUpscaling();
+		SaveSettings();
+		break;
+	case EGlpMenuLine::Weather:
+		WeatherChoice = (WeatherChoice + 5 + Step) % 5;
+		SaveSettings();
+		if (OnTitle())
+		{
+			NewSession();
+			bRefreshViews = true;
+		}
+		break;
+	case EGlpMenuLine::Light:
+		// GlpLook's order (day, sunrise, dusk, night, random) is a ring of five: four steps on are one step back.
+		for (int32 i = 0; i < (Step > 0 ? 1 : 4); i++)
+		{
+			LightChoice = GlpLook::NextChoice(LightChoice);
+		}
+		FixedLight = -1;
+		SaveSettings();
+		if (OnTitle())
+		{
+			NewSession();
+			bRefreshViews = true;
+		}
+		break;
+	case EGlpMenuLine::Units:
+		bKmh = !bKmh;
+		SaveSettings();
+		break;
+	case EGlpMenuLine::FullScreen:
+		ToggleFullScreen();
+		break;
+	case EGlpMenuLine::Update:
+		if (Direction == 0)
+		{
+			TakeUpdateLine();
+		}
+		break;
+	case EGlpMenuLine::Quit:
+		if (Direction == 0)
+		{
+			SaveSettings();
+			FPlatformMisc::RequestExit(false);
+		}
+		break;
+	}
+}
+
+FString AGlpGame::UpdateLine() const
+{
+	if (!Updater.Running())
+	{
+		return TEXT("CHECK FOR UPDATES");
+	}
+	const glp_update_state& U = Updater.State();
+	const FString Version = Updater.Latest().IsEmpty() ? FString(TEXT("THE UPDATE")) : TEXT("v") + Updater.Latest();
+	switch (U.phase)
+	{
+	case GLP_UPDATE_CHECKING:
+		return TEXT("CHECKING FOR UPDATES...   (ENTER: STOP)");
+	case GLP_UPDATE_UP_TO_DATE:
+		return TEXT("CHECK FOR UPDATES AGAIN");
+	case GLP_UPDATE_AVAILABLE:
+		return U.package_size > 0 ? FString::Printf(TEXT("DOWNLOAD AND INSTALL %s   (%lld MB)"), *Version, static_cast<long long>(U.package_size >> 20))
+			: FString::Printf(TEXT("DOWNLOAD AND INSTALL %s"), *Version);
+	case GLP_UPDATE_DOWNLOADING:
+		return U.bytes_total > 0 ? FString::Printf(TEXT("DOWNLOADING %s   %lld %%   (ENTER: STOP)"), *Version, static_cast<long long>(U.bytes_done * 100 / U.bytes_total))
+			: FString::Printf(TEXT("DOWNLOADING %s...   (ENTER: STOP)"), *Version);
+	case GLP_UPDATE_VERIFYING:
+		return FString::Printf(TEXT("CHECKING THE DOWNLOAD OF %s..."), *Version);
+	case GLP_UPDATE_READY:
+		return FString::Printf(TEXT("INSTALL %s NOW"), *Version);
+	case GLP_UPDATE_STARTING:
+	case GLP_UPDATE_QUIT_NOW:
+		return FString::Printf(TEXT("INSTALLING %s..."), *Version);
+	case GLP_UPDATE_FAILED:
+		switch (U.can_retry)
+		{
+		case GLP_UPDATE_RETRY_DOWNLOAD:
+			return TEXT("TRY THE DOWNLOAD AGAIN");
+		case GLP_UPDATE_RETRY_APPLY:
+			return TEXT("TRY TO INSTALL AGAIN");
+		case GLP_UPDATE_RETRY_CHECK:
+			return TEXT("CHECK FOR UPDATES AGAIN");
+		default:
+			return U.has_page ? TEXT("OPEN THE DOWNLOAD PAGE") : TEXT("CHECK FOR UPDATES AGAIN");
+		}
+	default:
+		return TEXT("CHECK FOR UPDATES");
+	}
+}
+
+void AGlpGame::TakeUpdateLine()
+{
+	if (!Updater.Running())
+	{
+		return;
+	}
+	const glp_update_state& U = Updater.State();
+	switch (U.phase)
+	{
+	case GLP_UPDATE_IDLE:
+	case GLP_UPDATE_UP_TO_DATE:
+		Updater.Check();
+		break;
+	case GLP_UPDATE_CHECKING:
+	case GLP_UPDATE_DOWNLOADING:
+	case GLP_UPDATE_VERIFYING:
+		// The player backs out; what has come of a download stays on disk for a later try.
+		Updater.Cancel();
+		bInstallAsked = false;
+		break;
+	case GLP_UPDATE_AVAILABLE:
+		// The one press the owner asked for: the download, its check and the hand-over to the installer follow.
+		bInstallAsked = Updater.Download();
+		break;
+	case GLP_UPDATE_READY:
+		Updater.Apply();
+		break;
+	case GLP_UPDATE_FAILED:
+		if (U.can_retry == GLP_UPDATE_RETRY_DOWNLOAD)
+		{
+			bInstallAsked = Updater.Download();
+		}
+		else if (U.can_retry == GLP_UPDATE_RETRY_APPLY)
+		{
+			Updater.Apply();
+		}
+		else if (U.can_retry == GLP_UPDATE_RETRY_NONE && U.has_page)
+		{
+			// The updater can do no more by itself: the release's page, in the player's browser.
+			FPlatformProcess::LaunchURL(*Updater.Page(), nullptr, nullptr);
+		}
+		else
+		{
+			Updater.Check();
+		}
+		break;
+	default:
+		break;
+	}
+}
+
+void AGlpGame::RunUpdater()
+{
+	if (!Updater.Running())
+	{
+		return;
+	}
+	Updater.Poll();
+	const int32 Phase = Updater.Phase();
+	if (Phase == GLP_UPDATE_QUIT_NOW)
+	{
+		// The installer runs and waits for the game to go: out through the normal way, with the choices saved.
+		if (!bQuitForUpdate)
+		{
+			bQuitForUpdate = true;
+			SaveSettings();
+			UE_LOG(LogGlpGame, Log, TEXT("quitting for the update to v%s"), *Updater.Latest());
+			FPlatformMisc::RequestExit(false);
+		}
+		return;
+	}
+	if (Phase == GLP_UPDATE_FAILED || Phase == GLP_UPDATE_IDLE || Phase == GLP_UPDATE_UP_TO_DATE)
+	{
+		bInstallAsked = false;
+	}
+	// The verified package is handed over without another press, but never in the middle of a drive: with the menu
+	// open, on the title screen or at the credit's end.
+	if (bInstallAsked && Phase == GLP_UPDATE_READY && (PauseMenu.bOpen || Current.phase == GLP_PHASE_SELECT_TRANSMISSION || Current.phase == GLP_PHASE_FINISHED))
+	{
+		bInstallAsked = false;
+		Updater.Apply();
+	}
+}
+
+FString AGlpGame::UpdateNotice() const
+{
+	if (!Updater.Running())
+	{
+		return FString();
+	}
+	switch (Updater.Phase())
+	{
+	case GLP_UPDATE_AVAILABLE:
+		return FString::Printf(TEXT("v%s is available: ESC, then DOWNLOAD AND INSTALL"), *Updater.Latest());
+	case GLP_UPDATE_READY:
+		return FString::Printf(TEXT("v%s is ready: ESC to install it"), *Updater.Latest());
+	default:
+		return Updater.Status();
+	}
 }

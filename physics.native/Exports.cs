@@ -57,6 +57,13 @@ public static unsafe class Exports
     [UnmanagedCallersOnly(EntryPoint = "glp_step", CallConvs = [typeof(CallConvCdecl)])]
     public static int Step(nint session, NativeInputs* inputs, float dt) => Guarded(() => NativeApi.Step(Resolve(session), *inputs, dt));
 
+    [UnmanagedCallersOnly(EntryPoint = "glp_feather_inputs", CallConvs = [typeof(CallConvCdecl)])]
+    public static int FeatherInputs(nint session, NativeInputs* inputs, int throttleFromKey, int brakeFromKey) =>
+        Guarded(() => *inputs = NativeApi.FeatherInputs(Resolve(session), *inputs, throttleFromKey != 0, brakeFromKey != 0));
+
+    [UnmanagedCallersOnly(EntryPoint = "glp_ground_height", CallConvs = [typeof(CallConvCdecl)])]
+    public static int GroundHeight(nint session, float x, float z, float* height) => Guarded(() => *height = NativeApi.GroundHeight(Resolve(session), x, z));
+
     [UnmanagedCallersOnly(EntryPoint = "glp_get_state", CallConvs = [typeof(CallConvCdecl)])]
     public static int GetState(nint session, NativeState* output) => Guarded(() => *output = NativeApi.State(Resolve(session)));
 

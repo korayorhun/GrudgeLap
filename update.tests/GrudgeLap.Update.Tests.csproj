@@ -3,7 +3,8 @@
   <!-- The updater's engine-free parts (the release feed, the download client, the log, the apply helpers) tested
        against an in-process stand-in for GitHub that drops, stalls, ignores ranges, expires its signed redirects and
        runs out of API calls on purpose. The sources are the game's own, compiled in here: the game's assembly needs
-       Godot, these files do not. -->
+       Godot, these files do not. The session that drives them for the Unreal version (update.native) is compiled in
+       the same way, with its C interface for the layout of the struct it fills (hence the unsafe blocks). -->
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <LangVersion>latest</LangVersion>
@@ -12,6 +13,7 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <RootNamespace>GrudgeLap.Update.Tests</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,6 +27,8 @@
     <Compile Include="..\game\src\UpdateFeed.cs" Link="Game\UpdateFeed.cs" />
     <Compile Include="..\game\src\UpdateLog.cs" Link="Game\UpdateLog.cs" />
     <Compile Include="..\game\src\UpdateApply.cs" Link="Game\UpdateApply.cs" />
+    <Compile Include="..\update.native\UpdateSession.cs" Link="Native\UpdateSession.cs" />
+    <Compile Include="..\update.native\Exports.cs" Link="Native\Exports.cs" />
   </ItemGroup>
 
 </Project>

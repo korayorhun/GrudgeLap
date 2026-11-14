@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The self-updater as a native library with a C interface (NativeAOT), for the Unreal Engine version, which
+       does not host .NET: the game loads GrudgeLap.Update.Native.dll and calls the glp_update_* functions declared
+       in include/grudgelap_update.h. `dotnet publish -c Release -r win-x64` builds it (needs the MSVC linker);
+       nothing of .NET has to be installed where it runs. The release feed, the download client, the log and the
+       apply helpers are the Godot version's own files, compiled in here as update.tests does; UpdateSession.cs is
+       the engine-free port of that version's Updater node, and nothing in it downloads without being asked. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>GrudgeLap.Update.Native</RootNamespace>
+    <AssemblyName>GrudgeLap.Update.Native</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <PublishAot>true</PublishAot>
+    <NativeLib>Shared</NativeLib>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\game\src\UpdateClient.cs" Link="Game\UpdateClient.cs" />
+    <Compile Include="..\game\src\UpdateFeed.cs" Link="Game\UpdateFeed.cs" />
+    <Compile Include="..\game\src\UpdateLog.cs" Link="Game\UpdateLog.cs" />
+    <Compile Include="..\game\src\UpdateApply.cs" Link="Game\UpdateApply.cs" />
+  </ItemGroup>
+
+</Project>

@@ -15,6 +15,8 @@ namespace
 		// The title screen's weather, hour and music folder (0.77): until the hour came the keyboard's H and M were never
 		// read, as they were missing here; only a scripted run could press them.
 		EKeys::H, EKeys::L, EKeys::M,
+		// The update check (0.78, as the Godot version's F10).
+		EKeys::F10,
 		// The pad's buttons (InputSetup): the stick and the triggers are read as axes.
 		EKeys::Gamepad_DPad_Left, EKeys::Gamepad_DPad_Right, EKeys::Gamepad_DPad_Up, EKeys::Gamepad_DPad_Down,
 		EKeys::Gamepad_LeftStick_Left, EKeys::Gamepad_LeftStick_Right,
@@ -40,6 +42,26 @@ namespace
 
 FGlpInput::FGlpInput()
 {
+	// The scripted mouse: "<seconds>:<x>,<y>[:click]" entries joined by "+", in the order of their times.
+	if (FString Points; FParse::Value(FCommandLine::Get(), TEXT("GlpMouse="), Points, false))
+	{
+		TArray<FString> Entries;
+		Points.ParseIntoArray(Entries, TEXT("+"));
+		for (const FString& Entry : Entries)
+		{
+			TArray<FString> Parts;
+			Entry.ParseIntoArray(Parts, TEXT(":"));
+			FString X, Y;
+			if (Parts.Num() >= 2 && Parts[1].Split(TEXT(","), &X, &Y))
+			{
+				FMouse Move;
+				Move.At = FCString::Atof(*Parts[0]);
+				Move.Point = FVector2f(FCString::Atof(*X), FCString::Atof(*Y));
+				Move.bClick = Parts.Num() > 2 && Parts[2].Equals(TEXT("click"), ESearchCase::IgnoreCase);
+				Mouse.Add(Move);
+			}
+		}
+	}
 	FString Keys;
 	if (!FParse::Value(FCommandLine::Get(), TEXT("GlpKeys="), Keys, false))
 	{
@@ -77,8 +99,25 @@ FGlpInput::FGlpInput()
 	}
 }
 
+bool FGlpInput::ScriptedMouse(FVector2f& Point, bool& bClick) const
+{
+	if (!Mouse.IsValidIndex(MouseNow))
+	{
+		return false;
+	}
+	Point = Mouse[MouseNow].Point;
+	bClick = bMouseClick;
+	return true;
+}
+
 void FGlpInput::Update(const APlayerController* Player, float Time)
 {
+	bMouseClick = false;
+	while (Mouse.IsValidIndex(MouseNow + 1) && Time >= Mouse[MouseNow + 1].At)
+	{
+		MouseNow++;
+		bMouseClick |= Mouse[MouseNow].bClick;
+	}
 	WasHeld = MoveTemp(Held);
 	Held.Reset();
 	for (const FKey& Key : Watched)
@@ -133,6 +172,8 @@ glp_inputs FGlpInput::Drive(float DeltaSeconds, float SpeedMps)
 		Steer = MoveToward(Steer, Target, Rate * DeltaSeconds);
 	}
 	// A pedal is the trigger's position while it is pressed at all, the key's ramp otherwise.
+	bThrottleKey = RightTrigger <= 0.02f;
+	bBrakeKey = LeftTrigger <= 0.02f;
 	Throttle = RightTrigger > 0.02f ? FMath::Clamp(RightTrigger, 0.f, 1.f) : Ramp(Throttle, Down(EKeys::Up) || Down(EKeys::W) || Down(EKeys::Gamepad_DPad_Up), DeltaSeconds, 0.18f, 0.12f);
 	Brake = LeftTrigger > 0.02f ? FMath::Clamp(LeftTrigger, 0.f, 1.f) : Ramp(Brake, Down(EKeys::Down) || Down(EKeys::S) || Down(EKeys::Gamepad_DPad_Down), DeltaSeconds, 0.15f, 0.10f);
 	Clutch = Ramp(Clutch, Down(EKeys::LeftShift) || Down(EKeys::RightShift) || Down(EKeys::Gamepad_FaceButton_Left), DeltaSeconds, 0.12f, 0.25f);

@@ -15,7 +15,7 @@
 extern "C" {
 #endif
 
-#define GLP_ABI_VERSION 8
+#define GLP_ABI_VERSION 9
 
 typedef intptr_t glp_session; /* 0 is no session */
 typedef intptr_t glp_engine;  /* 0 is no engine voice */
@@ -191,6 +191,13 @@ int32_t glp_abort(glp_session session);
 int32_t glp_scripted_inputs(glp_session session, glp_inputs* out);
 /* Advances the session by dt seconds (the vehicle integrates at 240 Hz inside). */
 int32_t glp_step(glp_session session, const glp_inputs* inputs, float dt);
+/* ABI 9: the pedals a driver on keys actually holds. A key is all or nothing, so a key's throttle is eased against
+ * wheelspin and its brake against a locking wheel, in place; say which pedals come from keys (a pad's trigger has a
+ * position of its own and is left alone). Call before glp_step with the inputs the keys gave. */
+int32_t glp_feather_inputs(glp_session session, glp_inputs* inputs, int32_t throttle_from_key, int32_t brake_from_key);
+/* ABI 9: the ground's height (m) at a point: the terrain with the roads at grade; a deck (a bridge, the loop) is not
+ * ground. For cameras, which must stay over it. */
+int32_t glp_ground_height(glp_session session, float x, float z, float* out_height);
 int32_t glp_get_state(glp_session session, glp_state* out);
 /* The HUD message as UTF-8, cut to capacity - 1 bytes and terminated; returns its full length in bytes. */
 int32_t glp_message(glp_session session, char* buffer, int32_t capacity);

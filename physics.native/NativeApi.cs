@@ -22,7 +22,7 @@ internal sealed class NativeSession(RaceSession session, int car)
 /// </summary>
 internal static class NativeApi
 {
-    public const int AbiVersion = 8;
+    public const int AbiVersion = 9;
     public const int TrafficFlag = 1;
     public const int SpeedRouteFlag = 2;
     /// <summary>Bits 4-5 of the flags: the credit's weather (0 dry, 1 overcast, 2 wet, 3 rain); <see cref="RandomWeatherFlag"/> draws one instead.</summary>
@@ -146,6 +146,26 @@ internal static class NativeApi
     public static NativeInputs ScriptedInputs(NativeSession native) => ToNative(native.Driver.Next(native.Session));
 
     public static void Step(NativeSession native, in NativeInputs inputs, float dt) => native.Session.Step(FromNative(inputs), dt);
+
+    /// <summary>
+    /// The pedals a driver on keys actually holds (ABI 9): a key is all or nothing, so the Godot host eased a key's
+    /// throttle against wheelspin and its brake against a locking wheel (KeyboardDriver, <see cref="ScriptedDriver.FeatherThrottle"/>
+    /// and <see cref="ScriptedDriver.FeatherBrake"/>). A pedal with a position of its own (a pad's trigger) is left as it is:
+    /// the host says which pedals come from keys. Without it a host on keys drove a harder game than the Godot version's.
+    /// </summary>
+    public static NativeInputs FeatherInputs(NativeSession native, NativeInputs inputs, bool throttleFromKey, bool brakeFromKey)
+    {
+        var car = native.Session.Car;
+        if (throttleFromKey) inputs.Throttle = ScriptedDriver.FeatherThrottle(car, inputs.Throttle);
+        if (brakeFromKey) inputs.Brake = ScriptedDriver.FeatherBrake(car, inputs.Brake);
+        return inputs;
+    }
+
+    /// <summary>
+    /// The ground's height at a point (ABI 9): the terrain with the roads at grade, as the cars stand on it; a deck
+    /// (a bridge, the loop) is not ground. For a host's cameras, which must stay over it.
+    /// </summary>
+    public static float GroundHeight(NativeSession native, float x, float z) => native.Session.Track.Terrain.Height(x, z);
 
     public static unsafe NativeState State(NativeSession native)
     {

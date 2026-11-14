@@ -5,6 +5,7 @@
 #include "grudgelap_physics.h"
 
 class AActor;
+struct FGlpCockpit;
 class UMaterialInterface;
 class UPrimitiveComponent;
 class USceneComponent;
@@ -82,9 +83,15 @@ public:
 
 	/**
 	 * From the driver's seat the body shell, the outside details and the wheels are not drawn, only their shadows
-	 * (CarView.SetViewpoint): seen from inside, the single-sided shell showed its paint along the door tops.
+	 * (CarView.SetViewpoint): seen from inside, the single-sided shell showed its paint along the door tops. With
+	 * InsideGlass (0.78) the car's windows wear it from the seat and their own glass from outside: the level's glass,
+	 * right for a car seen from the road, took half the road's light on its way in through a raked windscreen and laid
+	 * the dashboard's reflection over what was left (AGlpGame::InsideGlassMaterial).
 	 */
-	void SetInside(bool bInside);
+	void SetInside(bool bInside, UMaterialInterface* InsideGlass = nullptr);
+
+	/** The driver's seat as the game corrects it (0.78): the dials' face and the steering wheel moved and scaled. */
+	void SetCockpit(const FGlpCockpit& Cockpit);
 
 	AActor* Root() const { return RootActor.Get(); }
 
@@ -102,9 +109,20 @@ private:
 	TArray<TWeakObjectPtr<USceneComponent>> Wheels;
 	TArray<TWeakObjectPtr<USceneComponent>> Spinners;
 	TWeakObjectPtr<USceneComponent> Steering;
+	TWeakObjectPtr<USceneComponent> Dials;
 	TArray<FTransform> WheelRest;
 	TArray<FTransform> SpinnerRest;
 	FTransform SteeringRest;
+	FTransform DialsRest;
+	/** A window or a lens of the car: the slot that wears the level's glass (M_Glass), and that glass. */
+	struct FGlassSlot
+	{
+		TWeakObjectPtr<UStaticMeshComponent> Mesh;
+		int32 Slot = 0;
+		TWeakObjectPtr<UMaterialInterface> Outside;
+	};
+	TArray<FGlassSlot> Glass;
+	bool bInsideGlass = false;
 	TArray<TWeakObjectPtr<AActor>> Owned;   // actors whose visibility SetVisible switches
 	TArray<TWeakObjectPtr<UPrimitiveComponent>> OutsideOnly;   // drawn only from outside the car (SetInside)
 	TArray<TWeakObjectPtr<class UMaterialInstanceDynamic>> BrakeLamps;   // the lamps SetBraking lights

@@ -4,9 +4,12 @@
 #include "GameFramework/Actor.h"
 #include "GlpCamera.h"
 #include "GlpCarView.h"
+#include "GlpCockpits.h"
 #include "GlpInput.h"
 #include "GlpLook.h"
+#include "GlpMenu.h"
 #include "GlpScores.h"
+#include "GlpUpdate.h"
 #include "grudgelap_physics.h"
 #include "GlpGame.generated.h"
 
@@ -25,7 +28,7 @@ class UMaterialInstanceDynamic;
  * to the result, the camera, the sound and the HUD fed from it, the best lap and the player's choices kept.
  *
  * Scripts/build_scene.py places one in the level and tags what it moves (see FGlpCarView). Command line for
- * automated runs: -GlpAttract (the scripted driver drives), -GlpView=chase, -GlpNoTraffic, -GlpKeys=... (see
+ * automated runs: -GlpAttract (the scripted driver drives), -GlpView=cockpit|chase|film, -GlpNoTraffic, -GlpKeys=... (see
  * FGlpInput), -GlpShots=3+8+15 (screenshots that many seconds into the drive, in Saved/Screenshots/Glp),
  * -GlpQuitAfter=12, -GlpTitleShots (both clocks run from the start instead, to photograph the title screen) and
  * -GlpSaveBest (an attract-mode lap may become the saved best lap, for a ghost to test against); -GlpAuto gives
@@ -34,6 +37,19 @@ class UMaterialInstanceDynamic;
  * hour (0.77); -GlpNoMegaLights keeps the night's lamps on the classic lighting path; -GlpCamera=x,y,z,tx,ty,tz[,fov]
  * (simulation metres, a vertical field of view) and -GlpOrbit=yaw,pitch,distance (on the car: 0 from behind, 90 from
  * its right) hold the camera as the Godot version's --camera= and --orbit= do, so the two can be shot alike.
+ *
+ * The driver's seat (0.78): -GlpFov=<degrees upright> and -GlpDrop=<m> for every car, -GlpCockpit=<FGlpCockpit::Read's
+ * text> for the car driven and -GlpCockpits=<file> for each car try a seat without building the module;
+ * -GlpTour[=seconds] photographs each car to drive in turn after that many seconds of its credit (Saved/Screenshots/Glp/
+ * tour_<index>_<view>.png) and quits, -GlpTourCars=1+8 only those; -GlpLocal=<shadow>,<highlight>[,<detail>] and
+ * -GlpCabinEv=<stops> set the seat's local exposure and its extra exposure, -GlpGlass=<transmittance>,<specular>,<opacity>
+ * the glass the windows wear from the seat.
+ *
+ * The menu, the upscaler and the updater (0.78): -GlpUpscaling=off|native|quality|balanced|performance|ultra sets the
+ * upscaler's mode for a run; -GlpData=<folder> names the folder the settings, scores and best laps are kept in (a
+ * check's own, so that it leaves the player's alone), -GlpImport and -GlpGodotData=<folder> try the take-over of the
+ * earlier versions' files (GlpInstance::Import), -GlpUpdateRoot=<folder> lets the editor's build run the updater
+ * (FGlpUpdate). The scripted keys reach the menu: -GlpKeys=2:Escape,3:Down,3.5:Enter.
  */
 UCLASS()
 class GRUDGELAPUE_API AGlpGame : public AActor
@@ -83,6 +99,16 @@ public:
 	UPROPERTY(EditAnywhere, Category = "GrudgeLap")
 	TSoftObjectPtr<UMaterialInterface> NightSkyMaterial;
 
+	/**
+	 * M_GlassInside (0.78): what the player's windows wear from the driver's seat. The level's glass is a car's glass
+	 * seen from the road: tinted, with the full reflection of a pane. From the seat, under an exposure held for the
+	 * open road, it took half the road's light on its way through a raked windscreen and laid the dashboard's
+	 * reflection over the rest (the owner's report of 14 November 2026); this one lets nearly all of it through and
+	 * reflects about a sixth as much, as the eye behind a windscreen, adapted and focused far ahead, sees it.
+	 */
+	UPROPERTY(EditAnywhere, Category = "GrudgeLap")
+	TSoftObjectPtr<UMaterialInterface> InsideGlassMaterial;
+
 	// What the HUD shows.
 	bool HasSession() const { return Session != 0; }
 	const glp_state& State() const { return Current; }
@@ -103,12 +129,33 @@ public:
 	/** The lamps are lit, dusk to dawn (WorldBuilder.LampsLit): the cars' beams, the train's lamp, the yards'. */
 	bool LampsLit() const { return Hour == EGlpHour::Dusk || Hour == EGlpHour::Night; }
 	bool InCockpit() const;
+	/** The view the camera key chose (the replay's crane aside). */
+	EGlpView View() const { return Rig.View; }
+	/** The film view is on screen: the HUD frames it with a film's black bars. */
+	bool InFilmView() const;
+	const TCHAR* ViewName() const
+	{
+		return Rig.View == EGlpView::Cockpit ? TEXT("DRIVER'S SEAT") : Rig.View == EGlpView::Chase ? TEXT("BEHIND THE CAR") : TEXT("FILM");
+	}
+	/** The view's name in file names and the settings: cockpit, chase, film. */
+	const TCHAR* ViewTag() const
+	{
+		return Rig.View == EGlpView::Cockpit ? TEXT("cockpit") : Rig.View == EGlpView::Chase ? TEXT("chase") : TEXT("film");
+	}
 	bool UsesKmh() const { return bKmh; }
 	float DrivingSeconds() const { return DrivingTime; }
 	float DashOffset() const { return Dash; }
 	bool Attract() const { return bAttract; }
 	const FGlpScores& HighScores() const { return Scores; }
 	UTexture* InstrumentPanel() const;
+	/** The Esc menu, for the HUD to draw. */
+	const FGlpMenu& Menu() const { return PauseMenu; }
+	/** This copy's version, "0.78.0": the project's (Config/DefaultGame.ini), which tools/release.ps1 stamps. */
+	const FString& Version() const { return VersionText; }
+	/** The updater's line for the title screen and the HUD's corner; empty when it has nothing to say. */
+	FString UpdateNotice() const;
+	/** Where the updater stands (GLP_UPDATE_IDLE .. GLP_UPDATE_FAILED), -1 when this copy does not update itself. */
+	int32 UpdatePhase() const { return Updater.Running() ? Updater.Phase() : -1; }
 
 protected:
 	virtual void BeginPlay() override;
@@ -134,14 +181,26 @@ private:
 	FString SavedFile(const TCHAR* Name) const;
 	FGlpCarView* PlayerCar() const;
 	void FitOutCockpit();
-	/** DLSS Ray Reconstruction where the card and the plugin support it (0.74). */
-	void EnableRayReconstruction();
+	/** What the card and NVIDIA's plugin can do: DLSS, and Ray Reconstruction with it (BeginPlay). */
+	void ProbeUpscaler();
+	/** The upscaler's mode on the renderer: DLSS and its Ray Reconstruction on an RTX card, TSR's share of the window anywhere else. */
+	void ApplyUpscaling();
+	/** The next mode this card offers, or the one before. */
+	void StepUpscaling(int32 Direction);
+	/** The menu's line: "DLSS: QUALITY", or "UPSCALING: TSR QUALITY" on a card without DLSS. */
+	FString UpscalingLine() const;
 	/** The chosen car's best-lap file in Saved/GrudgeLap (0.74: one per car). */
 	FString BestLapFile() const;
 	void ShowSideMirrors(bool bInside);
 	void ApplyFrameCap();
 	/** The credit's weather (glp_state.weather) on the level: the sun, the fog, the clouds, the exposure, MPC_Weather and the rain. */
 	void ApplyWeather();
+	/** What the view asks of the picture (0.78): the seat's local exposure and its share more exposure. */
+	void ApplyViewLook();
+	/** The camera key: the driver's seat, behind the car, the film view, and round again (or the other way). */
+	void StepView(int32 Direction = 1);
+	/** The chosen car's seat as corrected: GlpCockpits' own, -GlpCockpits' file over it, -GlpCockpit over both. */
+	FGlpCockpit Cockpit() const;
 
 	UPROPERTY(VisibleAnywhere, Category = "GrudgeLap")
 	TObjectPtr<UCameraComponent> Camera;
@@ -239,6 +298,25 @@ private:
 
 	FGlpInput Input;
 	FGlpCameraRig Rig;
+	TMap<int32, FGlpCockpit> CockpitFile;   // -GlpCockpits=
+	FString CockpitText;                    // -GlpCockpit=
+	float FixedFov = 0.f;                   // -GlpFov=
+	float FixedDrop = -1.f;                 // -GlpDrop=
+	/** The windows' glass from the seat: an instance of InsideGlassMaterial, so -GlpGlass can set it. */
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> InsideGlass;
+	/**
+	 * The seat's picture (ApplyViewLook). A cabin in the shade stands four or five stops under the sunlit road; the eye
+	 * sees both at once, a fixed exposure does not. Local exposure (the engine's local tone mapping) lifts the shade
+	 * towards the eye's picture: its contrast below middle grey scaled by CabinShadow, above it by CabinHighlight.
+	 */
+	float CabinShadow = 0.62f;
+	float CabinHighlight = 0.9f;
+	float CabinDetail = 1.f;
+	/** Stops more exposure from the seat by day: the cabin frames the picture and the eye opens to it a little. */
+	float CabinEv = 0.25f;
+	float LookEv = 14.f;         // the hour's and the weather's exposure, EV100 (ApplyWeather)
+	bool bViewLookInside = false;
 	FGlpScores Scores;
 	bool bScoreOffered = false;   // the credit's end has been put to the high-score table
 	// A first start (no settings yet) shows the hot hatch (0.74): its own cabin is the best of the line-up's, where the
@@ -341,7 +419,51 @@ private:
 	/** MPC_Night: the player's beams where they are this frame. */
 	void SyncRetroreflection();
 
+	// The Esc menu (0.78, FGlpMenu). While it is open the session is not stepped, nothing moves and the sound is held.
+	FGlpMenu PauseMenu;
+	FVector2f MenuMouse = FVector2f(-1.f, -1.f);   // where the mouse was a frame ago on the HUD's canvas: only a move chooses
+	bool bRefreshViews = false;                     // a choice changed the picture behind the menu
+	int32 SessionWeather = 0;                       // the choices the running credit was made with: another one waits
+	int32 SessionLight = 0;                         // for the next game
+	void OpenMenu(EGlpMenuLine At = EGlpMenuLine::Continue);
+	void CloseMenu();
+	/** A frame with the menu open: the keys, the mouse, the choice taken. */
+	void RunMenu(APlayerController* Player);
+	/** The lines as they read now. */
+	void FillMenu();
+	/** A line taken (Direction 0: Enter, A or a click) or changed (-1 left, 1 right). */
+	void TakeMenuLine(EGlpMenuLine Line, int32 Direction);
+	/** The next car to drive, or the one before; the session is rebuilt around it. */
+	void StepCar(int32 Direction);
+	void ToggleFullScreen();
+	bool OnTitle() const { return Current.phase == GLP_PHASE_SELECT_TRANSMISSION; }
+
+	// The upscaler (0.78; the owner's request of 14 November 2026 for DLSS in the menu). DLSS in its Quality mode and its
+	// Ray Reconstruction have been on since 0.44 and 0.74 wherever the card ran them; the mode is now the player's.
+	// The settings' upscaling=: 0 off (DLSS cards only: TSR takes over), 1 native (DLAA), 2 quality, 3 balanced,
+	// 4 performance, 5 ultra performance (DLSS only).
+	int32 UpscaleChoice = 2;
+	bool bRayReconstruction = true;   // the settings' rr=
+	bool bDlss = false;               // the card and the plugin run DLSS
+	bool bDlssRR = false;             // and Ray Reconstruction, with hardware ray tracing
+	int32 BilateralBefore = -1;       // r.Lumen.Reflections.BilateralFilter as the game found it
+
+	// The updater (0.78): a button in the menu, and nothing fetched until it is pressed (the owner's rule of 14 November 2026).
+	FGlpUpdate Updater;
+	FString VersionText;
+	bool bInstallAsked = false;       // DOWNLOAD AND INSTALL was chosen: the verified package is handed over without another press
+	bool bQuitForUpdate = false;      // the installer runs: the game has asked to quit
+	/** Every frame: the updater moved on, the hand-over when it is due, the way out when the installer waits. */
+	void RunUpdater();
+	/** The menu's line for where the updater stands, and what taking it does. */
+	FString UpdateLine() const;
+	void TakeUpdateLine();
+
 	// Automated runs (see the class comment).
+	float TourSeconds = 0.f;     // -GlpTour: each car's credit is photographed this far in
+	float TourClock = 0.f;
+	bool bTourShot = false;
+	TArray<int32> TourCars;      // the cars still to photograph
 	TArray<float> ShotTimes;
 	int32 NextShot = 0;
 	float QuitAfter = 0.f;
