@@ -154,6 +154,19 @@ internal static partial class InstallerOutcome
         return "the installer stopped before the end (last step: " + Shorten(Message(lines[^1]), 70) + ")";
     }
 
+    /// <summary>
+    /// True when the log shows a run that began and has not ended: the unpack script's last run without its "done" or
+    /// "FAILED" line, an installer's log without "Log closed". False without a log: nothing ran.
+    /// </summary>
+    public static bool Unfinished(string kind, string? logPath)
+    {
+        var lines = Tail(logPath, 400);
+        if (lines.Count == 0) return false;
+        if (kind != "portable") return !lines.Any(l => l.Contains("Log closed", StringComparison.Ordinal));
+        var start = lines.ToList().FindLastIndex(l => l.Contains(" start ", StringComparison.Ordinal));
+        return !lines.Skip(Math.Max(start, 0)).Any(l => l.EndsWith(" done", StringComparison.Ordinal) || l.Contains("FAILED:", StringComparison.Ordinal));
+    }
+
     /// <summary>What an installer that ended at once said with its exit code (Inno Setup's codes; anything else for the script).</summary>
     public static string ExitReason(string kind, int code) => kind != "setup"
         ? $"the unpack script ended at once (exit code {code})"
@@ -225,9 +238,11 @@ internal static class UpdateCommands
     /// /NOCANCEL keeps a click from stopping it halfway, /NORESTART never restarts Windows, /LOG keeps a log for the
     /// next start to read. /UPDATE tells GrudgeLap.iss that the game started it: wait for the game to exit, and with 1
     /// start it again afterwards, with 2 not (an update applied as the game quits, or a check run without a player).
+    /// <paramref name="unattended"/> is that check without a player: /VERYSILENT hides the progress too, and
+    /// /SUPPRESSMSGBOXES answers what would otherwise wait for a click nobody is there to give.
     /// </summary>
-    public static string InstallerArguments(string logPath, bool relaunch) =>
-        $"/SILENT /NORESTART /SP- /NOCANCEL /UPDATE={(relaunch ? 1 : 2).ToString(CultureInfo.InvariantCulture)} /LOG=\"{logPath}\"";
+    public static string InstallerArguments(string logPath, bool relaunch, bool unattended = false) =>
+        $"{(unattended ? "/VERYSILENT /SUPPRESSMSGBOXES" : "/SILENT")} /NORESTART /SP- /NOCANCEL /UPDATE={(relaunch ? 1 : 2).ToString(CultureInfo.InvariantCulture)} /LOG=\"{logPath}\"";
 
     /// <summary>Windows PowerShell by its full path: a bare powershell.exe was looked up on the PATH, which an unlucky folder can shadow.</summary>
     public static string PowerShell => Path.Combine(System.Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
@@ -271,27 +286,58 @@ internal static class UpdateCommands
     /// starts the game again. It logs to apply.log beside the zip ("start", then "done" or "FAILED: why"), which the
     /// game's next start reads, and stops at the first failure with the old files in place.
     /// </summary>
+    /// <remarks>
+    /// Nothing is copied while one of the game's programs runs. Unpacking a gigabyte takes the script a while and shows
+    /// nothing, and a player who starts the game again meanwhile runs the old version from the very files that are to
+    /// be replaced: a copy over them stops at the first one in use and leaves two versions mixed. The script waits for
+    /// those programs to close (-CloseWait seconds, three minutes unless a test says otherwise; a game from 0.78.0 that
+    /// finds the script at work closes by itself, <c>UpdateSession.ReviewLastApply</c>) and gives up with nothing
+    /// replaced when they do not.
+    /// </remarks>
     public const string UnpackScript = """
-        param([int]$ProcessId, [string]$Zip, [string]$Dir, [string]$Exe, [string]$Version, [switch]$NoRestart)
+        param([int]$ProcessId, [string]$Zip, [string]$Dir, [string]$Exe, [string]$Version, [switch]$NoRestart, [int]$CloseWait = 180)
         $ErrorActionPreference = 'Stop'
         $log = Join-Path (Split-Path -Parent $Zip) 'apply.log'
         function Note($text) { Add-Content -LiteralPath $log -Value ((Get-Date).ToString('yyyy-MM-dd HH:mm:ss', [Globalization.CultureInfo]::InvariantCulture) + ' ' + $text) -Encoding UTF8 }
+        # True when none of the programs runs. One that runs keeps its file from being opened for writing (a sharing or
+        # lock violation, 32 or 33); a file that is read-only, or not there, is not a program that runs.
+        function Closed([string[]]$Programs) {
+            foreach ($program in $Programs) {
+                try {
+                    $handle = [System.IO.File]::Open($program, 'Open', 'ReadWrite', 'None')
+                    $handle.Close()
+                } catch {
+                    $code = $_.Exception.GetBaseException().HResult -band 0xFFFF
+                    if ($code -eq 32 -or $code -eq 33) { return $false }
+                }
+            }
+            return $true
+        }
+        function WaitClosed([string[]]$Programs, [int]$Seconds) {
+            for ($waited = 0; $waited -lt $Seconds; $waited++) {
+                if (Closed $Programs) { return $true }
+                Start-Sleep -Seconds 1
+            }
+            return (Closed $Programs)
+        }
         Note "start $Version from $Zip over $Dir (waiting for process $ProcessId)"
         try { Wait-Process -Id $ProcessId -Timeout 120 -ErrorAction SilentlyContinue } catch {}
-        for ($attempt = 1; $attempt -le 30 -and (Test-Path -LiteralPath $Exe); $attempt++) {
-            try {
-                $handle = [System.IO.File]::Open($Exe, 'Open', 'ReadWrite', 'None')
-                $handle.Close()
-                break
-            } catch { Start-Sleep -Seconds 1 }
-        }
+        [void](WaitClosed @($Exe) ([Math]::Min(30, $CloseWait)))
         $tmp = Join-Path (Split-Path -Parent $Zip) ("unpack-" + [guid]::NewGuid().ToString("N"))
+        $running = $false
         try {
             Add-Type -AssemblyName System.IO.Compression.FileSystem
             [System.IO.Compression.ZipFile]::ExtractToDirectory($Zip, $tmp)
             $entries = @(Get-ChildItem -LiteralPath $tmp)
             $src = if ($entries.Count -eq 1 -and $entries[0].PSIsContainer) { $entries[0].FullName } else { $tmp }
             Note "unpacked $($entries.Count) entries"
+            # The game's programs: its launcher and every program the zip brings, where the copy will put it.
+            $programs = @($Exe) + @(Get-ChildItem -LiteralPath $src -Recurse -Filter '*.exe' | Where-Object { -not $_.PSIsContainer } |
+                ForEach-Object { $Dir.TrimEnd('\') + $_.FullName.Substring($src.TrimEnd('\').Length) })
+            if (-not (WaitClosed $programs $CloseWait)) {
+                $running = $true
+                throw "the game was started again and still runs: nothing was replaced. Close it and ask for the update again"
+            }
             for ($attempt = 1; $attempt -le 5; $attempt++) {
                 try {
                     Copy-Item -Path (Join-Path $src '*') -Destination $Dir -Recurse -Force
@@ -310,6 +356,12 @@ internal static class UpdateCommands
             Note "FAILED: $($_.Exception.Message)"
             Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
         }
-        if (-not $NoRestart) { Start-Process -FilePath $Exe -WorkingDirectory $Dir }
+        # Started through .NET: Start-Process reads its -WorkingDirectory as a pattern, and a folder with [ ] in its
+        # name ("Games [new]") matched nothing. Not when the game runs already: that copy would only be brought forward.
+        if (-not $NoRestart -and -not $running) {
+            $start = New-Object System.Diagnostics.ProcessStartInfo $Exe
+            $start.WorkingDirectory = $Dir
+            [void][System.Diagnostics.Process]::Start($start)
+        }
         """;
 }

@@ -1,118 +1,92 @@
 # GrudgeLap
 
-**EN** · A homage to the 1989 arcade driving simulators. Thirteen cars — a four-speed flat-twelve of 1984, a
-seven-speed V8 of 2012 with a sports exhaust, three hatchbacks of 1988-2003 (a front-wheel-drive eight-valve
-1.9, a four-wheel-drive two-litre turbo with a viscous-coupled centre differential and a four-wheel-drive 3.2 V6 with
-an on-demand coupling), three everyday cars of Turkey's roads (a 1.6
-rear-wheel-drive saloon of the 1990s, a 1.4 estate of the same years and a 2.1 rear-wheel-drive diesel fleet saloon of
-the 2010s) and five more of cars13 (a 4.5 flat-plane V8 of 2010 with a seven-speed dual-clutch gearbox and an
-electronically controlled differential, a five-cylinder and a 1.6 sixteen-valve hatchback of 2001, a 245 PS turbo
-hot hatch of 2018 with a clutch-pack front differential and a 250 km/h limiter, and a 2.0 boxer coupe of 2013 with a
-Torsen; the 458 drawn by a real model of it and the BRZ by a model of its twin, a Toyota 86 with the 2017 facelift's
-nose and a Mercedes cabin, the two Bravos and the Leon by lofted bodies of their own, keyed on their published
-dimensions and CC BY dimensioned drawings, since no CC-licensed model of either was found; each of the five with its
-own engine sound, recorded from the nearest freely licensed engine where the real one's was not: an F430's flat-plane
-V8 for the 458, an Audi five for the HGT, an MX-5's and a Golf's 1.6 for the Bravo 1.6), all with their
-published weights, gearing and power and real engine recordings — a fork between a long
-*speed* route and a short *stunt* route with an open drawbridge, a vertical loop and a banked 180, dips,
-traffic in both directions that keeps its distance, checkpoints against the clock, knocks that dent the car and bounce
-it off (only a hard hit, or one too many, is a crash), an instant replay with its own music after every crash in which
-the car crumples where it hit and sheds its lamps and trim, a hidden
-skid pad, a "1989 mode" and the *grudge match*: the ghost of your best lap races you on every lap after.
-The track follows the original's plan: the start at the foot of a bare hill with the fork on its crest, a
-speed route that sweeps round the east side and passes under the open drawbridge, a stunt route that jumps
-the speed route on that drawbridge, runs the loop and the banked 180 and crosses over itself, with gravel
-shoulders, white edge lines and marker posts (orange shoulders in 1989 mode). The scenery is the one you remember: a
-red barn with "33" on its door, Holstein cows grazing in the fields (they moo, shy away and can be shoved), a
-farmhouse with its porch after the curve, a gas station, a camouflaged hut, yellow signs that tip over when you clip them, sawhorses before
-the stunts and a level crossing with its railway, where a train really does come through. You sit in a leather-lined cabin,
-reading working dials through a steering wheel that turns as you steer, with the road behind you in the
-mirror, and the tyres squeal at their limit, howl and scrub past it and scrabble on gravel from real recordings. Keyboard-playable on Windows,
-windowed or full screen. Free, open source, no assets copied from anywhere.
+**EN** · A homage to the 1989 arcade driving simulators, drawn as close to a photograph as a free game can be. Since
+0.78 GrudgeLap runs on Unreal Engine 5 (Lumen with hardware ray tracing, Nanite, a physical sky and NVIDIA DLSS on RTX
+cards), on the simulation it has had from the start. Ten cars to drive, each drawn by a real model with its own cabin
+and simulated with its published weight, gearing and power and real engine recordings: a four-speed flat-twelve of
+1984, a seven-speed V8 of 2012, a 4.5 flat-plane V8 of 2010, three hatchbacks of 1988-2003 (a front-wheel-drive
+eight-valve 1.9, a four-wheel-drive two-litre turbo and a four-wheel-drive 3.2 V6), a 1.6 sixteen-valve hatchback of
+2001, a 2.0 boxer coupe of 2013, and two everyday cars of Turkey's roads (a 1.4 estate of the 1990s and a 2.1
+rear-wheel-drive diesel fleet saloon of the 2010s). A fork between a long *speed* route and a short *stunt* route with
+an open drawbridge, a vertical loop and a banked 180, dips, traffic in both directions that keeps its distance,
+checkpoints against the clock, knocks that bounce the car off (only a hard hit, or one too many, is a crash), an
+instant replay with its own music after every crash, a hidden skid pad and the *grudge match*: the ghost of your best
+lap races you on every lap after. The track follows the original's plan: the start at the foot of a bare hill with the
+fork on its crest, a speed route that sweeps round the east side and passes under the open drawbridge, a stunt route
+that jumps the speed route on that drawbridge, runs the loop and the banked 180 and crosses over itself. The scenery
+is the one you remember, under a mountain range: a red barn, cows in the fields, a farmhouse, a gas station, yellow
+signs that tip over when you clip them and a level crossing where a train really does come through; by day, at
+sunrise, at dusk or at night, dry, overcast, wet or in the rain. You sit in the car's own cabin, reading working dials
+through a steering wheel that turns as you steer, with the road behind you in the mirror; or follow the car from
+behind, or from far back through a long lens, as a film would. Keyboard and gamepad, on Windows. Free, open source.
 
-**TR** · 1989'un arcade sürüş simülatörlerine saygı duruşu. On üç araba (1984 flat-12, 4 vites; 2012 V8, 7
-vites, spor egzoz; 1988-2003'ten üç hatchback: önden çekişli 1.9 8V, dört çeker 2.0 turbo ve dört çeker 3.2 V6; Türkiye
-yollarının üç gündelik arabası: 1990'ların 1.6 arkadan itişli sedanı, aynı yılların 1.4 station'ı ve 2010'ların 2.1
-arkadan itişli dizel filo sedanı; cars13'ün beş arabası: 7 vites çift kavramalı şanzımanlı ve elektronik kontrollü
-diferansiyelli 2010 4.5 düz krank (flat-plane) V8, 2001'den beş silindirli 2.0 ve 1.6 16V iki hatchback, lamelli ön
-diferansiyelli ve 250 km/sa sınırlayıcılı 2018 245 PS turbo hot hatch ve Torsen diferansiyelli 2013 2.0 boxer coupe;
-458 kendi gerçek modeliyle, BRZ ise ikizi Toyota 86'nın modeliyle (2017 makyajının burnu ve bir Mercedes kabiniyle),
-iki Bravo ve Leon CC lisanslı bir modelleri bulunamadığından yayımlanmış ölçüleri ve CC BY ölçülü çizimleri üzerine
-kurulmuş kendi gövdeleriyle çizilir; beşinin de kendi motor sesi var (gerçek motorun özgür lisanslı kaydı olmayanlarda
-en yakın motorunki: 458'de bir F430'un V8'i, HGT'de bir Audi beşlisi, Bravo 1.6'da bir MX-5'in ve bir Golf'ün 1.6'sı);
-hepsi yayımlanmış ağırlık, vites ve güç değerleriyle, hepsinde gerçek motor kayıtları), uzun *speed* ve kısa *stunt* (açık köprü, dikey loop, eğimli
-180°) rotaları, çukurlar, iki yönlü trafik, süreye karşı kontrol noktaları, her kazadan sonra arabanın çarptığı
-yerden ezildiği ve parçalarının uçuştuğu anlık tekrar,
-gizli skid pad, "1989 modu" ve *grudge match*: en iyi turunuzun hayaleti sonraki her turda sizinle yarışır.
-Pist orijinalin planında: başlangıç, tepesinde çatal olan çıplak bir tepenin eteğinde; speed rotası doğuyu
-dolanıp açık köprünün altından geçer; stunt rotası o köprüden speed rotasının üstünden atlar, loop'u ve eğimli
-180°'yi geçip kendi üstünden aşar; yol kenarlarında çakıllı banket, beyaz kenar çizgileri ve reflektör direkleri
-(1989 modunda turuncu banket). Hafif çarpmalar arabayı ezip geri sektirir; yalnız sert çarpma ya da birikmiş hasar kaza
-sayılır; trafik mesafesini korur; inekler otlar, möler, kaçar ve itilebilir. Manzara hatırladığınız gibi: kapısında "33" yazan kırmızı ahır, tarlalarda inekler, virajdan sonra çiftlik
-evi, benzin istasyonu, kamuflajlı kulübe, çarpınca devrilen sarı levhalar, stunt öncesi tahta bariyerler ve
-raylı hemzemin geçitten gerçekten geçen bir tren. Deri kaplı bir kabinde oturur, çalışan göstergeleri siz
-çevirdikçe dönen direksiyonun içinden okur, arkanızdaki yolu dikiz aynasında görürsünüz; lastik
-ciyaklaması, patinaj ve çakıl sesleri gerçek kayıtlardan. Windows'ta
-klavyeyle oynanır; pencere veya tam ekran. Ücretsiz,
-açık kaynak.
+**TR** · 1989'un arcade sürüş simülatörlerine saygı duruşu; ücretsiz bir oyunun olabildiği kadar fotoğrafa yakın.
+0.78'den beri GrudgeLap Unreal Engine 5 üzerinde çalışıyor (donanım ışın izlemeli Lumen, Nanite, fiziksel gökyüzü, RTX
+kartlarda NVIDIA DLSS); simülasyon baştan beri aynı. Sürülebilen on araba, her biri gerçek modeliyle ve kendi
+kabiniyle, yayımlanmış ağırlık, vites ve güç değerleriyle, gerçek motor kayıtlarıyla: 1984 flat-12 (4 vites), 2012 V8
+(7 vites), 2010 4.5 düz krank V8, 1988-2003'ten üç hatchback (önden çekişli 1.9 8V, dört çeker 2.0 turbo, dört çeker
+3.2 V6), 2001 1.6 16V hatchback, 2013 2.0 boxer coupe ve Türkiye yollarından iki gündelik araba (1990'ların 1.4
+station'ı, 2010'ların 2.1 arkadan itişli dizel filo sedanı). Uzun *speed* ve kısa *stunt* rotaları (açık köprü, dikey
+loop, eğimli 180°), çukurlar, iki yönlü trafik, süreye karşı kontrol noktaları, her kazadan sonra kendi müziğiyle
+anlık tekrar, gizli skid pad ve *grudge match*: en iyi turunuzun hayaleti sonraki her turda sizinle yarışır. Manzara
+hatırladığınız gibi: kırmızı ahır, tarlalarda inekler, çiftlik evi, benzin istasyonu, çarpınca devrilen sarı levhalar
+ve hemzemin geçitten gerçekten geçen bir tren; gündüz, gün doğumu, alacakaranlık ya da gece; kuru, kapalı, ıslak ya da
+yağmurlu. Arabanın kendi kabininde oturur, çalışan göstergeleri dönen direksiyonun içinden okur, arkanızdaki yolu
+aynada görürsünüz; ya da arabayı arkadan, ya da uzaktan uzun odaklı bir film kamerasıyla izlersiniz. Windows'ta
+klavye ve oyun koluyla oynanır. Ücretsiz, açık kaynak.
 
-![cockpit](docs/images/cockpit.jpg)
+![from the seat](docs/images/ue-seat.jpg)
 
-| ![stunt chase](docs/images/chase.jpg) | ![V8](docs/images/v8.jpg) |
+| ![the chase view](docs/images/ue-chase.jpg) | ![the film view](docs/images/ue-film.jpg) |
 |---|---|
-| ![flat-twelve](docs/images/flat12.jpg) | ![1989 mode](docs/images/retro.jpg) |
-| ![speed route](docs/images/farm.jpg) | |
+| ![rain](docs/images/ue-rain.jpg) | ![night](docs/images/ue-night.jpg) |
 
-The name, track, cars and sounds are our own. The ideas come from a game we loved; nothing from it is
-copied. The car names are descriptions, not makes or models; the engine and tyre recordings are CC0 or CC BY,
-credited in [THIRD_PARTY.md](THIRD_PARTY.md).
+The name, track and sounds are our own. The ideas come from a game we loved; nothing from it is copied. The cars are
+named by description; the models that draw them, the engine and tyre recordings and the scanned scenery are CC0 or
+CC BY, each credited in [THIRD_PARTY.md](THIRD_PARTY.md).
+
+Until 0.77 the game ran on Godot. That version is frozen (tag `v0.77.0`); what it had and this one does not have yet
+(the showroom and the paints, the crash scene with its damage, the windscreen's drops and wipers, the 1989 look, the
+placed sounds and more) is being brought over, listed in section 12 of [docs/ISTERLER.md](docs/ISTERLER.md).
 
 ## Install
 
-[Scoop](https://scoop.sh) users: `scoop bucket add korayorhun https://github.com/korayorhun/scoop-bucket`
-then `scoop install korayorhun/grudgelap` (portable; updates arrive through `scoop update`). A winget
-package (`winget install KorayOrhun.GrudgeLap`) follows with the 1.0 release.
+Download `GrudgeLap-Setup-x.y.z.exe` (per-user install, no admin rights) or the portable
+`GrudgeLap-Portable-x.y.z.zip` (unzip anywhere, run `GrudgeLap.exe`; the `Engine` and `GrudgeLapUE` folders must stay
+next to it) from **[Releases](https://github.com/korayorhun/GrudgeLap/releases/latest)**. The installer is
+1.0 GB, the zip 1.2 GB, and the game takes 1.5 GB on disk. Nothing else has to be installed and Windows has nothing to
+ask: the Visual C++ runtime the engine needs lies beside the game, and the game opens no network port, so the
+firewall stays quiet. The package is not code-signed yet, so SmartScreen may say "unrecognized app": *More info → Run
+anyway*. Scoop and winget packages wait for the 1.0 release.
 
-Or download `GrudgeLap-Setup-x.y.z.exe` (per-user install, no admin rights) or the portable
-`GrudgeLap-Portable-x.y.z.zip` (unzip, run `GrudgeLap.exe`; `GrudgeLap.pck` and the
-`data_GrudgeLap_windows_x86_64` folder must stay next to it) from **[Releases](https://github.com/korayorhun/GrudgeLap/releases/latest)**. The
-package is not code-signed yet, so SmartScreen may say "unrecognized app": *More info → Run anyway*.
+Needs 64-bit Windows 10 or 11 and a DirectX 12 graphics card with Shader Model 6. A card with ray tracing gets
+ray-traced reflections and shadows; an NVIDIA RTX card gets DLSS and DLSS Ray Reconstruction; any other card is
+upscaled by the engine's own TSR.
 
-**Auto-update:** every start the game asks GitHub Releases for a newer version (the release's small `update.json`
-first, GitHub's API only when that is missing); if there is one it downloads it in the background, carrying on
-where it stopped when the connection drops (at the next start too), checks its size and SHA-256 and, as soon as you
-are on the title screen (or the credit is over and your initials are in), installs it (the installed copy through its
-own installer, silently; the portable copy by unpacking over itself) and restarts on the new version, so an opened
-copy is always the latest. `F10` applies a ready update at once, or asks again. What the updater is doing, and why
-when something fails, is shown on the title screen and over the race, and every step goes to `update.log` in
-`%APPDATA%\Godot\app_userdata\GrudgeLap` (never a proxy's password); an update that does not install twice is left to
-you (`F10` then opens its release page), and so is a download your antivirus removes or blocks: the game names the
-antivirus and does not download that version again until the next start. Nothing is sent anywhere. Under `[update]` in `settings.cfg` there, `auto=false` goes back to only
-offering the update (then `F10` takes it) and `enabled=false` switches the check at start off. A copy of 0.76 or
-older reaches this updater through its own once; if that keeps failing, install the latest `GrudgeLap-Setup` by hand.
+One copy runs per computer: starting it again brings the running game to the front. The settings, the high scores,
+the best laps and the updater's log are kept in `%LOCALAPPDATA%\GrudgeLap`; the first start takes over what an earlier
+version kept (the Godot version's scores, best laps and choices included).
 
-Starts windowed (1600x900); `F11` toggles full screen. Needs a Vulkan-capable GPU (any from the last ten years).
-One copy runs per computer: starting it again brings the running game to the front.
+**Updates: only when you ask.** The game never looks for a new version or downloads anything by itself. The menu's
+**CHECK FOR UPDATES** line (Esc; or `F10`) asks GitHub Releases for the latest version (the release's small
+`update.json`). If there is one, the line becomes **DOWNLOAD AND INSTALL** with the version and its size, and one press
+does the rest: the download (carried on where it stopped if the connection drops), its size and SHA-256 check, the
+installation (the installed copy through its own installer, the portable copy by unpacking over itself) and the
+restart on the new version. Enter stops a check or a download. What the updater is doing, and why when something
+fails, is shown on that line and on the title screen, and every step goes to `update.log` in `%LOCALAPPDATA%\GrudgeLap`
+(never a proxy's password); an update that does not install twice is left to you (the line then opens its release
+page, and a later check still finds the versions after it), and so is a download your antivirus removes or blocks.
+The installer asks for the room it needs before it touches the version you have, and a game started again while an
+update is still being installed closes itself and lets the update finish. Nothing is sent anywhere.
+A copy of 0.77 or older (the Godot game) updates itself to this version the way it always did, by itself, once. An
+installed copy of that old game can stand still for up to a minute just before it closes (an antivirus reads the new
+installer, a gigabyte, before Windows starts it): leave it, the installer follows.
 
 ## Play
 
-Press **Enter** (or Space, or click) on the title screen and you are off. Before that, **left / right**
-picks the car (the screen shows its power, weight, driven wheels and gears), **down** (or a click on the car's
-name) opens the **showroom**, and **1 / 2 / 3** the gearbox (automatic at first; your last choice is
-remembered). A crash shows a replay and puts you back at the last return point; Enter turns the key again.
-
-**Showroom.** Every car on a turntable, turning slowly through a full circle in its real model, with its year,
-layout, power, torque, weight (with a driver and fuel) and tyres under it, as the simulation has them. Open it from
-the title screen or from the menu's CAR line (Esc).
-
-| Key / mouse | Action |
-|---|---|
-| Left / right, A / D, the arrows on screen | the previous / next car |
-| Up / down, W / S, a click on a swatch | the paint: the car's own colour, red, white, silver, black, dark blue, green, yellow, or your own |
-| C (pad: Y), or a click on the last swatch | mix your own colour: hue, saturation, lightness and a finish (solid, metallic, pearl); up / down choose, left / right change, or click and drag; Enter keeps it, Esc puts the paint back |
-| Drag the car / mouse wheel | turn the turntable / come closer or step back |
-| Enter (pad: A); Space when opened from the title screen | take this car and the paints you chose (each car keeps its own colour) |
-| Esc (pad: B or Back); Space when opened from the menu, as in the menu | back, nothing changed |
+Press **Enter** on the title screen and you are off. Before that, **left / right** picks the car, **1 / 2 / 3** the
+gearbox (automatic at first), **H** the weather and **L** the hour; your choices are remembered. A crash shows a
+replay and puts you back at the last return point; Enter turns the key again.
 
 | Key | Action |
 |---|---|
@@ -122,17 +96,15 @@ the title screen or from the menu's CAR line (Esc).
 | Shift | clutch (only in *stick + clutch* mode: you can stall) |
 | Enter | turn the ignition key (start, and after every crash) |
 | Space | skip the instant replay / give up an off-road excursion |
-| C | cockpit / chase camera |
-| U | km/h / mph (metric by default, the choice remembered) |
-| F8 | 1989 mode: a third of the pixels, 20 frames a second, flat colours, synthesised engine and tyres |
-| F9 | attract mode (the scripted driver drives) |
-| F10 | check for / install an update |
-| F11 | full screen |
-| F12 | screenshot (saved under `%APPDATA%\Godot\app_userdata\GrudgeLap`) |
-| F7 | graphics preset: high, medium, low (remembered) |
-| F6 | frame-rate counter |
+| C | the camera: the driver's seat, behind the car, the film view (remembered) |
+| U | km/h / mph (remembered) |
+| Esc | the menu: continue, new game, car, camera, DLSS mode (off, DLAA, quality, balanced, performance, ultra performance; TSR's modes on a card without DLSS), DLSS Ray Reconstruction, weather, light, units, full screen, **check for updates**, **quit** (the game stands still and silent while it is open; keys, gamepad or mouse) |
 | F5 | new game |
-| Esc | the menu: carry on, new game, car (the showroom), paint (the car's own colour, red, white, silver, black, dark blue, green, yellow or the colour you mixed for it; each car its own, remembered), camera, graphics, weather, 1989 mode, units, full screen, replay music, **quit** (the race stands still while it is open) |
+| F9 | attract mode (the scripted driver drives) |
+| F10 | check for updates |
+| F11 | full screen |
+| F12 | screenshot |
+| M (title screen) | open the replay music folder |
 
 A gamepad works too: the left stick steers, the right trigger is the throttle and the left the brake, RB / LB
 shift (on the title screen they step through the gearboxes), X is the clutch, A starts, B skips, Y switches
@@ -141,117 +113,77 @@ the camera, Back opens the menu, and the d-pad stands in for the stick and the p
 Rules, from the cabinet's own operator options: 90 s on the clock, +45 s at the checkpoint and at the lap,
 10 s off road and you are put back, wrong way does not count, traffic is solid. The stunt route wants about
 60-80 mph for the open drawbridge and at least 60 for the loop. A hard left at the start line takes you
-to the skid pad, as in the original; donuts there cost nothing. Cows and signs only complain when you hit them; a barn,
-a tree, a sawhorse, a bridge pier or the train at the level crossing is a crash, and the replay shows the damage.
+to the skid pad, as in the original; donuts there cost nothing. A sign only tips over; a barn, a tree, a bridge pier
+or the train at the level crossing is a crash.
 
-**Grudge match.** Your best lap is recorded pose by pose and saved. From then on its ghost drives every lap
-with you; beat it and the new lap becomes the ghost.
+**Grudge match.** Your best lap is recorded pose by pose and saved, for each car. From then on its ghost drives every
+lap with you; beat it and the new lap becomes the ghost.
 
 **High scores.** The ten best credits are kept, and a score that makes the table asks for three initials
 at the end of the credit, as the cabinet did (up and down turn the letter, Enter takes it). The table
 ships with ten names to beat.
 
-**Your own replay music.** Put a file named `replay.ogg`, `replay.mp3` or `replay.wav` into
-`%APPDATA%\Godot\app_userdata\GrudgeLap\music\` (the menu's REPLAY MUSIC line opens the folder and shows what plays)
-and the instant replay plays it instead of the built-in tune; 1989 mode plays the built-in tune on its own
-synthesiser. Easier still: drag the music file onto the game's window, and it is copied there and named in the menu.
-The game itself ships only its own music (an original tune in the manner of late-eighties arcade music, made by
-`tools/make-replay-music.py`), so whatever you put there stays on your machine. The Unreal version plays a `replay.wav` from its own
-`Saved\GrudgeLap\music\` folder (M on its title screen opens it) or from the folder above.
+**Your own replay music.** Put a file named `replay.ogg` or `replay.wav` into `%LOCALAPPDATA%\GrudgeLap\music\`
+(**M** on the title screen opens the folder) and the instant replay plays it instead of the built-in tune. The game
+itself ships only its own music, so whatever you put there stays on your machine. A tune the Godot version was given
+is still found where that version kept it.
 
-**Weather.** Clear by default. The menu's WEATHER line (Esc) picks clear, overcast, a wet road, rain, or random, which
-draws a weather for every credit; the choice is remembered. A wet road is dark and mirror-like and takes about a
-third of the grip: brake earlier, turn in gentler, and mind the loop. The screen names the weather under the clock
-when it is not a clear day.
+**Weather and light.** Clear daylight by default. Clear, overcast, a wet road, rain or random (a draw for every
+credit); day, sunrise, dusk, night or random. A wet road is dark and mirror-like and takes about a third of the grip:
+brake earlier, turn in gentler, and mind the loop. At night the cars, the train and the farms have their lamps on.
 
 ## Build from source
 
-Needs the .NET 8 SDK and [Godot 4.7.2 .NET](https://godotengine.org/download/windows/) with its export
-templates (the Windows build via `winget install GodotEngine.GodotEngine.Mono` puts the editor where the
-scripts look). Then:
+Needs Unreal Engine 5.8 (the scripts look in `C:\UE\5.8`; set `UE_ROOT` for another), Visual Studio with the C++
+workload, the .NET 8 SDK, Python 3 with numpy and Pillow, and [Inno Setup 6](https://jrsoftware.org/isinfo.php) for
+the installer. The level is generated: [unreal/README.md](unreal/README.md) has the steps (the simulation core, the
+world's export, the scans, the DLSS plugin, the level). Then:
 
 ```powershell
 dotnet test physics.tests/GrudgeLap.Physics.Tests.csproj   # the feel checklist, headless
-./tools/build.ps1                                          # tests + export -> build/GrudgeLap.exe
-./tools/release.ps1 -Version 0.4.0                         # bump, build, installer, zip, tag, GitHub release, Scoop, winget
+./tools/package.ps1                                        # tests, native libraries, build, cook, stage -> build/unreal, one hidden start
+./tools/release.ps1 -Version 0.78.0 -NoStores              # stamp, package, installer, zip, update.json, tag, GitHub release
 ```
 
-The installer needs [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`installer/GrudgeLap.iss`). The
-build also fetches the real car models (CC BY, credited in [THIRD_PARTY.md](THIRD_PARTY.md)) and prepares them
-for the game, which needs Python 3 with numpy, Pillow and SciPy; `./tools/build.ps1 -SkipModels` builds without them, and the
-game then draws its own lofted bodies.
-Godot's editor opens the `game/` folder; the simulation lives in `physics/` with no engine dependency.
-Automated runs (screenshots, checks) take a few switches after Godot's `--`, listed in
-[docs/design.md](docs/design.md); `--invisible` keeps the window off the screen and `--no-ghost` leaves the
-best lap's ghost out of the picture.
+Automated runs (screenshots, checks) take the game's `-Glp…` switches, listed in [unreal/README.md](unreal/README.md);
+`-RenderOffScreen -NoSound` keeps a run off the screen and silent.
 
 ## How it is made
 
-- `physics/` — the simulation: raycast-wheel rigid body at 240 Hz, Pacejka-style tyres, torque-curve
-  engines (flat-twelve, two V8s, the fours, a five, two turbo fours with their boost lag, a VR6, a boxer four and a
-  turbodiesel with its governor),
-  front-, rear- or four-wheel drive (a centre differential with a viscous coupling, or an on-demand coupling to the
-  rear axle, and a differential per axle: open, clutch-type or Torsen, with the electronically controlled units of
-  the 2010s as clutch-type shares), speed limiters where the real cars have them, clutch lock/slip with a launch
-  assist, gearboxes, the track as a graph
-  of road frames built by a turtle API (loop, drawbridge, banked curve, overpass, dips), the wear of the road
-  (a slow undulation and potholes in the wheel tracks that the wheels feel and the view draws), a ground
-  field that gives the terrain its embankments and cuttings, traffic drones, the rules of a credit, the
+- `physics/` — the simulation, with no engine dependency: raycast-wheel rigid body at 240 Hz, Pacejka-style tyres,
+  torque-curve engines (flat-twelve, two V8s, the fours, a five, two turbo fours with their boost lag, a VR6, a boxer
+  four and a turbodiesel with its governor), front-, rear- or four-wheel drive (a centre differential with a viscous
+  coupling, or an on-demand coupling to the rear axle, and a differential per axle: open, clutch-type or Torsen),
+  speed limiters where the real cars have them, clutch lock/slip with a launch assist, gearboxes, the track as a graph
+  of road frames built by a turtle API (loop, drawbridge, banked curve, overpass, dips), the wear of the road, a
+  ground field that gives the terrain its embankments and cuttings, traffic drones, the rules of a credit, the
   best-lap recording, the high-score table, and a scripted driver that threads the traffic.
-- `physics.native/` — the same simulation as a native library with a C interface (NativeAOT; the
-  `glp_*` functions in `include/grudgelap_physics.h`), for the Unreal Engine version: `dotnet publish
-  physics.native -c Release -r win-x64 -o artifacts/physics-native` builds `GrudgeLap.Physics.Native.dll`,
-  which needs no .NET where it runs.
+- `physics.native/` — the same simulation as a native library with a C interface (NativeAOT; the `glp_*` functions in
+  `include/grudgelap_physics.h`), which the game loads: `GrudgeLap.Physics.Native.dll` needs no .NET where it runs.
 - `physics.tests/` — the feel checklist as numbers: 0-60, top speed (every car against its published figures),
-  braking, stall, launch, the loop's
-  minimum speed, the drawbridge window, the banked 180, the spin, grass, jumps in top gear, scripted laps on
-  both routes with and without traffic and at any frame rate from 20 to 144 fps, drone collisions, the ghost,
-  the skid pad, the ground and the props.
-- `audio/` — the engine voice both versions play: real recordings cut into their firing pulses
-  (`tools/make-engine-bank.py`) and laid down again one per firing period of the simulated revs; the
-  tyres' mix read from where each tyre is on its force curve (squeal at the limit, howl and scrub past
-  it, anti-lock chatter) and the synthesised wind, wet spray, gear whine and anti-lock pump (0.19);
-  `audio.tests/` renders them offline and measures pitch, levels, spectra and clicks, the tyres on the
-  simulation's own stops (set `GRUDGELAP_AUDIO_DEMO` to a folder for listenable renders).
-- `game/` — the Godot view: world generated from the track (terrain mesh from the ground field with a ring
-  of wooded hills and a snow-capped mountain range round the horizon under a clear sky with drifting clouds,
-  photo-textured road worn like a real one (patches of other asphalt, potholes, tar snakes, oil in the wheel
-  tracks, a faded centre line, every stretch different), orange shoulders all the way round, bare earth on
-  the fork hill and in the cuttings, bridges with guardrails, the loop in its
-  steel lattice, the drawbridge's white A-frame towers with cables, pad, grass tufts, trees from leaf cards,
-  a wood beyond the fields, fields, textured buildings, the green fork gantry with its traffic light, the
-  red checkpoint banner, signs, the train on its railway), real car models with their own cabins (0.16: CC BY
-  models of a Ferrari Testarossa (with a Lotus Esprit's cabin in black leather), a McLaren 570S, RainerS's Ferrari 458
-  Italia (0.75, with the 570S's cabin), a Toyota 86 standing for its twin, the Subaru BRZ (with the E-Class's cabin in
-  black), a Peugeot 205 GTi (on the 1.9's silver-grey wheels, with the Esprit's seats), a Lancia Delta Integrale, a
-  Volkswagen Golf R32 (with a SAAB 9-5's cabin in black), a VAZ-2106, a Renault 12, a Mercedes-Benz E-Class and a
-  Renault Clio II with its own cabin, set to
-  the simulation's wheelbase, their wheels and steering wheel turning, the live dials in their binnacles, the
-  rear-view mirror on their own; `tools/prepare_car_models.py`; in their own colours or one the player picks or
-  mixes for each car, a paint drawn from a texture recoloured with its shading, lettering and trim kept), a showroom
-  where the cars turn on a turntable in a studio of their own, traffic of five everyday cars in
-  twelve road colours, no two drones alike, and where a car has none, lofted car bodies
-  with rounded character lines, panel seams, the hatchbacks' lamps, grilles and tail lamps laid on the skin,
-  and a lined cabin behind tinted glass (leather dashboard, binnacle with live dials, a centre stack with its
-  radio and heater knobs, gear lever and handbrake, sun visors, a three-spoke wheel that turns with the steering,
-  seats and a rear bench, slim A-pillars, a rear-view mirror with its own camera), crash damage in the instant
-  replay (dents pressed into the shell, lamps and trim flying off, cracked glass, sparks, steam; repaired for the
-  restart), a driver's-eye cockpit camera whose head sways with the car and
-  a chase camera, HUD, engine, tyre (road roar, squeal, howl, screech, gravel) and V8 overrun-pop sounds
-  from recordings over synthesised wind and bump thumps, the drones' engines and the train's steam and
-  whistle placed in the world with Doppler shift (through the glass from the driver's seat), the shifter's
-  clunk, crash recordings, a synthesised engine and squeal for 1989 mode, moo, sign clang, and the cabinet's
-  chime, starter and jingles (a fanfare for a record lap, a tune at the end of the credit; no music while
-  driving, as in the arcade), keyboard and gamepad, graphics presets, the high-score table with its entry
-  of initials, updater. Design notes in [docs/design.md](docs/design.md), the checklist in
-  [docs/feel-checklist.md](docs/feel-checklist.md), the owner's requests and their status in
-  [docs/ISTERLER.md](docs/ISTERLER.md), what the research found in
-  [docs/research-notes.md](docs/research-notes.md).
-- `unreal/` — the Unreal Engine 5 version: the same track and the first five cars (the everyday cars of 0.10.0 await their export), exported from the game, dressed
-  with CC0 photoscans (Poly Haven) under Lumen, Nanite and a physical sky, and the whole game on the
-  simulation through `physics.native`: title screen, gearboxes, keyboard and gamepad, traffic, ghost, train,
-  HUD, instruments, mirrors, the high-score table and the same sound. Scripts rebuild the level, play it, drive it for tests, render stills and
-  measure the frame rate; see [unreal/README.md](unreal/README.md).
+  braking, stall, launch, the loop's minimum speed, the drawbridge window, the banked 180, the spin, grass, jumps in
+  top gear, scripted laps on both routes with and without traffic and at any frame rate from 20 to 144 fps, drone
+  collisions, the ghost, the skid pad, the ground and the props.
+- `audio/` — the engine voice: real recordings cut into their firing pulses (`tools/make-engine-bank.py`) and laid
+  down again one per firing period of the simulated revs; the tyres' mix read from where each tyre is on its force
+  curve; `audio.tests/` renders them offline and measures pitch, levels, spectra and clicks.
+- `update.native/` — the updater as a native library with a C interface (`include/grudgelap_update.h`): the check,
+  the resumable verified download and the hand-over to the installer or the unpack script, none of it unless the
+  player asks. `update.tests/` runs it against an in-process stand-in for GitHub with faults injected.
+- `native-runtime.props` — the patch of the .NET runtime that the two native libraries carry, pinned (the SDK's own
+  newest can be one with a published fault).
+- `unreal/` — the game: the `GrudgeLapUE` module (C++) runs the session on the simulation core and draws it; the
+  level is generated by scripts from the world's export, CC0 photoscans (Poly Haven) and the cars' models. See
+  [unreal/README.md](unreal/README.md).
+- `installer/`, `tools/package.ps1`, `tools/release.ps1`, `tools/portable_zip.py` — the installer (Inno Setup), the
+  packaging and the release.
+- `game/` — the Godot version, frozen at 0.77.0: the source of what is still being brought over, and the tool that
+  exports the world (track, buildings, placements) the Unreal level is built from. It also holds the updater's shared
+  sources and the recordings.
+
+Design notes in [docs/design.md](docs/design.md), the checklist in [docs/feel-checklist.md](docs/feel-checklist.md),
+the owner's requests and their status in [docs/ISTERLER.md](docs/ISTERLER.md), what the research found in
+[docs/research-notes.md](docs/research-notes.md).
 
 ## Support
 
@@ -260,4 +192,4 @@ smile, a coffee via [GitHub Sponsors](https://github.com/sponsors/korayorhun) is
 
 ## License
 
-MIT. Third-party components and the provenance of the engine and tyre recordings: [THIRD_PARTY.md](THIRD_PARTY.md).
+MIT. Third-party components and the provenance of the models, the scans and the recordings: [THIRD_PARTY.md](THIRD_PARTY.md).

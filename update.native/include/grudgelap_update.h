@@ -54,11 +54,15 @@ enum
     GLP_UPDATE_STARTING = 7,
     /* The installer runs and waits for this process to exit. QUIT NOW, through the game's normal shutdown (save,
      * release the one-copy lock): it replaces the game's files and starts the launcher again. An installed copy
-     * that has not quit after a minute is closed by the installer; a portable copy's update fails when the game is
-     * still there after two. */
+     * that has not quit after a minute is closed by the installer; a portable copy's script copies nothing while
+     * one of the game's programs runs, and gives up after three minutes with nothing replaced.
+     * A session can also START in this phase: the last session's installer or script is still at work and the player
+     * started the game again too early. Quit in the same way; whatever is at work starts the new version. */
     GLP_UPDATE_QUIT_NOW = 8,
     /* The last step failed and `status` says why. `can_retry` names the call that tries again; with `has_page`
-     * set the updater can do no more by itself and the host offers to open `page` in the browser instead. */
+     * set and nothing to try again the updater can do no more by itself and the host offers to open `page` in the
+     * browser instead. At a start after a version did not install twice both are given: the call is the check (a
+     * newer release may have come since; one that finds the same version again ends at its page). */
     GLP_UPDATE_FAILED = 9
 };
 

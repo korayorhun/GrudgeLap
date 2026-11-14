@@ -84,7 +84,9 @@ FGlpCockpit GlpCockpits::For(int32 Catalogue)
 		TEXT(""),   // 10 (traffic only)
 		TEXT(""),   // 11 (traffic only)
 		TEXT(""),   // 12 the boxer
-		TEXT(""),   // 13 the sixteen-valve hatch
+		// The dials stood at the foot of the picture, their lower half under its edge and the help line: the eyes 2 cm
+		// lower and 3 cm further back, and the view aimed 2.5 degrees further down, bring both dials into the wheel's opening.
+		TEXT("eye=0,-0.02,0.03;drop=1.6"),   // 13 the sixteen-valve hatch
 	};
 	FGlpCockpit Cockpit;
 	if (Catalogue >= 0 && Catalogue < UE_ARRAY_COUNT(Seats))

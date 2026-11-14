@@ -36,6 +36,9 @@ public sealed class UpdateApplyTests : IDisposable
 
         Assert.Equal(@"/SILENT /NORESTART /SP- /NOCANCEL /UPDATE=1 /LOG=""C:\Users\Ayşe Yılmaz\AppData\Local\Temp\GrudgeLap-Update\setup-0.77.0.log""", args);
         Assert.Contains("/UPDATE=2", UpdateCommands.InstallerArguments(@"C:\t\s.log", relaunch: false));
+        // A check without a player: no progress window, no message box that waits for a click, no game afterwards.
+        Assert.Equal(@"/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /NOCANCEL /UPDATE=2 /LOG=""C:\t\s.log""",
+            UpdateCommands.InstallerArguments(@"C:\t\s.log", relaunch: false, unattended: true));
         Assert.True(Path.IsPathFullyQualified(UpdateCommands.PowerShell));
         Assert.EndsWith(@"\WindowsPowerShell\v1.0\powershell.exe", UpdateCommands.PowerShell, StringComparison.OrdinalIgnoreCase);
     }
@@ -72,6 +75,32 @@ public sealed class UpdateApplyTests : IDisposable
         ]);
 
         Assert.Equal("An error occurred while trying to replace the existing file: DeleteFile failed; code 5. Access is denied.", InstallerOutcome.Reason("setup", log));
+    }
+
+    [Theory]
+    [InlineData("Message box (OK):")]
+    [InlineData("Defaulting to OK for suppressed message box (OK):")]
+    public void Reads_the_installer_s_own_refusal_for_lack_of_room(string box)
+    {
+        // GrudgeLap.iss asks for room before it removes the version in place (PrepareToInstall) and stops with these
+        // words, shown in a box to a player and only logged in a run without one. The line fits the status whole.
+        const string refusal = "GrudgeLap needs 1581 MB free on this drive and has 1200 MB. Nothing was changed: make room and update again.";
+        var log = Path.Combine(_folder, "setup-0.79.0.log");
+        File.WriteAllLines(log,
+        [
+            "2026-11-14 19:33:56.000   Log opened. (Time zone: UTC+03:00)",
+            "2026-11-14 19:33:56.108   Room in C:\\Users\\x\\AppData\\Local\\Programs\\GrudgeLap: 1200 MB free, 1581 MB needed (0 MB of the version in place counted in)",
+            "2026-11-14 19:33:56.108   Not enough room: nothing was changed",
+            "2026-11-14 19:33:56.108   PrepareToInstall failed: " + refusal,
+            "2026-11-14 19:33:56.108   " + box,
+            "                          " + refusal,
+            "2026-11-14 19:33:56.120   Deinitializing Setup.",
+            "2026-11-14 19:33:56.130   Log closed.",
+        ]);
+
+        Assert.Equal(refusal, InstallerOutcome.Reason("setup", log));
+        Assert.True(refusal.Length <= UpdateTexts.ReasonLength);
+        Assert.Equal("the installer could not prepare (exit code 7)", InstallerOutcome.ExitReason("setup", 7));
     }
 
     [Fact]
@@ -200,23 +229,127 @@ public sealed class UpdateApplyTests : IDisposable
         Assert.Equal("new exe", File.ReadAllText(Path.Combine(game, "GrudgeLap.exe")));
     }
 
+    /// <summary>
+    /// A portable copy as the Unreal package lays it out, in a folder whose name has a space, letters outside ASCII and
+    /// the brackets PowerShell reads as a pattern, and the zip of its next version beside a download folder.
+    /// </summary>
+    private (string Game, string Launcher, string GameExe, string Downloads, string Zip) PortableCopy()
+    {
+        var game = Directory.CreateDirectory(Path.Combine(_folder, "Oyunlar [yeni] Çağrı", "GrudgeLap")).FullName;
+        var launcher = Path.Combine(game, "GrudgeLap.exe");
+        var gameExe = Path.Combine(game, "GrudgeLapUE", "Binaries", "Win64", "GrudgeLapUE.exe");
+        Directory.CreateDirectory(Path.GetDirectoryName(gameExe)!);
+        File.WriteAllText(launcher, "old launcher");
+        File.WriteAllText(gameExe, "old game");
+        File.WriteAllText(Path.Combine(game, "README.md"), "old readme");
+        var downloads = Directory.CreateDirectory(Path.Combine(_folder, "Grudge Lap-Update")).FullName;
+        var zip = Path.Combine(downloads, "GrudgeLap-Portable-0.79.0.zip");
+        using var archive = ZipFile.Open(zip, ZipArchiveMode.Create);
+        Add(archive, "GrudgeLap.exe", "new launcher");
+        Add(archive, "GrudgeLapUE/Binaries/Win64/GrudgeLapUE.exe", "new game");
+        Add(archive, "README.md", "new readme");
+        return (game, launcher, gameExe, downloads, zip);
+    }
+
+    [Fact]
+    public void The_unpack_script_replaces_nothing_while_the_game_runs()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var (game, launcher, gameExe, downloads, zip) = PortableCopy();
+        var applyLog = Path.Combine(downloads, "apply.log");
+
+        // The player started the game again while the script was unpacking: a program that runs cannot be opened for
+        // writing. Here it is the game's own executable, two folders below the root, with the launcher free.
+        int exitCode;
+        using (new FileStream(gameExe, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            exitCode = RunUnpackScript(downloads, zip, game, closeWait: 2);
+        }
+
+        Assert.Equal(0, exitCode);
+        // Not one file was touched, the README that sorts first and is free included: no mix of two versions.
+        Assert.Equal("old launcher", File.ReadAllText(launcher));
+        Assert.Equal("old game", File.ReadAllText(gameExe));
+        Assert.Equal("old readme", File.ReadAllText(Path.Combine(game, "README.md")));
+        // The verified zip stays for the next try, and what was unpacked beside it is gone.
+        Assert.True(File.Exists(zip));
+        Assert.Empty(Directory.GetDirectories(downloads));
+        Assert.Equal("the game was started again and still runs: nothing was replaced. Close it and ask for the update again",
+            InstallerOutcome.Reason("portable", applyLog));
+        Assert.False(InstallerOutcome.Unfinished("portable", applyLog));
+    }
+
+    [Fact]
+    public async Task The_unpack_script_waits_for_a_game_that_is_still_closing()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var (game, launcher, gameExe, downloads, zip) = PortableCopy();
+        var applyLog = Path.Combine(downloads, "apply.log");
+
+        // The game closes a few seconds after the script has begun (0.78.0 does when it finds the script at work).
+        var held = new FileStream(launcher, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var closing = Task.Run(async () =>
+        {
+            // While the script is at work its log has begun and not ended: what a game started now goes by.
+            for (var waited = 0; waited < 100 && !File.Exists(applyLog); waited++) await Task.Delay(100);
+            var unfinished = InstallerOutcome.Unfinished("portable", applyLog);
+            await Task.Delay(3000);
+            held.Dispose();
+            return unfinished;
+        });
+        var exitCode = RunUnpackScript(downloads, zip, game, closeWait: 40);
+
+        Assert.True(await closing);
+        Assert.Equal(0, exitCode);
+        Assert.Equal("new launcher", File.ReadAllText(launcher));
+        Assert.Equal("new game", File.ReadAllText(gameExe));
+        Assert.Equal("new readme", File.ReadAllText(Path.Combine(game, "README.md")));
+        Assert.False(File.Exists(zip));
+        Assert.Empty(Directory.GetDirectories(downloads));
+        Assert.Contains(File.ReadAllLines(applyLog), l => l.EndsWith(" done", StringComparison.Ordinal));
+        Assert.False(InstallerOutcome.Unfinished("portable", applyLog));
+    }
+
+    [Fact]
+    public void An_installer_s_log_without_its_last_line_is_a_run_that_has_not_ended()
+    {
+        var log = Path.Combine(_folder, "setup-0.79.0.log");
+        // No log: nothing ran, so nothing is at work.
+        Assert.False(InstallerOutcome.Unfinished("setup", log));
+        Assert.False(InstallerOutcome.Unfinished("portable", log));
+        File.WriteAllLines(log, ["2026-11-14 19:14:28.920   Log opened. (Time zone: UTC+03:00)", "2026-11-14 19:14:32.199   Waited 3000 ms for the game to exit"]);
+        Assert.True(InstallerOutcome.Unfinished("setup", log));
+        File.AppendAllLines(log, ["2026-11-14 19:15:07.539   Installation process succeeded.", "2026-11-14 19:15:07.548   Log closed."]);
+        Assert.False(InstallerOutcome.Unfinished("setup", log));
+        // The script's log keeps earlier runs: only the last one counts.
+        File.WriteAllLines(log, ["2026-11-14 19:10:31 start 0.79.0 from a.zip over C:\\Games (waiting for process 1)", "2026-11-14 19:10:43 FAILED: no room",
+            "2026-11-14 19:12:31 start 0.79.0 from a.zip over C:\\Games (waiting for process 2)", "2026-11-14 19:12:41 unpacked 8 entries"]);
+        Assert.True(InstallerOutcome.Unfinished("portable", log));
+        File.AppendAllLines(log, ["2026-11-14 19:12:43 done"]);
+        Assert.False(InstallerOutcome.Unfinished("portable", log));
+    }
+
     private static void Add(ZipArchive archive, string name, string text)
     {
         using var writer = new StreamWriter(archive.CreateEntry(name).Open(), Encoding.UTF8);
         writer.Write(text);
     }
 
-    /// <summary>The game's own command line for the script, run to its end; -NoRestart as no game is there to start.</summary>
-    private static int RunUnpackScript(string downloads, string zip, string game)
+    /// <summary>
+    /// The game's own command line for the script, run to its end; -NoRestart as no game is there to start.
+    /// <paramref name="closeWait"/> shortens the script's wait for the game's programs to close (three minutes).
+    /// </summary>
+    private static int RunUnpackScript(string downloads, string zip, string game, int? closeWait = null)
     {
         var script = Path.Combine(downloads, "apply.ps1");
         File.WriteAllText(script, UpdateCommands.UnpackScript);
         // A process that has ended: the script's wait for the game returns at once.
         using var gone = Process.Start(new ProcessStartInfo("cmd.exe", "/c exit 0") { CreateNoWindow = true, UseShellExecute = false })!;
         gone.WaitForExit();
-        var args = UpdateCommands.UnpackArguments(script, gone.Id, zip, game, Path.Combine(game, "GrudgeLap.exe"), "0.77.0", relaunch: false);
+        var args = UpdateCommands.UnpackArguments(script, gone.Id, zip, game, Path.Combine(game, "GrudgeLap.exe"), "0.77.0", relaunch: false).ToList();
+        if (closeWait is { } seconds) args.AddRange(["-CloseWait", seconds.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
         using var run = Process.Start(new ProcessStartInfo(UpdateCommands.PowerShell, UpdateCommands.CommandLine(args)) { CreateNoWindow = true, UseShellExecute = false })!;
-        Assert.True(run.WaitForExit(60_000), "the unpack script did not finish within a minute");
+        Assert.True(run.WaitForExit(120_000), "the unpack script did not finish within two minutes");
         return run.ExitCode;
     }
 

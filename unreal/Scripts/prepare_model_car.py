@@ -55,6 +55,14 @@ MODEL_KEYS = {
     "clio": ["clio"],
 }
 
+# A paint that the prepared model does not name GLP_Paint, by model key. The Clio's sheet metal is the material
+# "Tle_rouge"; tools/car_models.json names it "==tle_rouge", an exact match that fails on the capital letter, so
+# tools/prepare_car_models.py left it the model's own material. The level then never gave it the paint: no clear coat
+# outside, and from the seat no lining, so the pillars and the header stood red round the windscreen (found from the
+# seat in 0.78: "0 paint slot(s)" in the level build's log). Named here, because the prepared models lie in the frozen
+# Godot game's folder; when they are prepared again, with that entry corrected, this is spent.
+MISSED_PAINT = {"clio": ["Tle_rouge"]}
+
 PANEL = (1024.0, 400.0)                 # InstrumentCluster.PanelSize, GlpInstruments' PanelWidth and PanelHeight
 MIRROR_GLASS = (0.21, 0.21 * 144 / 512)  # RearMirror.GlassWidth and its 512 x 144 picture
 MIRROR_OFFSET = 0.016                    # the glass 16 mm ahead of RearMirror's origin (CarView.MountMirror)
@@ -1016,6 +1024,9 @@ def main():
     doc["nodes"][root]["children"] = []
     for material in model.get("materials", []):
         correct_material(material)
+        if material.get("name") in MISSED_PAINT.get(key, ()):
+            print(f"{car}: {material['name']} is the model's paint (MISSED_PAINT)")
+            material["name"] = "GLP_Paint"
     special = {"Wheel0", "Wheel1", "Wheel2", "Wheel3", "Steering", "Eye", "Dials", "Mirror", "MirrorHung"}
     body_nodes = [i for name, c in top.items() if name not in special for i in mesh_nodes(model, c)]
     # The brake lamps' material's parts that are no tail lamp get materials of their own before the model's are merged

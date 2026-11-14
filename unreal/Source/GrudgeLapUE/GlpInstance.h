@@ -45,4 +45,13 @@ namespace GlpInstance
 	 * files from (both for checks).
 	 */
 	void Import();
+
+	/**
+	 * Clears the Godot game's files out of the game's own folder: GrudgeLap.pck, GrudgeLap.console.exe and the folder
+	 * data_GrudgeLap_windows_x86_64. A portable copy that updated itself from 0.77 or earlier still has them, as its
+	 * unpack script only adds and replaces (the installer removes them itself); their executable's name is this
+	 * version's launcher's, so nothing can start them any more. Nothing is touched unless the pack is there. Only the
+	 * packaged game does it; -GlpTidy=<folder> does it in that folder instead (for checks).
+	 */
+	void Tidy();
 }

@@ -19,6 +19,9 @@
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
+  <!-- The runtime patch this library carries (one number for both native libraries). -->
+  <Import Project="..\native-runtime.props" />
+
   <ItemGroup>
     <ProjectReference Include="..\physics\GrudgeLap.Physics.csproj" />
     <ProjectReference Include="..\audio\GrudgeLap.Audio.csproj" />

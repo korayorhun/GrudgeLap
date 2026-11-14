@@ -94,7 +94,8 @@ public sealed class UpdateSessionTests(ITestOutputHelper output) : IDisposable
     /// unless <paramref name="environment"/> says otherwise, and a process the session starts is only written down.
     /// </summary>
     private UpdateSession Session(FakeGitHub? server, string version = "0.78.0", bool installed = true, UpdateClientOptions? client = null,
-        Func<ProcessStartInfo, Process?>? start = null, Func<string, string?>? environment = null, bool feedFromEnvironment = false)
+        Func<ProcessStartInfo, Process?>? start = null, Func<string, string?>? environment = null, bool feedFromEnvironment = false,
+        TimeSpan? signWait = null)
     {
         Directory.CreateDirectory(GameDir);
         var session = new UpdateSession(new UpdateHost(version, Launcher, GameDir, DataDir), new UpdateSessionOptions
@@ -105,11 +106,14 @@ public sealed class UpdateSessionTests(ITestOutputHelper output) : IDisposable
             DownloadFolder = Downloads,
             Client = client ?? Fast,
             InstalledCopy = installed,
+            // The stand-in installer writes no log: unless a test is about that sign of life, it is not waited for.
+            InstallerSignWait = signWait ?? TimeSpan.Zero,
             FeedTimeout = TimeSpan.FromSeconds(10),
             Clock = () => _watch.Elapsed + _skipped,
             StartProcess = info =>
             {
-                _starts.Add(info);
+                // Called on a thread of the pool: the tests read the list after the hand-over's task has ended.
+                lock (_starts) _starts.Add(info);
                 // By default an installer that keeps running: this process, which the session only looks at.
                 return start is null ? Process.GetCurrentProcess() : start(info);
             },
@@ -510,8 +514,13 @@ public sealed class UpdateSessionTests(ITestOutputHelper output) : IDisposable
         await File.WriteAllTextAsync(log, "2026-11-09 01:10:00.100   Log opened.\n");
 
         Assert.True(session.Apply(), session.Refusal);
+        // The start runs off the host's thread (an antivirus can hold a new installer for most of a minute): until it
+        // is there the session says so, and takes nothing back.
+        var asked = session.Phase;
+        await session.HandOver;
 
         // The installer itself, silently, told to wait for the game and to start it again, with a log of its own.
+        Assert.Equal(UpdatePhase.Starting, asked);
         var start = Assert.Single(_starts);
         Assert.Equal(package, start.FileName);
         Assert.Equal($"/SILENT /NORESTART /SP- /NOCANCEL /UPDATE=1 /LOG=\"{log}\"", start.Arguments);
@@ -533,6 +542,8 @@ public sealed class UpdateSessionTests(ITestOutputHelper output) : IDisposable
         Assert.Equal("installing update...", starting.Status);
         _skipped += TimeSpan.FromSeconds(1);
         Assert.Equal(UpdatePhase.Starting, session.Poll().Phase);
+        // The installer's own log, opened as its first act: the sign that it runs.
+        await File.WriteAllTextAsync(log, "2026-11-09 01:12:00.100   Log opened.\n");
         _skipped += TimeSpan.FromSeconds(1);
         Assert.Equal(UpdatePhase.QuitNow, session.Poll().Phase);
         // Nothing takes a started installer back.
@@ -559,6 +570,7 @@ public sealed class UpdateSessionTests(ITestOutputHelper output) : IDisposable
         var script = Path.Combine(Downloads, "apply.ps1");
 
         Assert.True(session.Apply(), session.Refusal);
+        await session.HandOver;
 
         Assert.Equal(portable.Content, await File.ReadAllBytesAsync(zip));
         Assert.Equal(0, setup.Requests);
@@ -578,6 +590,128 @@ public sealed class UpdateSessionTests(ITestOutputHelper output) : IDisposable
         Assert.Equal(UpdatePhase.QuitNow, session.Poll().Phase);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_check_without_a_player_shows_nothing_and_does_not_start_the_game_again(bool installed)
+    {
+        await using var server = new FakeGitHub();
+        Publish(server);
+        var session = Session(server, installed: installed, environment: name => name == "GRUDGELAP_UPDATE_UNATTENDED" ? "1" : null);
+        Assert.True(session.Unattended);
+        await CheckAsync(session);
+        await DownloadAsync(session);
+
+        Assert.True(session.Apply(), session.Refusal);
+        await session.HandOver;
+
+        var start = Assert.Single(_starts);
+        if (installed)
+        {
+            var log = Path.Combine(Downloads, "setup-0.79.0.log");
+            Assert.Equal($"/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /NOCANCEL /UPDATE=2 /LOG=\"{log}\"", start.Arguments);
+        }
+        else
+        {
+            Assert.EndsWith(" -Version 0.79.0 -NoRestart", start.Arguments);
+        }
+        // The game still gets out of the way: whoever runs the check starts the new copy.
+        _skipped += TimeSpan.FromSeconds(2);
+        Assert.Equal(UpdatePhase.QuitNow, session.Poll().Phase);
+        Assert.Contains(LogLines(), l => l.Contains(" (unattended)", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_player_s_session_is_not_unattended_and_a_test_installer_s_key_is_its_own()
+    {
+        Assert.False(Session(server: null).Unattended);
+        Assert.False(Session(server: null, environment: name => name == "GRUDGELAP_UPDATE_UNATTENDED" ? "0" : null).Unattended);
+        // No installer has ever registered this AppId: a copy checked against it is a portable one.
+        Assert.False(UpdateSession.IsInstalledAt(GameDir, "{00000000-0000-0000-0000-00000000F00D}"));
+    }
+
+    [Fact]
+    public async Task A_start_that_Windows_holds_up_leaves_the_host_free_and_the_game_running()
+    {
+        await using var server = new FakeGitHub();
+        Publish(server);
+        // What an antivirus does with a new installer of a gigabyte: the call that starts it does not return for a while.
+        using var held = new ManualResetEventSlim();
+        var session = Session(server, start: _ =>
+        {
+            held.Wait(TimeSpan.FromSeconds(30));
+            return Process.GetCurrentProcess();
+        });
+        await CheckAsync(session);
+        await DownloadAsync(session);
+
+        var asked = Stopwatch.StartNew();
+        Assert.True(session.Apply(), session.Refusal);
+        var waiting = session.Poll();
+        asked.Stop();
+
+        // The host has its thread back at once and is told what it waits for; however long that takes, the game stays.
+        Assert.InRange(asked.ElapsedMilliseconds, 0, 2000);
+        Assert.Equal(UpdatePhase.Starting, waiting.Phase);
+        Assert.Equal("starting the installer (an antivirus may check it first)...", waiting.Status);
+        _skipped += TimeSpan.FromMinutes(2);
+        Assert.Equal(UpdatePhase.Starting, session.Poll().Phase);
+        Assert.False(session.Apply());
+        Assert.Equal("the installer has been started", session.Refusal);
+
+        held.Set();
+        await session.HandOver;
+        // The grace runs from the moment the installer was there, not from the request.
+        var started = session.Poll();
+        Assert.Equal(UpdatePhase.Starting, started.Phase);
+        Assert.Equal("installing update...", started.Status);
+        _skipped += TimeSpan.FromSeconds(2);
+        Assert.Equal(UpdatePhase.QuitNow, session.Poll().Phase);
+        Assert.Single(_starts);
+        Assert.Contains(LogLines(), l => l.Contains(" started after ", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task The_game_stays_until_the_installer_shows_that_it_runs()
+    {
+        await using var server = new FakeGitHub();
+        Publish(server);
+        var session = Session(server, signWait: TimeSpan.FromSeconds(30));
+        await CheckAsync(session);
+        await DownloadAsync(session);
+        var log = Path.Combine(Downloads, "setup-0.79.0.log");
+
+        Assert.True(session.Apply(), session.Refusal);
+        await session.HandOver;
+        session.Poll();
+        // Alive past the grace, but no log yet: the installer's own start can take its time too.
+        _skipped += TimeSpan.FromSeconds(10);
+        Assert.Equal(UpdatePhase.Starting, session.Poll().Phase);
+        // Inno Setup opens its log as its first act: now the game can go.
+        await File.WriteAllTextAsync(log, "2026-11-14 17:47:49.509   Log opened.\n");
+        Assert.Equal(UpdatePhase.QuitNow, session.Poll().Phase);
+        Assert.Contains(LogLines(), l => l.EndsWith("the installer is running: the game quits so that it can be replaced", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task An_installer_that_never_writes_its_log_is_not_waited_for_for_ever()
+    {
+        await using var server = new FakeGitHub();
+        Publish(server);
+        var session = Session(server, signWait: TimeSpan.FromSeconds(30));
+        await CheckAsync(session);
+        await DownloadAsync(session);
+
+        Assert.True(session.Apply(), session.Refusal);
+        await session.HandOver;
+        session.Poll();
+        _skipped += TimeSpan.FromSeconds(29);
+        Assert.Equal(UpdatePhase.Starting, session.Poll().Phase);
+        _skipped += TimeSpan.FromSeconds(2);
+        Assert.Equal(UpdatePhase.QuitNow, session.Poll().Phase);
+        Assert.Contains(LogLines(), l => l.EndsWith("the game quits for it all the same", StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task An_installer_that_ends_at_once_leaves_the_game_running_and_is_given_up_after_two()
     {
@@ -595,6 +729,7 @@ public sealed class UpdateSessionTests(ITestOutputHelper output) : IDisposable
         await DownloadAsync(session);
 
         Assert.True(session.Apply(), session.Refusal);
+        await session.HandOver;
         var failed = session.Poll();
 
         Assert.Equal(UpdatePhase.Failed, failed.Phase);
@@ -612,6 +747,7 @@ public sealed class UpdateSessionTests(ITestOutputHelper output) : IDisposable
         Assert.DoesNotContain("applying", state.Keys);
 
         Assert.True(session.Apply(), session.Refusal);
+        await session.HandOver;
         var gaveUp = session.Poll();
 
         Assert.Equal(UpdatePhase.Failed, gaveUp.Phase);
@@ -642,6 +778,7 @@ public sealed class UpdateSessionTests(ITestOutputHelper output) : IDisposable
         await CheckAsync(first);
         await DownloadAsync(first);
         Assert.True(first.Apply(), first.Refusal);
+        await first.HandOver;
         var failed = first.Poll();
         Assert.Equal(UpdatePhase.Failed, failed.Phase);
         Assert.Equal("update failed: the installer could not start (Access is denied)", failed.Status);
@@ -660,6 +797,7 @@ public sealed class UpdateSessionTests(ITestOutputHelper output) : IDisposable
         Assert.Equal(1, setup.Requests);
         Assert.Contains(LogLines(), l => l.Contains("reusing the package downloaded earlier", StringComparison.Ordinal));
         Assert.True(second.Apply(), second.Refusal);
+        await second.HandOver;
         var gaveUp = second.Poll();
         Assert.Equal(UpdatePhase.Failed, gaveUp.Phase);
         Assert.Equal("v0.79.0 did not install twice (the installer could not start (Access is denied))", gaveUp.Status);
@@ -667,27 +805,31 @@ public sealed class UpdateSessionTests(ITestOutputHelper output) : IDisposable
         Assert.Equal(server.Endpoints.Page(release.Tag).AbsoluteUri, gaveUp.Page);
         second.Shutdown();
 
-        // The third start knows before any check, and a check changes nothing: that version is the player's to install.
+        // The third start knows before any check. What it offers is a check, not only the page: a host whose line led
+        // to the page alone had no way left to learn of a newer release. A check that still finds that version changes
+        // nothing: it is the player's to install, from its page.
         var third = Session(server, start: Refused);
         var atStart = third.Poll();
         Assert.Equal(UpdatePhase.Failed, atStart.Phase);
         Assert.Equal(gaveUp.Status, atStart.Status);
         Assert.Equal(gaveUp.Page, atStart.Page);
-        Assert.Equal(UpdateRetry.None, atStart.Retry);
+        Assert.Equal(UpdateRetry.Check, atStart.Retry);
         var checkedAgain = await CheckAsync(third);
         Assert.Equal(UpdatePhase.Failed, checkedAgain.Phase);
         Assert.Equal(gaveUp.Status, checkedAgain.Status);
         Assert.Equal(gaveUp.Page, checkedAgain.Page);
+        Assert.Equal(UpdateRetry.None, checkedAgain.Retry);
         Assert.Equal("0.79.0", checkedAgain.Latest);
         Assert.False(third.DownloadAndInstall());
         Assert.Equal(2, _starts.Count);
         Assert.Equal(1, setup.Requests);
         third.Shutdown();
 
-        // A newer release is a new chance.
+        // A newer release is a new chance, and the start's own offer leads to it.
         Publish(server, "v0.80.0");
         var fourth = Session(server, start: Refused);
         Assert.Equal(UpdatePhase.Failed, fourth.Poll().Phase);
+        Assert.Equal(UpdateRetry.Check, fourth.Poll().Retry);
         var newer = await CheckAsync(fourth);
         Assert.Equal(UpdatePhase.Available, newer.Phase);
         Assert.Equal("v0.80.0 available", newer.Status);
@@ -778,7 +920,8 @@ public sealed class UpdateSessionTests(ITestOutputHelper output) : IDisposable
 
         Assert.Equal(UpdatePhase.Failed, gaveUp.Phase);
         Assert.Equal($"v0.79.0 did not install twice ({reason})", gaveUp.Status);
-        Assert.Equal(UpdateRetry.None, gaveUp.Retry);
+        // A check is what can still be asked for: it finds either this version again (then its page) or a newer one.
+        Assert.Equal(UpdateRetry.Check, gaveUp.Retry);
         Assert.Equal("http://127.0.0.1:1/korayorhun/GrudgeLap/releases/tag/v0.79.0", gaveUp.Page);
         Assert.Equal("2", State()["failed_count"]);
         second.Shutdown();
@@ -788,6 +931,101 @@ public sealed class UpdateSessionTests(ITestOutputHelper output) : IDisposable
         Assert.Equal(UpdatePhase.Idle, third.Poll().Phase);
         Assert.Equal("", third.Status);
         Assert.False(File.Exists(StatePath));
+    }
+
+    [Theory]
+    [InlineData("portable")]
+    [InlineData("setup")]
+    public async Task A_game_started_while_the_update_is_still_at_work_makes_way_for_it(string kind)
+    {
+        // The player started the game again before the unpack script (or the installer) had finished: the old version
+        // runs from the files that are being replaced.
+        Directory.CreateDirectory(DataDir);
+        Directory.CreateDirectory(Downloads);
+        var portable = kind == "portable";
+        var log = Path.Combine(Downloads, portable ? "apply.log" : "setup-0.79.0.log");
+        var package = Path.Combine(Downloads, portable ? PortableName : SetupName);
+        var handedOver = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 20;
+        string[] record = ["applying=0.79.0", "applying_from=0.78.0", $"applying_kind={kind}", $"applying_log={log}", $"applying_package={package}", $"applying_at={handedOver}"];
+        await File.WriteAllLinesAsync(StatePath, record);
+        // Begun and not ended: the script's "start" without "done" or "FAILED", the installer's log without "Log closed".
+        string[] begun = portable
+            ? [$"2026-11-14 19:10:31 start 0.79.0 from {package} over {GameDir} (waiting for process 1)", "2026-11-14 19:10:41 unpacked 8 entries"]
+            : ["2026-11-14 19:14:28.920   Log opened. (Time zone: UTC+03:00)", "2026-11-14 19:14:32.199   Waited 3000 ms for the game to exit"];
+        await File.WriteAllLinesAsync(log, begun);
+        await File.WriteAllTextAsync(package, "the package that is being installed");
+        var recorded = await File.ReadAllBytesAsync(StatePath);
+
+        var session = Session(server: null, installed: !portable);
+        var state = session.Poll();
+        await session.Cleanup;
+
+        // The host quits at once, as it does for an installer it started itself; nothing is judged or cleared.
+        Assert.Equal(UpdatePhase.QuitNow, state.Phase);
+        Assert.Equal("installing update...", state.Status);
+        Assert.Equal("0.79.0", state.Latest);
+        Assert.False(session.Check());
+        Assert.Equal("the installer has been started", session.Refusal);
+        Assert.Equal(recorded, await File.ReadAllBytesAsync(StatePath));
+        Assert.Contains(Path.GetFileName(package), DownloadedFiles());
+        Assert.Contains(LogLines(), l => l.EndsWith($"the update to v0.79.0 is still being installed ({kind}): the game makes way for it", StringComparison.Ordinal));
+        session.Shutdown();
+
+        // The same record once its window has passed is a run that died: read as it stands, and counted.
+        await File.WriteAllLinesAsync(StatePath, record.Select(l => l.StartsWith("applying_at=", StringComparison.Ordinal)
+            ? $"applying_at={handedOver - (long)UpdateSession.ApplyingWindow.TotalSeconds}" : l));
+        var later = Session(server: null, installed: !portable);
+        var died = later.Poll();
+        Assert.Equal(UpdatePhase.Idle, died.Phase);
+        Assert.StartsWith("the update to v0.79.0 did not install: ", died.Status);
+        Assert.Equal("1", State()["failed_count"]);
+        Assert.DoesNotContain("applying", State().Keys);
+    }
+
+    [Fact]
+    public async Task A_game_closed_while_the_installer_starts_has_not_failed_to_install()
+    {
+        await using var server = new FakeGitHub();
+        Publish(server);
+        // Windows holds the start (an antivirus reads the installer first) and the player, seeing nothing happen, quits:
+        // the call ends with the game's process, and no installer comes of it.
+        using var held = new ManualResetEventSlim();
+        var first = Session(server, start: _ =>
+        {
+            held.Wait(TimeSpan.FromSeconds(30));
+            return null;
+        });
+        await CheckAsync(first);
+        await DownloadAsync(first);
+        Assert.True(first.Apply(), first.Refusal);
+        Assert.Equal(UpdatePhase.Starting, first.Poll().Phase);
+        var handOver = first.HandOver;
+        first.Shutdown();
+        Assert.Equal("1", State()["applying_cut"]);
+        Assert.Equal("0.79.0", State()["applying"]);
+        held.Set();
+        await handOver;
+
+        // The next start, still the old version and with no installer's log: nothing ran, so nothing failed. The
+        // verified package is still there, and asking again installs it without another download.
+        var second = Session(server);
+        var state = second.Poll();
+        await second.Cleanup;
+        Assert.Equal(UpdatePhase.Idle, state.Phase);
+        Assert.Equal("the update to v0.79.0 was not installed: the game was closed while it was starting", state.Status);
+        Assert.False(File.Exists(StatePath));
+        Assert.Contains(SetupName, DownloadedFiles());
+        Assert.Contains(LogLines(), l => l.EndsWith("the update to v0.79.0 was never started: the game was closed while the installer was starting", StringComparison.Ordinal));
+        second.Shutdown();
+
+        // With an installer's log the start did happen, whatever the mark says: that one is judged by its log.
+        var log = Path.Combine(Downloads, "setup-0.79.0.log");
+        await File.WriteAllLinesAsync(StatePath, ["applying=0.79.0", "applying_from=0.78.0", "applying_kind=setup", $"applying_log={log}", "applying_at=1794650000", "applying_cut=1"]);
+        await File.WriteAllLinesAsync(log, ["2026-11-14 01:10:00.100   Log opened.", "2026-11-14 01:10:09.000   User chose Abort.", "2026-11-14 01:10:10.000   Log closed."]);
+        var third = Session(server);
+        Assert.StartsWith("the update to v0.79.0 did not install: ", third.Poll().Status);
+        Assert.Equal("1", State()["failed_count"]);
+        Assert.DoesNotContain("applying_cut", State().Keys);
     }
 
     [Fact]

@@ -36,6 +36,8 @@ internal sealed record UpdateSessionOptions
     public bool? InstalledCopy { get; init; }
     /// <summary>The longest a metadata request may take; by default the feed's own limit.</summary>
     public TimeSpan? FeedTimeout { get; init; }
+    /// <summary>How long a started installer is given to show that it runs; by default <see cref="UpdateSession.InstallerSignWait"/>.</summary>
+    public TimeSpan? InstallerSignWait { get; init; }
     /// <summary>A monotonic clock; by default a stopwatch started with the session.</summary>
     public Func<TimeSpan>? Clock { get; init; }
     /// <summary>Starts the installer or the unpack script; by default <see cref="Process.Start(ProcessStartInfo)"/>.</summary>
@@ -61,7 +63,10 @@ internal enum UpdatePhase
     Ready = 6,
     /// <summary>The installer (or the unpack script) has been started and is watched through its first moments.</summary>
     Starting = 7,
-    /// <summary>The installer runs and waits for the game to exit: the host must quit now.</summary>
+    /// <summary>
+    /// The installer runs and waits for the game to exit: the host must quit now. Also what a session starts in when
+    /// the last session's installer or unpack script is still at work (the game was started again too early).
+    /// </summary>
     QuitNow = 8,
     /// <summary>The last step failed; the status says why, <see cref="UpdateSnapshot.Retry"/> and <see cref="UpdateSnapshot.Page"/> what can be done.</summary>
     Failed = 9,
@@ -90,7 +95,8 @@ internal readonly record struct UpdateSnapshot(
 /// <summary>
 /// update-state.ini in the host's data folder: what the updater must still know at the next start, as
 /// <c>key=value</c> lines in UTF-8. <c>applying</c> and its <c>applying_*</c> details while an update is being handed
-/// over (the next start compares them with its own version to tell whether the update took); <c>failed_version</c>,
+/// over (the next start compares them with its own version to tell whether the update took; <c>applying_cut</c> marks
+/// a hand-over whose start the game's closing cut off); <c>failed_version</c>,
 /// <c>failed_count</c> and <c>failed_reason</c> for an update that did not take. The Godot version kept the same keys
 /// under [update] in its settings.cfg; the file exists only while there is something to remember.
 /// </summary>
@@ -188,14 +194,19 @@ internal sealed class UpdateState
 /// check only checks; a retry of a download does not look for a newer release first.
 /// </para>
 /// <para>
-/// Creating the session writes the log's first lines, judges the update the last session handed over (it took, it did
-/// not, or it failed twice and is left to the player) from update-state.ini, and clears the download folder of what
-/// that leaves, off the calling thread.
+/// Creating the session writes the log's first lines, judges the update the last session handed over from
+/// update-state.ini (it took; it did not; it failed twice, and only a check that finds a newer release goes on from
+/// there; it is still at work, and the game must make way; its start was cut off by the game closing), and clears the
+/// download folder of what that leaves, off the calling thread.
 /// </para>
 /// <para>
 /// Hooks for checks without a player, as in the Godot version: GRUDGELAP_UPDATE_FEED (a stand-in for GitHub at that
 /// URL, laid out as <see cref="UpdateEndpoints.ForFeed"/>), GRUDGELAP_UPDATE_DRYRUN (the check only: nothing is
-/// downloaded, written or cleared) and GRUDGELAP_FAKE_VERSION (the version this copy claims to be).
+/// downloaded, written or cleared) and GRUDGELAP_FAKE_VERSION (the version this copy claims to be). Two more are
+/// for the packaged game's own checks: GRUDGELAP_UPDATE_UNATTENDED (the installer shows nothing, not even its
+/// progress, and the game is not started again afterwards: whoever runs the check starts it, hidden) and
+/// GRUDGELAP_UPDATE_APPID (the installer AppId whose uninstall key tells an installed copy: a test build of the
+/// installer registers under its own, beside the player's real copy, and would otherwise count as portable).
 /// </para>
 /// </remarks>
 internal sealed class UpdateSession
@@ -211,10 +222,22 @@ internal sealed class UpdateSession
     /// (an antivirus that blocks or quarantines the new executable, a broken download) is caught while the game still runs.
     /// </summary>
     public static readonly TimeSpan InstallerGrace = TimeSpan.FromSeconds(1.5);
+    /// <summary>
+    /// How long a started installer is given to show that it runs, by its log (Inno Setup opens it as its first act,
+    /// the unpack script writes its first line), before the host is told to quit for it all the same. Until then the
+    /// game stays on the screen and says what it waits for, so that the player is not left before an empty desktop.
+    /// </summary>
+    public static readonly TimeSpan InstallerSignWait = TimeSpan.FromSeconds(30);
     /// <summary>Failed installs of one version before the updater stops applying it and points to the release page.</summary>
     public const int MaxApplyFailures = 2;
+    /// <summary>
+    /// How long after a hand-over an installer or an unpack script whose log has begun and not ended counts as still at
+    /// work. A game started within it makes way at once (<see cref="ReviewLastApply"/>); after it the log is read as it
+    /// stands, so a run that died keeps the game from starting for these minutes at most.
+    /// </summary>
+    public static readonly TimeSpan ApplyingWindow = TimeSpan.FromMinutes(5);
 
-    private static readonly string[] ApplyingKeys = ["applying", "applying_from", "applying_kind", "applying_log", "applying_package", "applying_at"];
+    private static readonly string[] ApplyingKeys = ["applying", "applying_from", "applying_kind", "applying_log", "applying_package", "applying_at", "applying_cut"];
     private static readonly string[] FailureKeys = ["failed_version", "failed_count", "failed_reason"];
 
     private enum Operation { Check, Download }
@@ -260,6 +283,10 @@ internal sealed class UpdateSession
     private Operation _retryOperation;
 
     private string? _packagePath;
+    // The start of the installer or the unpack script, running off the host's thread, with the clock's time at which
+    // the process was there.
+    private Task<(Process? Process, TimeSpan At)>? _starting;
+    private string _startingPackage = "";
     private Process? _installer;
     private TimeSpan _installerStartedAt;
     private string _installerKind = "setup";
@@ -285,6 +312,7 @@ internal sealed class UpdateSession
         _current = !string.IsNullOrEmpty(forced) && Version.TryParse(forced, out var fake) ? ReleaseVersion.Normalise(fake) : version;
         _currentText = ReleaseVersion.Text(_current);
         DryRun = _options.EnvironmentVariable("GRUDGELAP_UPDATE_DRYRUN") is { Length: > 0 } dry && dry != "0";
+        Unattended = _options.EnvironmentVariable("GRUDGELAP_UPDATE_UNATTENDED") is { Length: > 0 } alone && alone != "0";
         var feed = _options.EnvironmentVariable("GRUDGELAP_UPDATE_FEED");
         _endpoints = _options.Endpoints ?? (!string.IsNullOrEmpty(feed) && Uri.TryCreate(feed, UriKind.Absolute, out var uri)
             ? UpdateEndpoints.ForFeed(uri, RepoOwner, Repo)
@@ -295,7 +323,8 @@ internal sealed class UpdateSession
         var watch = Stopwatch.StartNew();
         _clock = _options.Clock ?? (() => watch.Elapsed);
         _downloadFolder = _options.DownloadFolder ?? UpdateFolder.Default;
-        _installed = _options.InstalledCopy ?? IsInstalledAt(_rootDir);
+        var appId = _options.EnvironmentVariable("GRUDGELAP_UPDATE_APPID");
+        _installed = _options.InstalledCopy ?? IsInstalledAt(_rootDir, string.IsNullOrEmpty(appId) ? InstallerAppId : appId);
         _statePath = Path.Combine(dataDir, StateFileName);
         try
         {
@@ -308,7 +337,7 @@ internal sealed class UpdateSession
         _log = new UpdateLog(Path.Combine(dataDir, LogFileName));
 
         Log($"---- GrudgeLap {_currentText}, {(_installed ? "installed" : "portable")} copy: {_launcher}"
-            + (DryRun ? " (dry run)" : "") + (string.IsNullOrEmpty(feed) ? "" : $" (feed {feed})"));
+            + (DryRun ? " (dry run)" : "") + (Unattended ? " (unattended)" : "") + (string.IsNullOrEmpty(feed) ? "" : $" (feed {feed})"));
         if (DryRun) return;
         var updated = ReviewLastApply();
         var current = _current;
@@ -338,20 +367,30 @@ internal sealed class UpdateSession
     public bool InstalledCopy => _installed;
     /// <summary>The check only: nothing is downloaded, written or cleared (GRUDGELAP_UPDATE_DRYRUN=1).</summary>
     public bool DryRun { get; }
+    /// <summary>
+    /// A check without a player (GRUDGELAP_UPDATE_UNATTENDED=1): the installer shows nothing and neither it nor the
+    /// unpack script starts the game again.
+    /// </summary>
+    public bool Unattended { get; }
     /// <summary>Why the last request that returned false was not taken.</summary>
     public string Refusal { get; private set; } = "";
     /// <summary>The clearing of the download folder that the session started with; the tests wait for it.</summary>
     internal Task Cleanup => _cleanup;
+    /// <summary>The start of the installer or the unpack script that the last <see cref="Apply"/> began; the tests wait for it.</summary>
+    internal Task HandOver => _starting is { } starting ? starting.ContinueWith(static _ => { }, TaskScheduler.Default) : Task.CompletedTask;
 
     private bool Working => _check is not null || _download is not null;
 
-    /// <summary>True when the installer's uninstall key names <paramref name="rootDir"/> (Inno Setup writes InstallLocation for the AppId).</summary>
-    public static bool IsInstalledAt(string rootDir)
+    /// <summary>
+    /// True when the installer's uninstall key names <paramref name="rootDir"/> (Inno Setup writes InstallLocation for
+    /// the AppId). <paramref name="appId"/> is the game's own unless a test build of the installer is being checked.
+    /// </summary>
+    public static bool IsInstalledAt(string rootDir, string appId = InstallerAppId)
     {
         if (!OperatingSystem.IsWindows()) return false;
         try
         {
-            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey($@"Software\Microsoft\Windows\CurrentVersion\Uninstall\{InstallerAppId}_is1");
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey($@"Software\Microsoft\Windows\CurrentVersion\Uninstall\{appId}_is1");
             if (key?.GetValue("InstallLocation") is not string { Length: > 0 } location) return false;
             return string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(location)), Path.TrimEndingDirectorySeparator(Path.GetFullPath(rootDir)), StringComparison.OrdinalIgnoreCase);
         }
@@ -392,10 +431,12 @@ internal sealed class UpdateSession
     }
 
     /// <summary>
-    /// Hands the verified package to the installer or the unpack script. <see cref="Poll"/> then reports
-    /// <see cref="UpdatePhase.Starting"/> and, once that has stayed alive for <see cref="InstallerGrace"/>,
-    /// <see cref="UpdatePhase.QuitNow"/>; when it could not start or ended at once, <see cref="UpdatePhase.Failed"/>
-    /// and the game stays. False unless a package is ready, or its last hand-over failed in this session.
+    /// Hands the verified package to the installer or the unpack script, without waiting for it to start (Windows can
+    /// hold a new executable for most of a minute first). <see cref="Poll"/> then reports
+    /// <see cref="UpdatePhase.Starting"/> and, once it has stayed alive for <see cref="InstallerGrace"/> and shown that
+    /// it runs, <see cref="UpdatePhase.QuitNow"/>; when it could not start or ended at once,
+    /// <see cref="UpdatePhase.Failed"/> and the game stays. False unless a package is ready, or its last hand-over
+    /// failed in this session.
     /// </summary>
     public bool Apply()
     {
@@ -430,6 +471,19 @@ internal sealed class UpdateSession
         if (_ended) return;
         _ended = true;
         if (_download is not null) Log("the game is closing: the download stops here; the .part keeps what came");
+        if (_starting is { IsCompleted: false })
+        {
+            // Windows still holds the start (an antivirus reads a new installer through first), and the call ends with
+            // this process: the installer may come of it or not. The next start finds out from the installer's log, and
+            // must not count a start that never happened as an install that failed.
+            Log("the game is closing while the installer starts: if Windows has not started it yet, nothing gets installed");
+            var state = LoadState();
+            if (state.Get("applying").Length > 0)
+            {
+                state.Set("applying_cut", 1);
+                Save(state);
+            }
+        }
         var check = _check as Task ?? Task.CompletedTask;
         Stop();
         _installer?.Dispose();
@@ -689,7 +743,7 @@ internal sealed class UpdateSession
         if (_installed)
         {
             // The installer itself, by its full path. /UPDATE=1: it waits for the game to exit and starts it again.
-            start = new ProcessStartInfo(package, UpdateCommands.InstallerArguments(_installerLog, relaunch: true))
+            start = new ProcessStartInfo(package, UpdateCommands.InstallerArguments(_installerLog, relaunch: !Unattended, unattended: Unattended))
             {
                 UseShellExecute = true,
                 WorkingDirectory = folder,
@@ -709,7 +763,7 @@ internal sealed class UpdateSession
             }
             // The script waits for this process (the game itself, whatever started it), unpacks over the root folder
             // and starts the launcher: in the Unreal package the running executable sits two folders below the root.
-            var args = UpdateCommands.UnpackArguments(script, Environment.ProcessId, package, _rootDir, _launcher, release.VersionText, relaunch: true);
+            var args = UpdateCommands.UnpackArguments(script, Environment.ProcessId, package, _rootDir, _launcher, release.VersionText, relaunch: !Unattended);
             start = new ProcessStartInfo(UpdateCommands.PowerShell, UpdateCommands.CommandLine(args))
             {
                 UseShellExecute = true,
@@ -736,27 +790,46 @@ internal sealed class UpdateSession
             Log($"the old log {_installerLog} could not be cleared: {ex.Message}");
         }
         Log($"starting {(_installed ? "the installer" : "the unpack script")}: \"{start.FileName}\" {start.Arguments}");
-        try
-        {
-            _installer = _options.StartProcess is { } starter ? starter(start) : Process.Start(start);
-        }
-        catch (Exception ex)
-        {
-            // Win32Exception: a file an antivirus has blocked ("contains a virus or potentially unwanted software") or
-            // removed under our feet, access denied. The game stays, and says why, naming the antivirus it can.
-            var antivirus = (_options.Client?.Antivirus ?? UpdateDiagnostics.ActiveAntivirus)();
-            FailToStart(release, _installed
-                ? UpdateTexts.StartFailure(ex, Path.GetFileName(package), antivirus)
-                : $"the unpack script could not start ({ex.Message.TrimEnd('.')})");
-            return;
-        }
+        // Off the host's thread: Windows hands a new executable to the antivirus before it lets it run, and the call
+        // does not return until that has read all of it (0.78's installer of 1.1 GB: 29 and 46 s on the development
+        // laptop). On the game's thread that was a frozen picture and, to Windows, a program that no longer responds.
+        var starter = _options.StartProcess ?? Process.Start;
+        var clock = _clock;
+        _starting = Task.Run(() => (starter(start), clock()));
+        _startingPackage = package;
+        _installer?.Dispose();
+        _installer = null;
         _installerStartedAt = _clock();
-        Enter(UpdatePhase.Starting, "installing update...");
+        Enter(UpdatePhase.Starting, _installed ? "starting the installer (an antivirus may check it first)..." : "starting the update...");
     }
 
-    /// <summary>The installer's first moments: one that ends at once failed (the game stays); one that keeps running gets the game out of its way.</summary>
+    /// <summary>
+    /// The hand-over's first moments. A start that fails, or an installer that ends at once, failed: the game stays.
+    /// One that keeps running gets the game out of its way once it has shown that it runs (its log is there), or
+    /// <see cref="InstallerSignWait"/> has passed without that.
+    /// </summary>
     private void WatchInstaller()
     {
+        if (_starting is { } starting)
+        {
+            if (!starting.IsCompleted) return;
+            _starting = null;
+            if (starting.IsFaulted)
+            {
+                // Win32Exception: a file an antivirus has blocked ("contains a virus or potentially unwanted software") or
+                // removed under our feet, access denied. The game stays, and says why, naming the antivirus it can.
+                var ex = starting.Exception!.GetBaseException();
+                var antivirus = (_options.Client?.Antivirus ?? UpdateDiagnostics.ActiveAntivirus)();
+                FailToStart(_available!, _installed
+                    ? UpdateTexts.StartFailure(ex, Path.GetFileName(_startingPackage), antivirus)
+                    : $"the unpack script could not start ({ex.Message.TrimEnd('.')})");
+                return;
+            }
+            var asked = _installerStartedAt;
+            (_installer, _installerStartedAt) = starting.Result;
+            Log($"started after {(_installerStartedAt - asked).TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture)} s");
+            _status = "installing update...";
+        }
         if (_installer is { } installer)
         {
             bool exited;
@@ -777,8 +850,14 @@ internal sealed class UpdateSession
                 return;
             }
         }
-        if (_clock() - _installerStartedAt < InstallerGrace) return;
-        Log("the installer is running: the game quits so that it can be replaced");
+        var running = _clock() - _installerStartedAt;
+        if (running < InstallerGrace) return;
+        // Its log is the sign that it runs: the old one was deleted before the start, so one that is there is this try's.
+        var signed = File.Exists(_installerLog);
+        if (!signed && running < (_options.InstallerSignWait ?? InstallerSignWait)) return;
+        Log(signed
+            ? "the installer is running: the game quits so that it can be replaced"
+            : $"the installer has written no log in {running.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)} s: the game quits for it all the same");
         Enter(UpdatePhase.QuitNow, "installing update...");
     }
 
@@ -809,7 +888,9 @@ internal sealed class UpdateSession
     /// <summary>
     /// The verdict on the update the last session handed over: this start's version against the one it was going to.
     /// A failure is counted (twice and the updater stops applying that version) and its reason, read from the
-    /// installer's log, becomes the status. True when the update took: the download folder can then be emptied.
+    /// installer's log, becomes the status. Two hand-overs are not failures: one that is still at work (the session
+    /// starts in <see cref="UpdatePhase.QuitNow"/>, with the record untouched) and one whose start the game's closing
+    /// cut off. True when the update took: the download folder can then be emptied.
     /// </summary>
     private bool ReviewLastApply()
     {
@@ -834,6 +915,25 @@ internal sealed class UpdateSession
                 failedCount = 0;
                 updated = true;
             }
+            else if (StillAtWork(kind, log, state.Get("applying_at")))
+            {
+                // The installer or the unpack script is at work on this folder right now: the player started the game
+                // again before it had finished (the script unpacks a gigabyte first and shows nothing; the installer
+                // copies for half a minute) and got the version that is being replaced. A copy over a running game stops
+                // half way and leaves two versions mixed, so this one makes way at once, and whatever is at work starts
+                // the new one. Nothing is recorded: the start after that gives the verdict.
+                Log($"the update to v{applying} is still being installed ({kind}): the game makes way for it");
+                _latest = applying;
+                Enter(UpdatePhase.QuitNow, "installing update...");
+                return false;
+            }
+            else if (state.Get("applying_cut").Length > 0 && !File.Exists(log))
+            {
+                // The game was closed while Windows still held the installer's start (Shutdown), and no log says that it
+                // ever ran: nothing was installed and nothing failed. The verified package is there for the next try.
+                Log($"the update to v{applying} was never started: the game was closed while the installer was starting");
+                Enter(UpdatePhase.Idle, $"the update to v{applying} was not installed: the game was closed while it was starting");
+            }
             else
             {
                 failedReason = InstallerOutcome.Reason(kind, log);
@@ -857,10 +957,24 @@ internal sealed class UpdateSession
             _gaveUp = failedVersion;
             _gaveUpReason = failedReason;
             // No check has named the release yet, but its page follows from its version (tools/release.ps1 tags v<version>).
-            Enter(UpdatePhase.Failed, GaveUpText(failedVersion, failedReason), page: _endpoints.Page("v" + failedVersion));
+            // What the host offers from here is a check, not that page: a newer release may have come since, and a start
+            // that offered only the page left a copy that could never learn of it (a check that still finds this version
+            // ends at the page, through Offer).
+            Enter(UpdatePhase.Failed, GaveUpText(failedVersion, failedReason), UpdateRetry.Check, page: _endpoints.Page("v" + failedVersion));
         }
         if (changed) Save(state);
         return updated;
+    }
+
+    /// <summary>
+    /// Whether the hand-over on record is still running: its log has begun and not ended, and it was handed over less
+    /// than <see cref="ApplyingWindow"/> ago by this computer's clock (an older log without an end is a run that died).
+    /// </summary>
+    private static bool StillAtWork(string kind, string log, string handedOverAt)
+    {
+        if (!long.TryParse(handedOverAt, NumberStyles.None, CultureInfo.InvariantCulture, out var seconds)) return false;
+        var age = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - seconds;
+        return age >= 0 && age < (long)ApplyingWindow.TotalSeconds && InstallerOutcome.Unfinished(kind, log);
     }
 
     private static int RecordFailure(UpdateState state, string version, string reason)

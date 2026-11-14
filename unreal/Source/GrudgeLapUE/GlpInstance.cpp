@@ -121,6 +121,36 @@ const FString& GlpInstance::DataDir()
 	return Directory;
 }
 
+void GlpInstance::Tidy()
+{
+	FString Root;
+	if (!FParse::Value(FCommandLine::Get(), TEXT("GlpTidy="), Root, false) || Root.IsEmpty())
+	{
+		if (!Packaged())
+		{
+			return;
+		}
+		Root = FPaths::RootDir();
+	}
+	Root = FPaths::ConvertRelativePathToFull(Root);
+	IFileManager& Files = IFileManager::Get();
+	// The Godot game's pack tells its files: without it this is not such a folder, and nothing in it is touched.
+	const FString Pack = FPaths::Combine(Root, TEXT("GrudgeLap.pck"));
+	if (!Files.FileExists(*Pack))
+	{
+		return;
+	}
+	const FString Console = FPaths::Combine(Root, TEXT("GrudgeLap.console.exe"));
+	const FString Data = FPaths::Combine(Root, TEXT("data_GrudgeLap_windows_x86_64"));
+	// The pack last: while something of the rest is still held (an antivirus that looks at it), the next start finds
+	// the pack and tries again.
+	bool bCleared = !Files.DirectoryExists(*Data) || Files.DeleteDirectory(*Data, false, true);
+	bCleared &= !Files.FileExists(*Console) || Files.Delete(*Console, false, true, true);
+	bCleared = bCleared && Files.Delete(*Pack, false, true, true);
+	UE_LOG(LogGlpInstance, Log, TEXT("the Godot version's files in %s: %s"), *Root,
+		bCleared ? TEXT("cleared") : TEXT("not all could be cleared; tried again at the next start"));
+}
+
 void GlpInstance::Import()
 {
 	if (!Packaged() && !FParse::Param(FCommandLine::Get(), TEXT("GlpImport")))

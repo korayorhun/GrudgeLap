@@ -1,0 +1,12 @@
+<Project>
+  <!-- The .NET runtime that the two native libraries carry (physics.native and update.native, NativeAOT), pinned to a
+       patch. The SDK builds them with the newest patch it knows, and an SDK a few months old knows one with a
+       published fault: 8.0.32's Brotli decoder can write out of bounds (GHSA-p3jp-9v83-76w9, fixed in 8.0.33).
+       Neither library ever decodes Brotli (the updater's HTTP handler decompresses nothing), so the fault was out of
+       reach, but a released library should not carry a known one. When the build warns again (NU1903: a package with
+       a known vulnerability), raise this number; it can go once the build machine's SDK knows a newer patch.
+       RuntimeFrameworkVersion names the runtime pack and, with it, the native compiler's pack of the same version. -->
+  <PropertyGroup>
+    <RuntimeFrameworkVersion>8.0.34</RuntimeFrameworkVersion>
+  </PropertyGroup>
+</Project>

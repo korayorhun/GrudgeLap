@@ -259,10 +259,14 @@ void AGlpGame::BeginPlay()
 		FrameCapBefore = GEngine->GetMaxFPS();
 		ApplyFrameCap();
 	}
+	// The packaged game is the engine's Development build: its warnings are for the log, not for the player's screen.
+	GAreScreenMessagesEnabled = false;
 	ProbeUpscaler();
 	bAttract = FParse::Param(FCommandLine::Get(), TEXT("GlpAttract"));
-	// What the earlier versions kept comes over before anything is read (0.78).
+	// What the earlier versions kept comes over before anything is read (0.78), and what the Godot game left in the
+	// game's own folder goes.
 	GlpInstance::Import();
+	GlpInstance::Tidy();
 	LoadScores();
 	bTraffic = !FParse::Param(FCommandLine::Get(), TEXT("GlpNoTraffic"));
 	bSpeedRoute = FParse::Param(FCommandLine::Get(), TEXT("GlpSpeedRoute"));
@@ -1922,11 +1926,15 @@ void AGlpGame::HandleGlobalKeys()
 		OpenMenu();
 	}
 	// F10 looks for a newer release, as in the Godot version. With one known, or a download on its way, it opens the
-	// menu at the updater's line instead: what happens next is the player's choice there.
+	// menu at the updater's line instead: what happens next is the player's choice there. A failure the updater can do
+	// no more about by itself (a version that did not install twice: the menu's line opens its page) is looked at
+	// again too: a newer release may have come since, and nothing else in the session would ever find it.
 	if (Input.Pressed(EKeys::F10))
 	{
 		const int32 Phase = Updater.Phase();
-		if (Updater.Running() && (Phase == GLP_UPDATE_IDLE || Phase == GLP_UPDATE_UP_TO_DATE || (Phase == GLP_UPDATE_FAILED && Updater.State().can_retry == GLP_UPDATE_RETRY_CHECK)))
+		const int32 Retry = Updater.State().can_retry;
+		if (Updater.Running() && (Phase == GLP_UPDATE_IDLE || Phase == GLP_UPDATE_UP_TO_DATE
+			|| (Phase == GLP_UPDATE_FAILED && (Retry == GLP_UPDATE_RETRY_CHECK || Retry == GLP_UPDATE_RETRY_NONE))))
 		{
 			Updater.Check();
 		}

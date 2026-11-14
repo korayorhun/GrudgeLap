@@ -3849,6 +3849,131 @@ The puddles were the view's alone: a mirror-flat patch on the asphalt, under the
 - **The Unreal times of day and night** (added to 0.77.0 after the game): see `unreal/README.md` (hours, lamps,
   MegaLights, the beams in the rain, the frame times); designed from the Godot game, built, independently checked and repaired.
 
+### One game, on Unreal Engine: the seat, the film view, the menu, the updater, the installer (0.78.0)
+
+The owner's requests of 14 November 2026 (ISTERLER H9, H10, G12, G13, U6, R5): one version, the Unreal one, with
+nothing of the Godot game lost (what is left to bring over is ISTERLER's section 12); a cabin that is easy to see out
+of, dashboards at their real distance, a cinematic camera, DLSS in the menu, and an update button: nothing downloaded
+unless the player asks. From 0.78.0 the released game is the Unreal version; the details are in `unreal/README.md`.
+
+- **The seat** (G12, G13). From the seat the player's windows wear a glass of their own (`M_GlassInside`: nearly all of
+  the road's light through, a sixth of the reflection), the view gets local exposure and a quarter of a stop more, and
+  the painted faces of the cabin are a dark lining. The lining is a rule by position, with the windscreen's lower edge
+  found per model (`prepare_model_car.py`'s `Cowl`): on the body's Nanite mesh the engine's two-sided sign never
+  reported a back face, so the 0.75 lining had never shown. A 50 degree lens aimed 4 degrees down took the place of 62
+  degrees level, which had pushed every dashboard away; each car's seat, dials and wheel are corrected in one table
+  (`GlpCockpits`) that a run can replace without a build. The night keeps its picture.
+- **The film view** (U6). A third camera: a tracking shot from 17 m back through a long lens that follows the car's
+  way over the ground (not its nose, so a slide reads as a slide), carried with 80 % of the car's velocity before its
+  spring (a plain spring fell 10 to 20 m further back at speed), with a film's black bars and the speed, gear and revs
+  set in the lower one.
+- **The menu** (T1) is the Godot version's `PauseMenu` on the HUD's canvas: keys, pad and mouse; the game holds still
+  and silent behind it. Its upscaler lines set DLSS's mode through the screen percentage the plugin reads, and Ray
+  Reconstruction; a card without DLSS gets TSR's modes on the same line.
+- **The updater** (R5, T3). The Godot version's updater sources behind a C interface as a NativeAOT library
+  (`update.native`, `UpdateSession`: the state machine of that game's `Updater` node without the engine), loaded by
+  `GlpUpdate`. The owner's rule changed what it does by itself: no check at start and no download, ever; what still
+  happens unasked stays inside an operation the player asked for (a check or a download that a lost connection stopped
+  is tried again in 30 s and in 3 minutes, and can be stopped). One press on DOWNLOAD AND INSTALL carries through the
+  download, the SHA-256 check, the hand-over and the restart, because that is what the player asked for with it.
+  NGX's own over-the-air update of the DLSS models is off for the same rule.
+- **The hand-over.** The end-to-end check showed the game frozen in one frame for 28 s while it started the
+  installer: Windows hands a new executable to the antivirus before it lets it run, and a gigabyte takes that long
+  (46 s for another start of the same file). The start now runs off the game's thread; the menu says what it waits
+  for, and the game leaves only when the installer has shown that it runs (its log is there: Inno Setup opens it as
+  its first act, the unpack script writes its first line) or 30 s have passed without that, so the player is not left
+  before an empty desktop wondering whether anything is happening.
+- **What an update could still do to a player** (a review of the hand-over, the installer and the scripts on 14
+  November, before 0.78.0 went out; none of it had shown in a check on the development laptop, each is closed with a
+  test).
+  (a) *A game started again too early.* A portable copy's unpack script unpacks a gigabyte beside the game before it
+  copies anything and shows nothing meanwhile; a player who starts the game again gets the old version, running from
+  the very files that are to be replaced, and the copy stopped at the first one in use: two versions mixed. The
+  script now copies nothing while one of the game's programs runs (it waits three minutes for them to close, then
+  gives up with nothing replaced), and a game that finds the last hand-over still at work (its log begun and not
+  ended, handed over less than five minutes ago) quits at once and leaves the files to it. The same for an installer
+  that is still copying.
+  (b) *Room.* An update takes no folder page, and with it none of Setup's own questions about free space: on a drive
+  that is nearly full `[InstallDelete]` would have removed the old game, the new one would not have fit, Setup would
+  have rolled back, and an update that 0.77 fetched by itself would have left no game at all. The installer asks for
+  the room first (`PrepareToInstall`: the game's size less what the version in place gives back) and stops with
+  nothing changed, in words short enough for the game's status line at the next start.
+  (c) *A version that did not install twice* is left to the player, and a session then started with nothing to offer
+  but that version's page: such a copy could never have learned of the version after it. The start now offers the
+  check, and a check that finds the same version again ends at its page.
+  (d) *A game closed while Windows still held the installer's start* (an antivirus reads a new installer for half a
+  minute, and a player who sees nothing happen quits) counted as an install that failed, though nothing ever ran. The
+  closing now marks the hand-over, and a start that finds the mark and no installer's log counts nothing.
+  Smaller ones: the unpack script started the game again through `Start-Process`, which reads its working directory
+  as a pattern (in a folder named "Games [new]" it answered "Unable to find the specified file": tried); the
+  installer refuses a folder that holds another Unreal game's `Engine` (its files would have been written into it,
+  and the first update would have removed it whole); the packaging empties the engine's archive folder first (the
+  archive step only adds and overwrites, so a file a version no longer has would have shipped again); what a run
+  leaves in `Engine\Saved` is neither shipped nor left behind by the uninstaller; and the release script commits only
+  its own stamps and stops when the commit fails (it read a failed commit as "nothing new" and would have tagged the
+  commit before).
+  A rule that follows: a portable copy's update only adds and replaces, so a version that drops or renames a file it
+  shipped names it in `GlpInstance::Tidy` (the installer removes the game's folders whole).
+- **One copy and the player's data** (T18, T20; `GlpInstance`). The Godot version's mutex and event; the data in
+  `%LOCALAPPDATA%\GrudgeLap`, outside the game's folder, so that an update, a reinstall or a second copy finds it; the
+  earlier versions' scores, best laps and choices taken over once, never over a file that is already there.
+- **The package.** The engine's Development configuration (the engine is a source build, and a Shipping build would
+  compile it once more), with its console key taken out and its on-screen warnings off. `tools/package.ps1` lays it
+  out with the engine's launcher under the Godot game's name, `GrudgeLap.exe`, in the root: the 0.77 copies' updaters
+  start that name after an update, and shortcuts keep working.
+- **Nothing to install, nothing to answer** (R6, R7). Two faults of the package as first built, both of the kind the
+  owner means by "another computer". (a) The engine's launcher starts the game only where it finds the Visual C++
+  runtime of the engine's own compiler (14.50) or a newer one, beside the executable or installed in Windows;
+  elsewhere it shows a message box and ends, and installing the runtime asks for an administrator. The development
+  laptop has a newer one, so every check here had passed. The runtime's libraries now ship beside the executable, and
+  the packaging compares them with the version the launcher asks for. (b) A Development build listens on TCP port
+  1985, on every address, for Unreal Insights, and Windows Firewall asks about a program that listens, once for each
+  folder it runs from: every test folder of the end-to-end checks put a question on the owner's screen (six in an
+  afternoon, his report of 14 November), and every player would have had one at the first start. The engine has no
+  run-time switch for it; the game's own build of the engine now leaves the listener out
+  (`UE_TRACE_ALLOW_TCP_CONTROL=0` in `GrudgeLapUE.Target.cs`, at the price of one full compile of the engine), and
+  the packaging's smoke run fails when the game's process listens on anything but the loopback address. A test run
+  that makes Windows ask is a fault like a visible window or a sound (ISTERLER's rule 1).
+- **The Clio's paint.** From its seat the pillars and the header stood red round the windscreen, and the cabin's grey
+  took a pink cast from them: the level's build log said "0 paint slot(s)" for this car. `tools/car_models.json` names
+  its sheet metal `==tle_rouge`, an exact match, and the material is `Tle_rouge`, so the prepared model never named
+  its paint and the level left it the model's own material: no clear coat outside, no lining inside. The prepared
+  models lie in the frozen Godot game's folder, so the name is put right where the Unreal side reads them
+  (`prepare_model_car.py`'s `MISSED_PAINT`). Its dials, which stood at the foot of the picture, are in view now (the
+  eyes 2 cm lower and 3 cm back, the view aimed 2.5 degrees further down). What is left: the door cards beside the
+  seat keep a faint pink cast (the model's cabin is one plain white material, and it takes the red body's bounce).
+- **The runtime inside the native libraries.** The SDK on the build machine builds NativeAOT libraries with the newest
+  patch of .NET 8 it knows, 8.0.32, whose Brotli decoder has a published out-of-bounds write (GHSA-p3jp-9v83-76w9).
+  Neither library decodes Brotli (the updater's HTTP handler decompresses nothing), so the fault was out of reach; the
+  libraries now carry 8.0.34 all the same (`native-runtime.props`: `RuntimeFrameworkVersion`, which the native
+  compiler's pack follows).
+- **From the Godot game to this one.** A 0.77 copy reads the same `update.json` and takes the package of its kind
+  under the same name. The installer has the same AppId, folder and shortcuts; it removes the Godot game's files
+  (`[InstallDelete]`) and, on later updates, an earlier Unreal version's `Engine`, `Binaries`, `Content` and
+  `Plugins`, so that nothing a version no longer has stays beside it (`Engine` only from a folder that held this
+  game's Unreal version: it is a name other games use). A portable copy's unpack script only adds and replaces, so
+  the first start clears the Godot files itself (`GlpInstance::Tidy`), and only where the Godot game's pack lies.
+- **The installer's compression.** 1.7 GB through `lzma2/ultra64` in four block threads compiles in two minutes, but
+  needs some 4 GB: Inno Setup's compiler is a 32-bit program and stopped with "Out of memory" until the compressor ran
+  in its own 64-bit process (`LZMAUseSeparateProcess=yes`). The installer is 1.1 GB, the zip 1.3 GB (deflate; the
+  cooked content is compressed already), both under GitHub's 2 GiB a file.
+- **Checked**, hidden and silent: tours of all ten cars from the seat by day, at sunrise and dusk, in rain and at
+  night; the film view at speed; the menu by scripted keys and a scripted mouse; and the updates end to end with the
+  packaged game against a folder served on the loopback address as the release routes: a portable copy through the
+  menu (check, download, SHA-256, unpack script, the copy file for file the new one, "updated to" at the next start),
+  a test build of the installer over a copy of the Godot game's files, that installed copy through the menu (the
+  installer unattended, waiting for the game to exit), the portable zip over the Godot game's files, the Godot game
+  itself (0.77.0, a copy of the installed one's files with a stand-in for its user folder) updating through its own
+  updater the way a portable copy does (headless, `--update-only=apply`) with the first start of what it unpacked,
+  and the uninstaller; all of it in a folder named with a space and Turkish letters, as another computer's user
+  folder may be. The installer's own decisions were tried with a stand-in payload of a few files: no room (nothing
+  changed, exit code 7), the room an older version gives back counted in, a folder that holds another Unreal game
+  (refused), one that holds this game (an update). A test build has its own AppId and name (`/DTestBuild`), told to the updater through
+  `GRUDGELAP_UPDATE_APPID`, so the player's own copy is never touched. What a hidden run cannot show is left to the
+  owner: the one-copy lock (off-screen runs do not take it), the real mouse, the installer's progress window, and an
+  installed 0.77 copy handing over to the new installer (only the owner's own copy is one; the updater's side of that
+  is the code 0.77 shipped with, the installer's side is checked above).
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and
@@ -3895,14 +4020,16 @@ The puddles were the view's alone: a mirror-flat patch on the asphalt, under the
 
 Simulation space is right-handed, +Y up, forward +Z, right +X, heading positive to the right; Godot's
 forward is -Z, so the view flips Z and nothing else. Units are SI; speeds are shown in mph by default.
-Settings and the best lap live under `user://` (`%APPDATA%\Godot\app_userdata\GrudgeLap`).
+Settings and the best lap lived under the Godot version's `user://` (`%APPDATA%\Godot\app_userdata\GrudgeLap`); since
+0.78 the player's data is in `%LOCALAPPDATA%\GrudgeLap`, taken over from there once.
 
 ## Release
 
-`tools/release.ps1 -Version x.y.z` stamps the version into `project.godot`, the csproj and the Inno script,
-runs the tests, exports, builds the installer and the portable zip with their SHA-256 files, commits, tags,
-pushes, creates the GitHub release, updates the Scoop bucket and submits the winget manifest. CI
-(`.github/workflows/build.yml`) repeats tests, export and installer on every push. Since 0.6.0 every
+`tools/release.ps1 -Version x.y.z` stamps the version into the Unreal project's settings (`ProjectVersion`) and the
+Inno script, packages the game (`tools/package.ps1`: the tests, the native libraries, the engine's build, cook and
+stage, one hidden start of what ships), builds the installer and the portable zip with their SHA-256 files, commits,
+tags, pushes, creates the GitHub release, updates the Scoop bucket and submits the winget manifest. Until 0.77 it
+stamped `project.godot` and the csproj and exported the Godot game (`tools/build.ps1`). Since 0.6.0 every
 version goes out as a GitHub release again (`-NoStores`), because the game updates itself from there at
 start-up; the installer script is written UTF-8 with a byte-order mark (`release.ps1` stamps the version that
 way), because Inno Setup reads a script without one in the system's ANSI code page and the Turkish screens of
