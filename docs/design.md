@@ -4031,7 +4031,7 @@ and its paint was the one its model came in. This is the Godot game's showroom (
   car where 4.4 lux draws a white card white. They light neither the rain's streaks nor the fog: a cone of lit air
   between the lamp and the car would hide the paint the lamp is there to show. By day, at dusk and at sunrise the
   light is the credit's own.
-- **Checked**, hidden and silent. The game's own checks (`-GlpSelfTest`, 163 of them: a paint's text both ways, the
+- **Checked**, hidden and silent. The game's own checks (`-GlpSelfTest`, 165 of them: a paint's text both ways, the
   colour arithmetic, the book of paints, the picker by keys and by mouse, what the mouse hits in three shapes of
   window, the turn, the drag, the zoom and the framing) and the core's tests of the lines. In pictures: every car
   to drive in its own colour, a car from eight sides, the presets, the picker, the Delta and the 205 through their
@@ -4040,7 +4040,17 @@ and its paint was the one its model came in. This is the Godot game's showroom (
   taking it; the next start with the car and its paint kept, and the menu's PAINT line; every control of the
   showroom and the picker by the mouse alone; from the menu in the middle of a drive, leaving (the drive goes on, its
   lap time unmoved) and taking another car (a new game); and the Godot copy's paints into an empty folder and into
-  one that had been taken over before. Left to the owner: the real mouse and the pad.
+  one that had been taken over before; the pad's buttons by script as well, and the showroom in the packaged game.
+  Left to the owner: the real mouse and the pad in the hand.
+- **A second reading.** Before the release a fresh reader went through the new code with no word of what to expect
+  (as before 0.78.0). No crash and no state left behind (pointer, input mode, hidden cars), and six small faults, all
+  put right: a colour nobody mixed was kept as a car's mixed colour when the mixed swatch was only stepped over (its
+  settings gained a line, the menu's PAINT a step); a drag was dropped where the pointer left the window to the left
+  or over the top, as the engine gives a pointer there no place (the button is asked for itself now and the drag
+  goes on from where the pointer comes back); the last step of a drag was lost on the frame the button came up; a
+  chime made in the showroom under the menu waited, the sound being held there, and rang when the drive went on;
+  a run's own paint (`-GlpPaint`) stayed on the car driven before when another was stepped to; and the hue's
+  label read 360 at the foot of its bar.
 - **Known.** The estate's doors carry a dark panel: it is the model's own plastic (black in the Godot showroom, a
   dark grey in this version's daylight) and was left alone. A sunlit red reads a little towards coral through the
   tone mapper, the car's own red and the preset alike.

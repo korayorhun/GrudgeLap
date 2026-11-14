@@ -84,7 +84,8 @@ namespace
 		P.Rect(Bar.X - 2.f, HueY - 1.5f, Bar.W + 4.f, 3.f, White);
 
 		const TCHAR* Names[] = { TEXT("HUE"), TEXT("SATURATION"), TEXT("LIGHTNESS") };
-		const FString Values[] = { FString::Printf(TEXT("%d°"), FMath::RoundToInt(Picker.Hue * 360.f)),
+		// The hue is a place on a circle: the foot of the bar, a hair under a full turn, reads 0 as its head does.
+		const FString Values[] = { FString::Printf(TEXT("%d°"), FMath::RoundToInt(Picker.Hue * 360.f) % 360),
 			FString::Printf(TEXT("%d %%"), FMath::RoundToInt(Picker.Saturation * 100.f)), FString::Printf(TEXT("%d %%"), FMath::RoundToInt(Picker.Lightness * 100.f)) };
 		for (int32 i = 0; i < 3; i++)
 		{

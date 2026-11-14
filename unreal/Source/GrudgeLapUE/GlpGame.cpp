@@ -1439,6 +1439,9 @@ void AGlpGame::NewSession()
 			Cars[i]->SetInside(false);
 		}
 	}
+	// Every car in its paint: a run's own paint (-GlpPaint) is the driven car's, whichever car that has become (a step
+	// on the title screen, a tour's next car), and the one driven before is back in the paint its settings keep.
+	SyncPaints();
 	bInsideShown = false;
 	ClearSkidMarks();
 	ClearPuffs();
@@ -2820,6 +2823,9 @@ void AGlpGame::CloseShowroom(bool bTake)
 		return;
 	}
 	const int32 Shown = Room.Index;
+	// For a run's log: what the showroom was left with (a check reads the turn a scripted drag made here).
+	UE_LOG(LogGlpGame, Log, TEXT("showroom %s: car %d, paint %s, the camera %.1f degrees round, zoom %.2f"), bTake ? TEXT("taken") : TEXT("left"),
+		Shown, *Room.Choice().Format(), FMath::RadiansToDegrees(Room.Yaw), Room.Zoom);
 	if (bTake)
 	{
 		// A colour still being mixed is the car's: Enter in the picker and Enter here both mean "this one". Every paint
@@ -2889,7 +2895,8 @@ void AGlpGame::CloseShowroom(bool bTake)
 		Rig.Reset();
 		SyncViews(0.f);
 	}
-	if (bTake && Audio)
+	// Under the menu (the same car taken there) the sound is held: no chime to wait for the drive.
+	if (bTake && Audio && !PauseMenu.bOpen)
 	{
 		Audio->Chime();
 	}
@@ -2977,13 +2984,14 @@ void AGlpGame::RunShowroom(APlayerController* Player, float DeltaSeconds)
 	{
 		Room.ZoomBy(Wheel);
 	}
-	if (!bMouse || !bHeld)
+	// The button. A pointer dragged out of the window to the left or over the top has no place the engine will give (a
+	// captured mouse reports on with coordinates under zero, which GetMousePosition refuses): the button is asked for
+	// itself then, so the drag is held there and goes on from where the pointer comes back, not dropped at the edge.
+	const bool bButton = bMouse ? bHeld : Player && Player->IsInputKeyDown(EKeys::LeftMouseButton);
+	if (!bMouse)
 	{
-		Room.bDragging = false;
-		if (Room.Picker.IsSet())
-		{
-			Room.Picker->Dragging = FGlpColourPicker::EHit::Nothing;
-		}
+		// Nowhere this frame: nothing turns, and the turn takes up from where the pointer is found again.
+		Room.Mouse = FVector2f(-1.f, -1.f);
 	}
 	if (bMouse && !bTake && !bLeave)
 	{
@@ -3020,8 +3028,9 @@ void AGlpGame::RunShowroom(APlayerController* Player, float DeltaSeconds)
 					break;
 				}
 			}
-			else if (bHeld && Picker.Dragging != FGlpColourPicker::EHit::Nothing)
+			else if (Picker.Dragging != FGlpColourPicker::EHit::Nothing)
 			{
+				// Held, or let go on this frame: the value is where the button came up, the drag's last step with it.
 				Picker.Pick(Canvas, Picker.Dragging, Point);
 				Room.ApplyPicker();
 			}
@@ -3065,11 +3074,20 @@ void AGlpGame::RunShowroom(APlayerController* Player, float DeltaSeconds)
 				break;
 			}
 		}
-		else if (Room.bDragging && bHeld && Room.Mouse.X >= 0.f)
+		else if (Room.bDragging && Room.Mouse.X >= 0.f)
 		{
+			// Held, or let go on this frame: the way to where the button came up counts (a drag was a frame short).
 			Room.Drag(Point.X - Room.Mouse.X);
 		}
 		Room.Mouse = Point;
+	}
+	if (!bButton)
+	{
+		Room.bDragging = false;
+		if (Room.Picker.IsSet())
+		{
+			Room.Picker->Dragging = FGlpColourPicker::EHit::Nothing;
+		}
 	}
 
 	if (bTake || bLeave)
@@ -3077,7 +3095,8 @@ void AGlpGame::RunShowroom(APlayerController* Player, float DeltaSeconds)
 		CloseShowroom(bTake);
 		return;
 	}
-	if (bChime && Audio)
+	// No chime under the menu, which holds the sound: it would wait there and sound when the drive went on.
+	if (bChime && Audio && !PauseMenu.bOpen)
 	{
 		Audio->Chime();
 	}

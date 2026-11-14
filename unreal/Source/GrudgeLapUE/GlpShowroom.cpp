@@ -245,11 +245,10 @@ FGlpPaintChoice FGlpShowroom::MixedFor(int32 Car) const
 
 void FGlpShowroom::SetChoice(const FGlpPaintChoice& NewChoice)
 {
+	// Only the car's paint. A mixed colour is one the picker made (ApplyPicker): the mixed swatch stepped over with up
+	// and down shows the car's own colour as a solid, which nobody mixed, and remembering that as the car's mixed
+	// colour gave its settings a line and the menu's PAINT a step for a colour the player never chose.
 	Edits.Add(Index, NewChoice);
-	if (NewChoice.IsCustom())
-	{
-		MixedHere.Add(Index, NewChoice);
-	}
 }
 
 void FGlpShowroom::ChooseSlot(int32 Slot)
@@ -304,7 +303,9 @@ void FGlpShowroom::ApplyPicker()
 {
 	if (Picker.IsSet())
 	{
-		SetChoice(Picker->Choice());
+		const FGlpPaintChoice Made = Picker->Choice();
+		SetChoice(Made);
+		MixedHere.Add(Index, Made);
 	}
 }
 
@@ -488,6 +489,7 @@ int32 FGlpShowroom::SelfTest(TArray<FString>& Failures)
 		TEXT("a step up from ORIGINAL is the mixed colour, which starts as the car's own as a solid"));
 	Room.CyclePaint(1);
 	Check(Room.Choice().IsOriginal(), TEXT("and a step down from the mixed colour is ORIGINAL again"));
+	Check(Room.MixedHere.IsEmpty(), TEXT("the mixed swatch stepped over is not a colour mixed"));
 	Room.ChooseSlot(5);
 	Check(Room.Choice().Name() == TEXT("DARK BLUE"), TEXT("a swatch taken"));
 
@@ -510,9 +512,10 @@ int32 FGlpShowroom::SelfTest(TArray<FString>& Failures)
 	Check(Room.Picker->Nudge(0, -1, 0.016f) && Room.Picker->Nudge(0, -1, 0.016f) && Room.Picker->Finish == EGlpFinish::Pearl, TEXT("and round the other way"));
 	Room.ApplyPicker();
 	Check(Room.Choice() == Room.Picker->Choice() && Room.Choice().Finish == EGlpFinish::Pearl, TEXT("the picker's colour is the car's as it changes"));
+	Check(Room.MixedHere.Contains(2) && Room.MixedHere[2] == Room.Picker->Choice(), TEXT("and the colour the car was mixed in here"));
 	Room.ClosePicker(false);
-	Check(!Room.Picker.IsSet() && Room.Choice().Name() == TEXT("DARK BLUE") && Room.MixedHere.Contains(2)
-		&& Room.MixedHere[2] == FGlpPaintChoice::Mixed(Room.OwnSrgb, EGlpFinish::Solid), TEXT("CANCEL puts the paint and the mixed swatch back as they were"));
+	Check(!Room.Picker.IsSet() && Room.Choice().Name() == TEXT("DARK BLUE") && !Room.MixedHere.Contains(2)
+		&& Room.MixedChoice() == FGlpPaintChoice::Mixed(Room.OwnSrgb, EGlpFinish::Solid), TEXT("CANCEL puts the paint and the mixed swatch back as they were"));
 
 	// DONE keeps it; the mouse on the square and the bar; the hue kept for a colour that has none.
 	Room.OpenPicker();
