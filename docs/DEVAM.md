@@ -11,7 +11,8 @@ Yeni bir thread bu dosyayı okuyup buradaki talimatla devam eder. Sahibin yapı�
 3. **İlk iş isterleri oku:** [ISTERLER.md](ISTERLER.md). İsterler, durumları, açık işler ve çalışma kuralları orada; 11. bölümdeki kurallara uy.
 4. **İsterleri güncel tut:** sahip yeni bir istek verince önce ISTERLER.md'ye satır olarak ekle. İş bitip yayınlanınca o satırın durumunu ve sürümünü güncelle ve aynı commit'le gönder.
 5. **Kurallar:**
-   - Oyunu her zaman gizli ve sessiz çalıştır: `--audio-driver Dummy --position -32000,-32000 -- --invisible`.
+   - Oyunu her zaman gizli ve sessiz çalıştır: Unreal `-RenderOffScreen -NoSound` (ses kaydı gerekiyorsa `-GlpMute`) ve `t.MaxFPS 60`; Godot (yalnız dünyayı dışa aktarırken) `--audio-driver Dummy --position -32000,-32000 -- --invisible`.
+   - Tek sürüm Unreal (sahibin 14 Kasım 2026 kararı, ISTERLER H9): geliştirme yalnız `unreal/` ile ortak `physics/` ve `audio/` içinde. `game/` (Godot) dondurulmuştur; ISTERLER bölüm 12'deki taşıma listesi bitene kadar kaynak ve dünya dışa aktarım aracı olarak durur.
    - Her iş bitince derle, test et ve yeni sürüm olarak yayınla.
    - Model ve ses yalnız CC0 ya da CC BY olur ve kaynağı güvenilir olur; her kaynak [THIRD_PARTY.md](../THIRD_PARTY.md)'de anılır. Sahibin 8 Kasım 2026 izniyle ("izin veriyorum"; oyun ücretsiz) BlendSwap'in "Fan Art" işaretli (ticari kullanım yasak) CC BY ve CC BY-SA modelleri de kullanılabilir; kısıtları THIRD_PARTY.md'de yazılır (ISTERLER A8).
    - Cevaplar Türkçe, kısa ve madde madde.

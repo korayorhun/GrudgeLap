@@ -4,11 +4,11 @@ Proje sahibinin bu oyun için istediği her şeyin tek listesi. Yeni bir thread 
 nasıl başlayacağı [DEVAM.md](DEVAM.md)'de yazar.
 Yeni bir istek gelince buraya satır olarak eklenir. Bir sürüm bir isteği karşılayınca o satırın durumu ve sürümü güncellenir.
 
-- **Kaynak:** sahibin 22 Ekim - 7 Kasım 2026 arasındaki geliştirme thread'lerinde yazdıkları. Kısa alıntılar sahibin kendi sözleri, tarihleri yanında.
+- **Kaynak:** sahibin 22 Ekim - 14 Kasım 2026 arasındaki geliştirme thread'lerinde yazdıkları. Kısa alıntılar sahibin kendi sözleri, tarihleri yanında.
 - **Durum:** `Tamam` karşılandı, `Kısmen` bir kısmı karşılandı, `Açık` henüz yapılmadı, `Karar` yön belirlendi, `Ertelendi` bilerek sonraya bırakıldı.
 - **Ayrıntı:** teknik gerekçeler [design.md](design.md)'de, sürüm notları GitHub Releases'te.
 
-Son güncelleme: 9 Kasım 2026 (sürüm 0.77.0).
+Son güncelleme: 14 Kasım 2026 (sürüm 0.77.0; 14 Kasım istekleri eklendi: H9, H10, G12, G13, U6, R5, bölüm 12).
 
 ## 1. Hedef
 
@@ -19,9 +19,11 @@ Son güncelleme: 9 Kasım 2026 (sürüm 0.77.0).
 | H3 | Gerçek fizik kurallarıyla çalışan, gerçek otomobil dinamikleri olan bir oyun. Her turda daha gerçekçi. | 1 Kas (gece modu): "daha iyi otomobil dinamiklerinin olduğu gerçek fizik kuralları ile çalışan" | Sürekli hedef (0.18-0.24'te büyük adımlar; 0.49 frenlerin ısınması ve fade; 0.56 su kızağı: birikintide yüksek hızda tutuş kaybı; 0.61 rüzgâr: yan rüzgâr ve hamleler arabayı itiyor) |
 | H4 | Gerekirse her şey baştan tasarlanabilir. Endüstrinin en iyi uygulamaları araştırılıp kullanılsın. | 1 Kas: "gerekiyorsa herşeyi baştan tasarlayabilirsin", "industry best practice'leri araştırıp uygulayabilirsin" | İlke |
 | H5 | Fotogerçekçilik her şeyden önemli; Godot ile gerçek hayat görüntüsü sağlanamıyorsa en doğru motora geçilsin ve bütün enerji ona harcansın; yapılanlar boşa gitmesin. | 1 Kas, soru cevabı: "Unreal sürümü"; 7 Kas: "DLSS yerleşik olan daha iyi realizm verebilecek bir motora geçmek çok mu maliyetli?", "realizm'i arttırmak engine değiştirerek mümkünse lütfen onu da yapmaya çalış, her izni veriyorum"; 8 Kas: "gerçek fotorealistik bir görüntü yakalayacaksak motoru değiştirmeni rica ediyorum, fotorealizm en önemli hedefimiz", "godot ile bunu sağlayamıyorsak, en doğru seçeneği belirleyelim ve bütün enerjimizi onu gerçekleştirmek için harcayalım", "kayıp yaşamamaya çalışalım, yaptıkların boşa gitmesin", "ben dönene kadar devam et, fotorealizm için tekrar tekrar dene" | Karar (8 Kas): Unreal Engine 5.8 ana motor olacak, adım adım. Değerlendirme: Unreal'da donanım ışın izleme, DLSS Ray Reconstruction, Lumen, Nanite ve taranmış içerik var; Godot 4.7'de DLSS ve donanım ışın izleme yok; Unity HDRP dondurulmuş; diğer motorlar daha zayıf. Simülasyon (C#) olduğu gibi kalıyor (Unreal onu NativeAOT DLL'i üzerinden çalıştırıyor), Godot dünyayı üretip dışa aktarıyor; Godot sürümü de yayımlanmaya devam ediyor. 0.74.0: Unreal önizlemesinde Godot'un gerçek araba modelleri kabinleriyle, donanım ışın izleme, DLSS Ray Reconstruction, boyalı taş banket (madde 70) |
-| H6 | Ekran kartı RTX ise DLSS kullanılsın. | 7 Kas: "sistem RTX ise DLSS kullanma gibi bir şansımız var mı?", "dlss kullanma şansımız var mı?"; 8 Kas: "dlss'i de unutma :)" | Tamam (Unreal sürümü): NVIDIA'nın DLSS 4.5 eklentisi (8.9.0); RTX kartta DLSS Quality (pencerenin %75'i büyütülüyor). 0.74.0'dan RTX kartta DLSS Ray Reconstruction da açık: donanım ışın izlemenin yansımalarını ve gölgelerini Lumen'in kendi gürültü gidericileri yerine NVIDIA'nın eğitilmiş gürültü gidericisi temizliyor. Başka kartta TSR ve yazılım Lumen kendiliğinden devreye giriyor. Godot 4.7'de DLSS yok |
+| H6 | Ekran kartı RTX ise DLSS kullanılsın. | 7 Kas: "sistem RTX ise DLSS kullanma gibi bir şansımız var mı?", "dlss kullanma şansımız var mı?"; 8 Kas: "dlss'i de unutma :)"; 14 Kas: "dlss desteği ekleyebilir misin" | Tamam (Unreal sürümü): NVIDIA'nın DLSS 4.5 eklentisi (8.9.0); RTX kartta DLSS Quality (pencerenin %75'i büyütülüyor). 0.74.0'dan RTX kartta DLSS Ray Reconstruction da açık: donanım ışın izlemenin yansımalarını ve gölgelerini Lumen'in kendi gürültü gidericileri yerine NVIDIA'nın eğitilmiş gürültü gidericisi temizliyor. Başka kartta TSR ve yazılım Lumen kendiliğinden devreye giriyor. Godot 4.7'de DLSS yok. 14 Kas isteği: DLSS menüde görünsün ve modu seçilebilsin (Açık) |
 | H7 | Sık sık sürüm çıksın; sahip evde her yeni sürümü oynuyor; en az 10 sürüm çıkana kadar iterasyon sürsün. | 7 Kas akşam: "sık sık versiyon çıkarmaya devam et ben evde oynayacağım yeni versiyon çıktıkça", "en az 10 versiyon çıkarana kadar iterasyona devam" | Sürüyor (0.37.0 ile başladı) |
 | H8 | Uzaktaki bulutlar titremesin. | 8 Kas: "uzaktaki bulutlar titriyor ona da dikkat et lütfen" | Tamam (0.71.0): bulut gürültüleri mip zinciriyle; gölgelendirici her örneği pikselinin ve adımının boyuna göre okuyor. Sabit kamerayla ufka yakın gökyüzünde kareden kareye titreme 0,47'den 0,30 gri düzeyine indi; yakın bulutlar aynı, en uzaktakiler biraz daha yumuşak |
+| H9 | Tek sürüm olsun, o da Unreal Engine sürümü. Godot için artık hiçbir geliştirme yapılmasın; gerekiyorsa silinsin. Godot tarafında oyun için yapılan hiçbir geliştirme kaybolmasın: sesler, menüler, seçimler ve diğerleri. | 14 Kas: "godot motoru için artık hiçbir geliştirme yapmayalım, hatta gerekiyorsa silelim", "tek sürümüz olsun ve o da unreal engine üzerinde hazırladığın kod olsun. fotorealizm çok çok daha başarılı godot'a göre", "godot tarafında yaptığımız oyun için yaptığımız hiçbir geliştirme lütfen kaybolmasın. sesler, menüler, seçimler vs" | Karar (14 Kas): Godot sürümü 0.77.0'da donduruldu; yeni sürümler yalnız Unreal. Godot kodu (`game/`) repoda duruyor: Unreal'a taşınacakların kaynağı ve dünyayı (pist, binalar, yerleşimler) dışa aktaran araç. Silinmesi iki koşula bağlı: bölüm 12'deki taşıma listesi bitecek ve dünya üretimi Godot'suz çalışacak; o zamana kadar silmek kayıp demek. Son Godot sürümü GitHub'da v0.77.0 etiketiyle duruyor |
+| H10 | Fotogerçekçilik en önemli öncelik; ama görüntü insanın içini açsın, kolay görülsün, zevkle oynansın. | 14 Kas: "Görüntünün fotorealistik olması en önemli önceliğimiz; ancak insanın içini açan, kolay görülebilen ve zevkle oynanabilen görüntüler olmasını istiyorum" | Açık |
 
 ## 2. Pist ve dünya
 
@@ -66,6 +68,8 @@ Son güncelleme: 9 Kasım 2026 (sürüm 0.77.0).
 | G7 | Bazı arabaların kokpitleri çok karanlık, hiçbir şey görünmüyor; hepsi kontrol edilsin. | 3 Kas: "bazı arabaların kokpitleri çok karanlık hiç görünmüyor.. hepsini kontrol et" | Tamam (0.28.0): gerçek modelle çizilen kabinlerde (Esprit, 570S, 205, Delta, SAAB, VAZ, W212, R12, 458 ve BRZ'nin ödünç kabinleri) kabin gün ışığı hiç kurulmuyordu, yalnız gökyüzünün ortam ışığıyla tavanın altında kalıyordu; artık her kabin kendi göz noktasından aydınlatılıyor (karanlık piksel payı W212 %55→%13, R12 %51→%45, 205 %48→%22, Delta %43→%9, 458 %35→%11, BRZ %46→%18) |
 | G10 | Arabalar gerçeği gibi olsun ya da hiç olmasın: her arabanın içi, dışı, sesi ve sürüşü gerçeğiyle karşılaştırılsın; gerçek görüntüsü oluşturulamayan araba çıkarılsın; 458'in arka lambaları gerçeği gibi olsun. | 8 Kas: "bazı arabaların içleri çok kötü", "fiat bravolar ve cupra çocuk çizmiş gibi, bunların gerçek görüntülerini oluşturamıyorsak çıkar daha iyi", "bütün arabaları kullan ve gerçeğiyle karşılaştır", "lütfen arabalar gerçek gibi olsun ya da olmasın", "ferrari 458 arka farlar korkunç... lütfen onun gerçeğini bul.. hepsinin gerçeğini bul", "gerçeğini bulabildiğin sesi içi dışı ve driving physics gerçek gibi hazır data bulabiliyorsan, bulduklarını ekleyebilirsin" | Kısmen (0.70.0): iki Bravo ve Cupra seçilebilir arabalardan ve trafikten çıktı; yeniden arandı, lisanslı gerçek modelleri yok. 0.75.0: 458 RainerS'in modeliyle (BlendSwap #5151, CC BY 3.0: gerçek LED halkalı arka lambalar, gerçek jantlar); her arabanın kabini gerçek arabanın fotoğraflarıyla karşılaştırıldı ve düzeltildi (madde 71). Kalan: BRZ'nin ve 458'in kendi kabini (lisanslı model yok), Delta'nın yarış kafesi |
 | G11 | Hayalet araba iyi görünsün; kimin, neyin hayaleti olduğu belli olsun. | 8 Kas: "hayalet araba da kötü görünüyor, bir de neyin hayaleti çok belirsiz en son iyi zamanı yapanın mı.. random birşeyler gözüküyor gibi" | Tamam (0.73.0): hayalet artık o arabayla yapılmış en iyi tur (her arabanın kendi kaydı); üstünde "BEST LAP süre ROTA" etiketi var. Yalnız dış kabuk, iki geçişte çiziliyor: iç parçalar, koltuklar, tekerleklerin içi görünmüyor; kenarları parlayan saydam bir kabuk, yakında soluyor. Önceden tek bir en iyi tur bütün arabalar için tutuluyor, hayalet sürülen arabanın kılığında başka arabanın turunu sürebiliyordu. Eski ortak kayıt (bestlap.bin) hangi arabayla yapıldığı bilinmediği için hayalet olarak gösterilmiyor; dosya duruyor. 0.76.0: hayaletin arkasındaki ızgara, yağmur, cam ve iz artık hayaletin içinden görünüyor; arabanın bütün yüzleri çiziliyor (estate'in camları, kapıları, Testarossa'nın arka lambası, BRZ'nin çamurluk içleri delik gibi görünüyordu) |
+| G12 | Araç içinden görüntü bazı açılardan çok karanlık oluyor; bazı arabalarda ön camdaki yansımalar aşırı; yolu görmek zor. | 14 Kas: "otomobil içinden görüntülerde bazı açılardan görüntü çok karanlık oluyor, bazı arabalarda ön camdan yansımalar aşırı gözüküyor, yolu görmek epey zor oluyor" | Açık |
+| G13 | Bazı arabaların iç konsolu çok uzak görünüyor; gerçeği gibi görünsün. Bazılarında direksiyon kadranları görmeyi engelliyor. | 14 Kas: "Otomobillerin bazılarının iç konsolları gerçekten çok uzak. Gerçeği gibi gözükmesini istiyorum. Bazılarında direksiyon kadranı görmeyi engelliyor" | Açık |
 
 ## 5. Araba seçimi ve yeni arabalar
 
@@ -121,15 +125,17 @@ Son güncelleme: 9 Kasım 2026 (sürüm 0.77.0).
 | U3 | Uygulama hızlı açılsın. | 22 Eki: "uygulama çok geç açılıyor" | Kısmen (0.31.0): dağıtılan oyunda ilk kare 4,4 s → 3,0 s (0.31.0: arazi ağı 1,3 s → 0,3 s, inek postları dünya kurulurken arka planda boyanıyor, yol aşınması paralel okunuyor); 0.29.0'da ılık açılış 9,4 s → 8,2 s (ineklerin post dokusu paralel boyanıyor: 7 inek 7,2 s → 0,8 s; trafik arabalarının modelleri açılışın başında yükleyici iş parçacığında: 2,2 s → 0,04 s). İlk açılış (kurulumdan sonraki ilk kez) hâlâ ~58 s: shader derlemesi, Godot'un kendi işi; kalan: motorun kendi açılışı ~1,1 s, dünya ~1,1 s (gökyüzü ve dağlar 0,24, arazi 0,32, yollar 0,27, orman ve çimen 0,17) |
 | U4 | Uygulama bir bilgisayarda yalnız bir kez açılabilsin. | 22 Eki | Tamam |
 | U5 | Oyun çökmesin, bilgisayarı kilitlemesin. | 28 Eki: "oyun biraz oynayınca kilitleniyor, bilgisayarı da kilitliyor" | Tamam (0.8.0: kare sınırı, GPU zaman aşımlarına karşı) |
+| U6 | Kamera modlarına daha uzaktan bakan, film tarzı bir mod eklensin. | 14 Kas: "camera modlarına bir tane de daha uzaktan biraz movie tarzı mod ekler misin" | Açık |
 
 ## 9. Güncelleme ve yayın
 
 | No | İster | Kaynak | Durum |
 |---|---|---|---|
-| R1 | Oyun açılınca kendini güncellesin; her açılışta en yeni sürüm gelsin. | 26 Eki: "açtığımda en güceli gelsin her zaman" | Tamam (0.6.0) |
+| R1 | Oyun açılınca kendini güncellesin; her açılışta en yeni sürüm gelsin. | 26 Eki: "açtığımda en güceli gelsin her zaman" | Tamam (0.6.0). 14 Kas: sahip kendiliğinden indirmeyi kaldırdı (R5) |
 | R2 | Otomatik güncelleme çoğu zaman başarısız oluyor. | 3 Kas; 8 Kas: evde yine başarısız | Tamam (0.26.0): paketler 200 MB'yi geçince 60 saniyelik süre doluyordu. 0.17-0.25 kurulu kopyalar 0.26.0'ı bir kez elle kurmalı. Güncelleyici baştan yazıldı (0.77.0): kopan indirme kaldığı yerden sürüyor, sürüm bilgisi update.json'dan (GitHub API sınırı yok), kurulum oyunun kapanmasını bekliyor, başarısızlığın nedeni ekranda ve update.log'da, iki başarısızlıktan sonra F10 sürüm sayfasını açıyor; antivirüsün sildiği ya da engellediği indirme antivirüsün adıyla söyleniyor ve o oturumda yeniden indirilmiyor, yalnız kopan bağlantı kendiliğinden yeniden deneniyor. 0.76 ve öncesi bir kez eski yoldan gelir; olmazsa son Setup elle bir kez kurulur |
-| R3 | Her iş bitince yayınlansın (GitHub Release). | 29 Eki: "çalışman bitince her zaman publish de yap" | Kural |
+| R3 | Her iş bitince yayınlansın (GitHub Release). | 29 Eki: "çalışman bitince her zaman publish de yap"; 14 Kas: "yaptığın geliştirmelerden sonra hep sürüm çıkarıp publish et" | Kural |
 | R4 | winget ve benzeri mağaza yayınları 1.0 kararlı sürüme kadar beklesin. | 22 Eki | Ertelendi |
+| R5 | Güncelleme kararlı olsun: oyunu başka bilgisayarda güncellemek hep sorun çıkardı. Ana menüde bir düğme olsun; oyun kendiliğinden indirmesin; kullanıcı denetlesin, isterse indirsin ve kurulum kendiliğinden yapılsın. | 14 Kas: "godot ile yapılan oyunu başka bilgisayarda güncellemek hep sorun çıkarıyordu.. güncelleme işini lütfen stabil hale getir.. ana menüde bir düğme olsa daha güzel olur otomatik kendi indirmesin, kullanıcı denetlesin, istiyorsa indirip otomatik kurulmasını sağlasın" | Açık |
 
 ## 10. Açık işler (0.26.0 sonrası)
 
@@ -215,7 +221,7 @@ Son güncelleme: 9 Kasım 2026 (sürüm 0.77.0).
 
 ## 11. Çalışma kuralları
 
-1. **Gizli ve sessiz:** geliştirirken oyun görünmez ve sessiz çalışır (`--audio-driver Dummy --position -32000,-32000 -- --invisible`). Sahip açıkça istemedikçe görünür ya da sesli koşu yok. (1 Kas) İstisna: 7 Kasım'da sahip 5 saatlik görünür koşuya izin verdi ("5 saat boyunca görüntüyü gizlemek zorunda değilsin"); süre bitince kural yeniden geçerli.
+1. **Gizli ve sessiz:** geliştirirken oyun görünmez ve sessiz çalışır (`--audio-driver Dummy --position -32000,-32000 -- --invisible`). Sahip açıkça istemedikçe görünür ya da sesli koşu yok. (1 Kas) İstisna: 7 Kasım'da sahip 5 saatlik görünür koşuya izin verdi ("5 saat boyunca görüntüyü gizlemek zorunda değilsin"); süre bitince kural yeniden geçerli. Unreal sürümü: `-RenderOffScreen -NoSound` (ses kaydı gerekiyorsa `-GlpMute`), her zaman `t.MaxFPS 60`.
 2. **Yetki yalnız bu repoda:** commit, push ve GitHub Release yetkisi yalnız bu repo içindir. Proje kişiseldir; bilgileri bu repoda ve sahibin yerel notlarında durur. (22 Eki, 30 Eki, 1 Kas)
 3. **Her iş yayınlanır:** iş bitince sürüm çıkar, sahip evde ya da başka bilgisayarda dener. (29 Eki)
 4. **Lisans:** modeller ve kayıtlar yalnız CC0 ya da CC BY olur ve kaynağı güvenilir olur; oyundan, moddan, ücretli mağazadan alınmış ya da derleme içerik kullanılmaz. Her kaynak [THIRD_PARTY.md](../THIRD_PARTY.md)'de anılır.
@@ -223,5 +229,37 @@ Son güncelleme: 9 Kasım 2026 (sürüm 0.77.0).
 6. **Soru en aza iner:** sahip yokken karar verilir ve gerekçesi yazılır; yalnız gerçekten sahibin vereceği kararlar sorulur. (23 Eki: "bana sormadan, uygun bulduğun en doğru sıra ile bütün herşeyi yap")
 7. **Araç serbest:** gerekli araç (video çözümleme, Blender, ffmpeg) kurulabilir. (1 Kas: "istediğin tool'u indirip yükleyebilirsin"; 7 Kas: "istediğin şeyi indirip kurabilirsin, hyperrealistik olması herşeyden önemli", "eğer realizm artacaksa, gerçek hayat gibi görünecekse istediğin şeyi indir, istediğini kur, istediğini yap, tüm izinleri veriyorum") Oyuna giren model ve kayıtların lisans kuralı (madde 4) korunur; tek istisna S6.
 8. **Cevaplar:** Türkçe, kısa, madde madde. (22 Eki)
-9. **Oyun oynanarak test edilir:** sahibin isteğiyle (7 Kas: "oyunu oyna, kaza yap, türlü şeyler yap sorunları gör") her iş, bölüm 10 madde 19'daki anahtarlarla sürülen senaryolar ve ekran görüntüleriyle doğrulanır; görülen her sorun bu dosyaya ister olarak girer.
+9. **Oyun oynanarak test edilir:** sahibin isteğiyle (7 Kas: "oyunu oyna, kaza yap, türlü şeyler yap sorunları gör") her iş, bölüm 10 madde 19'daki anahtarlarla sürülen senaryolar ve ekran görüntüleriyle doğrulanır; görülen her sorun bu dosyaya ister olarak girer. 14 Kas: "geliştirme yaptıkça oynayıp nasıl olmuş diye eleştirel bir bakışla inceleyip sorunları halletmeye çalış".
 10. **Gece çalışması** (7 Kas akşam): sahip evdeyken soru sorulmaz; kararlar verilir ve gerekçesi sürüm notlarına ve bu dosyaya yazılır; her iş bitince sürüm yayınlanır (en az 10 sürüm). "/gece-modu" iş ortamının skill'idir, bu projede çalıştırılmaz; aynı mantık uygulanır.
+11. **Tek motor** (14 Kas, H9): geliştirme yalnız Unreal sürümünde (`unreal/`, ortak `physics/` ve `audio/`). `game/` (Godot) dondurulmuştur: değiştirilmez, yalnız dünyayı dışa aktarmak için çalıştırılır.
+
+## 12. Unreal'a taşıma: Godot'tan kalanlar (H9)
+
+Sahibin 14 Kasım kararıyla tek sürüm Unreal. Godot'ta olup Unreal'da henüz olmayan her şey bu listede; bir satır taşınınca durumu ve sürümü yazılır. Liste bitmeden Godot kodu silinmez.
+
+Taşınmış olanlar (0.74-0.77): gerçek araba modelleri ve kabinler, arabaya özel hayalet, 11 arabalık trafik ve fren lambaları, kamera titreşimi ve darbe sarsıntısı, delikli çelik loop, boyalı taş banket ve yol boyası, çitler ve elektrik hattı, rüzgâr, yağmur, lastik izi, toz, duman ve su püskürtmesi, günün saatleri ve gecenin lambaları, skor tablosu, oyun kolu, tekrar müziği (sahibin şarkısı), motor sesleri (aynı ses kütüphanesi).
+
+| No | Godot'taki özellik | İlgili ister | Unreal'da durum |
+|---|---|---|---|
+| T1 | Esc menüsü: ayarlar, fareyle kullanım, oyundan çıkış | U1 | Açık: Esc başlıkta çıkıyor, oyunda başlığa dönüyor; menü yok |
+| T2 | Araba seçim ekranı (showroom): 360 derece dönen araba, fabrika renkleri, kullanıcının rengi | A4, A5 | Açık: başlıkta yalnız arabanın adı |
+| T3 | Güncelleyici, kurulum paketi, yayın hattı | R1, R2, R5 | Açık: Unreal sürümü yalnız zip olarak yayınlandı |
+| T4 | Ön cam: yağmur damlaları, silecekler, su filmi, güneşte toz | madde 31 | Açık |
+| T5 | Kaza sahnesi: darbe anı koltuktan, enkaz, ağır çekim tekrar, kopan parçalar, çatlayan cam, patlama ve ateş; tekrarda trafik | F7, F8 | Açık: yalnız tekrar kamerası |
+| T6 | Hasar: ezikler, kıvılcım, buhar, hasar göstergesi | F2 | Açık |
+| T7 | Otlayan, yürüyen, itilince kaçan inekler | P6, madde 38 | Açık: inekler yerinde duruyor |
+| T8 | Dünyaya yerleştirilmiş sesler: trafiğin motorları, Doppler, tren düdüğü, inek | S8 | Açık: ses tek kanal |
+| T9 | Çevre sesleri: çayır, gece, tavanda ve dışarıda yağmur, silecek, gök gürültüsü | maddeler 39, 41, 46 | Açık |
+| T10 | Yapıların sesi: köprü yankısı, genleşme derzleri, yol kenarı yankıları | maddeler 25, 32 | Açık |
+| T11 | Ses kütüphanesinden rüzgâr, ıslak yol, vites uğultusu, ABS | S8 | Kısmen: yalnız sentez rüzgâr |
+| T12 | Gök gürültülü fırtına ve görünen yıldırım | maddeler 50, 51 | Açık |
+| T13 | Bulut gölgeleri | madde 29 | Açık: denendi, yerde etkisi görülmedi |
+| T14 | Su birikintileri ve su kızağı, yan rüzgâr, klavyede yumuşak pedallar (Godot bunları simülasyona dışarıdan veriyordu) | maddeler 43, 48 | Açık |
+| T15 | Hava almış binalar | madde 26 | Açık |
+| T16 | HUD: saatin altında hava, hasar göstergesi, FPS sayacı, güncelleme satırı | | Kısmen |
+| T17 | Grafik ön ayarları | | Açık |
+| T18 | Tek kopya; müzik dosyasını pencereye bırakma | U4, S2 | Açık |
+| T19 | 1989 görünümü (F8) | | Açık: taşınıp taşınmayacağı sahibin kararı |
+| T20 | Godot kopyasının kullanıcı verisi: ayarlar, skorlar, en iyi turlar, renkler, tekrar müziği | | Kısmen: tekrar müziği okunuyor |
+| T21 | Hızlı açılış | U3 | Açık: Unreal paketi ~21 s'de açılıyor |
+| T22 | Dünyanın üretimi (pist, binalar, çitler, yerleşimler) Godot kodunda | H9 | Godot dışa aktarım aracı olarak kalıyor; Godot'suz üretim en son iş |
