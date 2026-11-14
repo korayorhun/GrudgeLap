@@ -22,7 +22,7 @@ internal sealed class NativeSession(RaceSession session, int car)
 /// </summary>
 internal static class NativeApi
 {
-    public const int AbiVersion = 9;
+    public const int AbiVersion = 10;
     public const int TrafficFlag = 1;
     public const int SpeedRouteFlag = 2;
     /// <summary>Bits 4-5 of the flags: the credit's weather (0 dry, 1 overcast, 2 wet, 3 rain); <see cref="RandomWeatherFlag"/> draws one instead.</summary>
@@ -99,6 +99,19 @@ internal static class NativeApi
     };
 
     public static string CarName(int car) => Spec(car).Name;
+
+    /// <summary>
+    /// A line of what the showroom and the title screen print about a car (ABI 10, <see cref="CarFacts"/>): 0 its layout
+    /// (year, engine, driven wheels, gearbox, weight on each axle), 1 its figures (power, torque, mass, tyres), 2 the
+    /// title screen's short line (power, mass, driven wheels, gears).
+    /// </summary>
+    public static string CarFactLine(int car, int line) => line switch
+    {
+        0 => CarFacts.LayoutLine(Spec(car)),
+        1 => CarFacts.FiguresLine(Spec(car)),
+        2 => CarFacts.TitleLine(Spec(car)),
+        _ => throw new ArgumentOutOfRangeException(nameof(line), line, "a car has three lines of facts: 0 the layout, 1 the figures, 2 the title screen's"),
+    };
 
     /// <remarks>cg_height is where the game puts the body: the springs' rest length less the static sag (the
     /// car's weight on four springs), the wheel radius, and the hub's height under the centre of gravity.</remarks>

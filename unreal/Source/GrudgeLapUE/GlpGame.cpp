@@ -410,7 +410,16 @@ void AGlpGame::BeginPlay()
 	{
 		Cars[i] = FGlpCarView::FromLevel(GetWorld(), FName(i == 0 ? FString(TEXT("GLP.Car")) : FString::Printf(TEXT("GLP.Car%d"), i)));
 		CarNames.Add(Library->CarName(i));
+		// For the showroom and the title screen (0.79): what they print about each car, and the car's measures to stand
+		// it on the road without a session.
+		Library->CarSpec(i, &Specs.AddDefaulted_GetRef());
+		for (int32 Line = 0; Line < UE_ARRAY_COUNT(Facts); Line++)
+		{
+			Facts[Line].Add(Library->CarFacts(i, Line));
+		}
 	}
+	Paints.Reset(CarCount);
+	Worn.Init(FGlpPaintChoice(), CarCount);
 	if (!Cars.IsValidIndex(0) || !Cars[0])
 	{
 		UE_LOG(LogGlpGame, Error, TEXT("no actor tagged GLP.Car: the level was not built by Scripts/build_scene.py"));
@@ -543,6 +552,24 @@ void AGlpGame::BeginPlay()
 	{
 		CarIndex = 0;
 	}
+	// The showroom and the paints for automated runs (0.79, see the class comment).
+	if (FString Text; FParse::Value(FCommandLine::Get(), TEXT("GlpPaint="), Text, false))
+	{
+		if (FGlpPaintChoice Choice; FGlpPaintChoice::TryParse(Text, Choice))
+		{
+			RunPaint = Choice;
+		}
+		else
+		{
+			UE_LOG(LogGlpGame, Warning, TEXT("-GlpPaint=%s: a preset's name or number, or #RRGGBB[:solid|metallic|pearl] wanted; the car keeps its paint"), *Text);
+		}
+	}
+	if (float Turn = 0.f; FParse::Value(FCommandLine::Get(), TEXT("GlpTurn="), Turn))
+	{
+		HeldTurn = Turn;
+	}
+	FParse::Value(FCommandLine::Get(), TEXT("GlpShowroomPaint="), ShowroomPaintText, false);
+	bShowroomAtStart = FParse::Param(FCommandLine::Get(), TEXT("GlpShowroom")) || FParse::Value(FCommandLine::Get(), TEXT("GlpShowroom="), ShowroomStartCar);
 	if (TourSeconds > 0.f)
 	{
 		// The tour (0.78): every car to drive in the catalogue's order, or -GlpTourCars' ("1+8": cmd splits at commas).
@@ -570,7 +597,44 @@ void AGlpGame::BeginPlay()
 			TourCars.RemoveAt(0);
 		}
 	}
+	if (FParse::Param(FCommandLine::Get(), TEXT("GlpSelfTest")))
+	{
+		// The paints' and the showroom's own checks (0.79), for an automated run: the result in the log, and out with it
+		// as the exit code (0 when every check held).
+		TArray<FString> Failures;
+		const int32 Checks = GlpPaint::SelfTest(Failures) + FGlpShowroom::SelfTest(Failures);
+		for (const FString& Failure : Failures)
+		{
+			UE_LOG(LogGlpGame, Error, TEXT("self test failed: %s"), *Failure);
+		}
+		UE_LOG(LogGlpGame, Display, TEXT("self test: %d checks, %d failed"), Checks, Failures.Num());
+		FPlatformMisc::RequestExitWithStatus(false, Failures.IsEmpty() ? 0 : 3);
+		return;
+	}
+	SyncPaints();
 	NewSession();
+	if (bShowroomAtStart && Session)
+	{
+		OpenShowroom(false);
+		if (Room.bOpen && Cars.IsValidIndex(ShowroomStartCar) && Cars[ShowroomStartCar])
+		{
+			// Any car of the catalogue, as the Godot version's --showroom= (a car out of the line-up too).
+			PutOnShow(ShowroomStartCar);
+		}
+		if (FGlpPaintChoice Choice; Room.bOpen && FGlpPaintChoice::TryParse(ShowroomPaintText, Choice))
+		{
+			if (Choice.IsCustom())
+			{
+				Room.OpenPicker();
+				Room.Picker->Set(Choice);
+				Room.ApplyPicker();
+			}
+			else
+			{
+				Room.ChooseSlot(Choice.Preset);
+			}
+		}
+	}
 }
 
 void AGlpGame::ApplyWeather()
@@ -984,12 +1048,12 @@ void AGlpGame::ShowNightLamps()
 	}
 }
 
-void AGlpGame::SyncRetroreflection()
+void AGlpGame::SyncRetroreflection(const FGlpCarView* Car)
 {
 	// The marker posts' reflectors and the road paint's glass beads return the player's beams to them (M_Reflector,
 	// M_RoadPaint): retroreflected light goes back to its source, so the drones' lamps return to the drones and only the
-	// player's two count. Written every frame while they are lit, once when they go out.
-	const FGlpCarView* Car = PlayerCar();
+	// player's two count (in the showroom the two of the car on show). Written every frame while they are lit, once
+	// when they go out.
 	const USpotLightComponent* Left = Car ? Car->BeamLight(0) : nullptr;
 	const USpotLightComponent* Right = Car ? Car->BeamLight(1) : nullptr;
 	const bool bOn = Left && Right;
@@ -1449,6 +1513,12 @@ void AGlpGame::NewSession()
 		}
 	}
 	Library->GetState(Session, &Current);
+	// Where a credit starts, for the showroom (0.79): the cars it shows stand there without a session of their own, each
+	// with its centre of gravity its own height over that road.
+	FMemory::Memcpy(StartPosition, Current.position, sizeof(StartPosition));
+	FMemory::Memcpy(StartOrientation, Current.orientation, sizeof(StartOrientation));
+	StartGround = Current.position[1] - CarSpec.cg_height;
+	bStartKnown = true;
 	// The credit's hour (0.77), as the Godot version's: -GlpLight for an automated run, otherwise the player's choice (the
 	// day by default; random draws one of the four for every credit).
 	Hour = GlpLook::HourOf(FixedLight >= 0 ? FixedLight : LightChoice);
@@ -1607,12 +1677,13 @@ void AGlpGame::ShowSideMirrors(bool bInside)
 
 bool AGlpGame::InCockpit() const
 {
-	return Rig.Cockpit() && Current.phase != GLP_PHASE_REPLAY;
+	// The showroom looks at the car from outside whatever view the credit is driven in.
+	return Rig.Cockpit() && Current.phase != GLP_PHASE_REPLAY && !Room.bOpen;
 }
 
 bool AGlpGame::InFilmView() const
 {
-	return Rig.View == EGlpView::Film && Current.phase != GLP_PHASE_REPLAY && !FixedCamera && !Orbit;
+	return Rig.View == EGlpView::Film && Current.phase != GLP_PHASE_REPLAY && !FixedCamera && !Orbit && !Room.bOpen;
 }
 
 UTexture* AGlpGame::InstrumentPanel() const
@@ -1647,6 +1718,17 @@ void AGlpGame::Tick(float DeltaSeconds)
 		// The player started the game a second time: that copy has gone and this one comes to the front.
 		GlpInstance::ComeForward();
 	}
+	if (Room.bOpen)
+	{
+		// The showroom holds the game as the menu does (0.79): the session is not stepped, the keys and the mouse are
+		// its own, and what is drawn is the car on show with the camera on its way round it.
+		RunShowroom(Player, DeltaSeconds);
+		if (Session)
+		{
+			Automate(DeltaSeconds);
+		}
+		return;
+	}
 	const bool bMenuWasOpen = PauseMenu.bOpen;
 	if (bMenuWasOpen)
 	{
@@ -1658,6 +1740,13 @@ void AGlpGame::Tick(float DeltaSeconds)
 	}
 	if (!Session)
 	{
+		return;
+	}
+	if (Room.bOpen)
+	{
+		// The menu's CAR line opened it on this frame: its picture at once.
+		SyncShowroom(0.f);
+		Automate(DeltaSeconds);
 		return;
 	}
 	if (bMenuWasOpen || PauseMenu.bOpen)
@@ -1702,6 +1791,13 @@ void AGlpGame::Tick(float DeltaSeconds)
 		if (HandleMenu())
 		{
 			Controls.ignition = 1;
+		}
+		if (Room.bOpen)
+		{
+			// The title screen's Down opened the showroom on this frame: its picture at once.
+			SyncShowroom(0.f);
+			Automate(DeltaSeconds);
+			return;
 		}
 	}
 	if ((Input.Pressed(EKeys::SpaceBar) || Input.Pressed(EKeys::Gamepad_FaceButton_Right)) && (Current.phase == GLP_PHASE_REPLAY || (Current.phase == GLP_PHASE_DRIVING && Current.off_road)))
@@ -1798,6 +1894,17 @@ bool AGlpGame::HandleMenu()
 {
 	if (Current.phase != GLP_PHASE_SELECT_TRANSMISSION)
 	{
+		return false;
+	}
+	// Down (the key, S or the d-pad; not the brake trigger, which a resting foot would press) opens the showroom
+	// (0.79, as in the Godot version since 0.25): the cars seen from outside and their paints, before one is taken.
+	if (Input.Pressed(EKeys::Down) || Input.Pressed(EKeys::S) || Input.Pressed(EKeys::Gamepad_DPad_Down))
+	{
+		OpenShowroom(false);
+		if (Room.bOpen && Audio)
+		{
+			Audio->Chime();
+		}
 		return false;
 	}
 	// Left/right flips between the cars the level has; the session is rebuilt around the new one.
@@ -1970,13 +2077,14 @@ void AGlpGame::ApplyFrameCap()
 	UE_LOG(LogGlpGame, Log, TEXT("frame cap: %d fps on a %.0f Hz screen%s"), Cap, Refresh, bFocused ? TEXT("") : TEXT(" (in the background)"));
 }
 
-void AGlpGame::SyncViews(float DeltaSeconds)
+void AGlpGame::ShowInside(bool bInside)
 {
-	FGlpCarView* Car = PlayerCar();
-	const bool bInside = InCockpit();
 	if (bInside != bInsideShown)
 	{
-		Car->SetInside(bInside, InsideGlass);
+		if (FGlpCarView* Car = PlayerCar())
+		{
+			Car->SetInside(bInside, InsideGlass);
+		}
 		if (Puffs)
 		{
 			// From the seat every puff is beyond the glass; from outside the young smoke is between the eye and the car.
@@ -1994,6 +2102,13 @@ void AGlpGame::SyncViews(float DeltaSeconds)
 	{
 		ApplyViewLook();
 	}
+}
+
+void AGlpGame::SyncViews(float DeltaSeconds)
+{
+	FGlpCarView* Car = PlayerCar();
+	const bool bInside = InCockpit();
+	ShowInside(bInside);
 	if (Mirror && bInside && (++MirrorFrame & 1) == 0)
 	{
 		// From outside the glass keeps its last picture.
@@ -2041,7 +2156,7 @@ void AGlpGame::SyncViews(float DeltaSeconds)
 	// The player's lamps (0.77), lit dusk to dawn, the glows also in the rain; the drones' in SyncTrafficAndTrain.
 	Car->SetLamps(LampState(CarIndex, true), LampAssets);
 	SyncTrafficAndTrain(DeltaSeconds);
-	SyncRetroreflection();
+	SyncRetroreflection(Car);
 	LaySkidMarks();
 	ThrowPuffs(DeltaSeconds, Shot.Location);
 	FallRain(DeltaSeconds, Shot.Location, Shot.Rotation);
@@ -2308,6 +2423,11 @@ void AGlpGame::LoadSettings()
 		{
 			bRayReconstruction = FCString::Atoi(*Value) != 0;
 		}
+		else
+		{
+			// Each car's paint (0.79): paint.<car>, as the Godot version's settings name them.
+			Paints.ReadLine(Key, Value);
+		}
 	}
 }
 
@@ -2315,7 +2435,8 @@ void AGlpGame::SaveSettings() const
 {
 	const FString Text = FString::Printf(TEXT("car=%d\ntransmission=%d\nunits=%s\nweather=%d\nlight=%d\nview=%s\nupscaling=%s\nrr=%d\n"), CarIndex, Transmission, bKmh ? TEXT("kmh") : TEXT("mph"),
 		WeatherChoice, LightChoice, ViewTag(), UpscaleTags[FMath::Clamp(UpscaleChoice, 0, 5)], bRayReconstruction ? 1 : 0);
-	FFileHelper::SaveStringToFile(Text, *SavedFile(TEXT("settings.ini")));
+	// The paints after the rest: one line for every car that is not in its own colour.
+	FFileHelper::SaveStringToFile(Text + Paints.Lines(), *SavedFile(TEXT("settings.ini")));
 }
 
 void AGlpGame::LoadScores()
@@ -2440,6 +2561,7 @@ void AGlpGame::FillMenu()
 	Add(EGlpMenuLine::Continue, TEXT("CONTINUE"));
 	Add(EGlpMenuLine::NewGame, TEXT("NEW GAME"));
 	Add(EGlpMenuLine::Car, FString::Printf(TEXT("CAR: %s"), *CarNameText));
+	Add(EGlpMenuLine::Paint, FString::Printf(TEXT("PAINT: %s"), *(RunPaint.IsSet() ? RunPaint->Name() : PaintName())));
 	Add(EGlpMenuLine::Camera, FString::Printf(TEXT("CAMERA: %s"), ViewName()));
 	Add(EGlpMenuLine::Upscaling, UpscalingLine());
 	if (bDlssRR)
@@ -2487,36 +2609,16 @@ void AGlpGame::RunMenu(APlayerController* Player)
 	}
 	// The mouse: the line under it once it has moved (a mouse lying still does not take the keys' line), a click takes it.
 	bool bClicked = false;
-	if (GEngine && GEngine->GameViewport)
+	FVector2f Point = FVector2f::ZeroVector;
+	if (bool bPress = false, bHeld = false; HudMouse(Player, Point, bPress, bHeld))
 	{
-		FVector2D Viewport(0.0, 0.0);
-		GEngine->GameViewport->GetViewportSize(Viewport);
-		if (Viewport.X > 0.0 && Viewport.Y > 0.0)
+		const int32 Line = PauseMenu.LineAt(HudCanvas(), Point);
+		const bool bMoved = MenuMouse.X >= 0.f && !Point.Equals(MenuMouse, 0.5f);
+		MenuMouse = Point;
+		if (Line != INDEX_NONE && (bMoved || bPress))
 		{
-			// The HUD's canvas: 1600 x 900 scaled to the window (GlpHud).
-			const float Scale = static_cast<float>(FMath::Min(Viewport.X / 1600.0, Viewport.Y / 900.0));
-			const FVector2f Canvas(static_cast<float>(Viewport.X) / Scale, static_cast<float>(Viewport.Y) / Scale);
-			FVector2f Point = FVector2f::ZeroVector;
-			bool bPress = false;
-			// A scripted run's mouse (-GlpMouse) stands in for the real one, which a hidden window never has.
-			bool bKnown = Input.ScriptedMouse(Point, bPress);
-			if (float X = 0.f, Y = 0.f; !bKnown && Player && Player->GetMousePosition(X, Y))
-			{
-				Point = FVector2f(X / Scale, Y / Scale);
-				bPress = Player->WasInputKeyJustPressed(EKeys::LeftMouseButton);
-				bKnown = true;
-			}
-			if (bKnown)
-			{
-				const int32 Line = PauseMenu.LineAt(Canvas, Point);
-				const bool bMoved = MenuMouse.X >= 0.f && !Point.Equals(MenuMouse, 0.5f);
-				MenuMouse = Point;
-				if (Line != INDEX_NONE && (bMoved || bPress))
-				{
-					PauseMenu.Cursor = Line;
-					bClicked = bPress;
-				}
-			}
+			PauseMenu.Cursor = Line;
+			bClicked = bPress;
 		}
 	}
 	const EGlpMenuLine Kind = PauseMenu.Lines[PauseMenu.Cursor].Kind;
@@ -2539,6 +2641,598 @@ void AGlpGame::RunMenu(APlayerController* Player)
 	}
 }
 
+// ---- the showroom and the paints (0.79) --------------------------------------------------------------------
+
+FVector2f AGlpGame::HudCanvas() const
+{
+	// The HUD's canvas: 1600 x 900 scaled to the window, wider or taller where the window is (GlpHud).
+	FVector2D Viewport(0.0, 0.0);
+	if (GEngine && GEngine->GameViewport)
+	{
+		GEngine->GameViewport->GetViewportSize(Viewport);
+	}
+	if (Viewport.X <= 0.0 || Viewport.Y <= 0.0)
+	{
+		return FVector2f(1600.f, 900.f);
+	}
+	const float Scale = static_cast<float>(FMath::Min(Viewport.X / 1600.0, Viewport.Y / 900.0));
+	return FVector2f(static_cast<float>(Viewport.X) / Scale, static_cast<float>(Viewport.Y) / Scale);
+}
+
+bool AGlpGame::HudMouse(const APlayerController* Player, FVector2f& Point, bool& bPress, bool& bDown) const
+{
+	// A scripted run's mouse (-GlpMouse) stands in for the real one, which a hidden window never has.
+	if (Input.ScriptedMouse(Point, bPress))
+	{
+		bDown = Input.ScriptedMouseHeld();
+		return true;
+	}
+	FVector2D Viewport(0.0, 0.0);
+	if (GEngine && GEngine->GameViewport)
+	{
+		GEngine->GameViewport->GetViewportSize(Viewport);
+	}
+	float X = 0.f, Y = 0.f;
+	if (Viewport.X <= 0.0 || Viewport.Y <= 0.0 || !Player || !Player->GetMousePosition(X, Y))
+	{
+		return false;
+	}
+	const float Scale = static_cast<float>(FMath::Min(Viewport.X / 1600.0, Viewport.Y / 900.0));
+	Point = FVector2f(X / Scale, Y / Scale);
+	bPress = Player->WasInputKeyJustPressed(EKeys::LeftMouseButton);
+	bDown = Player->IsInputKeyDown(EKeys::LeftMouseButton);
+	return true;
+}
+
+bool AGlpGame::Place(int32 Car, int32& OutNumber, int32& OutCount) const
+{
+	OutNumber = 0;
+	OutCount = 0;
+	for (int32 i = 0; i < Cars.Num(); i++)
+	{
+		if (Cars[i] && IsDrivable(i))
+		{
+			OutCount++;
+			OutNumber += i <= Car ? 1 : 0;
+		}
+	}
+	return Cars.IsValidIndex(Car) && Cars[Car] && IsDrivable(Car);
+}
+
+const FString& AGlpGame::TitleFacts() const
+{
+	static const FString None;
+	return Facts[2].IsValidIndex(CarIndex) ? Facts[2][CarIndex] : None;
+}
+
+const FString& AGlpGame::ShownFacts(int32 Line) const
+{
+	static const FString None;
+	return Line >= 0 && Line < 2 && Facts[Line].IsValidIndex(Room.Index) ? Facts[Line][Room.Index] : None;
+}
+
+FString AGlpGame::ShownPlace() const
+{
+	int32 Number = 0, Count = 0;
+	return Place(Room.Index, Number, Count) ? FString::Printf(TEXT("CAR %d OF %d"), Number, Count) : FString(TEXT("NOT IN THE LINE-UP"));
+}
+
+void AGlpGame::SyncPaints()
+{
+	for (int32 i = 0; i < Cars.Num(); i++)
+	{
+		if (!Cars[i])
+		{
+			continue;
+		}
+		// The showroom's choice while it is open, seen on the car as it is chosen; otherwise the settings', and for the
+		// car driven a run's own (-GlpPaint).
+		FGlpPaintChoice Wanted = Room.bOpen ? Room.ChoiceOf(i) : Paints.Of(i);
+		if (!Room.bOpen && i == CarIndex && RunPaint.IsSet())
+		{
+			Wanted = RunPaint.GetValue();
+		}
+		if (Wanted != Worn[i])
+		{
+			const TOptional<FGlpPaint> Paint = Wanted.Paint();
+			Cars[i]->Repaint(Paint.IsSet() ? &Paint.GetValue() : nullptr);
+			Worn[i] = Wanted;
+		}
+	}
+}
+
+void AGlpGame::StepPaint(int32 Step)
+{
+	// The car's own colour, the presets, and the colour it was last mixed in when it has one (the Godot version's
+	// PaintBook.Options): mixing is the showroom's, the menu steps through what there is.
+	TArray<FGlpPaintChoice> Options;
+	for (int32 i = 0; i < GlpPaint::PresetCount(); i++)
+	{
+		Options.Add(FGlpPaintChoice::OfPreset(i));
+	}
+	if (const TOptional<FGlpPaintChoice> Mixed = Paints.LastMixed(CarIndex); Mixed.IsSet())
+	{
+		Options.Add(Mixed.GetValue());
+	}
+	const int32 At = FMath::Max(Options.IndexOfByKey(Paints.Of(CarIndex)), 0);
+	Paints.Set(CarIndex, Options[(At + Step + Options.Num()) % Options.Num()]);
+	// A paint chosen here is the player's word over a run's (-GlpPaint).
+	RunPaint.Reset();
+	SaveSettings();
+	SyncPaints();
+}
+
+void AGlpGame::PutOnShow(int32 Car)
+{
+	Room.Show(Car);
+	// The car's own colour, for the ORIGINAL swatch and the colour its picker starts from (a mid grey for a car whose
+	// paint the level does not know).
+	FLinearColor Own(0.5f, 0.5f, 0.5f);
+	Cars[Car]->OwnColour(Own);
+	Room.OwnSrgb = Own;
+}
+
+void AGlpGame::OpenShowroom(bool bFromMenu, int32 Step)
+{
+	if (Room.bOpen || !bStartKnown || !PlayerCar())
+	{
+		return;
+	}
+	// The first view is the front three-quarter from the driver's side; -GlpTurn holds the camera where a picture wants it.
+	Room.Open(CarIndex, &Paints, bFromMenu, HeldTurn.Get(FGlpShowroom::StartBearing), HeldTurn.IsSet());
+	PutOnShow(CarIndex);
+	if (Step != 0)
+	{
+		StepShowroom(Step);
+	}
+	RoomCar = INDEX_NONE;
+	Input.Reset();
+	if (APlayerController* Player = GetWorld()->GetFirstPlayerController(); Player && !bFromMenu)
+	{
+		// The mouse turns the car and takes the swatches: its pointer shows, as under the menu (which has shown it already).
+		FInputModeGameAndUI Mode;
+		Mode.SetHideCursorDuringCapture(false);
+		Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		Player->SetInputMode(Mode);
+		Player->SetShowMouseCursor(true);
+	}
+}
+
+void AGlpGame::StepShowroom(int32 Direction)
+{
+	// The next car to drive, or the one before, round the line-up; a car out of it (-GlpShowroom=) steps into it.
+	const int32 Count = Cars.Num();
+	for (int32 i = 1; i <= Count; i++)
+	{
+		const int32 Candidate = ((Room.Index + (Direction < 0 ? -i : i)) % Count + Count) % Count;
+		if (Cars[Candidate] && IsDrivable(Candidate))
+		{
+			PutOnShow(Candidate);
+			return;
+		}
+	}
+}
+
+void AGlpGame::CloseShowroom(bool bTake)
+{
+	if (!Room.bOpen)
+	{
+		return;
+	}
+	const int32 Shown = Room.Index;
+	if (bTake)
+	{
+		// A colour still being mixed is the car's: Enter in the picker and Enter here both mean "this one". Every paint
+		// chosen here is kept, a car's the player only looked at too (the Godot showroom's rule, which its note states).
+		Room.ClosePicker(true);
+		for (const TPair<int32, FGlpPaintChoice>& Edit : Room.Edits)
+		{
+			if (Edit.Value != Paints.Of(Edit.Key))
+			{
+				Paints.Set(Edit.Key, Edit.Value);
+			}
+		}
+		// A colour mixed here and then left for a preset stays the car's mixed colour: its swatch has it next time.
+		for (const TPair<int32, FGlpPaintChoice>& Mixed : Room.MixedHere)
+		{
+			Paints.Remember(Mixed.Key, Mixed.Value);
+		}
+	}
+	Room.Close();
+	RoomCar = INDEX_NONE;
+	LightShowroom(false);
+	// A car out of the line-up can be looked at (-GlpShowroom=) but not driven: taking it keeps the car driven.
+	const bool bAnother = bTake && Shown != CarIndex && Cars.IsValidIndex(Shown) && Cars[Shown] && IsDrivable(Shown);
+	if (bAnother)
+	{
+		CarIndex = Shown;
+	}
+	if (bTake)
+	{
+		// The paint taken is the player's word over a run's (-GlpPaint).
+		RunPaint.Reset();
+		SaveSettings();
+	}
+	SyncPaints();
+	// The cars and the traffic as the session has them again.
+	for (int32 i = 0; i < Cars.Num(); i++)
+	{
+		if (Cars[i])
+		{
+			Cars[i]->SetVisible(i == CarIndex);
+		}
+	}
+	for (const TUniquePtr<FGlpCarView>& Drone : TrafficCars)
+	{
+		Drone->SetVisible(true);
+	}
+	Input.Reset();
+	if (bAnother)
+	{
+		// Another car is another credit: its title screen, the menu closed (as the Godot version's showroom).
+		if (PauseMenu.bOpen)
+		{
+			CloseMenu();
+		}
+		NewSession();
+	}
+	if (APlayerController* Player = GetWorld()->GetFirstPlayerController(); Player && !PauseMenu.bOpen)
+	{
+		Player->SetInputMode(FInputModeGameOnly());
+		Player->SetShowMouseCursor(false);
+	}
+	if (Session)
+	{
+		// The picture behind: the car where the session has it, the camera the view's own.
+		Library->GetState(Session, &Current);
+		MessageText = Library->Message(Session);
+		Rig.Reset();
+		SyncViews(0.f);
+	}
+	if (bTake && Audio)
+	{
+		Audio->Chime();
+	}
+}
+
+void AGlpGame::RunShowroom(APlayerController* Player, float DeltaSeconds)
+{
+	const FVector2f Canvas = HudCanvas();
+	const bool bLeft = Input.Pressed(EKeys::Left) || Input.Pressed(EKeys::A) || Input.Pressed(EKeys::Gamepad_DPad_Left) || Input.Pressed(EKeys::Gamepad_LeftStick_Left);
+	const bool bRight = Input.Pressed(EKeys::Right) || Input.Pressed(EKeys::D) || Input.Pressed(EKeys::Gamepad_DPad_Right) || Input.Pressed(EKeys::Gamepad_LeftStick_Right);
+	const bool bUp = Input.Pressed(EKeys::Up) || Input.Pressed(EKeys::W) || Input.Pressed(EKeys::Gamepad_DPad_Up);
+	const bool bDown = Input.Pressed(EKeys::Down) || Input.Pressed(EKeys::S) || Input.Pressed(EKeys::Gamepad_DPad_Down);
+	const bool bEscape = Input.Pressed(EKeys::Escape) || Input.Pressed(EKeys::Gamepad_FaceButton_Right) || Input.Pressed(EKeys::Gamepad_Special_Left);
+	const bool bEnter = Input.Pressed(EKeys::Enter) || Input.Pressed(EKeys::Gamepad_FaceButton_Bottom) || Input.Pressed(EKeys::Gamepad_Special_Right);
+	const bool bSpace = Input.Pressed(EKeys::SpaceBar);
+	const bool bMix = Input.Pressed(EKeys::C) || Input.Pressed(EKeys::Gamepad_FaceButton_Top);
+	bool bChime = false;
+	bool bTake = false;
+	bool bLeave = false;
+
+	if (Room.Picker.IsSet())
+	{
+		// The colour picker's keys (the Godot version's HandlePicker): Esc, Back or B put the paint back as it was;
+		// Enter, Space, A, C or Y keep the colour; up and down choose the row, left and right change it (a tap a step,
+		// held faster and faster). Taking the car or leaving the showroom waits for the picker to close.
+		if (bEscape)
+		{
+			Room.ClosePicker(false);
+		}
+		else if (bEnter || bSpace || bMix)
+		{
+			Room.ClosePicker(true);
+			bChime = true;
+		}
+		else
+		{
+			if (bUp || bDown)
+			{
+				Room.Picker->MoveFocus(bUp ? -1 : 1);
+			}
+			const int32 Held = (Input.Down(EKeys::Right) || Input.Down(EKeys::D) || Input.Down(EKeys::Gamepad_DPad_Right) || Input.Down(EKeys::Gamepad_LeftStick_Right) ? 1 : 0)
+				- (Input.Down(EKeys::Left) || Input.Down(EKeys::A) || Input.Down(EKeys::Gamepad_DPad_Left) || Input.Down(EKeys::Gamepad_LeftStick_Left) ? 1 : 0);
+			if (Room.Picker->Nudge(Held, (bRight ? 1 : 0) - (bLeft ? 1 : 0), DeltaSeconds))
+			{
+				Room.ApplyPicker();
+			}
+		}
+	}
+	else if (bMix)
+	{
+		Room.OpenPicker();
+		bChime = true;
+	}
+	else if (bEscape || (bSpace && Room.bFromMenu))
+	{
+		// Space goes back over the menu, whose foot says so, and takes over the title screen, where it starts the game.
+		bLeave = true;
+	}
+	else if (bEnter || bSpace)
+	{
+		bTake = true;
+	}
+	else if (bLeft || bRight)
+	{
+		StepShowroom(bLeft ? -1 : 1);
+		bChime = true;
+	}
+	else if (bUp || bDown)
+	{
+		Room.CyclePaint(bUp ? -1 : 1);
+		bChime = true;
+	}
+
+	// The mouse (the Godot version's HandleShowroomMouse): a press takes a chevron, a swatch or a button, or what the
+	// picker has under it; a press on the stage starts a drag that turns the view; the wheel brings the car closer.
+	FVector2f Point = FVector2f::ZeroVector;
+	bool bPress = false, bHeld = false;
+	const bool bMouse = HudMouse(Player, Point, bPress, bHeld);
+	int32 Wheel = Input.ScriptedWheel();
+	if (Player)
+	{
+		Wheel += (Player->WasInputKeyJustPressed(EKeys::MouseScrollUp) ? 1 : 0) - (Player->WasInputKeyJustPressed(EKeys::MouseScrollDown) ? 1 : 0);
+	}
+	if (Wheel != 0)
+	{
+		Room.ZoomBy(Wheel);
+	}
+	if (!bMouse || !bHeld)
+	{
+		Room.bDragging = false;
+		if (Room.Picker.IsSet())
+		{
+			Room.Picker->Dragging = FGlpColourPicker::EHit::Nothing;
+		}
+	}
+	if (bMouse && !bTake && !bLeave)
+	{
+		bool bPickerTook = false;
+		if (Room.Picker.IsSet())
+		{
+			FGlpColourPicker& Picker = Room.Picker.GetValue();
+			if (bPress)
+			{
+				EGlpFinish Finish = Picker.Finish;
+				const FGlpColourPicker::EHit Hit = FGlpColourPicker::HitTest(Canvas, Point, Finish);
+				bPickerTook = Hit != FGlpColourPicker::EHit::Nothing;
+				switch (Hit)
+				{
+				case FGlpColourPicker::EHit::Square:
+				case FGlpColourPicker::EHit::HueBar:
+					Picker.Dragging = Hit;
+					Picker.Pick(Canvas, Hit, Point);
+					Room.ApplyPicker();
+					break;
+				case FGlpColourPicker::EHit::Finish:
+					Picker.SetFinish(Finish);
+					Room.ApplyPicker();
+					break;
+				case FGlpColourPicker::EHit::Done:
+					Room.ClosePicker(true);
+					bChime = true;
+					break;
+				case FGlpColourPicker::EHit::Cancel:
+					Room.ClosePicker(false);
+					break;
+				default:
+					// The panel takes a press on it; one outside it is the showroom's (below).
+					break;
+				}
+			}
+			else if (bHeld && Picker.Dragging != FGlpColourPicker::EHit::Nothing)
+			{
+				Picker.Pick(Canvas, Picker.Dragging, Point);
+				Room.ApplyPicker();
+			}
+		}
+		if (bPress && !bPickerTook)
+		{
+			int32 Slot = 0;
+			switch (FGlpShowroom::HitTest(Canvas, Point, Slot))
+			{
+			case FGlpShowroom::EHit::Left:
+				StepShowroom(-1);
+				bChime = true;
+				break;
+			case FGlpShowroom::EHit::Right:
+				StepShowroom(1);
+				bChime = true;
+				break;
+			case FGlpShowroom::EHit::Take:
+				// TAKE IT and BACK wait for the picker to close: they are drawn dimmed while it is open.
+				bTake = !Room.Picker.IsSet();
+				break;
+			case FGlpShowroom::EHit::Back:
+				bLeave = !Room.Picker.IsSet();
+				break;
+			case FGlpShowroom::EHit::Swatch:
+				if (Slot == FGlpShowroom::CustomSlot())
+				{
+					// The mixed colour's swatch opens the picker on it.
+					Room.OpenPicker();
+					bChime = true;
+				}
+				else if (Slot != Room.PaintSlot())
+				{
+					Room.ChooseSlot(Slot);
+					bChime = true;
+				}
+				break;
+			default:
+				// The stage between the bar and the panel: the car is taken hold of.
+				Room.bDragging = Point.Y > 64.f && Point.Y < FGlpShowroom::Panel(Canvas).Y;
+				break;
+			}
+		}
+		else if (Room.bDragging && bHeld && Room.Mouse.X >= 0.f)
+		{
+			Room.Drag(Point.X - Room.Mouse.X);
+		}
+		Room.Mouse = Point;
+	}
+
+	if (bTake || bLeave)
+	{
+		CloseShowroom(bTake);
+		return;
+	}
+	if (bChime && Audio)
+	{
+		Audio->Chime();
+	}
+	SyncShowroom(DeltaSeconds);
+	// Over the title screen the sound goes on (the menu holds it; under the menu it is held already): the day's air,
+	// and the chime of a step. The state is the title's last, without its events: they have sounded.
+	if (Audio && !PauseMenu.bOpen)
+	{
+		glp_state Still = Current;
+		Still.events = 0;
+		Audio->Update(Still, TrainDistance, false, DeltaSeconds);
+	}
+}
+
+void AGlpGame::LightShowroom(bool bOn, const FVector& Foot, const FVector& Nose, const FVector& Right, double MiddleCm)
+{
+	// The key light ahead of the nose on the driver's side and the fill behind on the other side, each 45 degrees off
+	// the car's length, so that the nose and one flank face the key and the tail and the other flank the fill: 4.6 m
+	// out along and across and 3.6 m up, about 7 m from the car's middle and 24 degrees over it, where a photographer's
+	// two lamps on stands would be, and out of the picture from every place on the camera's circle. The night's
+	// exposure (EV100 1, GlpLook) draws a white card in 4.4 lux as white: the key's 600 cd are 12 lux square on and 7.6
+	// on a flank, most of a stop over that, the lit side of a night picture; the fill's 420 cd two thirds of it, so the
+	// car is easy to see from all round and still has a lit and a darker side. A daylight lamp's white, a little warm.
+	struct FStand
+	{
+		double Along;    // m ahead of the car's middle
+		double Across;   // m to its right
+		double Up;       // m over the road
+		float Candela;
+	};
+	static const FStand Stands[2] = { { 4.6, -4.6, 3.6, 600.f }, { -4.6, 4.6, 3.6, 420.f } };
+	static const FLinearColor White = FLinearColor::FromSRGBColor(FColor(255, 244, 229));
+	for (int32 i = 0; i < 2; i++)
+	{
+		USpotLightComponent* Light = RoomLights[i].Get();
+		if (!Light)
+		{
+			if (!bOn)
+			{
+				continue;
+			}
+			// No light on the rain's streaks or in the night rain's fog: a cone of lit air between the lamp and the car
+			// would hide the paint the lamp is there to show. Their shadows stand the car on the road.
+			Light = GlpLamps::Spot(this, GetRootComponent(), FTransform::Identity, Stands[i].Candela, White, 22.f, 38.f, 2500.f, true, nullptr, false);
+			if (!Light)
+			{
+				continue;
+			}
+			Light->SetUsingAbsoluteLocation(true);
+			Light->SetUsingAbsoluteRotation(true);
+			Light->SetVolumetricScatteringIntensity(0.f);
+			// A lamp behind a diffuser, 90 cm across: its highlight on the paint is a soft patch, not a point.
+			Light->SetSourceRadius(45.f);
+			RoomLights[i] = Light;
+		}
+		if (bOn)
+		{
+			const FVector At = Foot + Nose * (Stands[i].Along * 100.0) + Right * (Stands[i].Across * 100.0) + FVector::UpVector * (Stands[i].Up * 100.0);
+			const FVector Target = Foot + FVector::UpVector * MiddleCm;
+			Light->SetWorldLocationAndRotation(At, FRotationMatrix::MakeFromX(Target - At).ToQuat());
+		}
+		if (Light->IsVisible() != bOn)
+		{
+			Light->SetVisibility(bOn);
+		}
+	}
+}
+
+void AGlpGame::SyncShowroom(float DeltaSeconds)
+{
+	FGlpCarView* Car = Cars.IsValidIndex(Room.Index) ? Cars[Room.Index].Get() : nullptr;
+	if (!Car || !Car->Root() || !Specs.IsValidIndex(Room.Index))
+	{
+		return;
+	}
+	ShowInside(false);
+	if (RoomCar != Room.Index)
+	{
+		// Only the car on show is drawn, with the traffic and the ghost out of the picture: a drone the menu holds at the
+		// start line would stand in it. The car stands where a credit starts, on its own springs.
+		for (int32 i = 0; i < Cars.Num(); i++)
+		{
+			if (Cars[i])
+			{
+				Cars[i]->SetVisible(i == Room.Index);
+			}
+		}
+		for (const TUniquePtr<FGlpCarView>& Drone : TrafficCars)
+		{
+			Drone->SetVisible(false);
+		}
+		if (Ghost)
+		{
+			Ghost->SetVisible(false);
+		}
+		const float Position[3] = { StartPosition[0], StartGround + Specs[Room.Index].cg_height, StartPosition[2] };
+		Car->SetPose(Position, StartOrientation);
+		Car->SetWheelsAtRest(Specs[Room.Index]);
+		Car->SetBraking(0.f);
+		RoomCar = Room.Index;
+	}
+	// The car's lamps as the hour and the weather light them, but out at night, when the showroom's floodlights light
+	// the car (see RoomLights).
+	const bool bFloodlit = ShowroomFloodlit();
+	FGlpLampState Lamps = LampState(Room.Index, true);
+	if (bFloodlit)
+	{
+		Lamps.bBeams = false;
+		Lamps.bCards = false;
+	}
+	Car->SetLamps(Lamps, LampAssets);
+	SyncPaints();
+
+	// The car's measures, from its body's box over the ground under its wheels: the radius it sweeps as the camera goes
+	// round it (half the diagonal of its plan, or five quarters of its height for a short, tall one) and its middle.
+	const FBox& Box = Car->BodyBox();
+	const float Length = static_cast<float>(Box.GetSize().Y) / 100.f;
+	const float Width = static_cast<float>(Box.GetSize().X) / 100.f;
+	const float Height = (static_cast<float>(Box.Max.Z) - Car->GroundZ()) / 100.f;
+	const float Middle = Height * 0.5f;
+	Room.Advance(DeltaSeconds, HudCanvas(), FMath::Max(0.5f * FMath::Sqrt(Length * Length + Width * Width), Height * 1.25f), Middle);
+
+	// The camera on a level circle round the car's middle, FGlpShowroom::CameraPitch over it and aimed a little under
+	// it, so the car stands in the stage between the bar and the panel. The nose is the root's -Y, the right its +X.
+	const FTransform& Body = Car->Root()->GetActorTransform();
+	const FVector Foot = Body.TransformPosition(FVector(Box.GetCenter().X, Box.GetCenter().Y, Car->GroundZ()));
+	const FVector Nose = (-Body.GetUnitAxis(EAxis::Y)).GetSafeNormal2D();
+	const FVector Right = Body.GetUnitAxis(EAxis::X).GetSafeNormal2D();
+	LightShowroom(bFloodlit, Foot, Nose, Right, Middle * 100.0);
+	float SinYaw = 0.f, CosYaw = 1.f, SinPitch = 0.f, CosPitch = 1.f;
+	FMath::SinCos(&SinYaw, &CosYaw, Room.Yaw);
+	FMath::SinCos(&SinPitch, &CosPitch, FMath::DegreesToRadians(FGlpShowroom::CameraPitch));
+	const FVector Away = Nose * CosYaw + Right * SinYaw;
+	const double Distance = Room.Distance * 100.0;
+	// With the picker open the camera steps aside, to its right, and the car stands in the stage left of the panel.
+	const FVector Aside = FVector::CrossProduct(FVector::UpVector, -Away) * (Room.Shift * 100.0);
+	const FVector Aim = Foot + FVector::UpVector * (Middle * 100.0 - FGlpShowroom::AimDrop * Distance) + Aside;
+	FVector Eye = Aim + (Away * CosPitch + FVector::UpVector * SinPitch) * Distance;
+	if (Rig.Ground)
+	{
+		// The verge may rise beside the road: the camera stays over it, as the game's other cameras outside the car do.
+		if (const TOptional<double> Under = Rig.Ground(Eye); Under.IsSet())
+		{
+			Eye.Z = FMath::Max(Eye.Z, Under.GetValue() + 45.0);
+		}
+	}
+	const FQuat Look = FRotationMatrix::MakeFromXZ(Aim - Eye, FVector::UpVector).ToQuat();
+	Camera->SetWorldLocationAndRotation(Eye, Look);
+	Camera->SetFieldOfView(GlpSpace::HorizontalFov(FGlpShowroom::CameraFov));
+
+	SyncRetroreflection(Car);
+	// The weather goes on round the car: the rain falls in the showroom's picture too.
+	FallRain(DeltaSeconds, Eye, Look);
+}
+
 void AGlpGame::TakeMenuLine(EGlpMenuLine Line, int32 Direction)
 {
 	// Enter steps a choice on as right does; a line that is a button takes Enter only.
@@ -2559,8 +3253,12 @@ void AGlpGame::TakeMenuLine(EGlpMenuLine Line, int32 Direction)
 		}
 		break;
 	case EGlpMenuLine::Car:
-		// The car is a credit's: the session is rebuilt around the new one, on the title screen.
-		StepCar(Step);
+		// The showroom (0.79, as the Godot version's CAR line since 0.25) over the paused credit; left and right go
+		// straight on to the next car there. Until 0.78 the line stepped the car and rebuilt the session at once.
+		OpenShowroom(true, Direction);
+		break;
+	case EGlpMenuLine::Paint:
+		StepPaint(Step);
 		bRefreshViews = true;
 		break;
 	case EGlpMenuLine::Camera:

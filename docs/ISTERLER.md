@@ -8,7 +8,7 @@ Yeni bir istek gelince buraya satır olarak eklenir. Bir sürüm bir isteği kar
 - **Durum:** `Tamam` karşılandı, `Kısmen` bir kısmı karşılandı, `Açık` henüz yapılmadı, `Karar` yön belirlendi, `Ertelendi` bilerek sonraya bırakıldı.
 - **Ayrıntı:** teknik gerekçeler [design.md](design.md)'de, sürüm notları GitHub Releases'te.
 
-Son güncelleme: 14 Kasım 2026 (sürüm 0.78.0: yayınlanan oyun artık Unreal sürümü; 14 Kasım istekleri H9, H10, G12, G13, U6, R5, R6, R7 ve bölüm 12'den T1, T3, T18, T20 işlendi).
+Son güncelleme: 15 Kasım 2026 (sürüm 0.79.0: bölüm 12'den T2 işlendi, Unreal sürümünde araba seçim ekranı ve boyalar. Sürüm 0.78.0: yayınlanan oyun artık Unreal sürümü; 14 Kasım istekleri H9, H10, G12, G13, U6, R5, R6, R7 ve bölüm 12'den T1, T3, T18, T20 işlendi).
 
 ## 1. Hedef
 
@@ -78,8 +78,8 @@ Son güncelleme: 14 Kasım 2026 (sürüm 0.78.0: yayınlanan oyun artık Unreal 
 | A1 | Farklı araba seçenekleri olsun. Özellikle Türkiye'de kullanılan standart arabalar, gerçekçi modelleri, gerçek sesleri ve fizikleriyle. | 28 Eki: "mesela renault clio, eski fiat bravo, seat leon cupra"; 29 Eki: "türkiyede kullanılan standart arabaların" | Kısmen: Renault 12, Tofaş (VAZ), E-Class (0.10), Bravo ve Leon (0.26), Renault Clio II 1.6 16V beş kapı '01 (0.33.0: Nardeol'un CC BY modeli, SAAB kabini; sesi Bravo 1.6'nın 16 supaplı bankası, gerçek K4M kaydı bulununca değişir). Bravo ve Leon'un gerçek modeli hâlâ yok |
 | A2 | Ferrari 458, Fiat Bravo 2001 HGT, Fiat Bravo 2001 1.6, SEAT Leon Cupra 2018 240HP 2.0 TSI ve Subaru BRZ eklensin; en gerçekçi sürüş fiziği, görünüş ve sesle. | 2 Kas | Tamam (0.26.0). Varsayım ve eksikler aşağıda |
 | A3 | Leon Cupra: "2018, 240 HP, 2.0 TSI". 2018 Cupra resmen 300 PS'ti; aynı yılların 245 PS (241 HP) 2.0 TSI ayarı kullanıldı. | 2 Kas | Karar bekliyor: 300 PS'lik gerçek Cupra değerleri kodda hazır |
-| A4 | Arabayı görerek seçmek için bir menü; arabalar 360 derece dönsün. | 2 Kas: "araba seçtiğimiz bir menü olsa ve arabalar 360 derece rotate olsa" | Tamam (0.25.0 showroom) |
-| A5 | Seçim ekranında renk seçilebilsin: varsayılan orijinal fabrika rengi, ayrıca kullanıcının kendi rengi. | 2 Kas: "varsayılan renkleri olsun (orjinal renkler) + kullanıcı custom seçebilsin" | Tamam (0.25.0; yeni beş araba 0.26.0) |
+| A4 | Arabayı görerek seçmek için bir menü; arabalar 360 derece dönsün. | 2 Kas: "araba seçtiğimiz bir menü olsa ve arabalar 360 derece rotate olsa" | Tamam (0.25.0 showroom; Unreal sürümünde 0.79.0, T2) |
+| A5 | Seçim ekranında renk seçilebilsin: varsayılan orijinal fabrika rengi, ayrıca kullanıcının kendi rengi. | 2 Kas: "varsayılan renkleri olsun (orjinal renkler) + kullanıcı custom seçebilsin" | Tamam (0.25.0; yeni beş araba 0.26.0; Unreal sürümünde 0.79.0, T2) |
 | A6 | Bravo (2000 kasası) ve Leon (2018 ve öncesi kasası) için model her yerde detaylıca aransın. Bulunamazsa oyunun kendi gövdesi kullanılsın. | 2 Kas, soru cevapları | Tamam: lisanslı model yok; oyunun kendi gövdeleri gerçek ölçülerden yapıldı (0.26.0) |
 | A7 | 458 için iç mekânlı RainerS modeli (BlendSwap #5151) indirilip Blender'la oyuna hazırlansın. | 2 Kas, soru cevabı: "sen indirip kurar mısın?" | Tamam (0.75.0): sahibin hesabıyla indirilen .blend Blender'da temiz bir modele dönüştürüldü (tools/convert_rainers_458.py); 458 artık bu modelle: gerçek LED halkalı arka lambalar, gerçek jantlar, doğru ölçüler. Modelin kendi kabini çok sade olduğu için kabin McLaren 570S'inki |
 | A8 | Daha iyi modeller sahibin Sketchfab ve BlendSwap hesaplarıyla indirilebilir; BlendSwap'in "Fan Art" işaretli (ticari kullanım yasak) ve CC BY-SA modelleri de kullanılabilir. | 2 Kas: "sana her türlü yetkiyi veriyorum"; 8 Kas: "download'a bazı arabalar indirdim.. onların da gerçekçi iç ve driving physics ve seslerini bulabilirsen kullanır mısın?", "izin veriyorum" | Karar: CC0/CC BY ve, sahibin 8 Kas izniyle, oyun ücretsiz olduğu için BlendSwap'in Fan Art (ticari olmayan) ve CC BY-SA modelleri; her kısıt THIRD_PARTY.md'de yazılır. 8 Kas'ta indirilenler: Ferrari 458 (RainerS, CC BY 3.0, Fan Art değil), Lamborghini Gallardo (jaxy), Audi R8 (pranavjit), Mercedes 300 SL (CC BY 3.0, Fan Art), Subaru BRZ (CC BY-SA 3.0, Fan Art) |
@@ -243,8 +243,8 @@ Taşınmış olanlar (0.74-0.77): gerçek araba modelleri ve kabinler, arabaya �
 
 | No | Godot'taki özellik | İlgili ister | Unreal'da durum |
 |---|---|---|---|
-| T1 | Esc menüsü: ayarlar, fareyle kullanım, oyundan çıkış | U1 | Tamam (0.78.0): Esc menüsü (devam, yeni oyun, araba, kamera, DLSS, hava, ışık, birim, tam ekran, güncelleme, çıkış); klavye, oyun kolu ve fare; oyun arkada duruyor ve susuyor. Boya ve grafik ön ayarı satırları T2 ve T17 ile gelecek |
-| T2 | Araba seçim ekranı (showroom): 360 derece dönen araba, fabrika renkleri, kullanıcının rengi | A4, A5 | Açık: başlıkta yalnız arabanın adı |
+| T1 | Esc menüsü: ayarlar, fareyle kullanım, oyundan çıkış | U1 | Tamam (0.78.0): Esc menüsü (devam, yeni oyun, araba, kamera, DLSS, hava, ışık, birim, tam ekran, güncelleme, çıkış); klavye, oyun kolu ve fare; oyun arkada duruyor ve susuyor. Boya satırı 0.79.0'da geldi (T2); grafik ön ayarı satırı T17 ile gelecek |
+| T2 | Araba seçim ekranı (showroom): 360 derece dönen araba, fabrika renkleri, kullanıcının rengi | A4, A5 | Tamam (0.79.0): araba kredinin başladığı yerde, pistte ve günün ışığında durur; kamera çevresinde 360 derece döner, fareyle çevrilir, tekerlekle yaklaşılır. Sağ/sol bütün arabalar, yukarı/aşağı boyalar: fabrika rengi, yedi hazır renk ve kullanıcının kendi karışımı (ton, doygunluk, açıklık seçicisi; düz, metalik ya da sedefli). Başlıkta aşağı tuşu ya da Esc menüsünün CAR satırı açar; menüde PAINT satırı var. Gece iki projektör arabayı aydınlatır. Boyalar araba başına ayarlarda durur; karışım rengi hazır renge geçilince de saklanır |
 | T3 | Güncelleyici, kurulum paketi, yayın hattı | R1, R2, R5 | Tamam (0.78.0): güncelleyici (`update.native`: Godot'takinin aynı kodu, C arayüzü arkasında; yalnız oyuncu isteyince), Inno Setup kurulumu (aynı AppId, klasör ve kısayollar; Godot dosyalarını kaldırıyor), taşınabilir zip, `tools/package.ps1` ve `tools/release.ps1` |
 | T4 | Ön cam: yağmur damlaları, silecekler, su filmi, güneşte toz | madde 31 | Açık |
 | T5 | Kaza sahnesi: darbe anı koltuktan, enkaz, ağır çekim tekrar, kopan parçalar, çatlayan cam, patlama ve ateş; tekrarda trafik | F7, F8 | Açık: yalnız tekrar kamerası |
@@ -262,6 +262,6 @@ Taşınmış olanlar (0.74-0.77): gerçek araba modelleri ve kabinler, arabaya �
 | T17 | Grafik ön ayarları | | Açık |
 | T18 | Tek kopya; müzik dosyasını pencereye bırakma | U4, S2 | Kısmen (0.78.0): tek kopya tamam; müzik dosyasını pencereye bırakma açık (M klasörü açıyor) |
 | T19 | 1989 görünümü (F8) | | Açık: taşınıp taşınmayacağı sahibin kararı |
-| T20 | Godot kopyasının kullanıcı verisi: ayarlar, skorlar, en iyi turlar, renkler, tekrar müziği | | Tamam (0.78.0): veriler `%LOCALAPPDATA%\GrudgeLap`'te; ilk açılışta Godot kopyasının skorları, en iyi turları ve seçimleri (araba, vites, hava, ışık, birim) devralınıyor; tekrar müziği yerinden okunuyor. Kullanıcı renkleri T2 ile gelecek |
+| T20 | Godot kopyasının kullanıcı verisi: ayarlar, skorlar, en iyi turlar, renkler, tekrar müziği | | Tamam (0.78.0): veriler `%LOCALAPPDATA%\GrudgeLap`'te; ilk açılışta Godot kopyasının skorları, en iyi turları ve seçimleri (araba, vites, hava, ışık, birim) devralınıyor; tekrar müziği yerinden okunuyor. Kullanıcı renkleri 0.79.0'da devralındı (T2): Godot kopyasının araba boyaları ilk açılışta bir kez alınır |
 | T21 | Hızlı açılış | U3 | Kısmen (0.78.0): paket ~12 s'de açılıyor (DLSS'in açılıştaki model sorgusu kapatıldı); kalan açık |
 | T22 | Dünyanın üretimi (pist, binalar, çitler, yerleşimler) Godot kodunda | H9 | Godot dışa aktarım aracı olarak kalıyor; Godot'suz üretim en son iş |

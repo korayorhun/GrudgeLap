@@ -18,7 +18,9 @@ is the one you remember, under a mountain range: a red barn, cows in the fields,
 signs that tip over when you clip them and a level crossing where a train really does come through; by day, at
 sunrise, at dusk or at night, dry, overcast, wet or in the rain. You sit in the car's own cabin, reading working dials
 through a steering wheel that turns as you steer, with the road behind you in the mirror; or follow the car from
-behind, or from far back through a long lens, as a film would. Keyboard and gamepad, on Windows. Free, open source.
+behind, or from far back through a long lens, as a film would. You choose the car in the showroom, where it stands on
+the track and the camera goes round it, in its own colour, one of seven others or one you mix yourself, solid,
+metallic or pearl. Keyboard and gamepad, on Windows. Free, open source.
 
 **TR** · 1989'un arcade sürüş simülatörlerine saygı duruşu; ücretsiz bir oyunun olabildiği kadar fotoğrafa yakın.
 0.78'den beri GrudgeLap Unreal Engine 5 üzerinde çalışıyor (donanım ışın izlemeli Lumen, Nanite, fiziksel gökyüzü, RTX
@@ -32,22 +34,26 @@ anlık tekrar, gizli skid pad ve *grudge match*: en iyi turunuzun hayaleti sonra
 hatırladığınız gibi: kırmızı ahır, tarlalarda inekler, çiftlik evi, benzin istasyonu, çarpınca devrilen sarı levhalar
 ve hemzemin geçitten gerçekten geçen bir tren; gündüz, gün doğumu, alacakaranlık ya da gece; kuru, kapalı, ıslak ya da
 yağmurlu. Arabanın kendi kabininde oturur, çalışan göstergeleri dönen direksiyonun içinden okur, arkanızdaki yolu
-aynada görürsünüz; ya da arabayı arkadan, ya da uzaktan uzun odaklı bir film kamerasıyla izlersiniz. Windows'ta
-klavye ve oyun koluyla oynanır. Ücretsiz, açık kaynak.
+aynada görürsünüz; ya da arabayı arkadan, ya da uzaktan uzun odaklı bir film kamerasıyla izlersiniz. Arabanızı
+galeride seçersiniz: araba pistte durur, kamera çevresinde döner; kendi renginde, yedi hazır renkten birinde ya da
+kendi karıştırdığınız düz, metalik ya da sedefli renkte. Windows'ta klavye ve oyun koluyla oynanır. Ücretsiz, açık
+kaynak.
 
 ![from the seat](docs/images/ue-seat.jpg)
 
 | ![the chase view](docs/images/ue-chase.jpg) | ![the film view](docs/images/ue-film.jpg) |
 |---|---|
 | ![rain](docs/images/ue-rain.jpg) | ![night](docs/images/ue-night.jpg) |
+| ![the showroom](docs/images/ue-showroom.jpg) | ![mixing a colour](docs/images/ue-paint.jpg) |
 
 The name, track and sounds are our own. The ideas come from a game we loved; nothing from it is copied. The cars are
 named by description; the models that draw them, the engine and tyre recordings and the scanned scenery are CC0 or
 CC BY, each credited in [THIRD_PARTY.md](THIRD_PARTY.md).
 
 Until 0.77 the game ran on Godot. That version is frozen (tag `v0.77.0`); what it had and this one does not have yet
-(the showroom and the paints, the crash scene with its damage, the windscreen's drops and wipers, the 1989 look, the
-placed sounds and more) is being brought over, listed in section 12 of [docs/ISTERLER.md](docs/ISTERLER.md).
+(the crash scene with its damage, the windscreen's drops and wipers, the 1989 look, the placed sounds and more) is
+being brought over, listed in section 12 of [docs/ISTERLER.md](docs/ISTERLER.md); the showroom and the paints came
+with 0.79.
 
 ## Install
 
@@ -85,8 +91,12 @@ installer, a gigabyte, before Windows starts it): leave it, the installer follow
 ## Play
 
 Press **Enter** on the title screen and you are off. Before that, **left / right** picks the car, **1 / 2 / 3** the
-gearbox (automatic at first), **H** the weather and **L** the hour; your choices are remembered. A crash shows a
-replay and puts you back at the last return point; Enter turns the key again.
+gearbox (automatic at first), **H** the weather and **L** the hour; your choices are remembered. **Down** opens the
+showroom: the car stands on the track and the camera goes round it (drag to turn it yourself, the wheel brings it
+closer); left / right step through the cars, up / down through the paints, **C** mixes a colour of your own (hue,
+saturation, lightness; solid, metallic or pearl), Enter takes the car with every paint you chose, Esc leaves them.
+Each car keeps its paint. A crash shows a replay and puts you back at the last return point; Enter turns the key
+again.
 
 | Key | Action |
 |---|---|
@@ -98,7 +108,8 @@ replay and puts you back at the last return point; Enter turns the key again.
 | Space | skip the instant replay / give up an off-road excursion |
 | C | the camera: the driver's seat, behind the car, the film view (remembered) |
 | U | km/h / mph (remembered) |
-| Esc | the menu: continue, new game, car, camera, DLSS mode (off, DLAA, quality, balanced, performance, ultra performance; TSR's modes on a card without DLSS), DLSS Ray Reconstruction, weather, light, units, full screen, **check for updates**, **quit** (the game stands still and silent while it is open; keys, gamepad or mouse) |
+| Down / S (title screen) | the showroom: choose the car by sight, and its paint |
+| Esc | the menu: continue, new game, car (opens the showroom), paint, camera, DLSS mode (off, DLAA, quality, balanced, performance, ultra performance; TSR's modes on a card without DLSS), DLSS Ray Reconstruction, weather, light, units, full screen, **check for updates**, **quit** (the game stands still and silent while it is open; keys, gamepad or mouse) |
 | F5 | new game |
 | F9 | attract mode (the scripted driver drives) |
 | F10 | check for updates |
@@ -108,7 +119,8 @@ replay and puts you back at the last return point; Enter turns the key again.
 
 A gamepad works too: the left stick steers, the right trigger is the throttle and the left the brake, RB / LB
 shift (on the title screen they step through the gearboxes), X is the clutch, A starts, B skips, Y switches
-the camera, Back opens the menu, and the d-pad stands in for the stick and the pedals.
+the camera, Back opens the menu, and the d-pad stands in for the stick and the pedals. On the title screen the d-pad's
+down opens the showroom; there A takes the car, B leaves, Y mixes a colour.
 
 Rules, from the cabinet's own operator options: 90 s on the clock, +45 s at the checkpoint and at the lap,
 10 s off road and you are put back, wrong way does not count, traffic is solid. The stunt route wants about

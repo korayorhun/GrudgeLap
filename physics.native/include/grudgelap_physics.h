@@ -15,7 +15,7 @@
 extern "C" {
 #endif
 
-#define GLP_ABI_VERSION 9
+#define GLP_ABI_VERSION 10
 
 typedef intptr_t glp_session; /* 0 is no session */
 typedef intptr_t glp_engine;  /* 0 is no engine voice */
@@ -181,6 +181,11 @@ int32_t glp_car_count(void);
 /* The car's name as UTF-8, like glp_message. */
 int32_t glp_car_name(int32_t car, char* buffer, int32_t capacity);
 int32_t glp_get_car_spec(int32_t car, glp_car_spec* out);
+/* A line of what the showroom and the title screen print about a car, as UTF-8 like glp_car_name (ABI 10): line 0 its
+ * layout (the year, where the engine sits, the driven wheels, the gearbox, the weight on each axle), line 1 its figures
+ * (power, torque, mass, tyres), line 2 the title screen's short line (power, mass, driven wheels, gears). Worked out
+ * from the car's specification, so the figures are the simulation's own. Returns -1 for any other line. */
+int32_t glp_car_facts(int32_t car, int32_t line, char* buffer, int32_t capacity);
 /* car: catalogue index; flags: GLP_TRAFFIC | GLP_SPEED_ROUTE or 0. Returns 0 on failure. */
 glp_session glp_create(int32_t car, int32_t flags);
 void glp_destroy(glp_session session);

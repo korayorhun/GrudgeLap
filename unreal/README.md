@@ -91,7 +91,8 @@ Run these from the repository root.
 | `python unreal/Scripts/compare.py out.jpg Cockpit godot.png unreal.png …` | Godot and Unreal pictures of the same shot side by side. | `out.jpg` |
 
 To play, open `unreal\GrudgeLapUE.uproject` in the editor and press Play, or start the editor binary with the
-project and `-game`. The keys are the Godot version's: left and right choose the car on the title screen, 1, 2 and
+project and `-game`. The keys are the Godot version's: left and right choose the car on the title screen and down
+opens the showroom (0.79, below), 1, 2 and
 3 the gearbox, H the weather, L the hour (day, sunrise, dusk, night, random), Enter starts; then the arrow keys or
 WASD drive, E and Q (or 1 to 7, N, R) change gear, Shift is the clutch, Space skips the replay or puts the car back on
 the road, C steps the camera (the seat, behind the car, the film view), U the units, Esc opens the menu, F5
@@ -267,10 +268,36 @@ the night's sounds for an ambience in `GlpAudio`.
   with a film's black bars and the speed, gear and revs set in the lower one. C steps seat, chase, film;
   `-GlpView=cockpit|chase|film`.
 - **The menu** (T1; `GlpMenu.h`, `AGlpGame::RunMenu`, drawn by `GlpHud`). Esc or the pad's Back: CONTINUE, NEW GAME,
-  CAR, CAMERA, the upscaler's lines, WEATHER, LIGHT, UNITS, FULL SCREEN, the updater's line, QUIT GAME; up and down
+  CAR (since 0.79 it opens the showroom), PAINT (0.79), CAMERA, the upscaler's lines, WEATHER, LIGHT, UNITS, FULL SCREEN, the updater's line, QUIT GAME; up and down
   choose, left and right change, Enter or a click takes a line. The game holds still and silent behind it
   (`GlpAudio::SetHush`). For checks the keys are scripted as everywhere (`-GlpKeys=3:Escape+4:Up+5:Enter`) and so is
   the mouse, which a hidden window never has: `-GlpMouse=6:800,420+7:800,420:click`, in the HUD's 1600 x 900 canvas.
+
+## The showroom and the paints (0.79)
+
+ISTERLER T2, the Godot game's Showroom, ColourPicker and PaintBook carried over; the reasons are in
+`docs/design.md` under 0.79.0.
+
+- **The showroom** (`GlpShowroom.*`: the state, the layout the mouse hits and the camera's framing;
+  `AGlpGame::RunShowroom` and `SyncShowroom`; drawn by `GlpHud`). Down on the title screen, or the menu's CAR line.
+  The car on show stands where a credit starts and the camera goes round it (`FGlpShowroom::Yaw`: 0 ahead of the
+  nose, growing towards the car's right); the session is not stepped, only that car is drawn, and at night two
+  floodlights light it while its own lamps are out (`AGlpGame::LightShowroom`). Left and right are the cars, up and
+  down the paints, C or Y the picker, Enter takes, Esc leaves; a drag turns the view, the wheel zooms.
+- **The paints** (`GlpPaint.*`). A choice is the car's own colour, a preset or a mixed colour in a finish
+  (`FGlpPaintChoice`, written as `DARK BLUE` or `#1E4FA0 PEARL`); the book (`FGlpPaintBook`) keeps one for every car
+  in `settings.ini` as `paint.<style>`, and the colour a car was last mixed in as `mixed.<style>` while it wears
+  another. `FGlpCarView::Repaint` puts a paint on a car's paint materials: `Paint`, or for a paint that is a texture
+  `Chosen` with `Repainted` (and `Masked` when the model brought its mask, `build_scene.py`'s
+  `paint_textured_material`); the finish is `Metallic`, `Roughness`, `Pearl` and `PearlTint` (`paint_finish`). The
+  styles' names, which the keys and the Godot copy's files carry, are `GlpStyles.h`.
+- **The lines of facts** are the core's (`physics/Vehicle/CarFacts.cs`, `glp_car_facts`: line 0 the layout, 1 the
+  figures, 2 the title screen's short line).
+- **For checks.** `-GlpShowroom[=<car>]` opens it at the start, `-GlpTurn=<degrees>` holds the camera at a bearing
+  (from straight ahead of the nose towards the driver's side), `-GlpShowroomPaint=<paint>` chooses a paint there,
+  `-GlpPaint=<paint>` paints the driven car for one run without keeping it, and `-GlpSelfTest` runs the paints' and
+  the showroom's own checks and exits (0 when all hold; the log says how many ran). The scripted mouse can hold its
+  button and turn its wheel: `-GlpMouse=4:700,400:down+5:900,400:up+6:800,400:wheel3`.
 
 ## One copy, the player's data, the updater (0.78)
 
@@ -378,6 +405,8 @@ unpacked.
 - `GlpMenu.h` is the Esc menu's lines and layout, `GlpUpdate.*` the updater's library on the game's side,
   `GlpInstance.*` the one-copy lock, the data folder and the take-over of the earlier versions' files, and
   `GlpCockpits.*` each car's seat (0.78; the sections above).
+- `GlpShowroom.*` is the showroom and its colour picker, `GlpPaint.*` the paints and the book that keeps them,
+  `GlpStyles.h` the cars' styles by name (0.79; the section above).
 - `GlpHud` draws the readouts, the title screen and the high-score panel on the canvas; `GlpInstruments` draws the instrument panel
   into a texture shown on the binnacle and at the foot of the screen; a scene capture fills the rear-view
   mirror. `GlpAudio` mixes the recordings and the synthesis the way the Godot version does, at 44.1 kHz; the

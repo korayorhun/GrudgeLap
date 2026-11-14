@@ -8,7 +8,9 @@
 #include "GlpInput.h"
 #include "GlpLook.h"
 #include "GlpMenu.h"
+#include "GlpPaint.h"
 #include "GlpScores.h"
+#include "GlpShowroom.h"
 #include "GlpUpdate.h"
 #include "grudgelap_physics.h"
 #include "GlpGame.generated.h"
@@ -50,6 +52,15 @@ class UMaterialInstanceDynamic;
  * check's own, so that it leaves the player's alone), -GlpImport and -GlpGodotData=<folder> try the take-over of the
  * earlier versions' files (GlpInstance::Import), -GlpUpdateRoot=<folder> lets the editor's build run the updater
  * (FGlpUpdate). The scripted keys reach the menu: -GlpKeys=2:Escape,3:Down,3.5:Enter.
+ *
+ * The showroom and the paints (0.79; on the title screen Down opens it, in the menu the CAR line): -GlpShowroom[=<catalogue
+ * index>] opens the showroom at the start,
+ * -GlpTurn=<degrees> holds its camera at that bearing round the car (0 ahead of the nose, 90 on the driver's side),
+ * -GlpShowroomPaint=<paint> chooses a paint there (a preset's name or number, or "#RRGGBB:finish", which opens the
+ * colour picker on it), and -GlpPaint=<paint> puts the driven car in a paint for this run without keeping it. The
+ * scripted keys and the scripted mouse (-GlpMouse, with :down and :up for a drag) reach the showroom too.
+ * -GlpSelfTest runs the paints' and the showroom's own checks (GlpPaint::SelfTest, FGlpShowroom::SelfTest), logs
+ * "self test: N checks, M failed" and quits with 0 when all held.
  */
 UCLASS()
 class GRUDGELAPUE_API AGlpGame : public AActor
@@ -150,6 +161,20 @@ public:
 	UTexture* InstrumentPanel() const;
 	/** The Esc menu, for the HUD to draw. */
 	const FGlpMenu& Menu() const { return PauseMenu; }
+	/** The showroom (0.79), for the HUD to draw: its state, and what it prints about the car on show. */
+	const FGlpShowroom& Showroom() const { return Room; }
+	const FString& ShownName() const { return CarNames.IsValidIndex(Room.Index) ? CarNames[Room.Index] : CarNameText; }
+	/** The two lines of the car's facts (glp_car_facts): its layout and its figures. */
+	const FString& ShownFacts(int32 Line) const;
+	/** The car's place in the line-up, "CAR 3 OF 10"; a car that is not to drive (automation only) has none. */
+	FString ShownPlace() const;
+	/** The paint the car to drive wears, for the title screen's line. */
+	FString PaintName() const { return Paints.Of(CarIndex).Name(); }
+	/** The title screen's line about the car to drive (glp_car_facts' third): power, mass, driven wheels, gears. */
+	const FString& TitleFacts() const;
+	/** A car's place among the cars to drive (from 1) and how many those are; false for a car out of the line-up. */
+	bool Place(int32 Car, int32& OutNumber, int32& OutCount) const;
+	int32 DrivenCar() const { return CarIndex; }
 	/** This copy's version, "0.78.0": the project's (Config/DefaultGame.ini), which tools/release.ps1 stamps. */
 	const FString& Version() const { return VersionText; }
 	/** The updater's line for the title screen and the HUD's corner; empty when it has nothing to say. */
@@ -416,8 +441,8 @@ private:
 	void ShowNightLamps();
 	/** A car's lamps for the hour and the weather. */
 	FGlpLampState LampState(int32 Catalogue, bool bPlayer) const;
-	/** MPC_Night: the player's beams where they are this frame. */
-	void SyncRetroreflection();
+	/** MPC_Night: the beams of the car on the road (the player's, or the showroom's) where they are this frame. */
+	void SyncRetroreflection(const FGlpCarView* Car);
 
 	// The Esc menu (0.78, FGlpMenu). While it is open the session is not stepped, nothing moves and the sound is held.
 	FGlpMenu PauseMenu;
@@ -437,6 +462,59 @@ private:
 	void StepCar(int32 Direction);
 	void ToggleFullScreen();
 	bool OnTitle() const { return Current.phase == GLP_PHASE_SELECT_TRANSMISSION; }
+
+	// The showroom and the paints (0.79, FGlpShowroom): the Godot version's Showroom and PaintBook. While it is open the
+	// session is not stepped, as under the menu; the car on show stands where the credit starts and the camera goes
+	// round it. The cars it steps through are the level's own, shown without a session: only taking one starts a game.
+	FGlpShowroom Room;
+	FGlpPaintBook Paints;
+	TArray<FGlpPaintChoice> Worn;           // the paint each car's view wears now (SyncPaints)
+	TOptional<FGlpPaintChoice> RunPaint;    // -GlpPaint=: the driven car's paint for this run, not kept
+	TArray<glp_car_spec> Specs;             // every catalogue car's, for the cars shown without a session
+	TArray<FString> Facts[3];               // every car's lines (glp_car_facts): the showroom's two and the title screen's
+	float StartPosition[3] = {};            // where a credit starts: the simulation's pose of the car's centre of gravity
+	float StartOrientation[4] = { 0.f, 0.f, 0.f, 1.f };
+	float StartGround = 0.f;                // the road's height under it (simulation metres)
+	bool bStartKnown = false;
+	TOptional<float> HeldTurn;              // -GlpTurn=
+	FString ShowroomPaintText;              // -GlpShowroomPaint=
+	bool bShowroomAtStart = false;          // -GlpShowroom
+	int32 ShowroomStartCar = INDEX_NONE;
+	int32 RoomCar = INDEX_NONE;             // the car the showroom has stood on the road (INDEX_NONE: the cars are the session's)
+	/**
+	 * The showroom's two floodlights, lit at night only. By day, at dusk and at sunrise the car on show stands in the
+	 * credit's own light; a night's exposure leaves a car on an unlit road nearly black, and its own dipped beams dazzle
+	 * the camera as it passes the nose (in the night's rain they fill the fog), so a paint could not be judged. At night
+	 * the car's lamps are out and these two light it, as a car parked on show is lit.
+	 */
+	TWeakObjectPtr<class USpotLightComponent> RoomLights[2];
+	bool ShowroomFloodlit() const { return Room.bOpen && Hour == EGlpHour::Night; }
+	/**
+	 * The floodlights on their stands round the car on show (Foot: the ground under its middle, Unreal units) and aimed
+	 * at its middle, or out.
+	 */
+	void LightShowroom(bool bOn, const FVector& Foot = FVector::ZeroVector, const FVector& Nose = FVector::ForwardVector,
+		const FVector& Right = FVector::RightVector, double MiddleCm = 0.0);
+	/** Opens the showroom on the car driven; Step moves on to the next car (1) or the one before (-1) at once. */
+	void OpenShowroom(bool bFromMenu, int32 Step = 0);
+	/** Another car on show: the showroom's index, and the car's own colour for its ORIGINAL swatch. */
+	void PutOnShow(int32 Car);
+	/** The menu's PAINT line (the Godot version's CyclePaint): the driven car's next paint, or the one before, kept at once. */
+	void StepPaint(int32 Step);
+	/** Closes it: the car on show and every paint chosen taken (another car starts a new game), or all of it forgotten. */
+	void CloseShowroom(bool bTake);
+	/** A frame with the showroom open: the keys, the mouse, the turn, the cars and the camera. */
+	void RunShowroom(APlayerController* Player, float DeltaSeconds);
+	void StepShowroom(int32 Direction);
+	/** The car on show where a credit starts and every other car out of sight; the camera on its way round it. */
+	void SyncShowroom(float DeltaSeconds);
+	/** Every car's view in the paint it should wear: the showroom's choice while it is open, the settings' otherwise. */
+	void SyncPaints();
+	/** The HUD's canvas (1600 x 900 scaled to the window) and the mouse on it: the real one, or a scripted run's. */
+	FVector2f HudCanvas() const;
+	bool HudMouse(const APlayerController* Player, FVector2f& Point, bool& bPress, bool& bDown) const;
+	/** The view from inside or outside the car as the camera needs it (the glass, the parts hidden from the seat, the mirrors, the picture). */
+	void ShowInside(bool bInside);
 
 	// The upscaler (0.78; the owner's request of 14 November 2026 for DLSS in the menu). DLSS in its Quality mode and its
 	// Ray Reconstruction have been on since 0.44 and 0.74 wherever the card ran them; the mode is now the player's.

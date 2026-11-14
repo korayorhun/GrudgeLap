@@ -19,6 +19,9 @@ public:
 	/** A catalogue car's name. */
 	FString CarName(int32 Car) const;
 
+	/** A line of what is printed about a car (glp_car_facts, 0.79): 0 its layout and 1 its figures for the showroom, 2 the title screen's short line. */
+	FString CarFacts(int32 Car, int32 Line) const;
+
 	/** The session's HUD message. */
 	FString Message(glp_session Session) const;
 
@@ -26,6 +29,7 @@ public:
 	decltype(&glp_car_count) CarCount = nullptr;
 	decltype(&glp_car_name) CarNameText = nullptr;
 	decltype(&glp_get_car_spec) CarSpec = nullptr;
+	decltype(&glp_car_facts) CarFactsText = nullptr;
 	decltype(&glp_create) Create = nullptr;
 	decltype(&glp_destroy) Destroy = nullptr;
 	decltype(&glp_choose_transmission) ChooseTransmission = nullptr;

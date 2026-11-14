@@ -8,6 +8,7 @@ enum class EGlpMenuLine : uint8
 	Continue,
 	NewGame,
 	Car,
+	Paint,
 	Camera,
 	Upscaling,
 	RayReconstruction,

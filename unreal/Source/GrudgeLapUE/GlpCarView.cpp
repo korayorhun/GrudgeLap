@@ -6,6 +6,7 @@
 #include "EngineUtils.h"
 #include "GameFramework/Actor.h"
 #include "GlpCockpits.h"
+#include "GlpPaint.h"
 #include "GlpSpace.h"
 #include "Materials/MaterialInstanceDynamic.h"
 
@@ -48,6 +49,32 @@ namespace
 			}
 		}
 		return nullptr;
+	}
+
+	/** The material is the level's car paint: it has the Paint parameter (M_CarPaint, M_CarPaintSolid, M_CarPaintTextured). */
+	bool WearsPaint(const UMaterialInterface* Material)
+	{
+		FLinearColor Current;
+		return Material && Material->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("Paint")), Current);
+	}
+
+	/**
+	 * Another colour (linear) on an instance of the level's car paint. A paint in a texture (M_CarPaintTextured) keeps
+	 * its Paint, the factor its texture is drawn with, and is told to draw Chosen instead through its mask (0.79:
+	 * until then a traffic copy's colour multiplied the texture, and a navy 205 times beige was near black); a flat
+	 * paint's Paint is the colour itself.
+	 */
+	void WearColour(UMaterialInstanceDynamic* Instance, const FLinearColor& Colour)
+	{
+		if (float Repainted = 0.f; Instance->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("Repainted")), Repainted))
+		{
+			Instance->SetVectorParameterValue(TEXT("Chosen"), Colour);
+			Instance->SetScalarParameterValue(TEXT("Repainted"), 1.f);
+		}
+		else
+		{
+			Instance->SetVectorParameterValue(TEXT("Paint"), Colour);
+		}
 	}
 }
 
@@ -111,6 +138,11 @@ TUniquePtr<FGlpCarView> FGlpCarView::FromLevel(UWorld* World, FName RootTag)
 				if (UMaterialInterface* Material = Mesh->GetMaterial(Slot); Material && Material->GetFName() == TEXT("M_Glass"))
 				{
 					View->Glass.Add({ Mesh, Slot, Material });
+				}
+				else if (WearsPaint(Material))
+				{
+					// The slots the showroom repaints (0.79).
+					View->PaintSlots.Add({ Mesh, Slot, Material, nullptr });
 				}
 			}
 		}
@@ -230,14 +262,19 @@ TUniquePtr<FGlpCarView> FGlpCarView::Clone(UWorld* World, const FString& Name, c
 			for (int32 Slot = 0; Slot < Mesh->GetNumMaterials(); Slot++)
 			{
 				UMaterialInterface* Material = Mesh->GetMaterial(Slot);
+				// The level's paint, whatever the player chose for this car (Repaint): the copy is another car.
+				if (UMaterialInterface* Factory = FactoryPaint(Mesh, Slot))
+				{
+					Material = Factory;
+				}
 				if (Override)
 				{
 					Material = Override;
 				}
-				else if (FLinearColor Current; Paint && Material && Material->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("Paint")), Current))
+				else if (Paint && WearsPaint(Material))
 				{
 					UMaterialInstanceDynamic* Painted = UMaterialInstanceDynamic::Create(Material, CopyMesh);
-					Painted->SetVectorParameterValue(TEXT("Paint"), *Paint);
+					WearColour(Painted, *Paint);
 					Material = Painted;
 				}
 				CopyMesh->SetMaterial(Slot, Material);
@@ -591,6 +628,92 @@ void FGlpCarView::AdvanceWheels(float Distance, float SteerAngle, float WheelRad
 			Wheel->SetRelativeRotation(Steer * WheelRest[i].GetRotation());
 		}
 	}
+}
+
+void FGlpCarView::SetWheelsAtRest(const glp_car_spec& Spec)
+{
+	for (int32 i = 0; i < 4; i++)
+	{
+		if (USceneComponent* Wheel = Wheels[i].Get())
+		{
+			// As SetWheels with the springs carrying the car: the tyres' foot is cg_height under the centre of gravity.
+			FVector Hub = WheelRest[i].GetLocation();
+			Hub.Z = -(Spec.cg_height - Spec.wheel_radius) * 100.f;
+			Wheel->SetRelativeLocationAndRotation(Hub, WheelRest[i].GetRotation());
+		}
+		if (USceneComponent* Spinner = Spinners[i].Get())
+		{
+			Spinner->SetRelativeRotation(SpinnerRest[i].GetRotation());
+		}
+	}
+	TurnSteeringWheel(0.f);
+}
+
+UMaterialInterface* FGlpCarView::FactoryPaint(const UStaticMeshComponent* Mesh, int32 Slot) const
+{
+	for (const FPaintSlot& Painted : PaintSlots)
+	{
+		if (Painted.Mesh.Get() == Mesh && Painted.Slot == Slot)
+		{
+			return Painted.Factory.Get();
+		}
+	}
+	return nullptr;
+}
+
+void FGlpCarView::Repaint(const FGlpPaint* Paint)
+{
+	for (FPaintSlot& Slot : PaintSlots)
+	{
+		UStaticMeshComponent* Mesh = Slot.Mesh.Get();
+		UMaterialInterface* Factory = Slot.Factory.Get();
+		if (!Mesh || !Factory)
+		{
+			continue;
+		}
+		if (!Paint)
+		{
+			Mesh->SetMaterial(Slot.Slot, Factory);
+			Slot.Painted = nullptr;
+			continue;
+		}
+		UMaterialInstanceDynamic* Painted = Slot.Painted.Get();
+		if (!Painted)
+		{
+			Painted = UMaterialInstanceDynamic::Create(Factory, Mesh);
+			Slot.Painted = Painted;
+		}
+		WearColour(Painted, Paint->Linear());
+		Painted->SetScalarParameterValue(TEXT("Metallic"), Paint->Metallic);
+		Painted->SetScalarParameterValue(TEXT("Roughness"), Paint->Roughness);
+		Painted->SetScalarParameterValue(TEXT("Pearl"), Paint->Pearl);
+		Painted->SetVectorParameterValue(TEXT("PearlTint"), Paint->PearlTint());
+		if (Mesh->GetMaterial(Slot.Slot) != Painted)
+		{
+			Mesh->SetMaterial(Slot.Slot, Painted);
+		}
+	}
+}
+
+bool FGlpCarView::OwnColour(FLinearColor& OutSrgb) const
+{
+	for (const FPaintSlot& Slot : PaintSlots)
+	{
+		const UMaterialInterface* Factory = Slot.Factory.Get();
+		if (!Factory)
+		{
+			continue;
+		}
+		FLinearColor Colour = FLinearColor::Black;
+		// A paint in a texture: the key its mask was made by, where the level knows it (black: it does not).
+		const bool bKeyed = Factory->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("Own")), Colour) && Colour.R + Colour.G + Colour.B > 0.f;
+		if (bKeyed || Factory->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("Paint")), Colour))
+		{
+			OutSrgb = GlpPaint::ToSrgb(Colour);
+			return true;
+		}
+	}
+	return false;
 }
 
 void FGlpCarView::TurnSteeringWheel(float SteerAngle)

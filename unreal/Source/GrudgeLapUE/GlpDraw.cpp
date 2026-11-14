@@ -112,6 +112,54 @@ void FGlpPainter::Triangle(const FVector2D& A, const FVector2D& B, const FVector
 	Canvas->DrawItem(Item);
 }
 
+void FGlpPainter::Shade(float X, float Y, float W, float H, int32 Columns, int32 Rows, TFunctionRef<FLinearColor(float Across, float Down)> Colour) const
+{
+	if (Columns < 1 || Rows < 1)
+	{
+		return;
+	}
+	// Each corner's colour and place once, then two triangles a cell: one item, drawn in one batch.
+	TArray<FLinearColor> Colours;
+	TArray<FVector2D> Places;
+	Colours.Reserve((Columns + 1) * (Rows + 1));
+	Places.Reserve((Columns + 1) * (Rows + 1));
+	for (int32 Row = 0; Row <= Rows; Row++)
+	{
+		for (int32 Column = 0; Column <= Columns; Column++)
+		{
+			const float Across = static_cast<float>(Column) / Columns;
+			const float Down = static_cast<float>(Row) / Rows;
+			Colours.Add(Colour(Across, Down));
+			Places.Add(Map(FVector2D(X + W * Across, Y + H * Down)));
+		}
+	}
+	TArray<FCanvasUVTri> Triangles;
+	Triangles.Reserve(Columns * Rows * 2);
+	auto Add = [&](int32 A, int32 B, int32 C)
+	{
+		FCanvasUVTri& Triangle = Triangles.AddDefaulted_GetRef();
+		Triangle.V0_Pos = Places[A];
+		Triangle.V1_Pos = Places[B];
+		Triangle.V2_Pos = Places[C];
+		Triangle.V0_Color = Colours[A];
+		Triangle.V1_Color = Colours[B];
+		Triangle.V2_Color = Colours[C];
+	};
+	for (int32 Row = 0; Row < Rows; Row++)
+	{
+		for (int32 Column = 0; Column < Columns; Column++)
+		{
+			const int32 TopLeft = Row * (Columns + 1) + Column;
+			const int32 BottomLeft = TopLeft + Columns + 1;
+			Add(TopLeft, TopLeft + 1, BottomLeft + 1);
+			Add(TopLeft, BottomLeft + 1, BottomLeft);
+		}
+	}
+	FCanvasTriangleItem Item(Triangles, GWhiteTexture);
+	Item.BlendMode = SE_BLEND_Translucent;
+	Canvas->DrawItem(Item);
+}
+
 void FGlpPainter::Texture(UTexture* Texture, float X, float Y, float W, float H) const
 {
 	if (!Texture || !Texture->GetResource())

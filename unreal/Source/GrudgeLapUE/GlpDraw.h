@@ -32,6 +32,11 @@ struct FGlpPainter
 	/** A band of the given width along the circle of Radius, from angle From to To (radians, clockwise from +x as on screen). */
 	void Arc(const FVector2D& Centre, float Radius, float From, float To, int32 Segments, const FLinearColor& Colour, float Width) const;
 	void Triangle(const FVector2D& A, const FVector2D& B, const FVector2D& C, const FLinearColor& Colour) const;
+	/**
+	 * A rectangle shaded by a function of the place in it (0.79, the colour picker's square and its bar of hues): Colour
+	 * is asked at the corners of Columns x Rows cells (across and down, each 0 to 1) and the canvas runs between them.
+	 */
+	void Shade(float X, float Y, float W, float H, int32 Columns, int32 Rows, TFunctionRef<FLinearColor(float Across, float Down)> Colour) const;
 	/** A texture stretched over the rectangle. */
 	void Texture(class UTexture* Texture, float X, float Y, float W, float H) const;
 

@@ -6,6 +6,7 @@
 
 class AActor;
 struct FGlpCockpit;
+struct FGlpPaint;
 class UMaterialInterface;
 class UPrimitiveComponent;
 class USceneComponent;
@@ -45,9 +46,34 @@ public:
 	/**
 	 * A copy of this car's exterior and wheels as a single new actor. Paint replaces the colour of every material
 	 * with a "Paint" parameter (the body's M_CarPaint, the strakes' and trims' M_CarPaintSolid); Override, when
-	 * given, replaces every material.
+	 * given, replaces every material. A copy starts from the level's paint, not from one the player chose for this
+	 * car (Repaint, 0.79): the traffic's Ferraris stay red whatever the player's wears.
 	 */
 	TUniquePtr<FGlpCarView> Clone(UWorld* World, const FString& Name, const FLinearColor* Paint, UMaterialInterface* Override) const;
+
+	/**
+	 * The car in a paint (0.79, the showroom's), or with null back in its own: every slot that wears the level's car
+	 * paint (MI_Paint_<car>_<n>, an instance of M_CarPaintSolid or M_CarPaintTextured) gets an instance of this car's
+	 * own on top of it with the paint's colour, base coat and pearl. The level's instance stays under it, so its cabin's
+	 * lining and its texture are kept; a paint in a texture is drawn in the new colour through its mask.
+	 */
+	void Repaint(const FGlpPaint* Paint);
+
+	/**
+	 * The car's own colour, sRGB, for the showroom's ORIGINAL swatch: its first paint's colour, or for a paint in a
+	 * texture the key its mask was made by (the level's Own parameter). False for a car without a paint slot.
+	 */
+	bool OwnColour(FLinearColor& OutSrgb) const;
+
+	/**
+	 * The wheels as the car stands on its own weight: the showroom shows cars that no session moves. The hubs hang
+	 * where the springs settle (the car's centre of gravity cg_height over the road), unsteered.
+	 */
+	void SetWheelsAtRest(const glp_car_spec& Spec);
+
+	/** The body's box in the root's frame (cm: x right, the nose at -y, z up) and the ground under the wheels there. */
+	const FBox& BodyBox() const { return Body; }
+	float GroundZ() const { return Ground; }
 
 	/** Places the body: the simulation pose of its centre of gravity. */
 	void SetPose(const float Position[3], const float Orientation[4]);
@@ -123,6 +149,17 @@ private:
 	};
 	TArray<FGlassSlot> Glass;
 	bool bInsideGlass = false;
+	/** A slot that wears the car's paint: the level's material, and this car's own instance of it while it is repainted. */
+	struct FPaintSlot
+	{
+		TWeakObjectPtr<UStaticMeshComponent> Mesh;
+		int32 Slot = 0;
+		TWeakObjectPtr<UMaterialInterface> Factory;
+		TWeakObjectPtr<class UMaterialInstanceDynamic> Painted;
+	};
+	TArray<FPaintSlot> PaintSlots;
+	/** The level's material of a slot that wears paint, whatever the player has chosen for it; null for any other slot. */
+	UMaterialInterface* FactoryPaint(const UStaticMeshComponent* Mesh, int32 Slot) const;
 	TArray<TWeakObjectPtr<AActor>> Owned;   // actors whose visibility SetVisible switches
 	TArray<TWeakObjectPtr<UPrimitiveComponent>> OutsideOnly;   // drawn only from outside the car (SetInside)
 	TArray<TWeakObjectPtr<class UMaterialInstanceDynamic>> BrakeLamps;   // the lamps SetBraking lights

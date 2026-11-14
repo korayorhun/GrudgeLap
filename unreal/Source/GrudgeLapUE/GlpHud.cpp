@@ -35,6 +35,173 @@ namespace
 		}
 		return Value < 0 ? TEXT("-") + Digits : Digits;
 	}
+
+	/** A paint's sRGB components as the canvas takes a colour. */
+	FLinearColor Swatch(const FLinearColor& Srgb)
+	{
+		return FGlpPainter::Srgb(Srgb.R, Srgb.G, Srgb.B);
+	}
+
+	/** A hue at its fullest, for the bar of hues and the strip under the mixed colour's swatch. */
+	FLinearColor PureHue(float Hue)
+	{
+		return Swatch(GlpPaint::FromHsl(Hue, 1.f, 0.5f));
+	}
+
+	/**
+	 * The colour picker (FGlpColourPicker; the Godot version's Hud.DrawPicker, measure for measure): the square of
+	 * saturation and lightness in the picker's hue with a ring at the colour, the bar of hues with a mark at its hue,
+	 * the three values and the finish as rows (the focused one lit, as the menu's line under its cursor), DONE and CANCEL.
+	 */
+	void DrawPicker(const FGlpPainter& P, const FVector2f& Size, const FGlpColourPicker& Picker)
+	{
+		using ERow = FGlpColourPicker::ERow;
+		const FLinearColor White = FGlpPainter::Srgb(1.f, 1.f, 1.f);
+		const FLinearColor Grey = FGlpPainter::Srgb(0.72f, 0.75f, 0.8f);
+		const FLinearColor Gold = FGlpPainter::Srgb(1.f, 0.85f, 0.3f);
+		const FLinearColor Lit = FGlpPainter::Srgb(1.f, 0.85f, 0.3f, 0.16f);
+		const FGlpRect Panel = FGlpColourPicker::Panel(Size);
+		P.Rect(Panel.X, Panel.Y, Panel.W, Panel.H, FGlpPainter::Srgb(0.03f, 0.03f, 0.04f, 0.88f));
+		const FGlpPaintChoice Choice = Picker.Choice();
+		P.Text(TEXT("MIX A COLOUR"), Panel.X + 20.f, Panel.Y + 36.f, EAlign::Left, -1.f, 22.f, White);
+		P.Rect(Panel.Right() - 58.f, Panel.Y + 16.f, 38.f, 26.f, Swatch(Choice.Srgb()));
+		P.Text(Choice.Hex(), Panel.X, Panel.Y + 36.f, EAlign::Right, Panel.W - 68.f, 16.f, Grey);
+
+		// The square: saturation across, lightness from white at the top through the full colour to black. 24 cells a
+		// side put a cell's edge on the middle row, where the full colour's ridge runs.
+		const FGlpRect Square = FGlpColourPicker::Square(Size);
+		const float Hue = Picker.Hue;
+		P.Shade(Square.X, Square.Y, Square.W, Square.H, 24, 24, [Hue](float Across, float Down) { return Swatch(GlpPaint::FromHsl(Hue, Across, 1.f - Down)); });
+		// A ring that shows on any colour: black inside white.
+		const FVector2D At(Square.X + Picker.Saturation * Square.W, Square.Y + (1.f - Picker.Lightness) * Square.H);
+		P.Arc(At, 8.f, 0.f, UE_TWO_PI, 24, FGlpPainter::Srgb(0.f, 0.f, 0.f, 0.8f), 3.f);
+		P.Arc(At, 6.f, 0.f, UE_TWO_PI, 24, White, 2.f);
+		// The bar of hues, a cell's edge on each of the six pure colours, and the mark at the picker's.
+		const FGlpRect Bar = FGlpColourPicker::HueBar(Size);
+		P.Shade(Bar.X, Bar.Y, Bar.W, Bar.H, 1, 36, [](float Across, float Down) { return PureHue(Down); });
+		const float HueY = Bar.Y + Picker.Hue * Bar.H;
+		P.Frame(Bar.X - 4.f, HueY - 3.f, Bar.W + 8.f, 6.f, FGlpPainter::Srgb(0.f, 0.f, 0.f, 0.8f), 2.f);
+		P.Rect(Bar.X - 2.f, HueY - 1.5f, Bar.W + 4.f, 3.f, White);
+
+		const TCHAR* Names[] = { TEXT("HUE"), TEXT("SATURATION"), TEXT("LIGHTNESS") };
+		const FString Values[] = { FString::Printf(TEXT("%d°"), FMath::RoundToInt(Picker.Hue * 360.f)),
+			FString::Printf(TEXT("%d %%"), FMath::RoundToInt(Picker.Saturation * 100.f)), FString::Printf(TEXT("%d %%"), FMath::RoundToInt(Picker.Lightness * 100.f)) };
+		for (int32 i = 0; i < 3; i++)
+		{
+			const FGlpRect Row = FGlpColourPicker::RowRect(Size, static_cast<ERow>(i));
+			const bool bFocused = Picker.Focus == static_cast<ERow>(i);
+			if (bFocused)
+			{
+				P.Rect(Row.X, Row.Y, Row.W, Row.H, Lit);
+			}
+			P.Text(Names[i], Row.X + 8.f, Row.Y + 22.f, EAlign::Left, -1.f, 16.f, bFocused ? Gold : Grey);
+			P.Text(Values[i], Row.X, Row.Y + 22.f, EAlign::Right, Row.W - 8.f, 16.f, bFocused ? Gold : White);
+		}
+		const FGlpRect FinishRow = FGlpColourPicker::RowRect(Size, ERow::Finish);
+		const bool bFinishFocused = Picker.Focus == ERow::Finish;
+		if (bFinishFocused)
+		{
+			P.Rect(FinishRow.X, FinishRow.Y, FinishRow.W, FinishRow.H, Lit);
+		}
+		P.Text(TEXT("FINISH"), FinishRow.X + 8.f, FinishRow.Y + 22.f, EAlign::Left, -1.f, 16.f, bFinishFocused ? Gold : Grey);
+		for (int32 i = 0; i < 3; i++)
+		{
+			const EGlpFinish Finish = static_cast<EGlpFinish>(i);
+			const FGlpRect Button = FGlpColourPicker::FinishButton(Size, Finish);
+			const bool bChosen = Finish == Picker.Finish;
+			P.Rect(Button.X, Button.Y, Button.W, Button.H, bChosen ? FGlpPainter::Srgb(1.f, 0.85f, 0.3f, 0.28f) : FGlpPainter::Srgb(1.f, 1.f, 1.f, 0.06f));
+			P.Text(GlpPaint::FinishName(Finish), Button.X, Button.Y + 21.f, EAlign::Centre, Button.W, 13.f, bChosen ? Gold : Grey);
+		}
+		const FGlpRect Done = FGlpColourPicker::DoneButton(Size);
+		const FGlpRect Cancel = FGlpColourPicker::CancelButton(Size);
+		P.Rect(Done.X, Done.Y, Done.W, Done.H, Lit);
+		P.Text(TEXT("DONE  (ENTER)"), Done.X, Done.Y + 24.f, EAlign::Centre, Done.W, 15.f, Gold);
+		P.Rect(Cancel.X, Cancel.Y, Cancel.W, Cancel.H, FGlpPainter::Srgb(1.f, 1.f, 1.f, 0.06f));
+		P.Text(TEXT("CANCEL  (ESC)"), Cancel.X, Cancel.Y + 24.f, EAlign::Centre, Cancel.W, 15.f, Grey);
+		P.Text(TEXT("up / down: row     left / right: change"), Panel.X, Panel.Bottom() - 14.f, EAlign::Centre, Panel.W, 13.f, Grey);
+	}
+
+	/**
+	 * The showroom (FGlpShowroom; the Godot version's Hud.DrawShowroom, measure for measure): the car's name in the bar
+	 * over the stage, the chevrons at the sides, and on a panel at the foot the facts the core gives about the car, the
+	 * paints as swatches (the chosen one framed, the ORIGINAL one in the car's own colour, the last one the car's mixed
+	 * colour over a strip of hues), the paint's name and the keys; the colour picker over the stage while it is open.
+	 * The rectangles are the showroom's and the picker's own, so the mouse hits what is drawn.
+	 */
+	void DrawShowroom(const FGlpPainter& P, const AGlpGame& G)
+	{
+		const FGlpShowroom& Room = G.Showroom();
+		const FVector2f Size(P.Size());
+		const FLinearColor White = FGlpPainter::Srgb(1.f, 1.f, 1.f);
+		const FLinearColor Grey = FGlpPainter::Srgb(0.72f, 0.75f, 0.8f);
+		const FLinearColor Gold = FGlpPainter::Srgb(1.f, 0.85f, 0.3f);
+		auto Centred = [&](const FString& Text, float Y, float FontSize, const FLinearColor& Colour) { P.Text(Text, 0.f, Y, EAlign::Centre, Size.X, FontSize, Colour); };
+		P.Rect(0.f, 0.f, Size.X, 64.f, FGlpPainter::Srgb(0.05f, 0.05f, 0.06f, 0.5f));
+		P.Text(TEXT("SHOWROOM"), 20.f, 44.f, EAlign::Left, -1.f, 30.f, White);
+		P.Text(G.ShownPlace(), Size.X - 320.f, 44.f, EAlign::Right, 300.f, 22.f, Grey);
+		// The name in the bar: over the stage it lay on the roofs of the tall cars and of a car brought closer.
+		Centred(G.ShownName(), 45.f, 34.f, White);
+		const FGlpRect Left = FGlpShowroom::LeftArrow(Size);
+		const FGlpRect Right = FGlpShowroom::RightArrow(Size);
+		P.Text(TEXT("<"), Left.X, Left.Y + 112.f, EAlign::Centre, Left.W, 96.f, Gold);
+		P.Text(TEXT(">"), Right.X, Right.Y + 112.f, EAlign::Centre, Right.W, 96.f, Gold);
+
+		const FGlpRect Panel = FGlpShowroom::Panel(Size);
+		P.Rect(Panel.X, Panel.Y, Panel.W, Panel.H, FGlpPainter::Srgb(0.03f, 0.03f, 0.04f, 0.80f));
+		const float Y = Panel.Y;
+		Centred(G.ShownFacts(0), Y + 38.f, 19.f, Grey);
+		Centred(G.ShownFacts(1), Y + 70.f, 20.f, White);
+		const FGlpRect First = FGlpShowroom::Swatch(Size, 0);
+		P.Text(TEXT("PAINT"), First.X - 112.f, First.Y + 25.f, EAlign::Right, 96.f, 20.f, Grey);
+		const int32 Chosen = Room.PaintSlot();
+		for (int32 i = 0; i < FGlpShowroom::SlotCount(); i++)
+		{
+			const FGlpRect Box = FGlpShowroom::Swatch(Size, i);
+			FLinearColor Colour = Room.OwnSrgb;
+			if (i == FGlpShowroom::CustomSlot())
+			{
+				Colour = Room.MixedChoice().Srgb();
+			}
+			else if (const TOptional<FGlpPaint> Preset = GlpPaint::Preset(i); Preset.IsSet())
+			{
+				Colour = Preset->Srgb;
+			}
+			P.Rect(Box.X, Box.Y, Box.W, Box.H, Swatch(Colour));
+			// A faint edge on every swatch: the black one was lost on the dark panel.
+			P.Frame(Box.X, Box.Y, Box.W, Box.H, FGlpPainter::Srgb(1.f, 1.f, 1.f, 0.3f), 1.f);
+			if (i == FGlpShowroom::CustomSlot())
+			{
+				// The mixed colour's swatch stands on a strip of every hue: the one that opens the picker.
+				P.Shade(Box.X, Box.Bottom() - 6.f, Box.W, 6.f, 12, 1, [](float Across, float Down) { return PureHue(Across); });
+			}
+			if (i == Chosen)
+			{
+				P.Frame(Box.X - 4.f, Box.Y - 4.f, Box.W + 8.f, Box.H + 8.f, Gold, 3.f);
+			}
+		}
+		const FGlpPaintChoice Choice = Room.Choice();
+		Centred(Choice.IsCustom() ? FString::Printf(TEXT("%s   %s"), *Choice.Name(), *Choice.Hex()) : Choice.Name(), Y + 160.f, 18.f, Gold);
+		// While the picker is open the buttons wait for its DONE or CANCEL (the game ignores a click on them): dimmed.
+		const float Waiting = Room.Picker.IsSet() ? 0.35f : 1.f;
+		const FGlpRect Take = FGlpShowroom::TakeButton(Size);
+		const FGlpRect Back = FGlpShowroom::BackButton(Size);
+		P.Rect(Take.X, Take.Y, Take.W, Take.H, FGlpPainter::Srgb(1.f, 0.85f, 0.3f, 0.16f * Waiting));
+		P.Text(TEXT("TAKE IT   (ENTER)"), Take.X, Take.Y + 29.f, EAlign::Centre, Take.W, 20.f, FGlpPainter::Srgb(1.f, 0.85f, 0.3f, Waiting));
+		P.Rect(Back.X, Back.Y, Back.W, Back.H, FGlpPainter::Srgb(1.f, 1.f, 1.f, 0.06f * Waiting));
+		P.Text(TEXT("BACK   (ESC)"), Back.X, Back.Y + 29.f, EAlign::Centre, Back.W, 20.f, FGlpPainter::Srgb(0.72f, 0.75f, 0.8f, Waiting));
+		// Space as on the screen under the showroom: it starts the game on the title screen and goes back on the menu.
+		Centred(FString::Printf(TEXT("left / right or A / D: car     up / down or W / S: paint     C or Y: mix a colour     drag the car to turn it, the wheel brings it closer     %s"),
+			Room.bFromMenu ? TEXT("ENTER or A: take it     ESC, SPACE or B: back") : TEXT("ENTER, SPACE or A: take it     ESC or B: back")), Y + 190.f, 15.f, Grey);
+		// The figures are the simulation's, read from the car's specification (CarFacts), and say so: a mass there carries
+		// a driver and fuel, and the power and torque are its curve's peaks, which can sit off the brochure's.
+		Centred(FString::Printf(TEXT("%s     ·     the figures are the simulation's, the mass with a driver and fuel"),
+			Room.bFromMenu ? TEXT("another car starts a new game; the car and every car's paint are kept for next time") : TEXT("the car and every car's paint are kept for next time")),
+			Y + 216.f, 14.f, FGlpPainter::Srgb(0.55f, 0.58f, 0.62f));
+		if (Room.Picker.IsSet())
+		{
+			DrawPicker(P, Size, Room.Picker.GetValue());
+		}
+	}
 }
 
 AGlpGameMode::AGlpGameMode()
@@ -71,6 +238,12 @@ void AGlpHud::DrawHUD()
 		return;
 	}
 	const FGlpPainter P(Canvas, FMath::Min(Canvas->ClipX / LayoutWidth, Canvas->ClipY / LayoutHeight));
+	if (G->Showroom().bOpen)
+	{
+		// The showroom has the screen (0.79): the title, the readouts and the menu it was opened from wait behind it undrawn.
+		DrawShowroom(P, *G);
+		return;
+	}
 	const FVector2D Size = P.Size();
 	const glp_state& S = G->State();
 	const float Flash = GetWorld()->GetRealTimeSeconds();
@@ -163,7 +336,11 @@ void AGlpHud::DrawHUD()
 		const float Y = PanelY + 70.f;
 		Centred(TEXT("GRUDGELAP"), Y, 58.f, White);
 		Centred(FString::Printf(TEXT("<   %s   >"), *G->CarName()), Y + 62.f, 28.f, White);
-		Centred(TEXT("left / right or the stick: car"), Y + 90.f, 15.f, Grey);
+		// The car's figures and the way to the others, as the Godot version's title (0.79: the figures, the car's place in
+		// the line-up and the showroom came over; until 0.78 the line read "left / right or the stick: car").
+		int32 Number = 0, Count = 0;
+		G->Place(G->DrivenCar(), Number, Count);
+		Centred(FString::Printf(TEXT("%s     left / right: car %d of %d     down: showroom and paints"), *G->TitleFacts(), Number, Count), Y + 90.f, 15.f, Grey);
 		const TCHAR* Labels[] = { TEXT("1  AUTOMATIC"), TEXT("2  STICK"), TEXT("3  STICK + CLUTCH") };
 		for (int32 i = 0; i < 3; i++)
 		{

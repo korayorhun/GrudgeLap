@@ -16,6 +16,9 @@ class APlayerController;
  * Up from 3 to 9 s and taps E at 4.5 s, in seconds since the level started (key names as FKey knows them; "+" may
  * stand for ",", which cmd would split the argument at). The Esc menu's mouse can be played too:
  * -GlpMouse=6:800,420+7:800,420:click puts it at that point of the HUD's 1600 x 900 canvas at 6 s and clicks there at 7.
+ * For the showroom (0.79) an entry may end in :down or :up instead (the button pressed there and held, let go there)
+ * and in :wheel<steps> (the wheel turned, positive towards the screen): 4:700,400:down+5:900,400:up drags the mouse
+ * 200 px to the right over that second, moving evenly between the two entries as a hand does.
  */
 class FGlpInput
 {
@@ -48,6 +51,10 @@ public:
 	 * when the run has none, or none yet: the real mouse then counts.
 	 */
 	bool ScriptedMouse(FVector2f& Point, bool& bClick) const;
+	/** The scripted mouse's button is held (between a :down and its :up). */
+	bool ScriptedMouseHeld() const { return bMouseHeld; }
+	/** The scripted mouse's wheel steps on this frame (positive towards the screen). */
+	int32 ScriptedWheel() const { return MouseWheel; }
 
 private:
 	struct FScripted
@@ -63,10 +70,15 @@ private:
 		float At = 0.f;
 		FVector2f Point = FVector2f::ZeroVector;
 		bool bClick = false;
+		int32 Button = 0;          // 1 the button goes down here and is held, -1 it is let go, 0 as it was
+		int32 Wheel = 0;
 	};
 	TArray<FMouse> Mouse;
 	int32 MouseNow = INDEX_NONE;   // the last entry whose time has come
-	bool bMouseClick = false;      // it clicks on this frame
+	bool bMouseClick = false;      // it clicks (or its button goes down) on this frame
+	bool bMouseHeld = false;       // its button is held
+	int32 MouseWheel = 0;          // its wheel's steps on this frame
+	FVector2f MousePoint = FVector2f::ZeroVector;   // where it is on this frame: on its way to the next entry while held
 	TSet<FKey> Held;
 	TSet<FKey> WasHeld;
 	float Steer = 0.f;

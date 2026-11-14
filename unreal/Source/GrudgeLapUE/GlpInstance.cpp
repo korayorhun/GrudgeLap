@@ -3,6 +3,8 @@
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
 #include "GenericPlatform/GenericWindow.h"
+#include "GlpPaint.h"
+#include "GlpStyles.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformMisc.h"
 #include "HAL/PlatformProcess.h"
@@ -29,10 +31,83 @@ namespace
 	HANDLE Call = nullptr;
 #endif
 
-	// VehicleSpec.Catalogue's body styles in its order (CarStyle): the Godot version names a car's best lap by its
-	// style (bestlap-<style>.bin), this one by its place in the catalogue (best_lap_<index>.bin).
-	const TCHAR* const Styles[] = { TEXT("FlatTwelve"), TEXT("V8"), TEXT("HotHatch"), TEXT("FiveHatch"), TEXT("TurboHatch"), TEXT("Saloon"),
-		TEXT("Estate"), TEXT("Fleet"), TEXT("FlatPlaneV8"), TEXT("HgtFive"), TEXT("HatchSixteen"), TEXT("CupraTsi"), TEXT("Boxer"), TEXT("ClioSixteen") };
+	/** The keys and values of settings.cfg's [game] section, the Godot version's choices; a string's quotes taken off. */
+	TMap<FString, FString> GodotChoices(const FString& File)
+	{
+		TMap<FString, FString> Choices;
+		FString Text;
+		if (!FFileHelper::LoadFileToString(Text, *File))
+		{
+			return Choices;
+		}
+		TArray<FString> Lines;
+		Text.ParseIntoArrayLines(Lines);
+		bool bGame = false;
+		for (const FString& Raw : Lines)
+		{
+			const FString Line = Raw.TrimStartAndEnd();
+			if (Line.StartsWith(TEXT("[")))
+			{
+				bGame = Line == TEXT("[game]");
+				continue;
+			}
+			FString Key, Value;
+			if (bGame && Line.Split(TEXT("="), &Key, &Value))
+			{
+				Choices.Add(Key.TrimStartAndEnd(), Value.TrimStartAndEnd().TrimQuotes());
+			}
+		}
+		return Choices;
+	}
+
+	/**
+	 * The Godot version's paints (0.79), once: its settings.cfg keeps each car's as paint.<style>="<paint>", the text
+	 * this version's settings.ini keeps under the same key (FGlpPaintChoice), so a car the player had painted there
+	 * stands in the same paint here. A paint already chosen in this version wins. The step has its own marker:
+	 * imported.txt is already on every computer that ran 0.78, which had no paints to take them into.
+	 */
+	void TakePaints(const FString& Godot, const FString& Target)
+	{
+		IFileManager& Files = IFileManager::Get();
+		const FString Marker = FPaths::Combine(Target, TEXT("imported-paints.txt"));
+		if (Files.FileExists(*Marker))
+		{
+			return;
+		}
+		Files.MakeDirectory(*Target, true);
+		const FString Settings = FPaths::Combine(Target, TEXT("settings.ini"));
+		FString Kept;
+		FFileHelper::LoadFileToString(Kept, *Settings);
+		TArray<FString> Lines;
+		Kept.ParseIntoArrayLines(Lines);
+		const TMap<FString, FString> Choices = GodotChoices(FPaths::Combine(Godot, TEXT("settings.cfg")));
+		FString Report = TEXT("GrudgeLap took over the paints the Godot version kept, once:\n");
+		FString Added;
+		for (int32 Car = 0; Car < GlpStyles::Count; Car++)
+		{
+			const FString Key = GlpPaint::Key(Car);
+			const FString* Text = Choices.Find(Key);
+			FGlpPaintChoice Choice;
+			if (!Text || !FGlpPaintChoice::TryParse(*Text, Choice) || Choice.IsOriginal()
+				|| Lines.ContainsByPredicate([&Key](const FString& Line) { return Line.StartsWith(Key + TEXT("=")); }))
+			{
+				continue;
+			}
+			Added += FString::Printf(TEXT("%s=%s\n"), *Key, *Choice.Format());
+			Report += FString::Printf(TEXT("%s=%s\n"), *Key, *Choice.Format());
+			UE_LOG(LogGlpInstance, Log, TEXT("taken over: %s=%s"), *Key, *Choice.Format());
+		}
+		if (Added.IsEmpty())
+		{
+			Report += TEXT("(nothing was found)\n");
+		}
+		else if (!FFileHelper::SaveStringToFile((Kept.IsEmpty() || Kept.EndsWith(TEXT("\n")) ? Kept : Kept + TEXT("\n")) + Added, *Settings))
+		{
+			// Not written: tried again at the next start.
+			return;
+		}
+		FFileHelper::SaveStringToFile(Report, *Marker);
+	}
 }
 
 bool GlpInstance::Packaged()
@@ -159,9 +234,14 @@ void GlpInstance::Import()
 	}
 	IFileManager& Files = IFileManager::Get();
 	const FString& Target = DataDir();
+	// The Godot version's folder (to 0.77), or a check's own.
+	FString Godot = FPaths::Combine(FPlatformMisc::GetEnvironmentVariable(TEXT("APPDATA")), TEXT("Godot"), TEXT("app_userdata"), TEXT("GrudgeLap"));
+	FParse::Value(FCommandLine::Get(), TEXT("GlpGodotData="), Godot, false);
 	const FString Marker = FPaths::Combine(Target, TEXT("imported.txt"));
 	if (Files.FileExists(*Marker))
 	{
+		// The files came over with 0.78; the paints (0.79) may still be owed.
+		TakePaints(Godot, Target);
 		return;
 	}
 	Files.MakeDirectory(*Target, true);
@@ -195,47 +275,30 @@ void GlpInstance::Import()
 	}
 
 	// The Godot version (to 0.77): the high scores and the best laps are the simulation core's own files in both versions.
-	FString Godot = FPaths::Combine(FPlatformMisc::GetEnvironmentVariable(TEXT("APPDATA")), TEXT("Godot"), TEXT("app_userdata"), TEXT("GrudgeLap"));
-	FParse::Value(FCommandLine::Get(), TEXT("GlpGodotData="), Godot, false);
 	if (Files.DirectoryExists(*Godot))
 	{
 		Take(FPaths::Combine(Godot, TEXT("scores.txt")), TEXT("scores.txt"));
-		for (int32 i = 0; i < UE_ARRAY_COUNT(Styles); i++)
+		// The Godot version names a car's best lap by its style (bestlap-<style>.bin), this one by its place in the
+		// catalogue (best_lap_<index>.bin).
+		for (int32 i = 0; i < GlpStyles::Count; i++)
 		{
-			Take(FPaths::Combine(Godot, FString::Printf(TEXT("bestlap-%s.bin"), Styles[i])), FString::Printf(TEXT("best_lap_%d.bin"), i));
+			Take(FPaths::Combine(Godot, FString::Printf(TEXT("bestlap-%s.bin"), GlpStyles::Names[i])), FString::Printf(TEXT("best_lap_%d.bin"), i));
 		}
 		// Its choices: settings.cfg's [game] section holds the same numbers this version's settings.ini does (the car's
 		// place in the catalogue, the gearbox, the weather, the hour), and units as 1 for km/h.
 		const FString Settings = FPaths::Combine(Target, TEXT("settings.ini"));
-		FString Text;
-		if (!Files.FileExists(*Settings) && FFileHelper::LoadFileToString(Text, *FPaths::Combine(Godot, TEXT("settings.cfg"))))
+		if (!Files.FileExists(*Settings))
 		{
-			TArray<FString> Lines;
-			Text.ParseIntoArrayLines(Lines);
-			bool bGame = false;
 			FString Out;
-			for (const FString& Raw : Lines)
+			for (const TPair<FString, FString>& Choice : GodotChoices(FPaths::Combine(Godot, TEXT("settings.cfg"))))
 			{
-				const FString Line = Raw.TrimStartAndEnd();
-				if (Line.StartsWith(TEXT("[")))
+				if (Choice.Key == TEXT("car") || Choice.Key == TEXT("transmission") || Choice.Key == TEXT("weather") || Choice.Key == TEXT("light"))
 				{
-					bGame = Line == TEXT("[game]");
-					continue;
+					Out += FString::Printf(TEXT("%s=%d\n"), *Choice.Key, FCString::Atoi(*Choice.Value));
 				}
-				FString Key, Value;
-				if (!bGame || !Line.Split(TEXT("="), &Key, &Value))
+				else if (Choice.Key == TEXT("units"))
 				{
-					continue;
-				}
-				Key.TrimStartAndEndInline();
-				Value.TrimStartAndEndInline();
-				if (Key == TEXT("car") || Key == TEXT("transmission") || Key == TEXT("weather") || Key == TEXT("light"))
-				{
-					Out += FString::Printf(TEXT("%s=%d\n"), *Key, FCString::Atoi(*Value));
-				}
-				else if (Key == TEXT("units"))
-				{
-					Out += FString::Printf(TEXT("units=%s\n"), FCString::Atoi(*Value) != 0 ? TEXT("kmh") : TEXT("mph"));
+					Out += FString::Printf(TEXT("units=%s\n"), FCString::Atoi(*Choice.Value) != 0 ? TEXT("kmh") : TEXT("mph"));
 				}
 			}
 			if (!Out.IsEmpty() && FFileHelper::SaveStringToFile(Out, *Settings))
@@ -256,4 +319,6 @@ void GlpInstance::Import()
 		Report += TEXT("(nothing was found)\n");
 	}
 	FFileHelper::SaveStringToFile(Report, *Marker);
+	// After the settings: the paints are added to the file the choices above may just have made.
+	TakePaints(Godot, Target);
 }

@@ -3974,6 +3974,77 @@ unless the player asks. From 0.78.0 the released game is the Unreal version; the
   installed 0.77 copy handing over to the new installer (only the owner's own copy is one; the updater's side of that
   is the code 0.77 shipped with, the installer's side is checked above).
 
+### The showroom and the paints, on the track (0.79.0)
+
+The Unreal game named its cars on the title screen and nothing more: a car could not be seen before it was driven,
+and its paint was the one its model came in. This is the Godot game's showroom (0.25) and its paints carried over
+(ISTERLER T2, the owner's A4 and A5), so that nothing of them is lost with the Godot game.
+
+- **Where the car stands.** Not in a studio. The Godot showroom turned the car on a turntable in a grey room of its
+  own; here the car stands where a credit starts, on the track, and the camera goes round it. The level's sun, sky,
+  fog and fixed exposure are what this version is built for, a closed room inside that level would have had to fight
+  all four, and a colour chosen in a room is not the colour on the road. What the player sees is the same slow turn:
+  a full circle in about 24 s, first the front three-quarter from the driver's side, through a 32 degree lens from
+  11 degrees over the car, framed from the car's own box (half the diagonal of its plan, or five quarters of its
+  height for a short, tall one) so that every car fills the stage between the bar and the panel alike. A drag turns
+  the view and keeps a little of the motion, the wheel brings it closer. Only the car on show is drawn; the traffic
+  and the ghost are out of the picture, the session is not stepped, and the weather goes on (the rain falls).
+- **The way in, as in the Godot game.** On the title screen left and right step the car as before and down (S, the
+  pad's down) opens the showroom; in the Esc menu the CAR line opens it, Enter on the car driven, left and right
+  straight on to the next car. In it left and right are the cars, up and down the paints, C or Y the colour picker,
+  Enter takes the car and Esc leaves. Taking keeps every paint chosen there, a car's the player only looked at too
+  (the Godot rule, which the screen states), and another car starts a new game; leaving forgets them. The menu has a
+  PAINT line that steps the driven car's paint without the showroom. One thing is not carried over: the Godot title
+  screen's click on the car's name, as the Unreal title screen has no mouse pointer.
+- **The paints.** The car's own colour, seven presets (red, white, a metallic silver, black, dark blue, green,
+  yellow) and a colour of the player's own, mixed in a picker of hue, saturation and lightness (lightness rather
+  than value, so the pastels and the dark shades of one hue lie on one line of the square) in one of three finishes.
+  The keys move a value a step at a tap and run on when held, from 30 to 150 steps a second; the mouse drags in the
+  square and on the hue bar. The colour is on the car as it is mixed. A finish is the base coat under the same clear
+  coat: a solid (metallic 0.05, roughness 0.38), a metallic (0.6, 0.3) or a pearl (0.3, 0.32) whose colour turns
+  towards a second one where a panel is seen edge-on, the hue moved on a little and darker, a white's towards its
+  mica's warm gold. The share of that tint is `Pearl x 0.55 x (1 - |normal . view|)^3`, the Godot paint shader's
+  measure. A mixed colour is held between 0.03 and 0.92, what a paint can reflect.
+- **How a model takes another colour.** A flat paint is a parameter. Three models carry their paint in a texture with
+  other things on it (the 205's atlas with its lamps, badges and black trim, the Lada's with its baked shade and
+  chrome, the Delta's white under the Martini lettering). The game's own preparation had made each a mask for the
+  Godot showroom (`tools/prepare_car_models.py`, `paint_mask`: the paint's weight at a texel, and the texel's
+  lightness against the paint's own colour); it comes in with the model, and `M_CarPaintTextured` draws the chosen
+  colour times that lightness where the mask says paint and the texture as it is elsewhere, so the panel lines, the
+  grime and the lettering stay in any colour. A paint texture without a mask (the Golf's) is the chosen colour all
+  over. The traffic gains by it: until 0.78 a traffic copy of such a car was its texture times the copy's colour, and
+  a navy 205 times beige was near black.
+- **Kept.** `settings.ini` has a line for every car that is not in its own colour, `paint.<style>`, the Godot
+  game's key and text (`DARK BLUE`, `#1E4FA0 PEARL`), written when a car is taken and when the menu's line steps. The
+  Godot game remembered the colour a car was last mixed in only while it ran, so a colour mixed with care was gone at
+  the next start once a preset had been tried over it; here it has a line of its own while the car wears another
+  paint (`mixed.<style>`). The Godot copy's paints are taken over once at the first start (`imported-paints.txt`
+  says which), never over a paint this version already has.
+- **The lines of facts.** The showroom's two lines (the layout; the figures) and the title screen's short one were
+  the Godot HUD's code. They are the core's now (`CarFacts`, `glp_car_facts`), worked out from the car's
+  specification alone, so both games print the same and the figures cannot drift from the simulation; the title
+  screen shows the power, the mass, the driven wheels and the gears under the car's name, as the Godot one did.
+- **At night.** A night's exposure (EV100 1) leaves a car on an unlit road nearly black, and its dipped beams dazzle
+  the camera as it passes the nose; in the night's rain they fill the fog. So at night, and only then, the car's own
+  lamps are out and two floodlights stand where a photographer's would: a key ahead of the nose on the driver's side
+  and a fill behind on the other, 4.6 m out along and across, 3.6 m up, 600 and 420 cd, about 12 lux square on the
+  car where 4.4 lux draws a white card white. They light neither the rain's streaks nor the fog: a cone of lit air
+  between the lamp and the car would hide the paint the lamp is there to show. By day, at dusk and at sunrise the
+  light is the credit's own.
+- **Checked**, hidden and silent. The game's own checks (`-GlpSelfTest`, 163 of them: a paint's text both ways, the
+  colour arithmetic, the book of paints, the picker by keys and by mouse, what the mouse hits in three shapes of
+  window, the turn, the drag, the zoom and the framing) and the core's tests of the lines. In pictures: every car
+  to drive in its own colour, a car from eight sides, the presets, the picker, the Delta and the 205 through their
+  masks, dusk, sunrise, rain, night and night rain. By scripted keys and a scripted mouse (which learnt to hold its
+  button and to turn its wheel): from the title screen through another car, the presets and a mixed colour to
+  taking it; the next start with the car and its paint kept, and the menu's PAINT line; every control of the
+  showroom and the picker by the mouse alone; from the menu in the middle of a drive, leaving (the drive goes on, its
+  lap time unmoved) and taking another car (a new game); and the Godot copy's paints into an empty folder and into
+  one that had been taken over before. Left to the owner: the real mouse and the pad.
+- **Known.** The estate's doors carry a dark panel: it is the model's own plastic (black in the Godot showroom, a
+  dark grey in this version's daylight) and was left alone. A sunlit red reads a little towards coral through the
+  tone mapper, the car's own red and the preset alike.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

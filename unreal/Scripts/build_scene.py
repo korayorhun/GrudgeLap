@@ -1401,8 +1401,20 @@ def paint_material():
     return material
 
 
-def paint_finish(material, attributes, colour):
-    """The clear-coated paint's finish, and its dark lining. The models draw their panels from both faces and few have a
+def paint_finish(material, attributes, colour, share=None):
+    """The clear-coated paint's finish, and its dark lining.
+
+    The finish (0.79, the showroom's paints): the base coat's Metallic and Roughness are parameters, at the values every
+    paint had until then (0.35 and 0.38), so a car in its own colour is drawn as it was; a paint chosen in the showroom
+    sets them (GlpPaint: a solid 0.05 and 0.38, a metallic 0.6 and 0.3, a pearl 0.3 and 0.32). A pearl's flop (Pearl
+    above 0) turns the colour towards PearlTint where a panel is seen edge-on, as the Godot game's paint shader does:
+    the share of the tint is Pearl x 0.55 x (1 - |normal . view|) cubed, so a panel seen at 60 degrees keeps nearly all
+    its own colour and only the turning edges take the tint. The absolute value because some models have panels wound
+    the wrong way, and the engine's two-sided sign never came out on the body's Nanite mesh (see below). share, when
+    given (a paint in a texture atlas), is the paint's weight at the pixel: the lamps, badges and trim of the atlas keep
+    the finish they had.
+
+    The lining. The models draw their panels from both faces and few have a
     headlining, so from the seat the roof's underside and the pillars' inner faces showed in the body's colour; the
     Godot game's ModelPaint draws a back face inside the cabin as a matt, near-black lining. The cabin is a box in the
     car's own frame (CabinMin..CabinMax, centimetres, set per car from its eye: CarView.SetPaintCabin's box).
@@ -1464,6 +1476,50 @@ def paint_finish(material, attributes, colour):
         mel.connect_material_expressions(node, output, custom, pin)
     lining = mel.create_material_expression(material, unreal.MaterialExpressionConstant3Vector, -650, 300)
     lining.set_editor_property("constant", unreal.LinearColor(0.045, 0.045, 0.05, 1.0))
+    # The pearl's flop (0.79).
+    pearl = mel.create_material_expression(material, unreal.MaterialExpressionScalarParameter, -900, 1150)
+    pearl.set_editor_property("parameter_name", "Pearl")
+    pearl.set_editor_property("default_value", 0.0)
+    tint = mel.create_material_expression(material, unreal.MaterialExpressionVectorParameter, -900, 1250)
+    tint.set_editor_property("parameter_name", "PearlTint")
+    tint.set_editor_property("default_value", unreal.LinearColor(1.0, 1.0, 1.0, 1.0))
+    flop = mel.create_material_expression(material, unreal.MaterialExpressionCustom, -650, 1150)
+    flop.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT1)
+    flop.set_editor_property("description", "GrudgeLap pearl flop")
+    flop.set_editor_property("code", "float edge = 1.0 - abs(dot(normalize(Normal), normalize(View)));\n"
+                                     "return saturate(Pearl * 0.55 * edge * edge * edge * Share);")
+    flop_inputs = []
+    for name in ("Normal", "View", "Pearl", "Share"):
+        entry = unreal.CustomInput()
+        entry.set_editor_property("input_name", name)
+        flop_inputs.append(entry)
+    flop.set_editor_property("inputs", flop_inputs)
+    whole = share
+    if whole is None:
+        whole = mel.create_material_expression(material, unreal.MaterialExpressionConstant, -900, 1400)
+        whole.set_editor_property("r", 1.0)
+    mel.connect_material_expressions(mel.create_material_expression(material, unreal.MaterialExpressionVertexNormalWS, -1100, 1150), "", flop, "Normal")
+    mel.connect_material_expressions(mel.create_material_expression(material, unreal.MaterialExpressionCameraVectorWS, -1100, 1250), "", flop, "View")
+    mel.connect_material_expressions(pearl, "", flop, "Pearl")
+    mel.connect_material_expressions(whole, "", flop, "Share")
+    flopped = mel.create_material_expression(material, unreal.MaterialExpressionLinearInterpolate, -450, 1150)
+    mel.connect_material_expressions(colour, "", flopped, "A")
+    mel.connect_material_expressions(tint, "", flopped, "B")
+    mel.connect_material_expressions(flop, "", flopped, "Alpha")
+    colour = flopped
+    # The base coat's finish (0.79): parameters at the values the paint had as constants.
+    finish = {}
+    for y, (name, default) in enumerate((("Metallic", 0.35), ("Roughness", 0.38))):
+        parameter = mel.create_material_expression(material, unreal.MaterialExpressionScalarParameter, -900, 1500 + y * 100)
+        parameter.set_editor_property("parameter_name", name)
+        parameter.set_editor_property("default_value", default)
+        finish[name] = parameter
+        if share is not None:
+            own = mel.create_material_expression(material, unreal.MaterialExpressionLinearInterpolate, -650, 1500 + y * 100)
+            own.set_editor_property("const_a", default)
+            mel.connect_material_expressions(parameter, "", own, "B")
+            mel.connect_material_expressions(share, "", own, "Alpha")
+            finish[name] = own
     mix = mel.create_material_expression(material, unreal.MaterialExpressionLinearInterpolate, -300, 0)
     mel.connect_material_expressions(colour, "", mix, "A")
     mel.connect_material_expressions(lining, "", mix, "B")
@@ -1485,6 +1541,8 @@ def paint_finish(material, attributes, colour):
         value = mel.create_material_expression(material, unreal.MaterialExpressionLinearInterpolate, -250, 200 + y * 100)
         value.set_editor_property("const_a", paint_value)
         value.set_editor_property("const_b", lining_value)
+        if pin in finish:
+            mel.connect_material_expressions(finish[pin], "", value, "A")
         mel.connect_material_expressions(custom, "", value, "Alpha")
         mel.connect_material_expressions(value, "", attributes, pin)
 
@@ -1512,7 +1570,19 @@ def paint_solid_material():
 
 def paint_textured_material():
     """The paint of a prepared model whose paint is a texture (a livery or a colour atlas, 0.74): the texture times
-    the Paint parameter under the same clear coat as M_CarPaintSolid, so the textured cars shine as the flat ones do."""
+    the Paint parameter under the same clear coat as M_CarPaintSolid, so the textured cars shine as the flat ones do.
+
+    Another colour (0.79, the showroom's paints and the traffic's): Repainted 1 draws the car in Chosen. Three of the
+    models carry their paint in a texture with other things on it (the 205's atlas with its lamps, badges and black
+    trim, the Lada's with its baked shade and chrome, the Delta's white with the Martini lettering); the game's own
+    preparation (tools/prepare_car_models.py paint_mask) made each a mask, which comes in with the model as its
+    emissive texture: red the paint's weight at a texel, green the texel's lightness against the paint's own colour,
+    halved. With it (Masked 1, set by dress_prepared_model) the colour is Chosen times that lightness where the mask
+    says paint and the texture as it is elsewhere, as the Godot game's TexturePaint draws it: the panel lines, the grime
+    and the lettering stay in any colour. Without one (the Golf's paint texture) the car is Chosen all over, as the
+    Godot game draws such a paint. Until 0.78 the only other colour was a traffic copy's, the texture times it: a navy
+    205 times beige was near black. The mask is read as the colour texture the importer made of it and turned back
+    into its numbers here (the sRGB curve), so that no texture's settings have to be changed."""
     material = asset_tools.create_asset("M_CarPaintTextured", f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
     material.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_CLEAR_COAT)
     material.set_editor_property("two_sided", True)   # as M_CarPaintSolid
@@ -1524,10 +1594,56 @@ def paint_textured_material():
     paint = mel.create_material_expression(material, unreal.MaterialExpressionVectorParameter, -700, 150)
     paint.set_editor_property("parameter_name", "Paint")
     paint.set_editor_property("default_value", unreal.LinearColor(1.0, 1.0, 1.0, 1.0))
-    colour = mel.create_material_expression(material, unreal.MaterialExpressionMultiply, -400, 0)
-    mel.connect_material_expressions(texture, "RGB", colour, "A")
-    mel.connect_material_expressions(paint, "", colour, "B")
-    paint_finish(material, attributes, colour)
+    factory = mel.create_material_expression(material, unreal.MaterialExpressionMultiply, -400, 0)
+    mel.connect_material_expressions(texture, "RGB", factory, "A")
+    mel.connect_material_expressions(paint, "", factory, "B")
+    mask = mel.create_material_expression(material, unreal.MaterialExpressionTextureSampleParameter2D, -1000, -400)
+    mask.set_editor_property("parameter_name", "Mask")
+    chosen = mel.create_material_expression(material, unreal.MaterialExpressionVectorParameter, -1000, -650)
+    chosen.set_editor_property("parameter_name", "Chosen")
+    chosen.set_editor_property("default_value", unreal.LinearColor(1.0, 1.0, 1.0, 1.0))
+    # The paint's own colour, which a texture has no one value for: the key its mask was made by (paint_key), kept on the
+    # instance for the game to read (the showroom's ORIGINAL swatch, FGlpCarView::OwnColour). Black: not known. It goes
+    # into the node below unused, so that the parameter is the material's.
+    own = mel.create_material_expression(material, unreal.MaterialExpressionVectorParameter, -1000, -1100)
+    own.set_editor_property("parameter_name", "Own")
+    own.set_editor_property("default_value", unreal.LinearColor(0.0, 0.0, 0.0, 1.0))
+    switches = {}
+    for y, name in enumerate(("Repainted", "Masked")):
+        switch = mel.create_material_expression(material, unreal.MaterialExpressionScalarParameter, -1000, -850 - y * 100)
+        switch.set_editor_property("parameter_name", name)
+        switch.set_editor_property("default_value", 0.0)
+        switches[name] = switch
+    decode = ("float2 m = Mask.rg;\n"
+              "m = float2(m.x <= 0.0031308 ? m.x * 12.92 : 1.055 * pow(m.x, 1.0 / 2.4) - 0.055,\n"
+              "           m.y <= 0.0031308 ? m.y * 12.92 : 1.055 * pow(m.y, 1.0 / 2.4) - 0.055);\n")
+
+    def custom(description, output, code, wires, x, y):
+        node = mel.create_material_expression(material, unreal.MaterialExpressionCustom, x, y)
+        node.set_editor_property("output_type", output)
+        node.set_editor_property("description", description)
+        node.set_editor_property("code", code)
+        inputs = []
+        for name, _, _ in wires:
+            entry = unreal.CustomInput()
+            entry.set_editor_property("input_name", name)
+            inputs.append(entry)
+        node.set_editor_property("inputs", inputs)
+        for name, source, output_name in wires:
+            mel.connect_material_expressions(source, output_name, node, name)
+        return node
+
+    colour = custom("GrudgeLap repaint", unreal.CustomMaterialOutputType.CMOT_FLOAT3,
+                    decode + "float3 coated = min(Chosen * (m.y * 2.0), 1.0);\n"
+                             "float3 byMask = lerp(Texel, coated, m.x);\n"
+                             "return lerp(Factory, lerp(Chosen, byMask, Masked), Repainted);",
+                    (("Texel", texture, "RGB"), ("Factory", factory, ""), ("Chosen", chosen, ""), ("Mask", mask, "RGB"),
+                     ("Masked", switches["Masked"], ""), ("Repainted", switches["Repainted"], ""), ("Own", own, "")), -650, -500)
+    # The paint's weight at the pixel, for the finish: all of it without a mask.
+    share = custom("GrudgeLap paint share", unreal.CustomMaterialOutputType.CMOT_FLOAT1,
+                   decode + "return lerp(1.0, m.x, Masked);",
+                   (("Mask", mask, "RGB"), ("Masked", switches["Masked"], "")), -650, -800)
+    paint_finish(material, attributes, colour, share)
     mel.recompile_material(material)
     eal.save_loaded_asset(material)
     return material
@@ -1926,6 +2042,29 @@ def translucent(material):
     return base is not None and base.get_editor_property("blend_mode") not in (unreal.BlendMode.BLEND_OPAQUE, unreal.BlendMode.BLEND_MASKED)
 
 
+def paint_key(label):
+    """The own colour of a prepared model's paint texture (0.79), linear RGB: the key its mask was made by, which the
+    game's preparation (tools/prepare_car_models.py embed_paint_mask) writes into the material's extras as
+    glp_paint_key. Read from the model itself (game/assets/models/<car>.glb): the import brings no extras. The showroom
+    shows it on the ORIGINAL swatch, since a paint in a texture has no one colour to read otherwise. None when the
+    model has no such paint or cannot be read."""
+    stem = label[len("PlayerCar_"):] if label.startswith("PlayerCar_") else "flat12"
+    path = os.path.join(ROOT, "..", "game", "assets", "models", f"{stem}.glb")
+    try:
+        with open(path, "rb") as file:
+            header = file.read(20)
+            if header[:4] != b"glTF" or header[16:20] != b"JSON":
+                return None
+            document = json.loads(file.read(int.from_bytes(header[12:16], "little")))
+    except (OSError, ValueError):
+        return None
+    for material in document.get("materials", []):
+        key = material.get("extras", {}).get("glp_paint_key")
+        if key and len(key) == 3:
+            return [float(v) for v in key]
+    return None
+
+
 def dress_prepared_model(car, parts, materials):
     """A prepared model's materials (prepare_model_car.py, the game's own model): GLP_Paint becomes the level's
     clear-coated paint in the model's own colour, through the Paint parameter, so the traffic copies can wear
@@ -1999,6 +2138,16 @@ def dress_prepared_model(car, parts, materials):
                 if colour is None or (textured and texture is None):
                     plain += 1
                     continue
+                # The mask a paint texture is recoloured by (0.79, paint_textured_material): the game's preparation put
+                # it in the material's emissive slot under the name glp_paint_mask.
+                mask = None
+                if textured:
+                    try:
+                        mask = mel.get_material_instance_texture_parameter_value(material, "EmissiveTexture")
+                    except Exception:
+                        mask = None
+                    if mask is not None and not mask.get_name().startswith("glp_paint_mask"):
+                        mask = None
                 key = (texture.get_path_name() if texture else "", round(colour.r, 4), round(colour.g, 4), round(colour.b, 4))
                 if key not in paints:
                     instance = asset_tools.create_asset(f"MI_Paint_{car.get_actor_label()}_{len(paints)}", f"{GAME}/Materials",
@@ -2007,6 +2156,21 @@ def dress_prepared_model(car, parts, materials):
                     mel.set_material_instance_vector_parameter_value(instance, "Paint", unreal.LinearColor(colour.r, colour.g, colour.b, 1.0))
                     if textured:
                         mel.set_material_instance_texture_parameter_value(instance, "Texture", texture)
+                    if mask is not None:
+                        # Read as a colour texture and turned back into numbers in the material: the importer's setting,
+                        # made sure of here.
+                        if not mask.get_editor_property("srgb"):
+                            mask.set_editor_property("srgb", True)
+                            eal.save_loaded_asset(mask)
+                        mel.set_material_instance_texture_parameter_value(instance, "Mask", mask)
+                        mel.set_material_instance_scalar_parameter_value(instance, "Masked", 1.0)
+                        own = paint_key(car.get_actor_label())
+                        if own is not None:
+                            mel.set_material_instance_vector_parameter_value(instance, "Own", unreal.LinearColor(own[0], own[1], own[2], 1.0))
+                            log(f"{car.get_actor_label()}: the paint texture's own colour (linear) {own}")
+                    if textured:
+                        log(f"{car.get_actor_label()}: paint texture {instance.get_name()}, "
+                            f"{'recoloured by ' + mask.get_path_name() if mask is not None else 'no mask: another colour is flat'}")
                     if cabin is not None:
                         mel.set_material_instance_vector_parameter_value(instance, "CabinMin", cabin[0])
                         mel.set_material_instance_vector_parameter_value(instance, "CabinMax", cabin[1])

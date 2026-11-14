@@ -194,6 +194,17 @@ public sealed unsafe class NativeApiTests
             var name = stackalloc byte[64];
             carName(1, name, 64);
             Assert.Equal(VehicleSpec.Catalogue[1].Name, Marshal.PtrToStringUTF8((nint)name));
+            // The lines about a car (ABI 10: the showroom's two and the title screen's): the same text as the managed
+            // side's, the middle dot whole.
+            var carFacts = (delegate* unmanaged[Cdecl]<int, int, byte*, int, int>)NativeLibrary.GetExport(library, "glp_car_facts");
+            var facts = stackalloc byte[512];
+            for (var line = 0; line < 3; line++)
+            {
+                Assert.True(carFacts(1, line, facts, 512) > 0);
+                Assert.Equal(NativeApi.CarFactLine(1, line), Marshal.PtrToStringUTF8((nint)facts));
+            }
+            Assert.Equal(-1, carFacts(1, 3, facts, 512));
+            Assert.Equal(-1, carFacts(99, 0, facts, 512));
             var session = create(0, NativeApi.TrafficFlag);
             Assert.NotEqual(0, session);
             var managed = NativeApi.Create(0, NativeApi.TrafficFlag);

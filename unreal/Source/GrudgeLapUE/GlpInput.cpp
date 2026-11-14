@@ -57,7 +57,16 @@ FGlpInput::FGlpInput()
 				FMouse Move;
 				Move.At = FCString::Atof(*Parts[0]);
 				Move.Point = FVector2f(FCString::Atof(*X), FCString::Atof(*Y));
-				Move.bClick = Parts.Num() > 2 && Parts[2].Equals(TEXT("click"), ESearchCase::IgnoreCase);
+				for (int32 i = 2; i < Parts.Num(); i++)
+				{
+					const FString& What = Parts[i];
+					Move.bClick |= What.Equals(TEXT("click"), ESearchCase::IgnoreCase);
+					Move.Button = What.Equals(TEXT("down"), ESearchCase::IgnoreCase) ? 1 : What.Equals(TEXT("up"), ESearchCase::IgnoreCase) ? -1 : Move.Button;
+					if (What.StartsWith(TEXT("wheel"), ESearchCase::IgnoreCase))
+					{
+						Move.Wheel = FCString::Atoi(*What.Mid(5));
+					}
+				}
 				Mouse.Add(Move);
 			}
 		}
@@ -105,7 +114,7 @@ bool FGlpInput::ScriptedMouse(FVector2f& Point, bool& bClick) const
 	{
 		return false;
 	}
-	Point = Mouse[MouseNow].Point;
+	Point = MousePoint;
 	bClick = bMouseClick;
 	return true;
 }
@@ -113,10 +122,24 @@ bool FGlpInput::ScriptedMouse(FVector2f& Point, bool& bClick) const
 void FGlpInput::Update(const APlayerController* Player, float Time)
 {
 	bMouseClick = false;
+	MouseWheel = 0;
 	while (Mouse.IsValidIndex(MouseNow + 1) && Time >= Mouse[MouseNow + 1].At)
 	{
 		MouseNow++;
-		bMouseClick |= Mouse[MouseNow].bClick;
+		const FMouse& Entry = Mouse[MouseNow];
+		bMouseClick |= Entry.bClick || Entry.Button > 0;
+		bMouseHeld = Entry.Button > 0 || (bMouseHeld && Entry.Button == 0);
+		MouseWheel += Entry.Wheel;
+	}
+	if (Mouse.IsValidIndex(MouseNow))
+	{
+		MousePoint = Mouse[MouseNow].Point;
+		if (bMouseHeld && Mouse.IsValidIndex(MouseNow + 1) && Mouse[MouseNow + 1].At > Mouse[MouseNow].At)
+		{
+			// A held button is a drag: the mouse is on its way to where the next entry has it.
+			const float Share = FMath::Clamp((Time - Mouse[MouseNow].At) / (Mouse[MouseNow + 1].At - Mouse[MouseNow].At), 0.f, 1.f);
+			MousePoint = FMath::Lerp(Mouse[MouseNow].Point, Mouse[MouseNow + 1].Point, Share);
+		}
 	}
 	WasHeld = MoveTemp(Held);
 	Held.Reset();

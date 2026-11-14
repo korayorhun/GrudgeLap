@@ -39,6 +39,7 @@ bool FGlpLibrary::Load()
 	Resolve(CarCount, TEXT("glp_car_count"));
 	Resolve(CarNameText, TEXT("glp_car_name"));
 	Resolve(CarSpec, TEXT("glp_get_car_spec"));
+	Resolve(CarFactsText, TEXT("glp_car_facts"));
 	Resolve(Create, TEXT("glp_create"));
 	Resolve(Destroy, TEXT("glp_destroy"));
 	Resolve(ChooseTransmission, TEXT("glp_choose_transmission"));
@@ -84,6 +85,12 @@ FString FGlpLibrary::CarName(int32 Car) const
 {
 	ANSICHAR Buffer[128];
 	return CarNameText(Car, Buffer, UE_ARRAY_COUNT(Buffer)) >= 0 ? FString(UTF8_TO_TCHAR(Buffer)) : FString();
+}
+
+FString FGlpLibrary::CarFacts(int32 Car, int32 Line) const
+{
+	ANSICHAR Buffer[512];
+	return CarFactsText(Car, Line, Buffer, UE_ARRAY_COUNT(Buffer)) >= 0 ? FString(UTF8_TO_TCHAR(Buffer)) : FString();
 }
 
 FString FGlpLibrary::Message(glp_session Session) const
