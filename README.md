@@ -17,8 +17,9 @@ that jumps the speed route on that drawbridge, runs the loop and the banked 180 
 is the one you remember, under a mountain range: a red barn, cows in the fields, a farmhouse, a gas station, yellow
 signs that tip over when you clip them and a level crossing where a train really does come through; by day, at
 sunrise, at dusk or at night, dry, overcast, wet or in the rain. You sit in the car's own cabin, reading working dials
-through a steering wheel that turns as you steer, with the road behind you in the mirror; or follow the car from
-behind, or from far back through a long lens, as a film would. You choose the car in the showroom, where it stands on
+through a steering wheel that turns as you steer, with the road behind you in the mirror, and in the rain the drops
+bead on the windscreen until the wipers sweep them off; or follow the car from behind, or from far back through a
+long lens, as a film would. You choose the car in the showroom, where it stands on
 the track and the camera goes round it, in its own colour, one of seven others or one you mix yourself, solid,
 metallic or pearl. Keyboard and gamepad, on Windows. Free, open source.
 
@@ -34,7 +35,8 @@ anlık tekrar, gizli skid pad ve *grudge match*: en iyi turunuzun hayaleti sonra
 hatırladığınız gibi: kırmızı ahır, tarlalarda inekler, çiftlik evi, benzin istasyonu, çarpınca devrilen sarı levhalar
 ve hemzemin geçitten gerçekten geçen bir tren; gündüz, gün doğumu, alacakaranlık ya da gece; kuru, kapalı, ıslak ya da
 yağmurlu. Arabanın kendi kabininde oturur, çalışan göstergeleri dönen direksiyonun içinden okur, arkanızdaki yolu
-aynada görürsünüz; ya da arabayı arkadan, ya da uzaktan uzun odaklı bir film kamerasıyla izlersiniz. Arabanızı
+aynada görürsünüz; yağmurda damlalar ön camda birikir, silecekler süpürür; ya da arabayı arkadan, ya da uzaktan uzun
+odaklı bir film kamerasıyla izlersiniz. Arabanızı
 galeride seçersiniz: araba pistte durur, kamera çevresinde döner; kendi renginde, yedi hazır renkten birinde ya da
 kendi karıştırdığınız düz, metalik ya da sedefli renkte. Windows'ta klavye ve oyun koluyla oynanır. Ücretsiz, açık
 kaynak.
@@ -51,9 +53,9 @@ named by description; the models that draw them, the engine and tyre recordings 
 CC BY, each credited in [THIRD_PARTY.md](THIRD_PARTY.md).
 
 Until 0.77 the game ran on Godot. That version is frozen (tag `v0.77.0`); what it had and this one does not have yet
-(the crash scene with its damage, the windscreen's drops and wipers, the 1989 look, the placed sounds and more) is
-being brought over, listed in section 12 of [docs/ISTERLER.md](docs/ISTERLER.md); the showroom and the paints came
-with 0.79.
+(the crash scene with its damage, the 1989 look, the placed sounds and more) is being brought over, listed in section
+12 of [docs/ISTERLER.md](docs/ISTERLER.md); the showroom and the paints came with 0.79, the windscreen's drops and
+wipers with 0.80.
 
 ## Install
 

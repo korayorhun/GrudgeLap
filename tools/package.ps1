@@ -73,6 +73,16 @@ if (Test-Path $archive) { Remove-Item $archive -Recurse -Force }
 Write-Host "packaging (the log: $log)"
 & $uat BuildCookRun "-project=$project" -noP4 -platform=Win64 -clientconfig=Development -build -cook -stage -pak -archive "-archivedirectory=$archive" "-applocaldirectory=$appLocal" -unattended -nocompileeditor *> $log
 if ($LASTEXITCODE -ne 0) { throw "packaging failed: see $log" }
+# A material whose shaders did not compile is cooked all the same, and the game draws the engine's default material
+# in its place; nothing fails. The editor compiles only the shaders it draws with, the cook every shader a material
+# can be asked for, so a material can look right in every run from the editor and be missing from what ships (0.80:
+# the windscreen's picture read a texture that only its own pass declares, and the packaged game drew the default
+# material over the seat's view). The cook's log is read for it.
+$uncompiled = @(Select-String -Path $log -Pattern 'Failed to compile Material (\S+)' -AllMatches |
+    ForEach-Object { $_.Matches } | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+if ($uncompiled.Count -gt 0) {
+    throw "the cook could not compile $($uncompiled.Count) material(s), which the game would draw as the engine's default: $($uncompiled -join ', ') (see $log)"
+}
 
 # ---- the folder that ships ----------------------------------------------------------------------------------
 # Without the debug symbols (2.6 GB), the build's manifests, any Saved folder of a run, the DLSS plugin's
@@ -137,6 +147,9 @@ if (-not $SkipSmoke) {
     foreach ($line in 'simulation core loaded', 'updater ready', 'new session', 'quitting after') {
         if ($text -notlike "*$line*") { throw "the packaged game's log lacks `"$line`": see $smoke" }
     }
+    # The same from the game's side: a material it loaded without its shaders (the cook's check above).
+    $defaulted = @($text -split "`n" | Where-Object { $_ -match 'will use default material|Default Material will be used' })
+    if ($defaulted.Count -gt 0) { throw "the packaged game drew the engine's default material for one of its own: $($defaulted[0].Trim()) (see $smoke)" }
     # A port on the loopback address is reached from this computer only, and the firewall does not ask about it.
     $open = @($listening | Where-Object { $_ -notmatch '^(TCP|UDP) (127\.|::1:)' })
     if ($open.Count -gt 0 -or $text -like '*Control listening on port*') {

@@ -372,6 +372,47 @@ void AGlpGame::BeginPlay()
 	{
 		UE_LOG(LogGlpGame, Warning, TEXT("no glass for the seat (M_GlassInside): build the level again with this module"));
 	}
+	// The glass's picture from the seat (0.80, SyncWindscreen): by the level's soft reference too; a level built before
+	// 0.80 has none and the glass stays clear.
+	GlassPane = GlassPaneMaterial.LoadSynchronous();
+	if (UMaterialInterface* Picture = WindscreenMaterial.LoadSynchronous(); Picture && GlassPane)
+	{
+		Windscreen = UMaterialInstanceDynamic::Create(Picture, this);
+		// Where the glass is, the picture reads from the custom depth and its stencil (FGlpCarView::MarkGlass): the pass
+		// is wanted with its stencil, and drawn without the upscaler's jitter. The scene's own depth is the upscaler's
+		// input, moved by a part of a pixel every frame: read from it, the glass's edge along the dashboard, the pillars
+		// and the mirror stood half a pixel off from frame to frame however the jitter was taken out of the reading
+		// (measured: 0.8 to 1.0 pixels of unrest over eight frames, 1.3 to 1.5 without the correction), and flickered.
+		// Both are the project's own settings (Config/DefaultEngine.ini), so the engine starts with them. They are only
+		// set here where a project's settings lack them: a change of r.CustomDepth has the engine flush the renderer
+		// and register every component of the world anew (SceneUtils.cpp OnCustomDepthChanged), which a start need
+		// not pay for.
+		const TPair<const TCHAR*, int32> Wanted[] = { { TEXT("r.CustomDepth"), 3 }, { TEXT("r.CustomDepthTemporalAAJitter"), 0 } };
+		for (const TPair<const TCHAR*, int32>& Variable : Wanted)
+		{
+			if (IConsoleVariable* Found = IConsoleManager::Get().FindConsoleVariable(Variable.Key); Found && Found->GetInt() != Variable.Value)
+			{
+				UE_LOG(LogGlpGame, Warning, TEXT("%s was %d: set to %d for the glass's picture (it belongs in DefaultEngine.ini)"), Variable.Key, Found->GetInt(), Variable.Value);
+				Found->Set(Variable.Value, ECVF_SetByCode);
+			}
+		}
+	}
+	else
+	{
+		UE_LOG(LogGlpGame, Warning, TEXT("no picture on the glass (M_Windscreen, M_Pane): build the level again with this module"));
+	}
+	if (FString Text; FParse::Value(FCommandLine::Get(), TEXT("GlpWindscreen="), Text, false))
+	{
+		const TArray<double> V = Numbers(Text);
+		if (V.Num() == 1 && V[0] == 0.0)
+		{
+			bGlassPicture = false;
+		}
+		for (int32 i = 0; i < V.Num() && i < 3 && V.Num() > 1; i++)
+		{
+			GlassTune[i] = static_cast<float>(V[i]);
+		}
+	}
 	// The cameras outside the car stay over the ground (0.78): the level has no collision to trace, the core knows its
 	// terrain. Unreal's (x, y) is the simulation's (x, -z) in centimetres (GlpSpace).
 	Rig.Ground = [this](const FVector& Point) -> TOptional<double>
@@ -599,10 +640,10 @@ void AGlpGame::BeginPlay()
 	}
 	if (FParse::Param(FCommandLine::Get(), TEXT("GlpSelfTest")))
 	{
-		// The paints' and the showroom's own checks (0.79), for an automated run: the result in the log, and out with it
-		// as the exit code (0 when every check held).
+		// The paints' and the showroom's own checks (0.79) and the windscreen's (0.80), for an automated run: the result
+		// in the log, and out with it as the exit code (0 when every check held).
 		TArray<FString> Failures;
-		const int32 Checks = GlpPaint::SelfTest(Failures) + FGlpShowroom::SelfTest(Failures);
+		const int32 Checks = GlpPaint::SelfTest(Failures) + FGlpShowroom::SelfTest(Failures) + GlpWindscreen::SelfTest(Failures);
 		for (const FString& Failure : Failures)
 		{
 			UE_LOG(LogGlpGame, Error, TEXT("self test failed: %s"), *Failure);
@@ -689,6 +730,8 @@ void AGlpGame::ApplyWeather()
 		// Godot's (x, y, z) is Unreal's (x, z, y) (GlpSpace); the light shines away from where it is.
 		const FVector Towards = FVector(Look.Towards.X, Look.Towards.Z, Look.Towards.Y).GetSafeNormal();
 		Sun->SetActorRotation(Look.bLevelSun ? DayRotation.GetValue() : FRotationMatrix::MakeFromX(-Towards).Rotator());
+		// Where the light stands, for the haze it lays on the windscreen's dust (SyncWindscreen).
+		LightTowards = -Sun->GetActorForwardVector();
 		LightLux = SunLux * Look.SunShare;
 		if (Look.GroundLux > 0.f)
 		{
@@ -1443,6 +1486,13 @@ void AGlpGame::NewSession()
 	// on the title screen, a tour's next car), and the one driven before is back in the paint its settings keep.
 	SyncPaints();
 	bInsideShown = false;
+	// The glass's picture comes off with the cars' marks (SetInside above): the next frame from the seat puts both back,
+	// on the car driven now (SyncWindscreen).
+	if (bWindscreenShown)
+	{
+		Camera->PostProcessSettings.WeightedBlendables.Array.RemoveAll([this](const FWeightedBlendable& Blendable) { return Blendable.Object == Windscreen; });
+		bWindscreenShown = false;
+	}
 	ClearSkidMarks();
 	ClearPuffs();
 	const FEyePoint& Eye = EyePoints[FMath::Clamp(CarSpec.style, 0, (int32)UE_ARRAY_COUNT(EyePoints) - 1)];
@@ -1456,6 +1506,15 @@ void AGlpGame::NewSession()
 			// The car's Unreal frame in centimetres; Unreal's (x, y, z) there is Godot's (x, z, y) (GlpSpace).
 			const FVector Local = Car->Root()->GetActorTransform().InverseTransformPosition(EyeActor->GetActorLocation()) / 100.0;
 			Rig.Eye = FVector3f(static_cast<float>(Local.X), static_cast<float>(Local.Z), static_cast<float>(Local.Y));
+		}
+		// The windscreen's lower edge on the car's middle line (0.80, GLP.Cowl: prepare_model_car.py's Cowl), from which
+		// the drops and the wipers are laid on the glass (SyncWindscreen). A car without one: 25 cm under the model's
+		// eye and 60 cm ahead of it, where build_scene.py puts the cabin's sill for such a car.
+		CowlLocal = FVector(0.0, (Rig.Eye.Z - 0.60) * 100.0, (Rig.Eye.Y - 0.25) * 100.0);
+		if (const AActor* Cowl = Car->Find(TEXT("GLP.Cowl")))
+		{
+			const FVector Local = Car->Root()->GetActorTransform().InverseTransformPosition(Cowl->GetActorLocation());
+			CowlLocal = FVector(0.0, Local.Y, Local.Z);
 		}
 	}
 	// The seat as the game corrects it (0.78): the eye, the lens, and the dials and the wheel where they stood wrong.
@@ -1587,6 +1646,10 @@ void AGlpGame::FitOutCockpit()
 			Dials->GetComponents<UStaticMeshComponent>(Meshes);
 			for (UStaticMeshComponent* Mesh : Meshes)
 			{
+				if (FGlpCarView::IsMark(Mesh))
+				{
+					continue;
+				}
 				UMaterialInstanceDynamic* Face = UMaterialInstanceDynamic::Create(Base, Mesh);
 				Face->SetTextureParameterValue(TEXT("Panel"), Instruments->Texture());
 				Mesh->SetMaterial(0, Face);
@@ -1643,6 +1706,10 @@ void AGlpGame::FitOutCockpit()
 	Glass->GetComponents<UStaticMeshComponent>(Meshes);
 	for (UStaticMeshComponent* Mesh : Meshes)
 	{
+		if (FGlpCarView::IsMark(Mesh))
+		{
+			continue;
+		}
 		UMaterialInstanceDynamic* View = UMaterialInstanceDynamic::Create(GlassBase, Mesh);
 		View->SetTextureParameterValue(TEXT("View"), Mirror->TextureTarget);
 		Mesh->SetMaterial(0, View);
@@ -1661,6 +1728,10 @@ void AGlpGame::FitOutCockpit()
 		Side->GetComponents<UStaticMeshComponent>(SideMeshes);
 		for (UStaticMeshComponent* Mesh : SideMeshes)
 		{
+			if (FGlpCarView::IsMark(Mesh))
+			{
+				continue;
+			}
 			SideMirrors.Add(Mesh);
 			SideMirrorGlass.Add(Mesh->GetMaterial(0));
 		}
@@ -2107,6 +2178,73 @@ void AGlpGame::ShowInside(bool bInside)
 	}
 }
 
+void AGlpGame::SyncWindscreen(float DeltaSeconds)
+{
+	// The glass before the driver (0.80; the Godot version's Windscreen.Update): drawn in the seat's view only, and only
+	// while it has something to show: rain, a wet day's spray, or the sun within 50 degrees of the view on its dust.
+	const FGlpCarView* Car = PlayerCar();
+	const AActor* Root = Car ? Car->Root() : nullptr;
+	const bool bSeat = Windscreen && Root && bGlassPicture && InCockpit();
+	const GlpWindscreen::FWater Water = GlpWindscreen::Water(Current.weather, Current.wetness);
+	const FTransform& View = Camera->GetComponentTransform();
+	// A direction in the camera's frame as the material reads it: x right, y up, z ahead.
+	auto InView = [&View](const FVector& World)
+	{
+		return FVector3f(static_cast<float>(FVector::DotProduct(World, View.GetUnitAxis(EAxis::Y))), static_cast<float>(FVector::DotProduct(World, View.GetUnitAxis(EAxis::Z))),
+			static_cast<float>(FVector::DotProduct(World, View.GetUnitAxis(EAxis::X))));
+	};
+	const FVector3f Sun = InView(LightTowards);
+	const float Share = GlpWindscreen::SunShare(Hour, Current.weather);
+	const float Glare = GlpWindscreen::Glare(Sun, Share);
+	// Under a sun's share the picture is only ever drawn for the haze: the rain and a wet day have none.
+	const bool bShow = bSeat && (Water.Any() || GlpWindscreen::Hazy(Sun, Share, bWindscreenShown) || GlassTune.Z > 0.f);
+	if (bShow != bWindscreenShown)
+	{
+		// On the camera's own blendables: the mirror's camera and the views from outside do not get it.
+		bWindscreenShown = bShow;
+		TArray<FWeightedBlendable>& Blendables = Camera->PostProcessSettings.WeightedBlendables.Array;
+		Blendables.RemoveAll([this](const FWeightedBlendable& Blendable) { return Blendable.Object == Windscreen; });
+		if (bShow)
+		{
+			Blendables.Add(FWeightedBlendable(1.f, Windscreen));
+		}
+		// The car says where its glass is only while the picture is drawn: the marks have the cabin drawn a second
+		// time (the custom depth pass), which a dry day with the sun behind need not pay for.
+		if (FGlpCarView* Marked = PlayerCar())
+		{
+			Marked->MarkGlass(bShow ? GlassPane.Get() : nullptr);
+		}
+	}
+	if (!bShow)
+	{
+		// The wipers stand while the glass is not drawn, as the Godot version's: back in the seat they go on from there.
+		return;
+	}
+	Wipers.Step(Water.Rain, DeltaSeconds);
+	auto Set = [this](const TCHAR* Name, const FVector3f& V, float W = 0.f)
+	{
+		Windscreen->SetVectorParameterValue(Name, FLinearColor(V.X, V.Y, V.Z, W));
+	};
+	Set(TEXT("Weather"), FVector3f(Water.Rain, Water.Wet, Water.Cover), Wipers.bOn ? 1.f : 0.f);
+	// The clock within its period: the material needs no more, and there a float has its milliseconds however long it
+	// rains (the clock itself is a double, FGlpWipers::Clock).
+	Set(TEXT("Wiper"), FVector3f(Wipers.Phase(), FGlpWipers::Sweep, Wipers.Period), FMath::Abs(Current.speed));
+	Set(TEXT("Light"), FVector3f(Glare, GlpWindscreen::Glint(Hour), GlassTune.X), GlassTune.Y);
+	Set(TEXT("SunView"), Sun);
+	// The car in the camera's frame: its right, its back (an imported car's nose is its local -Y, GlpSpace) and its roof,
+	// and the windscreen's lower edge, cm from the eye. With them the material turns a point of the glass into a place on
+	// the pane, so the drops and the blades stay on the car's glass when the head moves in the cabin.
+	const FTransform& Body = Root->GetActorTransform();
+	Set(TEXT("CarRight"), InView(Body.GetUnitAxis(EAxis::X)));
+	Set(TEXT("CarBack"), InView(Body.GetUnitAxis(EAxis::Y)));
+	Set(TEXT("CarUp"), InView(Body.GetUnitAxis(EAxis::Z)));
+	Set(TEXT("Anchor"), InView(Body.TransformPosition(CowlLocal) - View.GetLocation()));
+	// The windscreen's pattern is laid on a plane that rises 0.5 rad from the bonnet's line (a rake of some 60 degrees):
+	// a pane a few degrees steeper or flatter stretches it by less than a hundredth.
+	constexpr float Rise = 0.5f;
+	Set(TEXT("Glasshouse"), FVector3f(FMath::Cos(Rise), FMath::Sin(Rise), 0.f), GlassTune.Z);
+}
+
 void AGlpGame::SyncViews(float DeltaSeconds)
 {
 	FGlpCarView* Car = PlayerCar();
@@ -2155,6 +2293,7 @@ void AGlpGame::SyncViews(float DeltaSeconds)
 	}
 	Camera->SetWorldLocationAndRotation(Shot.Location, Shot.Rotation);
 	Camera->SetFieldOfView(Shot.HorizontalFov);
+	SyncWindscreen(DeltaSeconds);
 
 	// The player's lamps (0.77), lit dusk to dawn, the glows also in the rain; the drones' in SyncTrafficAndTrain.
 	Car->SetLamps(LampState(CarIndex, true), LampAssets);
@@ -3173,6 +3312,7 @@ void AGlpGame::SyncShowroom(float DeltaSeconds)
 		return;
 	}
 	ShowInside(false);
+	SyncWindscreen(0.f);
 	if (RoomCar != Room.Index)
 	{
 		// Only the car on show is drawn, with the traffic and the ghost out of the picture: a drone the menu holds at the

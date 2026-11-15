@@ -12,6 +12,7 @@
 #include "GlpScores.h"
 #include "GlpShowroom.h"
 #include "GlpUpdate.h"
+#include "GlpWindscreen.h"
 #include "grudgelap_physics.h"
 #include "GlpGame.generated.h"
 
@@ -59,8 +60,13 @@ class UMaterialInstanceDynamic;
  * -GlpShowroomPaint=<paint> chooses a paint there (a preset's name or number, or "#RRGGBB:finish", which opens the
  * colour picker on it), and -GlpPaint=<paint> puts the driven car in a paint for this run without keeping it. The
  * scripted keys and the scripted mouse (-GlpMouse, with :down and :up for a drag) reach the showroom too.
- * -GlpSelfTest runs the paints' and the showroom's own checks (GlpPaint::SelfTest, FGlpShowroom::SelfTest), logs
- * "self test: N checks, M failed" and quits with 0 when all held.
+ * -GlpSelfTest runs the paints', the showroom's and the windscreen's own checks (GlpPaint::SelfTest,
+ * FGlpShowroom::SelfTest, GlpWindscreen::SelfTest), logs "self test: N checks, M failed" and quits with 0 when all held.
+ *
+ * The windscreen from the seat (0.80, SyncWindscreen): -GlpWindscreen=0 leaves the glass clear, for comparisons;
+ * -GlpWindscreen=<film>,<lens>,<check> tries the water film's strength (0.55) and the drops' lens (2.2), and with a
+ * check draws that instead of the picture (1 the glass found, 2 its side windows, 3 a grid of 10 cm on the glass with
+ * the wipers' pivots and reach, 4 the glass alone, white on black, for measuring how still its edge stands).
  */
 UCLASS()
 class GRUDGELAPUE_API AGlpGame : public AActor
@@ -119,6 +125,22 @@ public:
 	 */
 	UPROPERTY(EditAnywhere, Category = "GrudgeLap")
 	TSoftObjectPtr<UMaterialInterface> InsideGlassMaterial;
+
+	/**
+	 * M_Windscreen (0.80): what the weather puts on the glass before the driver, a post-process material on the
+	 * player's own camera in the seat's view: the rain's drops, the wipers and the film of water between their sweeps,
+	 * and on a dry day the dust's haze with the sun ahead (SyncWindscreen).
+	 */
+	UPROPERTY(EditAnywhere, Category = "GrudgeLap")
+	TSoftObjectPtr<UMaterialInterface> WindscreenMaterial;
+
+	/**
+	 * M_Pane (0.80): what the unseen copies of the player's panes wear to write the glass into the custom depth
+	 * (FGlpCarView::MarkGlass), from which M_Windscreen knows where the glass is. Opaque and two-sided: a pane is seen
+	 * from its inner side.
+	 */
+	UPROPERTY(EditAnywhere, Category = "GrudgeLap")
+	TSoftObjectPtr<UMaterialInterface> GlassPaneMaterial;
 
 	// What the HUD shows.
 	bool HasSession() const { return Session != 0; }
@@ -342,6 +364,29 @@ private:
 	float CabinEv = 0.25f;
 	float LookEv = 14.f;         // the hour's and the weather's exposure, EV100 (ApplyWeather)
 	bool bViewLookInside = false;
+
+	/**
+	 * The windscreen from the seat (0.80): an instance of WindscreenMaterial on the camera's own blendables while the
+	 * glass has something to show, so that neither the mirror's camera nor a view from outside gets it. The picture is
+	 * laid on the glass itself, not on the screen: the panes' custom depth (FGlpCarView::MarkGlass) says where the
+	 * glass is, and the car's axes and the windscreen's lower edge, given in the camera's frame every frame, turn that
+	 * into a place on the pane. The drops and the blades so stay with the cabin when the head moves in it.
+	 */
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> Windscreen;
+	UPROPERTY()
+	TObjectPtr<UMaterialInterface> GlassPane;   // GlassPaneMaterial, loaded
+	bool bWindscreenShown = false;
+	FGlpWipers Wipers;
+	/** The windscreen's lower edge on the car's middle line, in the car's frame, cm (GLP.Cowl; without one, from the eye). */
+	FVector CowlLocal = FVector::ZeroVector;
+	/** Towards the sun or the moon, world (ApplyWeather). */
+	FVector LightTowards = FVector::UpVector;
+	/** -GlpWindscreen=<film>,<lens>,<check>; -GlpWindscreen=0 switches the glass's picture off. */
+	FVector3f GlassTune = FVector3f(0.55f, 2.2f, 0.f);
+	bool bGlassPicture = true;
+	/** The glass's picture for this frame (after the camera is placed). */
+	void SyncWindscreen(float DeltaSeconds);
 	FGlpScores Scores;
 	bool bScoreOffered = false;   // the credit's end has been put to the high-score table
 	// A first start (no settings yet) shows the hot hatch (0.74): its own cabin is the best of the line-up's, where the

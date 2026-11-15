@@ -4055,6 +4055,144 @@ and its paint was the one its model came in. This is the Godot game's showroom (
   dark grey in this version's daylight) and was left alone. A sunlit red reads a little towards coral through the
   tone mapper, the car's own red and the preset alike.
 
+### The windscreen: the rain's drops, the wipers and the sun's haze (0.80.0)
+
+From the seat the Unreal game's glass was clear whatever the weather: the rain fell beyond it and never touched it.
+This is the Godot game's windscreen (0.46, `windscreen.glsl` and `Windscreen.cs`) carried over (ISTERLER T4, the
+owner's item 31): in the rain the drops bead on the glass and bend the road behind them like little lenses, more of
+them the longer since the wipers passed; two blades sweep them off; between the sweeps a film of water softens the
+view; on a wet day a few drops of spray stand on it; and on a dry day the glass's dust and the fine arcs the blades
+have scratched into it light up into a haze when the sun stands ahead.
+
+- **On the glass, not on the screen.** The Godot shader drew its drops and blades at fixed places of the screen, over
+  whatever lay further than the cabin. In this version the seat's camera moves in the cabin (the head lags by up to
+  4.5 cm, shakes at speed, and the lens opens from 50 to 56 degrees), so drops fixed to the screen slid over the
+  pillars and the dashboard and did not look as if they were on the glass. Here everything is laid on the car's own
+  panes, in metres: the pane's distance at a pixel gives the point of the glass, the car's axes and the windscreen's
+  lower edge (the model's `Cowl` part, which every car has) turn it into a place on the pane, across the car and up
+  the glass for the windscreen, along the car and up for a side window. The drops, the film and the blades keep their
+  place on the car when the head moves, and their size whatever the lens; the side windows carry drops too, which no
+  blade reaches.
+- **Where the glass is.** While the glass has something to show, the player's car writes the engine's custom depth
+  pass and its stencil: every part the seat sees with a 1, and an unseen copy of each mesh that carries glass writes
+  its panes alone with a 2 (`FGlpCarView::MarkGlass`, `M_Pane`; the glass itself is translucent, which that pass
+  leaves out). Where the stencil holds a 2 the nearest thing of the car is a pane: the view goes through glass there,
+  and the pass's depth is the pane's. The cabin, the mirror, the wheel and the dials stand before it and are left
+  alone, with no distance to tune.
+- **The cabin's parts in that pass.** A car's parts without glass are Nanite meshes, and one Nanite part in the
+  custom depth pass has the engine run a second Nanite rasteriser for it: 0.30 ms of the frame. So a part Nanite
+  draws is not marked itself: an unseen copy of it, drawn without Nanite from its fallback mesh, stands in that pass
+  for it (`FGlpCarView`'s `Stands`), and the whole pass costs 0.03 ms. The fallback's shape is a little
+  off the part's own; compared car by car on the grid check, the glass found moved only at margins where a pane
+  and the body lie against each other, which hold no drops (below). Rejected: `r.Nanite.CustomDepth=0`, which takes
+  the Nanite parts out of the pass and puts drops on the steering wheel.
+- **The copies are not parts of the car.** They hang on the car's own actors beside the meshes they copy, so they
+  turn with the steering wheel and move with the dials. A copy of the car for the traffic or the ghost took them
+  along at first: a car that had been driven from its seat in the rain came back in the next credit's traffic with
+  the panes' black over its windows (16 meshes in the copy of a car of 10, 8 for one of 6). They carry a component
+  tag (`FGlpCarView::IsMark`), and whoever walks a car's meshes for what the car is made of leaves them out.
+- **Why that pass, and without the jitter.** The first try read the scene's own depth (a pane before what the scene
+  holds is glass). That depth is the upscaler's input and moves a part of a pixel every frame, so the glass's edge
+  along the dashboard, the pillars and the mirror flickered. Measured on the mask alone over eight frames at 53 fps
+  (off the jitter's own rhythm): the edge moved 1.3 to 1.5 pixels from frame to frame as read, 0.8 to 1.0 with the
+  frame's jitter taken out of the reading (and 2.0 to 2.5 with the sign turned, which showed the sign was right): a
+  yes or no read from one frame stands up to half an input pixel off whatever is done. The custom depth pass can be
+  drawn without the jitter (`r.CustomDepthTemporalAAJitter=0`, with `r.CustomDepth=3` for the stencil); read from it
+  the edge moves 0.01 to 0.04 pixels, under DLSS and under TSR alike. Both are the project's settings
+  (`Config/DefaultEngine.ini`). The game set them itself at first, when it began to play: a change of `r.CustomDepth`
+  has the engine flush the renderer and register every component of the world anew, which every start then paid
+  for; the game now only sets them (with a warning) where a project's settings lack them. Rejected: drawing the
+  glass before the upscaler (DLSS Ray Reconstruction is there to take small bright and dark specks out of a picture,
+  and the blades would have left trails).
+- **Glass the driver does not see as glass.** A model's panes run on behind their frames: under the pillar's body,
+  behind the scuttle at the windscreen's foot. From the seat of the 205 the drops' glints stood as white specks all
+  over the A-pillar. Where the car's own body lies within a few centimetres behind a pane (the scene's depth less
+  the pane's: nothing under 4 cm, everything over 12) no drops are drawn. This one reading of the scene's depth
+  bears the half pixel it stands off: it only decides whether a drop shows at such a margin.
+- **Where in the frame.** A post-process material (`M_Windscreen`, `build_scene.py`'s `WINDSCREEN_HLSL`) on the
+  player's own camera, so the mirror's picture and the views from outside do not get it; after the upscaler and the
+  motion blur and before the bloom: the drops stay sharp while the road behind them streams by, and the sun's haze
+  blooms. A material there works in the scene's own light units (the engine takes its pre-exposure out of the scene
+  it hands over and puts it back on the result), so what is meant in the screen's units, the haze and the glint in a
+  drop, is divided by the frame's exposure.
+- **The rain.** Two sizes of drops (7 to 17 mm and 4 to 9 mm across) on cells of the pane. A drop lands at a time
+  drawn from the rain's rate after the last sweep over its place and stays until the next; it shows the scene behind
+  it upside down and drawn in from round it, darker at its rim, with a glint of the sky low in it: a quarter of the
+  screen's white by day, 0.3 of that at dusk and 0.06 at night, where a day's glint had the drops standing on the
+  glass like snowflakes (the Godot game's dusk value, a half, did the same against this version's darker rain sky
+  at dusk). Over 50 km/h the air drives the drops, up the windscreen and back along the side windows,
+  stretched along their way. The Godot shader let a drop travel three cells while a pixel looked only into the cells
+  next to its own, and the drop showed cut along the cells' edges: here it creeps at most 0.43 of a cell, which with
+  where its middle starts in its cell (0.85 at most) and its drawn-out radius (0.72) keeps it inside them. The film
+  between the sweeps is the view six pixels soft, growing over four seconds since the blade passed, and it stays
+  where no blade reaches.
+- **The wipers** (`FGlpWipers`, as the Godot game's): on in the rain, one sweep up and back in 1.1 s with a crank's
+  eased motion, without a pause in full rain (in a lighter rain the sweeps would come up to 4.5 s apart). Two blades
+  of a left-hand-drive car's pair, the driver's pivot 50 cm left of the middle and the other 7 cm right of it, 4 cm
+  under the glass's lower edge, 62 and 55 cm long, from 6 degrees over the foot of the glass to a little past
+  upright. They are drawn black: the Godot shader's were a day's grey lit by the cabin's light, which from this seat
+  read as plastic. They stand while the glass is not drawn (another camera, the showroom, the replay). Their clock
+  runs on from one credit of rain into the next, so it is a double and the picture gets what is left of it within
+  the period: as a float its steps are 4 ms after nine hours of rain, and the blades would judder.
+- **A wet day** has no rain and no wipers: a few drops of spray (about one place in eight) stand on the glass.
+- **The sun's haze.** With the sun within 50 degrees of the view on a dry day (its full share by day and at sunrise,
+  a quarter at dusk, none under cloud or at night) the glass shows a halo round it, mottled by dust, and where a
+  blade sweeps the fine arcs it has scratched, one every 9 mm of the blade, most faint and a few deep. The Godot
+  shader lit every arc near the sun along its whole length, which in this version's sharper picture read as rings
+  drawn on the glass. A scratch is a groove, and a groove sends light on only round its own line: an arc shows where
+  it runs across the way from that point of the glass to the sun (within some 20 degrees, the grooves not being
+  clean), so the arcs glint along a streak from each pivot towards the sun and stay dark beside it, which is what a
+  worn windscreen shows against a low sun. The haze comes in from nothing at 50 degrees to all of it at 42
+  (`GlpWindscreen::Glare`). The Godot game switched it on whole at 50 degrees, by the view's middle, while the
+  picture lights each pixel by its own angle to the sun: with a low sun the side of the picture nearest it then
+  holds a tenth of the screen's white, which popped in as the road turned towards the sun. Once drawn, the picture
+  stays until the sun stands 52 degrees off (`Hazy`): putting it on and taking it off has the car's parts made anew
+  for the renderer (the marks), and a head swaying at the edge would ask for that several times a second. A pixel's
+  own halo goes out to nothing at its 50 degrees too (cut there, it left a step of a hundredth of the screen's white
+  on a circle round the sun). A scratch is a pixel or two wide in the finished picture: its width goes by the
+  picture's own height, which the pass knows as its output's; by the upscaler's input, as it first stood, the
+  scratches grew wider and brighter as the upscaler's mode dropped (twice at 50 %).
+- **What it costs.** Measured by pass on the development laptop (RTX 5060 Laptop, 1080p, the seat in the rain,
+  the glass on and off back to back): the custom depth pass 0.03 ms and the glass's own pass 0.30 to 0.32 ms, a
+  third of a millisecond of a 17 ms frame by day and a 21 ms frame at night; the frame times themselves stood within
+  the runs' drift of each other (17.4 against 17.5 ms by day, 21.1 against 21.2 at night). The picture reads the
+  stencil first, and where there is no glass (more than half of the view) nothing more. On a dry day without the sun
+  ahead the picture is not drawn and the car is not marked: the glass costs nothing then.
+- **What the editor did not show.** Every run from the editor was right, and the first packaged game drew the
+  engine's default material (a concrete texture) round the seat's view in place of the glass. The picture reads the
+  scene behind a drop from the pass's own texture, which only the post-process pass's shader declares; the engine
+  compiles a post-process material for the shaders that draw meshes too, and there that line did not compile. The
+  editor compiles only the shaders it draws with, so nothing failed in it; the cook compiles them all, logged "Failed
+  to compile Material ... Default Material will be used in game", and went on to a package that reported success.
+  The read is guarded now (`#if POST_PROCESS_MATERIAL`), and `tools/package.ps1` stops when the cook's log names a
+  material it could not compile or the packaged game's own log says it drew the default one: a material is not
+  checked until the packaged game has drawn it.
+- **A second reading.** A fresh reader went through the change without running it (as for 0.79) and found no crash,
+  no stale pointer and no state left behind across a change of car, seat, showroom, pause, replay, weather or hour.
+  Its five findings are the ones told above where they belong: the console variable changed at every start, the
+  scratches' width by the upscaler's input, the wipers' clock as a float, a drawn-out drop reaching 0.12 of a cell
+  past the cells a pixel looks into, and a line of this script's notes that said the game sets the blades' places.
+  What it could not see without the models: whether a car has glass inside its cabin (below).
+- **Checked**, hidden and silent. The game's own checks (`-GlpSelfTest`, 196 now, 31 of them the glass's: the
+  wipers' clock and period and a day and a half of rain, the water by weather, the sun's share and the glint by
+  hour, the haze's angles). The
+  glass found (`-GlpWindscreen=0.55,2.2,1` draws it green, `2` its side windows blue, `3` a 10 cm grid on the panes
+  with the blades' pivots and reach, `4` the mask alone for the edge's measure) in every car to drive: the grid lies
+  on each windscreen, and the cabin, the mirror, the wheel and the dials are out of it. In pictures: all ten seats
+  in the rain, eight phases of a sweep, night rain, dusk rain, a wet day, the haze at dusk with the clear glass
+  beside it (`-GlpWindscreen=0`), a change of car and of camera in the rain (the glass comes back with the seat),
+  and the packaged game. A tour of the ten cars in the rain with the traffic on: all 80 copies made for the traffic
+  keep their car's own number of meshes after the car was driven.
+- **Known.** The pivots and the blades' lengths are the same for every car, so a small car's blades run off its
+  glass at the top (they are drawn on glass only) and a wide one's leave more of it unswept; no car has a
+  right-hand-drive pair. A model that has wipers of its own on its scuttle keeps them parked there while the drawn
+  pair sweeps (the V8 saloon's show from its seat). The blades cast no shadow and are not seen in the mirror; the rear window's drops are not
+  drawn in the mirror's picture either. The wipers' and the rain's sounds on the glass are ISTERLER T9's. From
+  outside the cars' glass stays dry. Every slot of a car that wears the level's glass is taken for a pane: a model
+  with glass inside its cabin (a lens over its dials) would carry the film, the haze and the blades' passing on it,
+  only the drops being withheld there. None of the cars to drive has one (the grid check leaves every car's dials
+  clear); a model that brings one needs its lens told from its windows.
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

@@ -8,7 +8,7 @@ Yeni bir istek gelince buraya satır olarak eklenir. Bir sürüm bir isteği kar
 - **Durum:** `Tamam` karşılandı, `Kısmen` bir kısmı karşılandı, `Açık` henüz yapılmadı, `Karar` yön belirlendi, `Ertelendi` bilerek sonraya bırakıldı.
 - **Ayrıntı:** teknik gerekçeler [design.md](design.md)'de, sürüm notları GitHub Releases'te.
 
-Son güncelleme: 15 Kasım 2026 (sürüm 0.79.0: bölüm 12'den T2 işlendi, Unreal sürümünde araba seçim ekranı ve boyalar. Sürüm 0.78.0: yayınlanan oyun artık Unreal sürümü; 14 Kasım istekleri H9, H10, G12, G13, U6, R5, R6, R7 ve bölüm 12'den T1, T3, T18, T20 işlendi).
+Son güncelleme: 15 Kasım 2026 (sürüm 0.80.0: bölüm 12'den T4 işlendi, Unreal sürümünde ön camda yağmur damlaları, silecekler ve güneş pusu. Sürüm 0.79.0: bölüm 12'den T2 işlendi, Unreal sürümünde araba seçim ekranı ve boyalar. Sürüm 0.78.0: yayınlanan oyun artık Unreal sürümü; 14 Kasım istekleri H9, H10, G12, G13, U6, R5, R6, R7 ve bölüm 12'den T1, T3, T18, T20 işlendi).
 
 ## 1. Hedef
 
@@ -246,7 +246,7 @@ Taşınmış olanlar (0.74-0.77): gerçek araba modelleri ve kabinler, arabaya �
 | T1 | Esc menüsü: ayarlar, fareyle kullanım, oyundan çıkış | U1 | Tamam (0.78.0): Esc menüsü (devam, yeni oyun, araba, kamera, DLSS, hava, ışık, birim, tam ekran, güncelleme, çıkış); klavye, oyun kolu ve fare; oyun arkada duruyor ve susuyor. Boya satırı 0.79.0'da geldi (T2); grafik ön ayarı satırı T17 ile gelecek |
 | T2 | Araba seçim ekranı (showroom): 360 derece dönen araba, fabrika renkleri, kullanıcının rengi | A4, A5 | Tamam (0.79.0): araba kredinin başladığı yerde, pistte ve günün ışığında durur; kamera çevresinde 360 derece döner, fareyle çevrilir, tekerlekle yaklaşılır. Sağ/sol bütün arabalar, yukarı/aşağı boyalar: fabrika rengi, yedi hazır renk ve kullanıcının kendi karışımı (ton, doygunluk, açıklık seçicisi; düz, metalik ya da sedefli). Başlıkta aşağı tuşu ya da Esc menüsünün CAR satırı açar; menüde PAINT satırı var. Gece iki projektör arabayı aydınlatır. Boyalar araba başına ayarlarda durur; karışım rengi hazır renge geçilince de saklanır |
 | T3 | Güncelleyici, kurulum paketi, yayın hattı | R1, R2, R5 | Tamam (0.78.0): güncelleyici (`update.native`: Godot'takinin aynı kodu, C arayüzü arkasında; yalnız oyuncu isteyince), Inno Setup kurulumu (aynı AppId, klasör ve kısayollar; Godot dosyalarını kaldırıyor), taşınabilir zip, `tools/package.ps1` ve `tools/release.ps1` |
-| T4 | Ön cam: yağmur damlaları, silecekler, su filmi, güneşte toz | madde 31 | Açık |
+| T4 | Ön cam: yağmur damlaları, silecekler, su filmi, güneşte toz | madde 31 | Tamam (0.80.0): koltuktan bakışta yağmurda damlalar ön camda ve yan camlarda birikir, arkalarındaki yolu küçük bir mercek gibi büker; iki silecek süpürür, geçtikleri yer temizlenir, silmeler arasında su filmi görüşü yumuşatır; hızda hava damlaları sürükler. Islak günde birkaç serpinti damlası, silecek yok. Kuru günde güneş öndeyken camın tozu pus olur, silecek çizikleri güneşe doğru bir şerit hâlinde parlar. Damlalar ve silecekler ekrana değil arabanın camına sabit (on arabada da), baş kabinde oynayınca camda kalır. Yalnız koltuktan; sileceğin ve yağmurun cam sesleri T9'da |
 | T5 | Kaza sahnesi: darbe anı koltuktan, enkaz, ağır çekim tekrar, kopan parçalar, çatlayan cam, patlama ve ateş; tekrarda trafik | F7, F8 | Açık: yalnız tekrar kamerası |
 | T6 | Hasar: ezikler, kıvılcım, buhar, hasar göstergesi | F2 | Açık |
 | T7 | Otlayan, yürüyen, itilince kaçan inekler | P6, madde 38 | Açık: inekler yerinde duruyor |

@@ -823,6 +823,352 @@ float sky = dot(Scene.rgb, float3(0.2126, 0.7152, 0.0722)) / max(Exposure, 1e-8)
 float visible = saturate(2.0 - sky / SkyLimit);
 return Scene.rgb + sum * exp(-0.25 * (airmass - 1.0)) * Gain * visible * Exposure;"""
 
+WINDSCREEN_HLSL = """// The glass between the driver and the road (0.80; the Godot game's windscreen.glsl of 0.46, laid here on the glass
+// itself). In the rain the drops bead on the pane and bend the road behind them like little lenses, more of them the
+// longer since the wipers passed, and the blades sweep them off; between the sweeps a film of water softens the view.
+// On a dry day the glass's dust and the fine arcs the wipers have scratched into it light up into a haze when the sun
+// stands ahead.
+//
+// Where the glass is: while this is drawn the game has the player's car write the custom depth and its stencil
+// (FGlpCarView::MarkGlass), its seen parts with a 1 and its panes with a 2. Where the stencil holds a 2 the nearest
+// thing of the car is a pane: the view goes through glass there, and the pass's depth is the pane's own; the cabin, the
+// mirror and the wheel stand before it and are left alone. That pass is drawn without the upscaler's jitter
+// (AGlpGame::BeginPlay). The scene's own depth is the upscaler's input and moves a part of a pixel every frame: read
+// from it, the glass's edge stood half a pixel off from frame to frame whatever was done about the jitter, and
+// flickered along the dashboard and the pillars. The pass is as large as the upscaler's input: the four texels round
+// the pixel's place are read and blended, which gives the edge a soft step one texel wide. The scene's depth is still
+// read for one thing, which bears its half pixel: where the car's own body lies right behind a pane (the glass's
+// margins behind its frame, a dial behind its lens) no drops are drawn.
+//
+// Where on the glass: the pane's depth gives the point of the glass, the car's axes and the windscreen's lower edge
+// (in the camera's frame, from the game) its place on the pane in metres: across the car and up the glass for the
+// windscreen, along the car and up for a side window (told apart by which way the pane faces). The drops, the film and
+// the blades are drawn in those metres, so they keep their place on the car when the head moves in the cabin, and
+// their size whatever the lens.
+struct FGlpGlass
+{
+    float4 Weather;
+    float4 Wiper;
+    float4 Blades;
+    float Hash12(float2 p)
+    {
+        float3 p3 = frac(float3(p.xyx) * 0.1031);
+        p3 += dot(p3, p3.yzx + 33.33);
+        return frac((p3.x + p3.y) * p3.z);
+    }
+    float3 Hash32(float2 p)
+    {
+        float3 p3 = frac(float3(p.xyx) * float3(0.1031, 0.1030, 0.0973));
+        p3 += dot(p3, p3.yxz + 33.33);
+        return frac((p3.xxy + p3.yzz) * p3.zyx);
+    }
+    // The scene at a place of the view, in the scene's own light: its one level read outright (the reads below sit in
+    // branches and loops, where a read that takes its level from the picture's gradient may not), the pre-exposure the
+    // engine keeps it in taken out, as the Scene input's is.
+    //
+    // The pass's own texture exists in the post-process pass's shader alone, and the engine compiles a post-process
+    // material for the shaders that draw meshes as well (it may be laid on one). Without this guard those did not
+    // compile: the cook then ships the material without shaders and the packaged game draws the engine's default
+    // material in its place, while the editor, which compiles only the shaders it draws with, shows nothing wrong
+    // (tools/package.ps1 reads the cook's log for it since).
+    float3 Behind(float2 uv)
+    {
+#if POST_PROCESS_MATERIAL
+        uv = ClampSceneTextureUV(ViewportUVToSceneTextureUV(clamp(uv, 0.001, 0.999), PPI_PostProcessInput0), PPI_PostProcessInput0);
+        return Texture2DSampleLevel(PostProcessInput_0_Texture, PostProcessInput_BilinearSampler, uv, 0).rgb * ResolvedView.OneOverPreExposure;
+#else
+        return float3(0.0, 0.0, 0.0);
+#endif
+    }
+    float Noise(float2 p)
+    {
+        float2 i = floor(p);
+        float2 f = frac(p);
+        float2 u = f * f * (3.0 - 2.0 * f);
+        return lerp(lerp(Hash12(i), Hash12(i + float2(1.0, 0.0)), u.x), lerp(Hash12(i + float2(0.0, 1.0)), Hash12(i + float2(1.0, 1.0)), u.x), u.y);
+    }
+    // The blades' pivots on the pane, metres: the driver's near the left corner, the passenger's by the middle (a
+    // left-hand-drive car's pair), a little under the glass's lower edge. Parked, a blade lies along the foot of the
+    // glass pointing right (0.10 rad); it sweeps up to a little past upright (1.62 rad).
+    float2 Pivot(int k) { return float2(k == 0 ? Blades.x : Blades.y, Blades.z); }
+    float Reach(int k) { return (k == 0 ? 0.62 : 0.55) * Blades.w; }
+    // The blade's angle about its pivot now: parked, or along a sweep up and back with the eased motion of a crank.
+    float BladeAngle()
+    {
+        if (Weather.w < 0.5 || Wiper.x >= Wiper.y) return 0.10;
+        float x = Wiper.x / Wiper.y;
+        float e = x < 0.5 ? 0.5 - 0.5 * cos(6.28318531 * x) : 0.5 - 0.5 * cos(3.14159265 * (2.0 - 2.0 * x));
+        return lerp(0.10, 1.62, e);
+    }
+    // Seconds since a blade last passed the point g of the windscreen, or a long time for a point no blade reaches.
+    float SinceWipe(float2 g)
+    {
+        if (Weather.w < 0.5) return 1.0e4;
+        float best = 1.0e4;
+        for (int k = 0; k < 2; k++)
+        {
+            float2 d = g - Pivot(k);
+            float r = length(d);
+            float a = atan2(d.y, d.x);
+            if (r < 0.08 || r > Reach(k) || a < 0.10 || a > 1.62) continue;
+            // Where on the sweep the blade passes this angle, going up and coming back.
+            float f = (a - 0.10) / 1.52;
+            float up = acos(1.0 - 2.0 * f) / 3.14159265 * 0.5 * Wiper.y;
+            float down = Wiper.y - up;
+            float s = Wiper.x >= down ? Wiper.x - down : Wiper.x >= up ? Wiper.x - up : Wiper.x + Wiper.z - down;
+            best = min(best, s);
+        }
+        return best;
+    }
+    // One layer of drops on cells `cell` metres across: xy the pixel's place in the drop it lies in (from the drop's
+    // middle, metres), z the drop's cover there (0 to 1, soft at its rim), w its rim's shade. `way` is where the air
+    // drives the drops at speed: up the windscreen, back along a side window.
+    float4 Drops(float2 g, float2 way, float cell, float rate, float cap, float seed, float since)
+    {
+        float2 c = floor(g / cell);
+        float4 found = float4(0.0, 0.0, 0.0, 0.0);
+        float push = saturate((Wiper.w - 14.0) / 20.0);
+        float2 across = float2(way.y, -way.x);
+        for (int j = -1; j <= 1; j++)
+        {
+            for (int i = -1; i <= 1; i++)
+            {
+                float2 id = c + float2(i, j);
+                float3 h = Hash32(id + seed);
+                if (Hash12(id * 3.1 + seed) > cap) continue;
+                float2 centre = (id + 0.15 + 0.7 * h.xy) * cell;
+                // It lands at a time drawn from the rain's rate after the last sweep over it, and stays until the next.
+                float landed = -log(1.0 - 0.999 * h.z) / max(rate, 1.0e-3);
+                float age = since - landed;
+                if (age < 0.0) continue;
+                float radius = cell * lerp(0.16, 0.40, Hash12(id * 1.7 + seed));
+                // The air's push: a landed drop creeps on, drawn out along its way, faster as the car goes faster. Never
+                // out of the cells next to its own, which are all a pixel looks through (the Godot shader let it go three
+                // cells off, where it showed cut along the cells' edges): its middle starts at most 0.85 of a cell into
+                // its own, its drawn-out radius is at most 0.72, which leaves 0.43 to creep.
+                centre += way * cell * min(push * min(age, 3.0) * 0.9 * frac(h.x * 7.3), 0.43);
+                float2 d = g - centre;
+                d = across * dot(d, across) + way * (dot(d, way) / (1.0 + push * 0.8));
+                float r = length(d) / radius;
+                if (r < 1.0)
+                {
+                    float cover = 1.0 - smoothstep(0.82, 1.0, r);
+                    if (cover > found.z) found = float4(d, cover, smoothstep(0.7, 1.0, r));
+                }
+            }
+        }
+        return found;
+    }
+};
+FGlpGlass G;
+G.Weather = Weather;
+G.Wiper = Wiper;
+G.Blades = Blades;
+float2 UV = GetViewportUV(Parameters);
+// The custom depth's own picture, as large as the upscaler's input and standing still: its four texels round the
+// pixel's place.
+float2 size = ResolvedView.ViewSizeAndInvSize.xy;
+// The finished picture's own height: this pass draws after the upscaler, at the picture's size, and what is meant in
+// the picture's pixels (a scratch's width) goes by it. By the upscaler's input the scratches grew wider as the
+// upscaler's mode dropped. The pass's own figures exist in its shader alone (Behind's note).
+#if POST_PROCESS_MATERIAL
+float lines = PostProcessOutput_ViewportSize.y;
+#else
+float lines = size.y;
+#endif
+float2 texel = UV * size - 0.5;
+float2 corner = floor(texel);
+float2 part = texel - corner;
+float hit[4];
+float cover = 0.0;
+float whole = 1.0;
+for (int n = 0; n < 4; n++)
+{
+    float2 o = float2(n & 1, n >> 1);
+    float2 t = clamp(corner + o, float2(0.0, 0.0), size - 1.0);
+    float2 at = (t + 0.5 + ResolvedView.ViewRectMin.xy) * ResolvedView.BufferSizeAndInvSize.zw;
+    // A pane before everything else of the car (the stencil's 2, FGlpCarView::MarkGlass).
+    float through = abs(SceneTextureLookup(at, PPI_CustomStencil, false).r - 2.0) < 0.5 ? 1.0 : 0.0;
+    hit[n] = through * (o.x > 0.5 ? part.x : 1.0 - part.x) * (o.y > 0.5 ? part.y : 1.0 - part.y);
+    cover += hit[n];
+    whole *= through;
+}
+// A check (-GlpWindscreen=<film>,<lens>,4): the glass found, white on black, and nothing else; what changes from frame
+// to frame in it is the edge's own unrest.
+if (Glasshouse.w > 3.5) return float3(cover, cover, cover) * 0.5 / max(Exposure, 1.0e-8);
+// More than half of the picture is not glass: nothing more is read there.
+if (cover < 0.004) return Scene.rgb;
+float3 seen[4];
+float pane = 0.0;
+float room = 0.0;
+// The scene's own depth belongs to the upscaler's input: what lies at a place of the finished picture was drawn this
+// frame's jitter further on.
+float2 jitter = ResolvedView.TemporalAAParams.zw * ResolvedView.BufferSizeAndInvSize.zw;
+for (int e = 0; e < 4; e++)
+{
+    float2 o = float2(e & 1, e >> 1);
+    float2 t = clamp(corner + o, float2(0.0, 0.0), size - 1.0);
+    float2 at = (t + 0.5 + ResolvedView.ViewRectMin.xy) * ResolvedView.BufferSizeAndInvSize.zw;
+    float glass = SceneTextureLookup(at, PPI_CustomDepth, false).r;
+    pane += hit[e] * glass;
+    // Room behind the pane: a model's glass runs on behind its frame (under the pillar's body, behind the scuttle at
+    // its foot), and a dial stands right behind its lens. With the car's own body within a few centimetres behind it a
+    // pane holds no drops: the driver does not see that glass as glass. This is the scene's own depth, which moves with
+    // the jitter and stands half a pixel off at an edge; it only decides whether a drop shows at such a margin.
+    room += hit[e] * smoothstep(4.0, 12.0, SceneTextureLookup(at + jitter, PPI_SceneDepth, false).r - glass);
+    float2 place = (t + 0.5) / size;
+    seen[e] = float3((place.x * 2.0 - 1.0) * TanHalf.x, (1.0 - place.y * 2.0) * TanHalf.y, 1.0) * glass;
+}
+pane /= cover;
+room /= cover;
+// The point of the glass in the camera's frame (x right, y up, z ahead, cm) and in the car's, from the windscreen's
+// lower edge on the car's middle line (metres: to the right, to the back, up).
+float3 spot = float3((UV.x * 2.0 - 1.0) * TanHalf.x, (1.0 - UV.y * 2.0) * TanHalf.y, 1.0) * pane;
+float3 q = (spot - Anchor.xyz) * 0.01;
+float3 local = float3(dot(q, CarRight.xyz), dot(q, CarBack.xyz), dot(q, CarUp.xyz));
+// A side window faces across the car; the windscreen, even where it wraps round to the pillar, mostly ahead.
+bool side = abs(local.x) > 0.68;
+if (whole > 0.5)
+{
+    float3 normal = cross(seen[1] - seen[0], seen[2] - seen[0]);
+    side = abs(dot(normal, CarRight.xyz)) > 0.75 * length(normal);
+}
+// The pane's own two directions in the camera's frame, the place on it, and the way the air drives its drops.
+float3 across = side ? CarBack.xyz : CarRight.xyz;
+float3 upward = side ? CarUp.xyz : CarBack.xyz * Glasshouse.x + CarUp.xyz * Glasshouse.y;
+float2 g = side ? float2(local.y + (local.x > 0.0 ? 13.7 : 5.3), local.z + 2.9) : float2(local.x, local.y * Glasshouse.x + local.z * Glasshouse.y);
+float2 way = side ? float2(1.0, 0.0) : float2(0.0, 1.0);
+float rain = Weather.x;
+float wet = Weather.y;
+// Layers over the view in premultiplied alpha: the film, the drops over it, the blades over them.
+float3 colour = float3(0.0, 0.0, 0.0);
+float alpha = 0.0;
+float water = max(rain, wet * 0.35);
+if (water > 0.0)
+{
+    float since = side ? 1.0e4 : G.SinceWipe(g);
+    // The film between the sweeps: the view goes soft as water gathers (and stays soft where no blade reaches).
+    float film = rain * Light.z * smoothstep(0.0, 4.0, since);
+    if (film > 0.0)
+    {
+        // The view six pixels soft at 1080 lines: its own pixel and eight more on a disc round it.
+        float2 reach = float2(0.0056 * TanHalf.y / TanHalf.x, 0.0056);
+        float3 soft = Scene.rgb;
+        for (int m = 0; m < 8; m++)
+        {
+            float turn = 0.785398163 * m;
+            float2 tap = UV + float2(cos(turn), sin(turn)) * reach * (m % 2 == 0 ? 1.0 : 0.6);
+            soft += G.Behind(tap);
+        }
+        colour = soft / 9.0 * film;
+        alpha = film;
+    }
+    // Two sizes of drops, 7 to 17 mm and 4 to 9 mm across; the rate is drops a cell a second. The time since the
+    // blade passed is this pixel's for every drop round it: a drop the blade is crossing shows cut for that frame, as
+    // the blade cuts it.
+    float4 big = G.Drops(g, way, 0.021, water * 0.15, Weather.z, 3.1, since);
+    float4 small = G.Drops(g, way, 0.0115, water * 0.4, Weather.z, 7.7, since);
+    float4 drop = big.z >= small.z ? big : small;
+    drop.z *= room;
+    if (drop.z > 0.0)
+    {
+        // A drop is a lens: it shows the scene behind it upside down and drawn in from round it. The place it looks
+        // at is the point of the glass that far across the drop's middle, as the camera sees that point.
+        float3 other = spot - (across * drop.x + upward * drop.y) * (Light.w * 100.0);
+        float2 look = float2(other.x / (other.z * TanHalf.x), other.y / (other.z * TanHalf.y));
+        look = float2(look.x * 0.5 + 0.5, 0.5 - look.y * 0.5);
+        float3 lens = G.Behind(look);
+        // Darker at the rim, where the light bends off; a glint of the sky low in the drop, where the lens puts it, in
+        // the screen's own units (a quarter of its white by day).
+        lens *= lerp(1.0, 0.65, drop.w);
+        lens += 0.25 * Light.y / max(Exposure, 1.0e-8) * (1.0 - drop.w) * smoothstep(0.0021, 0.0, length(drop.xy - float2(0.0015, -0.0023)));
+        colour = lens * drop.z + colour * (1.0 - drop.z);
+        alpha = drop.z + alpha * (1.0 - drop.z);
+    }
+    // The blades themselves: black rubber on a thin arm, a centimetre and a half across.
+    if (Weather.w > 0.5 && !side)
+    {
+        float angle = G.BladeAngle();
+        float2 along = float2(cos(angle), sin(angle));
+        for (int b = 0; b < 2; b++)
+        {
+            float2 d = g - G.Pivot(b);
+            float run = dot(d, along);
+            float off = abs(d.x * along.y - d.y * along.x);
+            if (run > 0.08 && run < G.Reach(b))
+            {
+                float blade = 1.0 - smoothstep(0.0065, 0.0085, off);
+                colour = colour * (1.0 - blade);
+                alpha = blade + alpha * (1.0 - blade);
+            }
+        }
+    }
+}
+if (Light.x > 0.0)
+{
+    // The dust and the wipers' arcs catch the sun standing ahead: a haze round it, brighter close to it.
+    float3 ray = normalize(float3((UV.x * 2.0 - 1.0) * TanHalf.x, (1.0 - UV.y * 2.0) * TanHalf.y, 1.0));
+    float facing = max(dot(ray, normalize(SunView.xyz)), 0.0);
+    // Nothing to see more than 50 degrees off the sun: the noises are not worked out there.
+    if (facing > 0.64)
+    {
+        // Out to nothing at the 50 degrees: cut there as it stood it left a step of a hundredth of the screen's white
+        // along a circle round the sun.
+        float halo = (pow(facing, 24.0) * 0.5 + pow(facing, 5.0) * 0.12) * smoothstep(0.64, 0.70, facing);
+        float dust = 0.55 + 0.45 * G.Noise(g * 27.0) * G.Noise(g * 72.0 + 4.0);
+        float arcs = 0.0;
+        // The scratches the blades leave: one every 9 mm of the blade, each of its own depth (most faint, a few deep), a
+        // pixel or two wide in the finished picture whatever its size and the upscaler's mode (127 over the picture's
+        // lines: what 95 over the upscaler's input was at the 75 % the game was tuned at), and only where a blade
+        // sweeps. A scratch is a groove, and a groove
+        // sends the sun's light on only round its own line: it shows where it runs across the way from this point to
+        // the sun, so the arcs light up along a streak from each pivot towards the sun and stay dark beside it, as on a
+        // real windscreen (the Godot shader lit every arc near the sun, whole, which read as rings drawn on the glass).
+        float3 offSun = normalize(SunView.xyz) - ray;
+        for (int w = 0; w < 2 && !side; w++)
+        {
+            float2 d = g - G.Pivot(w);
+            float r = length(d);
+            float a = atan2(d.y, d.x);
+            if (r < 0.08 || r > G.Reach(w) || a < 0.10 || a > 1.62) continue;
+            float x = r * 106.0 + G.Noise(g * 7.0) * 0.6;
+            float depth = G.Hash12(float2(floor(x), w * 7.0 + 3.0));
+            float scratch = smoothstep(max(127.0 / max(lines, 1.0), 0.02), 0.0, abs(frac(x) - 0.5));
+            // Faded over the sweep's last few degrees, as the blade's rest and its turn leave the glass less worn.
+            float edge = smoothstep(0.10, 0.20, a) * smoothstep(1.62, 1.52, a);
+            // The scratch's own line here, in the camera's frame, and how nearly it lies across the way to the sun
+            // (within some 20 degrees: the grooves are not clean).
+            float3 groove = (across * -d.y + upward * d.x) / r;
+            float along = dot(groove, offSun);
+            float lit = exp(-along * along / (0.12 * max(dot(offSun, offSun), 1.0e-4)));
+            arcs += scratch * depth * depth * depth * 0.8 * edge * lit;
+        }
+        // In the screen's units, as the eye adapted to the road sees it: the exposure turns them into the scene's.
+        colour += float3(1.0, 0.890, 0.748) * Light.x * halo * (dust + 1.6 * arcs) / max(Exposure, 1.0e-8);
+    }
+}
+float3 picture = colour + Scene.rgb * (1.0 - alpha);
+// Checks (-GlpWindscreen=<film>,<lens>,<n>): the glass found in green, the side windows in blue, a 10 cm grid on the
+// panes with the wipers' pivots and reach in red.
+if (Glasshouse.w > 0.5)
+{
+    float3 mark = side && Glasshouse.w > 1.5 ? float3(0.1, 0.3, 1.0) : float3(0.1, 1.0, 0.2);
+    // Darker where the pane has the car's own body right behind it and holds no drops.
+    mark *= lerp(0.25, 1.0, room);
+    if (Glasshouse.w > 2.5)
+    {
+        float2 lines = abs(frac(g * 10.0 + 0.5) - 0.5) * 0.1;
+        mark = min(lines.x, lines.y) < 0.002 ? float3(1.0, 1.0, 1.0) : mark * 0.4;
+        for (int v = 0; v < 2 && !side; v++)
+        {
+            float r = length(g - G.Pivot(v));
+            if (r < 0.02 || abs(r - G.Reach(v)) < 0.004) mark = float3(1.0, 0.1, 0.1);
+        }
+    }
+    picture = lerp(Scene.rgb, mark * 0.5 / max(Exposure, 1.0e-8), 0.6);
+}
+return lerp(Scene.rgb, picture, cover);"""
+
 
 def lamp_glow_material():
     """M_LampGlow: a lit lamp's glow (the Godot version's lamp_glow.gdshader in physical units), additive and unlit on the
@@ -995,6 +1341,62 @@ def night_assets():
     eal.save_loaded_asset(sky)
     NIGHT["sky"] = sky
     log(f"night assets made: MPC_Night, IES_LowBeam ({peak:.0f} cd peak), M_LampGlow, M_Reflector, M_RoadPaint, M_TrainWindow, M_NightStars")
+
+
+def windscreen_material():
+    """M_Windscreen (0.80): what the weather puts on the glass before the driver (WINDSCREEN_HLSL), a post-process
+    material the game hangs on the player's own camera in the seat's view (AGlpGame::SyncWindscreen) and feeds every
+    frame: the weather (rain, wet, the share of places that hold a drop, the wipers on), the wipers' clock (the time
+    into the period, a sweep's length, the period, the car's speed in m/s), the light (the sun's haze, the drops' glint,
+    the film's strength, the drops' lens), the sun and the car's axes in the camera's frame (x right, y up, z ahead),
+    the windscreen's lower edge there (Anchor, cm) and the pane's rise with the checks (Glasshouse: the cosine and sine
+    of the windscreen's rise, nothing, a check to draw). The blades (the two pivots' places across the pane, their
+    height on it and the reach's scale, metres) are the one parameter the game does not set: every car has the pair
+    its default here describes. Before the bloom and after the upscaler and the motion blur: the drops
+    stay sharp while the road behind them streams by, and the sun's haze blooms. The custom depth and its stencil, which
+    say where the glass is, and the scene's depth, which says how much room there is behind it, are read in the code at
+    places of its own choosing; their nodes only let the material have them. M_Pane, which the panes wear to be written
+    there, is made here too."""
+    # What the unseen copies of the player's panes wear in the custom depth pass (FGlpCarView::MarkGlass): opaque, since
+    # that pass leaves a translucent glass out, and two-sided, since a pane is seen from its inner side. Never seen itself.
+    path = f"{GAME}/Materials/M_Pane"
+    pane = eal.load_asset(path) if eal.does_asset_exist(path) else \
+        asset_tools.create_asset("M_Pane", f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    mel.delete_all_material_expressions(pane)
+    pane.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    pane.set_editor_property("two_sided", True)
+    mel.connect_material_property(constant3(pane, (0.0, 0.0, 0.0), -300, 0), "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    mel.recompile_material(pane)
+    eal.save_loaded_asset(pane)
+    NIGHT["pane"] = pane
+    path = f"{GAME}/Materials/M_Windscreen"
+    glass = eal.load_asset(path) if eal.does_asset_exist(path) else \
+        asset_tools.create_asset("M_Windscreen", f"{GAME}/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    mel.delete_all_material_expressions(glass)
+    glass.set_editor_property("material_domain", unreal.MaterialDomain.MD_POST_PROCESS)
+    glass.set_editor_property("blendable_location", unreal.BlendableLocation.BL_SCENE_COLOR_BEFORE_BLOOM)
+    texture = lambda which, y: node(glass, unreal.MaterialExpressionSceneTexture, -1100, y, scene_texture_id=which)
+    inputs = [("Scene", texture(unreal.SceneTextureId.PPI_POST_PROCESS_INPUT0, -850), "Color"),
+              ("DepthOfScene", texture(unreal.SceneTextureId.PPI_SCENE_DEPTH, -700), "Color"),
+              ("DepthOfPanes", texture(unreal.SceneTextureId.PPI_CUSTOM_DEPTH, -550), "Color"),
+              ("StencilOfPanes", texture(unreal.SceneTextureId.PPI_CUSTOM_STENCIL, -400), "Color"),
+              ("TanHalf", node(glass, unreal.MaterialExpressionViewProperty, -1100, -250, property=unreal.MaterialExposedViewProperty.MEVP_TAN_HALF_FIELD_OF_VIEW)),
+              ("Exposure", node(glass, unreal.MaterialExpressionEyeAdaptation, -1100, -150))]
+    # The values a still picture of the level shows before the game sets its own: a dry glass under no sun.
+    defaults = (("Weather", (0.0, 0.0, 0.85, 0.0)), ("Wiper", (0.0, 1.1, 1.1, 0.0)), ("Light", (0.0, 1.0, 0.55, 2.2)),
+                ("SunView", (0.0, 0.0, 1.0, 0.0)), ("CarRight", (1.0, 0.0, 0.0, 0.0)), ("CarBack", (0.0, 0.0, -1.0, 0.0)),
+                ("CarUp", (0.0, 1.0, 0.0, 0.0)), ("Anchor", (38.0, -30.0, 90.0, 0.0)), ("Blades", (-0.50, 0.07, -0.04, 1.0)),
+                ("Glasshouse", (0.8776, 0.4794, 0.0, 0.0)))
+    for index, (name, value) in enumerate(defaults):
+        inputs.append((name, node(glass, unreal.MaterialExpressionVectorParameter, -1100, -50 + 100 * index, parameter_name=name,
+                                  default_value=unreal.LinearColor(*value)), "RGBA"))
+    picture = custom_node(glass, WINDSCREEN_HLSL, inputs, -600, 0, description="GrudgeLap windscreen")
+    mel.connect_material_property(picture, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    mel.recompile_material(glass)
+    eal.save_loaded_asset(glass)
+    NIGHT["windscreen"] = glass
+    log("windscreen made: M_Windscreen, M_Pane")
+    return glass
 
 
 def decal_material(name, texture, roughness, opacity):
@@ -1170,6 +1572,14 @@ def mirror_glass(car):
     return max(meshes, key=number) if meshes else None
 
 
+def tag_cowl(parts):
+    """Tags a car's Cowl (GLP.Cowl) among its parts; None when the car has none."""
+    cowl = next((a for a in parts if a.get_actor_label() == "Cowl" or a.get_actor_label().startswith("Cowl_")), None)
+    if cowl is not None:
+        tag(cowl, "GLP.Cowl")
+    return cowl
+
+
 def rig_car(car, root_tag):
     """Tags what the GrudgeLapUE module's game (AGlpGame, FGlpCarView) moves in one car and makes it movable: the
     root (root_tag: GLP.Car for the first catalogue car, GLP.Car1 for the second), the wheel pivots (GLP.Wheel0..3,
@@ -1204,6 +1614,9 @@ def rig_car(car, root_tag):
     eye = next((a for a in parts if a.get_actor_label() == "Eye"), None)
     if eye is not None:
         tag(eye, "GLP.Eye")
+    # A prepared model's windscreen's lower edge (0.80, prepare_model_car.py's Cowl): the game lays the rain's drops
+    # and the wipers on the glass from there (AGlpGame::SyncWindscreen).
+    cowl = tag_cowl(parts)
     # ModelShell (0.13): a real car model's body in place of the lofted one (prepare_car_model.py), kept in the
     # driver's view too (its roof and pillars frame the windscreen). ModelBody (0.74): a prepared model's body with its
     # own cabin (prepare_model_car.py), which the seat sees as the car's inside.
@@ -1244,7 +1657,8 @@ def rig_car(car, root_tag):
                 tag(actor, "GLP.SideMirror")
                 side += 1
                 break
-    log(f"{root_tag} tagged: {wheels} wheels, steering {'found' if steering else 'missing'}, eye {'found' if eye else 'table'}, {len(exterior)} exterior "
+    log(f"{root_tag} tagged: {wheels} wheels, steering {'found' if steering else 'missing'}, eye {'found' if eye else 'table'}, "
+        f"cowl {'found' if cowl else 'missing'}, {len(exterior)} exterior "
         f"parts, dials {'found' if dials else 'missing'}, mirror glass {glass.get_actor_label() if glass else 'missing'}, "
         f"{side} side mirror(s), {lamps} lamp socket(s)")
 
@@ -1353,6 +1767,13 @@ def place_game(car, materials, inside_glass=None):
         game.set_editor_property("inside_glass_material", inside_glass)
     except Exception as error:  # a module built before 0.78: the seat keeps the level's glass
         log(f"game: no inside glass property ({error}); build the module first")
+    # The glass's picture from the seat and what the panes wear to be found by it (0.80, windscreen_material), by soft
+    # references too.
+    try:
+        game.set_editor_property("windscreen_material", NIGHT["windscreen"])
+        game.set_editor_property("glass_pane_material", NIGHT["pane"])
+    except Exception as error:  # a module built before 0.80: the glass stays clear
+        log(f"game: no windscreen property ({error}); build the module first")
     log("game placed")
 
 
@@ -3425,6 +3846,7 @@ def main():
     calibrate(placements, actors)
     weather_assets()
     night_assets()
+    windscreen_material()
     rain_material()
     dress_track(actors)
     materials = car_materials()

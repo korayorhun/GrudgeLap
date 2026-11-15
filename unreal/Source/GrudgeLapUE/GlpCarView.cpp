@@ -18,6 +18,9 @@ namespace
 	// The lamp sockets' tags (Scripts/build_scene.py rig_car), in FGlpCarView::LampRest's order.
 	const TCHAR* LampTags[] = { TEXT("GLP.LampHeadL"), TEXT("GLP.LampHeadR"), TEXT("GLP.LampTailL"), TEXT("GLP.LampTailR") };
 
+	// The component tag of the unseen copies MarkGlass makes (0.80, FGlpCarView::IsMark).
+	const FName MarkTag(TEXT("GLP.Mark"));
+
 	// The tail lamps (0.77): the Godot version's TailRed, sRGB (1, 0.06, 0.03), linear; a 6 cd tail lamp through a 5 cm
 	// lens, six times that braking (ECE R7: a stop lamp at least five times the tail lamp).
 	const FLinearColor TailRed(1.f, 0.005f, 0.0023f);
@@ -253,6 +256,12 @@ TUniquePtr<FGlpCarView> FGlpCarView::Clone(UWorld* World, const FString& Name, c
 		Part->GetComponents<UStaticMeshComponent>(Meshes);
 		for (const UStaticMeshComponent* Mesh : Meshes)
 		{
+			if (IsMark(Mesh))
+			{
+				// Not a part of the car: a copy made after the car was driven from its seat in the rain would have worn
+				// the panes' black over its windows.
+				continue;
+			}
 			UStaticMeshComponent* CopyMesh = NewObject<UStaticMeshComponent>(Copy);
 			CopyMesh->SetMobility(EComponentMobility::Movable);
 			CopyMesh->SetStaticMesh(Mesh->GetStaticMesh());
@@ -740,8 +749,135 @@ void FGlpCarView::SetVisible(bool bVisible)
 	ShowLamps();
 }
 
+/**
+ * A second component of Mesh's mesh that only the custom depth pass draws, with Stencil (FGlpCarView::MarkGlass): no
+ * shadow, no part in the lighting, the ray tracing or the mirror's picture, and never through Nanite.
+ */
+static UStaticMeshComponent* UnseenCopy(UStaticMeshComponent* Mesh, int32 Stencil)
+{
+	UStaticMeshComponent* Copy = NewObject<UStaticMeshComponent>(Mesh->GetOwner());
+	Copy->SetStaticMesh(Mesh->GetStaticMesh());
+	Copy->SetMobility(EComponentMobility::Movable);
+	Copy->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Copy->SetCastShadow(false);
+	Copy->SetRenderInMainPass(false);
+	Copy->SetRenderInDepthPass(false);
+	Copy->SetForceDisableNanite(true);
+	Copy->bVisibleInRayTracing = false;
+	Copy->bVisibleInReflectionCaptures = false;
+	Copy->bVisibleInRealTimeSkyCaptures = false;
+	Copy->bAffectDynamicIndirectLighting = false;
+	Copy->bAffectDistanceFieldLighting = false;
+	Copy->SetHiddenInSceneCapture(true);
+	Copy->SetCustomDepthStencilValue(Stencil);
+	Copy->ComponentTags.Add(MarkTag);
+	Copy->SetupAttachment(Mesh);
+	Copy->RegisterComponent();
+	return Copy;
+}
+
+bool FGlpCarView::IsMark(const UActorComponent* Component)
+{
+	return Component && Component->ComponentHasTag(MarkTag);
+}
+
+void FGlpCarView::MarkGlass(UMaterialInterface* Pane)
+{
+	// The custom depth from the seat (0.80, the header's note): the car's seen parts with stencil 1, its panes with 2.
+	const bool bMark = Pane != nullptr;
+	if (bMark == bGlassMarked)
+	{
+		return;
+	}
+	bGlassMarked = bMark;
+	if (bMark && !bPanesMade)
+	{
+		bPanesMade = true;
+		TArray<UStaticMeshComponent*> Glazed;
+		for (const FGlassSlot& Slot : Glass)
+		{
+			if (UStaticMeshComponent* Mesh = Slot.Mesh.Get())
+			{
+				Glazed.AddUnique(Mesh);
+			}
+		}
+		for (UStaticMeshComponent* Mesh : Glazed)
+		{
+			UStaticMeshComponent* Copy = UnseenCopy(Mesh, PaneStencil);
+			for (int32 Index = 0; Index < Mesh->GetNumMaterials(); Index++)
+			{
+				// A pane's slot in Pane; any other in the level's glass, which the custom depth pass leaves out (a
+				// translucent material is drawn there only when it asks to be).
+				const FGlassSlot* Slot = Glass.FindByPredicate([Mesh, Index](const FGlassSlot& S) { return S.Mesh == Mesh && S.Slot == Index; });
+				Copy->SetMaterial(Index, Slot ? Pane : Glass[0].Outside.Get());
+			}
+			Panes.Add(Copy);
+		}
+	}
+	for (const TWeakObjectPtr<UStaticMeshComponent>& Copy : Panes)
+	{
+		if (UStaticMeshComponent* Mesh = Copy.Get())
+		{
+			Mesh->SetRenderCustomDepth(bMark);
+		}
+	}
+	for (const TWeakObjectPtr<AActor>& Actor : Owned)
+	{
+		const AActor* A = Actor.Get();
+		if (!A)
+		{
+			continue;
+		}
+		TArray<UPrimitiveComponent*> Primitives;
+		A->GetComponents<UPrimitiveComponent>(Primitives);
+		for (UPrimitiveComponent* Primitive : Primitives)
+		{
+			if (IsMark(Primitive))
+			{
+				// One of the unseen copies themselves.
+				continue;
+			}
+			UStaticMeshComponent* Mesh = Cast<UStaticMeshComponent>(Primitive);
+			// What the seat does not see (the shell, the wheels: their shadows alone are drawn) stands before no glass.
+			const bool bSeen = bMark && Primitive->bRenderInMainPass;
+			if (Mesh && Mesh->HasValidNaniteData() && !Mesh->IsForceDisableNanite() && !Mesh->IsDisallowNanite())
+			{
+				// A part Nanite draws: its unseen copy stands in the pass for it (the header's note).
+				UStaticMeshComponent* Stand = Stands.FindRef(Mesh).Get();
+				if (bSeen && !Stand)
+				{
+					Stand = UnseenCopy(Mesh, CabinStencil);
+					for (int32 Index = 0; Index < Mesh->GetNumMaterials(); Index++)
+					{
+						Stand->SetMaterial(Index, Mesh->GetMaterial(Index));
+					}
+					Stands.Add(Mesh, Stand);
+				}
+				if (Stand)
+				{
+					Stand->SetRenderCustomDepth(bSeen);
+				}
+				continue;
+			}
+			if (bSeen)
+			{
+				Primitive->SetCustomDepthStencilValue(CabinStencil);
+			}
+			if (Primitive->bRenderCustomDepth != bSeen)
+			{
+				Primitive->SetRenderCustomDepth(bSeen);
+			}
+		}
+	}
+}
+
 void FGlpCarView::SetInside(bool bInside, UMaterialInterface* InsideGlass)
 {
+	if (!bInside)
+	{
+		// The marks are the seat's: what they hold is what the seat saw.
+		MarkGlass(nullptr);
+	}
 	for (const TWeakObjectPtr<UPrimitiveComponent>& Component : OutsideOnly)
 	{
 		// Shadows still come from the main-pass-less proxy: Nanite meshes fall back to their fallback mesh for it.
@@ -756,13 +892,13 @@ void FGlpCarView::SetInside(bool bInside, UMaterialInterface* InsideGlass)
 		return;
 	}
 	bInsideGlass = bWear;
-	for (const FGlassSlot& Pane : Glass)
+	for (const FGlassSlot& Glazing : Glass)
 	{
-		UStaticMeshComponent* Mesh = Pane.Mesh.Get();
-		UMaterialInterface* Outside = Pane.Outside.Get();
+		UStaticMeshComponent* Mesh = Glazing.Mesh.Get();
+		UMaterialInterface* Outside = Glazing.Outside.Get();
 		if (Mesh && Outside)
 		{
-			Mesh->SetMaterial(Pane.Slot, bWear ? InsideGlass : Outside);
+			Mesh->SetMaterial(Glazing.Slot, bWear ? InsideGlass : Outside);
 		}
 	}
 }

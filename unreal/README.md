@@ -250,8 +250,8 @@ The dusk's afterglow stands over the sun, right of the start straight (bearing 2
 Godot's sky photo glows left of it; looking into it, the meadow's rocks shine white (their 0.76 material's specular, kept
 as the day has it). The train's lamp is where Godot's is, at the locomotive's cowcatcher, but in both versions the
 locomotive runs cab first and the lamp faces back over the first coach (the model's turn in the export and TrainView, a
-Godot-side change). The lightning's and the windscreen's hour values wait for a storm and a windscreen of their own, and
-the night's sounds for an ambience in `GlpAudio`.
+Godot-side change). The lightning's hour values wait for a storm of their own (the windscreen's came with 0.80, below),
+and the night's sounds for an ambience in `GlpAudio`.
 
 
 ## The driver's seat, the film view and the menu (0.78)
@@ -298,6 +298,47 @@ ISTERLER T2, the Godot game's Showroom, ColourPicker and PaintBook carried over;
   `-GlpPaint=<paint>` paints the driven car for one run without keeping it, and `-GlpSelfTest` runs the paints' and
   the showroom's own checks and exits (0 when all hold; the log says how many ran). The scripted mouse can hold its
   button and turn its wheel: `-GlpMouse=4:700,400:down+5:900,400:up+6:800,400:wheel3`.
+
+## The windscreen (0.80)
+
+ISTERLER T4, the Godot game's `Windscreen.cs` and `windscreen.glsl` carried over: from the seat, the rain's drops on
+the glass, the wipers, the water's film, a wet day's spray and the sun's haze on the glass's dust. The reasons and
+the measurements are in `docs/design.md` under 0.80.0.
+
+- **The picture** is `M_Windscreen`, a post-process material made by `build_scene.py` (`windscreen_material`, the
+  code is `WINDSCREEN_HLSL`): before the bloom, after the upscaler and the motion blur. `AGlpGame::SyncWindscreen`
+  hangs it on the player's own camera while the seat's view has something to show (rain, a wet day, the sun within
+  50 degrees of the view on a dry day) and feeds it every frame: the weather and the wipers' clock, the light, the
+  sun and the car's axes in the camera's frame, and the windscreen's lower edge (the model's `Cowl` part, tagged
+  `GLP.Cowl`). The mirror's picture and the views from outside do not get it.
+- **Where the glass is.** While the picture is drawn, `FGlpCarView::MarkGlass` has the player's car write the custom
+  depth pass: its seen parts with stencil 1, and unseen copies of the meshes that carry glass write their panes alone
+  with stencil 2 in `M_Pane` (opaque, two-sided). The material draws where the stencil holds a 2 and takes the pane's
+  distance from that pass, which the game has drawn with its stencil and without the upscaler's jitter
+  (`r.CustomDepth=3`, `r.CustomDepthTemporalAAJitter=0`, the project's settings in `Config/DefaultEngine.ini`; set
+  at run time the first has the engine register every component anew): read from the scene's own depth the
+  glass's edge flickered. A part Nanite draws is not marked itself: an unseen copy of it without Nanite stands in the
+  pass for it, since one Nanite part there has the engine run a second Nanite rasteriser (0.30 ms a frame against
+  0.03 for the whole pass with the copies). The marks are on only while the picture is drawn. The copies hang on
+  the car's own actors and carry a tag (`FGlpCarView::IsMark`): whoever walks a car's meshes (a copy of the car for
+  the traffic or the ghost, the dials' material) leaves them out.
+- **On the glass.** The pane's point is turned into metres on the pane (across the car and up the glass for the
+  windscreen, along the car and up for a side window), and the drops, the film and the blades are drawn in those:
+  they stay on the car's glass when the head moves in the cabin.
+- **The rules** are `GlpWindscreen.*`: the wipers' clock (`FGlpWipers`: a sweep of 1.1 s, steadily in the rain), the
+  water by the weather (`Water`), how much of the sun reaches the dust (`SunShare`; `Glare`, in from nothing at 50
+  degrees off the view to all of it at 42; `Hazy`, which keeps the picture until 52 degrees once it is drawn) and the
+  drops' glint by the hour (`Glint`), with their own checks in `-GlpSelfTest`.
+- **A post-process material's code** is compiled for the shaders that draw meshes too. What only the pass's own
+  shader declares (`PostProcessInput_0_Texture`) stands under `#if POST_PROCESS_MATERIAL` in `WINDSCREEN_HLSL`;
+  without it the editor's runs were right and the packaged game drew the engine's default material (below,
+  "Packaging and release").
+- **For checks.** `-GlpWindscreen=0` leaves the glass clear; `-GlpWindscreen=<film>,<lens>,<check>` tries the film's
+  strength (0.55) and the drops' lens (2.2) and, with a check, draws that instead of the picture: 1 the glass found
+  (green), 2 with the side windows (blue), 3 a grid of 10 cm on the panes with the blades' pivots and reach (red),
+  4 the mask alone, white on black, for measuring how still the glass's edge stands.
+- **Not here yet.** The wipers' and the rain's sounds on the glass (ISTERLER T9). The pivots and the blades'
+  lengths are one pair for every car.
 
 ## One copy, the player's data, the updater (0.78)
 
@@ -348,8 +389,12 @@ ships: the engine's launcher renamed `GrudgeLap.exe` in the root (it starts
 `GrudgeLapUE\Binaries\Win64\GrudgeLapUE.exe` and waits for it; the name is the Godot game's, so shortcuts and the
 0.77 updaters still fit), `Engine\`, `GrudgeLapUE\`, the README, the licence, `THIRD_PARTY.md`, the car models'
 credits and the engine's notices, without the debug symbols (2.6 GB) and without the DLSS plugin's development
-libraries (150 MB, for development machines). It then starts the packaged game once, hidden and silent, reads its log
-for the simulation core, the updater and a session on the road, and lists what its process listens on. With an engine
+libraries (150 MB, for development machines). It stops when the cook's log names a material it could not compile
+(`Failed to compile Material`): the cook goes on without it and the game would draw the engine's default material in
+its place, which no run from the editor shows, since the editor compiles only the shaders it draws with (0.80, the
+windscreen's picture). It then starts the packaged game once, hidden and silent, reads its log
+for the simulation core, the updater and a session on the road (and for a material drawn as the default one), and
+lists what its process listens on. With an engine
 built from source, the first packaging compiles the whole engine for the game target (about 35 minutes on the development
 laptop), and so does a change of the target's definitions; later runs take two to three minutes. The configuration is
 Development for that reason: a Shipping build would compile the engine once more. Its console key is taken out
@@ -407,6 +452,8 @@ unpacked.
   `GlpCockpits.*` each car's seat (0.78; the sections above).
 - `GlpShowroom.*` is the showroom and its colour picker, `GlpPaint.*` the paints and the book that keeps them,
   `GlpStyles.h` the cars' styles by name (0.79; the section above).
+- `GlpWindscreen.*` is the wipers' clock and what the weather and the hour put on the glass from the seat (0.80; the
+  section above); the picture itself is the level's `M_Windscreen`.
 - `GlpHud` draws the readouts, the title screen and the high-score panel on the canvas; `GlpInstruments` draws the instrument panel
   into a texture shown on the binnacle and at the foot of the screen; a scene capture fills the rear-view
   mirror. `GlpAudio` mixes the recordings and the synthesis the way the Godot version does, at 44.1 kHz; the

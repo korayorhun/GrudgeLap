@@ -5,6 +5,7 @@
 #include "grudgelap_physics.h"
 
 class AActor;
+class UActorComponent;
 struct FGlpCockpit;
 struct FGlpPaint;
 class UMaterialInterface;
@@ -112,9 +113,35 @@ public:
 	 * (CarView.SetViewpoint): seen from inside, the single-sided shell showed its paint along the door tops. With
 	 * InsideGlass (0.78) the car's windows wear it from the seat and their own glass from outside: the level's glass,
 	 * right for a car seen from the road, took half the road's light on its way in through a raked windscreen and laid
-	 * the dashboard's reflection over what was left (AGlpGame::InsideGlassMaterial).
+	 * the dashboard's reflection over what was left (AGlpGame::InsideGlassMaterial). Leaving the seat takes the glass's
+	 * marks off (MarkGlass).
 	 */
 	void SetInside(bool bInside, UMaterialInterface* InsideGlass = nullptr);
+
+	/**
+	 * Tells the glass's picture where this car's glass is, seen from its seat (0.80, M_Windscreen: the rain's drops and
+	 * the wipers): with Pane (AGlpGame::GlassPaneMaterial) everything of the car the seat sees writes the custom depth
+	 * with stencil 1, and a second, unseen copy of each mesh that carries a window writes its panes alone with stencil
+	 * 2, in Pane (its other slots keep a translucent glass, which that pass leaves out). Where the pass holds a 2 the
+	 * nearest thing of the car is a pane: the view goes through glass there, and the pass's depth says how far off the
+	 * pane is. The game has that pass drawn without the upscaler's jitter (AGlpGame::BeginPlay), so the glass's edge
+	 * stands still. Without Pane the marks are taken off: the game asks for them only while the glass has something to
+	 * show (AGlpGame::SyncWindscreen), since the pass draws the cabin a second time. Call it after SetInside: what the
+	 * seat sees is what is drawn in the main pass then.
+	 *
+	 * A part that Nanite draws (the steering wheel, the mirror's housing) is not marked itself: one Nanite part in that
+	 * pass has the engine run a second Nanite rasteriser for it, 0.30 ms a frame on the laptop this was measured on,
+	 * where the pass without any costs 0.01 ms. An unseen copy of it, drawn without Nanite (its fallback mesh), stands
+	 * in for it.
+	 */
+	void MarkGlass(UMaterialInterface* Pane);
+
+	/**
+	 * True for a component MarkGlass made: an unseen copy of one of the car's meshes, which hangs on the car's own actor
+	 * beside the mesh it copies. Whoever walks a car's meshes for what the car is made of (a copy of the car for the
+	 * traffic or the ghost, the dials' or a mirror's material) leaves these out.
+	 */
+	static bool IsMark(const UActorComponent* Component);
 
 	/** The driver's seat as the game corrects it (0.78): the dials' face and the steering wheel moved and scaled. */
 	void SetCockpit(const FGlpCockpit& Cockpit);
@@ -149,6 +176,15 @@ private:
 	};
 	TArray<FGlassSlot> Glass;
 	bool bInsideGlass = false;
+	/** The unseen copies that write the panes into the custom depth (MarkGlass), made the first time they are wanted. */
+	TArray<TWeakObjectPtr<UStaticMeshComponent>> Panes;
+	/** The unseen copies that stand in that pass for the parts Nanite draws, by the part (MarkGlass). */
+	TMap<TWeakObjectPtr<UStaticMeshComponent>, TWeakObjectPtr<UStaticMeshComponent>> Stands;
+	bool bPanesMade = false;
+	bool bGlassMarked = false;
+	/** What the custom depth's stencil holds from the seat: the car's own parts, and its panes before them. */
+	static constexpr int32 CabinStencil = 1;
+	static constexpr int32 PaneStencil = 2;
 	/** A slot that wears the car's paint: the level's material, and this car's own instance of it while it is repainted. */
 	struct FPaintSlot
 	{
