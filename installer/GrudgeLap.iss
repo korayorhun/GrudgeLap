@@ -3,7 +3,7 @@
 ; GrudgeLap.exe in the root, the engine's and the game's folders beside it. Until 0.77 it was the Godot game
 ; (GrudgeLap.exe, GrudgeLap.pck and a data folder): an update from there removes those and keeps the folder, the
 ; shortcuts and the AppId.
-#define MyAppVersion "0.79.0"
+#define MyAppVersion "0.80.0"
 #define MyAppPublisher "Koray Orhun"
 #define MyAppURL "https://github.com/korayorhun/GrudgeLap"
 #define MyAppExeName "GrudgeLap.exe"
