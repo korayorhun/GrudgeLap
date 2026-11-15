@@ -292,7 +292,8 @@ void GlpInstance::Import()
 			FString Out;
 			for (const TPair<FString, FString>& Choice : GodotChoices(FPaths::Combine(Godot, TEXT("settings.cfg"))))
 			{
-				if (Choice.Key == TEXT("car") || Choice.Key == TEXT("transmission") || Choice.Key == TEXT("weather") || Choice.Key == TEXT("light"))
+				// The frame rate counter's choice (fps) too since 0.81.
+				if (Choice.Key == TEXT("car") || Choice.Key == TEXT("transmission") || Choice.Key == TEXT("weather") || Choice.Key == TEXT("light") || Choice.Key == TEXT("fps"))
 				{
 					Out += FString::Printf(TEXT("%s=%d\n"), *Choice.Key, FCString::Atoi(*Choice.Value));
 				}

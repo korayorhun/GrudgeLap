@@ -4193,6 +4193,45 @@ have scratched into it light up into a haze when the sun stands ahead.
   only the drops being withheld there. None of the cars to drive has one (the grid check leaves every car's dials
   clear); a model that brings one needs its lens told from its windows.
 
+### The lines under the clock: the frame rate and the weather (0.81.0)
+
+The Godot version's two lines under the clock came over to the Unreal game's HUD (`AGlpHud::DrawHUD`; ISTERLER T16):
+the frame rate when the player asks for it, and the credit's weather when it is not a clear day.
+
+- **The frame rate** (`FGlpFrameRate`): the frames drawn in each half second of the wall clock
+  (`FPlatformTime::Seconds`), counted on every frame whether the line shows or not, so that the figure is right the
+  moment it is asked for. A window's count and not one frame's time turned over: the figure stands long enough to be
+  read, and a single slow frame moves it by what it cost and no more. Until the first half second has passed the line
+  reads dashes, not a nought. F6 switches it, as in Godot; the menu has a line for it too (FRAME RATE: SHOWN / HIDDEN),
+  because a gamepad has no F6 and the upscaler's mode is chosen in the same menu. The choice is kept in
+  `settings.ini` under the Godot version's key, `fps=`, and comes over from its `settings.cfg` on a first start
+  (`GlpInstance`).
+- **The weather** (`GlpHudLines::WeatherLabel`): OVERCAST, WET ROAD or RAIN, the core's own names
+  (`WeatherModel.Label`), by the credit's weather and not by the player's choice: with RANDOM chosen the line tells
+  what the credit drew.
+- **Plates.** Under the readouts' band the picture is the sky as often as not, and the lines' pale type did not read
+  on a bright one (the Godot version printed them bare). Every line under the band now stands on a plate of the band's
+  tone: these two as one plate, as wide as its widest line (the counter's by three figures, so that it does not
+  breathe with them), and on the right the best lap's and the updater's notice each on its own. A plate is as tall as
+  the lines' pitch, so two lines' plates meet without a seam. `FGlpPainter::TextWidth` measures the type.
+- **The film view** has no band: its readouts are plain type in the black bars. The two lines stand inside the top
+  bar, close under the clock (baselines 66 and 86 of the bar's 94), and take no plate.
+- **Put right on the way:** in the film view the updater's notice was printed over the best lap's line in a grudge
+  match while a download ran (both right-aligned on the bar's last line, since 0.78). It stands to that line's left
+  now.
+- **The title's keys.** The line of keys in the title's panel was as wide as the panel already (880 of the layout's
+  1600 with the longest names); the counter's key went beside the version instead: "F6 frame rate   F10 or the menu:
+  check for updates".
+- **A trap when measuring:** a picture the game takes of itself shows a low figure (16 to 27 where the engine draws
+  60). The screenshot holds its frame for about 0.44 s, and the HUD in the picture is drawn after that. The counter
+  was checked against the engine's own frame counter instead: at a cap of 60 its windows read 58 to 60 with as many
+  calls as engine frames, and at a cap of 120 it read 62 to 85 where the engine's profile had a median frame of
+  13.9 ms (72 a second).
+- **Checks:** eleven in `-GlpSelfTest` (207 in all): the count at 60, 30, 120 and 144 frames a second, a frame of two
+  seconds, a clock that steps back, a week into the clock, the weather's names, and the lines' room under the band and
+  in the film view's bar.
+- **Still open in T16:** the damage gauge, which belongs above these lines and comes with the damage (T6).
+
 ## Unreal Engine version (`unreal/`)
 
 - Started on 23 October 2026, after a feasibility test on the start straight. With the same viewpoints and

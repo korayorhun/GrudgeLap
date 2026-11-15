@@ -45,6 +45,8 @@ struct FGlpPainter
 	 * whatever the alignment. Size is the font size in pixels.
 	 */
 	void Text(const FString& Text, float X, float Y, EAlign Align, float Width, float Size, const FLinearColor& Colour) const;
+	/** How wide Text draws the text at this size, on the virtual canvas. */
+	float TextWidth(const FString& Text, float Size) const;
 
 	/** The virtual canvas: the real one divided by Scale. */
 	FVector2D Size() const;

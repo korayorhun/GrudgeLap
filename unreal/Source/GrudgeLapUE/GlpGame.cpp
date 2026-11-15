@@ -640,10 +640,10 @@ void AGlpGame::BeginPlay()
 	}
 	if (FParse::Param(FCommandLine::Get(), TEXT("GlpSelfTest")))
 	{
-		// The paints' and the showroom's own checks (0.79) and the windscreen's (0.80), for an automated run: the result
-		// in the log, and out with it as the exit code (0 when every check held).
+		// The paints' and the showroom's own checks (0.79), the windscreen's (0.80) and the HUD's (0.81), for an automated
+		// run: the result in the log, and out with it as the exit code (0 when every check held).
 		TArray<FString> Failures;
-		const int32 Checks = GlpPaint::SelfTest(Failures) + FGlpShowroom::SelfTest(Failures) + GlpWindscreen::SelfTest(Failures);
+		const int32 Checks = GlpPaint::SelfTest(Failures) + FGlpShowroom::SelfTest(Failures) + GlpWindscreen::SelfTest(Failures) + GlpHudLines::SelfTest(Failures);
 		for (const FString& Failure : Failures)
 		{
 			UE_LOG(LogGlpGame, Error, TEXT("self test failed: %s"), *Failure);
@@ -2084,6 +2084,11 @@ void AGlpGame::HandleGlobalKeys()
 		bKmh = !bKmh;
 		SaveSettings();
 	}
+	if (Input.Pressed(EKeys::F6))
+	{
+		bFrameRate = !bFrameRate;
+		SaveSettings();
+	}
 	if (Input.Pressed(EKeys::F5))
 	{
 		NewSession();
@@ -2565,6 +2570,11 @@ void AGlpGame::LoadSettings()
 		{
 			bRayReconstruction = FCString::Atoi(*Value) != 0;
 		}
+		else if (Key == TEXT("fps"))
+		{
+			// The Godot version's key for its counter (settings.cfg: fps=1).
+			bFrameRate = FCString::Atoi(*Value) != 0;
+		}
 		else
 		{
 			// Each car's paint (0.79): paint.<car>, as the Godot version's settings name them.
@@ -2575,8 +2585,8 @@ void AGlpGame::LoadSettings()
 
 void AGlpGame::SaveSettings() const
 {
-	const FString Text = FString::Printf(TEXT("car=%d\ntransmission=%d\nunits=%s\nweather=%d\nlight=%d\nview=%s\nupscaling=%s\nrr=%d\n"), CarIndex, Transmission, bKmh ? TEXT("kmh") : TEXT("mph"),
-		WeatherChoice, LightChoice, ViewTag(), UpscaleTags[FMath::Clamp(UpscaleChoice, 0, 5)], bRayReconstruction ? 1 : 0);
+	const FString Text = FString::Printf(TEXT("car=%d\ntransmission=%d\nunits=%s\nweather=%d\nlight=%d\nview=%s\nupscaling=%s\nrr=%d\nfps=%d\n"), CarIndex, Transmission, bKmh ? TEXT("kmh") : TEXT("mph"),
+		WeatherChoice, LightChoice, ViewTag(), UpscaleTags[FMath::Clamp(UpscaleChoice, 0, 5)], bRayReconstruction ? 1 : 0, bFrameRate ? 1 : 0);
 	// The paints after the rest: one line for every car that is not in its own colour.
 	FFileHelper::SaveStringToFile(Text + Paints.Lines(), *SavedFile(TEXT("settings.ini")));
 }
@@ -2717,6 +2727,8 @@ void AGlpGame::FillMenu()
 	Add(EGlpMenuLine::Units, FString::Printf(TEXT("UNITS: %s"), bKmh ? TEXT("KM/H") : TEXT("MPH")));
 	const UGameUserSettings* Settings = GEngine ? GEngine->GetGameUserSettings() : nullptr;
 	Add(EGlpMenuLine::FullScreen, FString::Printf(TEXT("FULL SCREEN: %s"), Settings && Settings->GetFullscreenMode() != EWindowMode::Windowed ? TEXT("ON") : TEXT("OFF")));
+	// The counter under the clock (0.81): the Godot version had only its key, F6, which a pad has not.
+	Add(EGlpMenuLine::FrameRate, FString::Printf(TEXT("FRAME RATE: %s"), bFrameRate ? TEXT("SHOWN") : TEXT("HIDDEN")));
 	Add(EGlpMenuLine::Update, UpdateLine());
 	Add(EGlpMenuLine::Quit, TEXT("QUIT GAME"));
 	PauseMenu.Cursor = FMath::Clamp(PauseMenu.Cursor, 0, Lines.Num() - 1);
@@ -3461,6 +3473,10 @@ void AGlpGame::TakeMenuLine(EGlpMenuLine Line, int32 Direction)
 		break;
 	case EGlpMenuLine::FullScreen:
 		ToggleFullScreen();
+		break;
+	case EGlpMenuLine::FrameRate:
+		bFrameRate = !bFrameRate;
+		SaveSettings();
 		break;
 	case EGlpMenuLine::Update:
 		if (Direction == 0)

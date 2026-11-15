@@ -176,6 +176,8 @@ public:
 		return Rig.View == EGlpView::Cockpit ? TEXT("cockpit") : Rig.View == EGlpView::Chase ? TEXT("chase") : TEXT("film");
 	}
 	bool UsesKmh() const { return bKmh; }
+	/** The HUD shows the frame rate under the clock (F6 or the menu; kept with the settings). */
+	bool ShowsFrameRate() const { return bFrameRate; }
 	float DrivingSeconds() const { return DrivingTime; }
 	float DashOffset() const { return Dash; }
 	bool Attract() const { return bAttract; }
@@ -394,6 +396,7 @@ private:
 	int32 CarIndex = 2;
 	int32 Transmission = GLP_MANUAL_AUTO_CLUTCH;
 	bool bKmh = true;   // metric by default since 0.14 (the Godot version too); U toggles, the choice is kept
+	bool bFrameRate = false;   // the HUD's frame rate counter (0.81, the Godot version's F6); the choice is kept
 	bool bAttract = false;
 	bool bTraffic = true;
 	bool bSpeedRoute = false;

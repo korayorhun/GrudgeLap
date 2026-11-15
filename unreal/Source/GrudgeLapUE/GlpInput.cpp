@@ -15,8 +15,8 @@ namespace
 		// The title screen's weather, hour and music folder (0.77): until the hour came the keyboard's H and M were never
 		// read, as they were missing here; only a scripted run could press them.
 		EKeys::H, EKeys::L, EKeys::M,
-		// The update check (0.78, as the Godot version's F10).
-		EKeys::F10,
+		// The update check (0.78, as the Godot version's F10) and the frame rate's counter (0.81, its F6).
+		EKeys::F10, EKeys::F6,
 		// The pad's buttons (InputSetup): the stick and the triggers are read as axes.
 		EKeys::Gamepad_DPad_Left, EKeys::Gamepad_DPad_Right, EKeys::Gamepad_DPad_Up, EKeys::Gamepad_DPad_Down,
 		EKeys::Gamepad_LeftStick_Left, EKeys::Gamepad_LeftStick_Right,

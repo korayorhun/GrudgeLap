@@ -111,8 +111,9 @@ again.
 | C | the camera: the driver's seat, behind the car, the film view (remembered) |
 | U | km/h / mph (remembered) |
 | Down / S (title screen) | the showroom: choose the car by sight, and its paint |
-| Esc | the menu: continue, new game, car (opens the showroom), paint, camera, DLSS mode (off, DLAA, quality, balanced, performance, ultra performance; TSR's modes on a card without DLSS), DLSS Ray Reconstruction, weather, light, units, full screen, **check for updates**, **quit** (the game stands still and silent while it is open; keys, gamepad or mouse) |
+| Esc | the menu: continue, new game, car (opens the showroom), paint, camera, DLSS mode (off, DLAA, quality, balanced, performance, ultra performance; TSR's modes on a card without DLSS), DLSS Ray Reconstruction, weather, light, units, full screen, frame rate, **check for updates**, **quit** (the game stands still and silent while it is open; keys, gamepad or mouse) |
 | F5 | new game |
+| F6 | the frame rate under the clock (remembered) |
 | F9 | attract mode (the scripted driver drives) |
 | F10 | check for updates |
 | F11 | full screen |

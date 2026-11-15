@@ -16,6 +16,7 @@ enum class EGlpMenuLine : uint8
 	Light,
 	Units,
 	FullScreen,
+	FrameRate,
 	Update,
 	Quit,
 };

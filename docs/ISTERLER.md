@@ -8,7 +8,7 @@ Yeni bir istek gelince buraya satır olarak eklenir. Bir sürüm bir isteği kar
 - **Durum:** `Tamam` karşılandı, `Kısmen` bir kısmı karşılandı, `Açık` henüz yapılmadı, `Karar` yön belirlendi, `Ertelendi` bilerek sonraya bırakıldı.
 - **Ayrıntı:** teknik gerekçeler [design.md](design.md)'de, sürüm notları GitHub Releases'te.
 
-Son güncelleme: 15 Kasım 2026 (sürüm 0.80.0: bölüm 12'den T4 işlendi, Unreal sürümünde ön camda yağmur damlaları, silecekler ve güneş pusu. Sürüm 0.79.0: bölüm 12'den T2 işlendi, Unreal sürümünde araba seçim ekranı ve boyalar. Sürüm 0.78.0: yayınlanan oyun artık Unreal sürümü; 14 Kasım istekleri H9, H10, G12, G13, U6, R5, R6, R7 ve bölüm 12'den T1, T3, T18, T20 işlendi).
+Son güncelleme: 15 Kasım 2026 (sürüm 0.81.0: bölüm 12'den T16'nın kalanı işlendi, Unreal sürümünde saatin altında FPS sayacı ve hava satırı. Sürüm 0.80.0: bölüm 12'den T4 işlendi, Unreal sürümünde ön camda yağmur damlaları, silecekler ve güneş pusu. Sürüm 0.79.0: bölüm 12'den T2 işlendi, Unreal sürümünde araba seçim ekranı ve boyalar. Sürüm 0.78.0: yayınlanan oyun artık Unreal sürümü; 14 Kasım istekleri H9, H10, G12, G13, U6, R5, R6, R7 ve bölüm 12'den T1, T3, T18, T20 işlendi).
 
 ## 1. Hedef
 
@@ -258,7 +258,7 @@ Taşınmış olanlar (0.74-0.77): gerçek araba modelleri ve kabinler, arabaya �
 | T13 | Bulut gölgeleri | madde 29 | Açık: denendi, yerde etkisi görülmedi |
 | T14 | Su birikintileri ve su kızağı, yan rüzgâr, klavyede yumuşak pedallar (Godot bunları simülasyona dışarıdan veriyordu) | maddeler 43, 48 | Kısmen (0.78.0): klavyede yumuşak pedallar çekirdekte (`glp_feather_inputs`); birikintiler ve yan rüzgâr açık |
 | T15 | Hava almış binalar | madde 26 | Açık |
-| T16 | HUD: saatin altında hava, hasar göstergesi, FPS sayacı, güncelleme satırı | | Kısmen (0.78.0: güncelleme satırı başlıkta, menüde ve indirme sürerken köşede) |
+| T16 | HUD: saatin altında hava, hasar göstergesi, FPS sayacı, güncelleme satırı | | Hasar göstergesi dışında tamam (0.81.0): FPS sayacı F6 ile ve menüdeki FRAME RATE satırıyla açılır, seçim saklanır (Godot'taki ayar da gelir); açık gün dışında saatin altında kredinin havası yazar (OVERCAST, WET ROAD, RAIN; RANDOM seçiliyken çıkan hava). Bandın altındaki satırlar (bu ikisi, en iyi tur, güncelleme satırı) açık gökyüzünde de okunsun diye koyu plakada. Film görünümünde üst siyah bandın içinde. Güncelleme satırı 0.78.0'da gelmişti (başlıkta, menüde, indirme sürerken köşede); film görünümünde rövanş maçında en iyi tur satırının üstüne basılması düzeltildi. Hasar göstergesi T6 ile gelecek |
 | T17 | Grafik ön ayarları | | Açık |
 | T18 | Tek kopya; müzik dosyasını pencereye bırakma | U4, S2 | Kısmen (0.78.0): tek kopya tamam; müzik dosyasını pencereye bırakma açık (M klasörü açıyor) |
 | T19 | 1989 görünümü (F8) | | Açık: taşınıp taşınmayacağı sahibin kararı |

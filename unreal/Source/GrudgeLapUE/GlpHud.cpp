@@ -205,6 +205,100 @@ namespace
 	}
 }
 
+void FGlpFrameRate::Frame(double Now)
+{
+	if (Since < 0.0 || Now < Since)
+	{
+		// The first frame, or a clock that stepped back: the count starts here.
+		Since = Now;
+		Frames = 0;
+		return;
+	}
+	Frames++;
+	if (const double Span = Now - Since; Span >= Window)
+	{
+		// By the time that really passed: a window closes on the first frame past its half second, not on the tick.
+		Rate = FMath::RoundToInt32(Frames / Span);
+		Since = Now;
+		Frames = 0;
+	}
+}
+
+const TCHAR* GlpHudLines::WeatherLabel(int32 Weather)
+{
+	return Weather == GLP_WEATHER_OVERCAST ? TEXT("OVERCAST") : Weather == GLP_WEATHER_WET ? TEXT("WET ROAD") : Weather == GLP_WEATHER_RAIN ? TEXT("RAIN") : TEXT("");
+}
+
+float GlpHudLines::First(bool bFilm)
+{
+	return bFilm ? 66.f : 84.f;
+}
+
+int32 GlpHudLines::SelfTest(TArray<FString>& Failures)
+{
+	int32 Checks = 0;
+	auto Check = [&Failures, &Checks](bool bHeld, const TCHAR* What)
+	{
+		Checks++;
+		if (!bHeld)
+		{
+			Failures.Add(FString::Printf(TEXT("hud: %s"), What));
+		}
+	};
+
+	// The frame rate: nothing before a window has passed, then the frames of each half second.
+	FGlpFrameRate Rate;
+	Rate.Frame(100.0);
+	Check(Rate.Shown() == 0, TEXT("no frame rate before the first half second"));
+	for (int32 i = 1; i <= 120; i++)
+	{
+		Rate.Frame(100.0 + i / 60.0);
+	}
+	Check(Rate.Shown() == 60, TEXT("sixty frames a second read 60"));
+	for (int32 i = 1; i <= 90; i++)
+	{
+		Rate.Frame(102.0 + i / 30.0);
+	}
+	Check(Rate.Shown() == 30, TEXT("thirty frames a second read 30"));
+	// One frame of two seconds among sixty a second: the window it closes reads what it cost, the next one 60 again.
+	FGlpFrameRate Hitch;
+	for (int32 i = 0; i <= 15; i++)
+	{
+		Hitch.Frame(i / 60.0);
+	}
+	Hitch.Frame(15.0 / 60.0 + 2.0);
+	Check(Hitch.Shown() == 7, TEXT("a frame of two seconds shows in its window"));
+	for (int32 i = 1; i <= 40; i++)
+	{
+		Hitch.Frame(15.0 / 60.0 + 2.0 + i / 60.0);
+	}
+	Check(Hitch.Shown() == 60, TEXT("the window after a slow frame is right again"));
+	// A clock that steps back (a suspended machine's, a test's) starts the count anew and leaves no absurd figure.
+	Hitch.Frame(1.0);
+	for (int32 i = 1; i <= 60; i++)
+	{
+		Hitch.Frame(1.0 + i / 120.0);
+	}
+	Check(Hitch.Shown() == 120, TEXT("a clock that stepped back starts the count anew"));
+	// Hours into a session the clock's steps are still whole: 144 frames a second after a week of seconds.
+	FGlpFrameRate Late;
+	for (int32 i = 0; i <= 144; i++)
+	{
+		Late.Frame(604800.0 + i / 144.0);
+	}
+	Check(Late.Shown() == 144, TEXT("the count is right a week into the clock"));
+
+	// The weather's line: the core's names, nothing on a clear day or for a number it does not know.
+	Check(FCString::Strcmp(WeatherLabel(GLP_WEATHER_OVERCAST), TEXT("OVERCAST")) == 0 && FCString::Strcmp(WeatherLabel(GLP_WEATHER_WET), TEXT("WET ROAD")) == 0
+		&& FCString::Strcmp(WeatherLabel(GLP_WEATHER_RAIN), TEXT("RAIN")) == 0, TEXT("the weather's names"));
+	Check(!*WeatherLabel(GLP_WEATHER_DRY) && !*WeatherLabel(7) && !*WeatherLabel(-1), TEXT("no weather line on a clear day"));
+
+	// The lines under the clock: clear of the readouts' band in the other views, both inside the film view's bar.
+	Check(First(false) - 16.f >= 64.f, TEXT("the lines under the clock stand below the readouts' band"));
+	Check(First(true) - 16.f >= 50.f && First(true) + Pitch + 5.f <= FilmBar, TEXT("two lines fit in the film view's bar under the clock"));
+	return Checks;
+}
+
 AGlpGameMode::AGlpGameMode()
 {
 	HUDClass = AGlpHud::StaticClass();
@@ -227,6 +321,7 @@ AGlpGame* AGlpHud::Game()
 void AGlpHud::DrawHUD()
 {
 	Super::DrawHUD();
+	FrameRate.Frame(FPlatformTime::Seconds());
 	// -GlpNoHud: pictures of the scene alone (the comparisons with the Godot version, whose --no-hud does the same).
 	static const bool bNoHud = FParse::Param(FCommandLine::Get(), TEXT("GlpNoHud"));
 	if (bNoHud)
@@ -255,7 +350,7 @@ void AGlpHud::DrawHUD()
 	// A film's black bars (2.25 to 1 on a 16:9 screen) with the readouts set in them as plain type: the speed, the gear
 	// and the revs as a thin line that reddens towards the limiter, where the other views draw the instrument cluster.
 	const bool bFilm = G->InFilmView();
-	constexpr float FilmBar = 94.f;
+	constexpr float FilmBar = GlpHudLines::FilmBar;
 	if (bFilm)
 	{
 		const FLinearColor Black = FGlpPainter::Srgb(0.f, 0.f, 0.f);
@@ -300,15 +395,64 @@ void AGlpHud::DrawHUD()
 	P.Text(FString::Printf(TEXT("LAP %d  %.1fs"), S.lap, S.lap_time), Size.X - 320.f, 44.f, EAlign::Right, 300.f, 26.f, FGlpPainter::Srgb(0.9f, 0.9f, 0.9f));
 	const TCHAR* Route = S.route == GLP_ROUTE_SPEED ? TEXT("SPEED TRACK") : S.route == GLP_ROUTE_STUNT ? TEXT("STUNT TRACK") : TEXT("");
 	P.Text(Route, Size.X - 320.f, 62.f, EAlign::Right, 300.f, 14.f, FGlpPainter::Srgb(0.7f, 0.85f, 1.f));
+	// Under the band the picture is the sky as often as not, and pale type on a pale sky does not read: every line there
+	// stands on a plate of the band's tone (0.81; the Godot version printed them bare). The film view's bar is black
+	// already. A plate is as tall as the lines' pitch, so two lines' plates meet without a seam.
+	auto Plated = [&P, &Band, bFilm](const FString& Text, float X, float Y, float Width, float FontSize, const FLinearColor& Colour)
+	{
+		if (Text.IsEmpty())
+		{
+			return;
+		}
+		if (!bFilm)
+		{
+			const float Wide = P.TextWidth(Text, FontSize);
+			P.Rect(X + Width - Wide - 8.f, Y - 15.f, Wide + 16.f, GlpHudLines::Pitch, Band);
+		}
+		P.Text(Text, X, Y, EAlign::Right, Width, FontSize, Colour);
+	};
 	if (S.grudge_match)
 	{
-		P.Text(FString::Printf(TEXT("%sBEST %s"), S.ghost_visible ? TEXT("GHOST  ") : TEXT(""), *LapTime(S.best_lap_time)), Size.X - 320.f, 84.f, EAlign::Right, 300.f, 16.f, FGlpPainter::Srgb(0.6f, 0.9f, 1.f));
+		Plated(FString::Printf(TEXT("%sBEST %s"), S.ghost_visible ? TEXT("GHOST  ") : TEXT(""), *LapTime(S.best_lap_time)), Size.X - 320.f, 84.f, 300.f, 16.f, FGlpPainter::Srgb(0.6f, 0.9f, 1.f));
 	}
 	// The updater's word in the corner while a download the player asked for runs or waits to be installed (0.78); the
 	// title screen has its own line.
 	if (const int32 Update = G->UpdatePhase(); S.phase != GLP_PHASE_SELECT_TRANSMISSION && Update >= GLP_UPDATE_DOWNLOADING && Update <= GLP_UPDATE_QUIT_NOW)
 	{
-		P.Text(G->UpdateNotice(), Size.X - 620.f, bFilm ? 84.f : 104.f, EAlign::Right, 600.f, 14.f, FGlpPainter::Srgb(0.6f, 0.9f, 1.f));
+		// In the film view the bar has no line left under the best lap's: the notice stands on that line, to its left
+		// (until 0.80 it was printed over it in a grudge match).
+		const float Right = bFilm && S.grudge_match ? 230.f : 20.f;
+		Plated(G->UpdateNotice(), Size.X - Right - 600.f, bFilm ? 84.f : 104.f, 600.f, 14.f, FGlpPainter::Srgb(0.6f, 0.9f, 1.f));
+	}
+	// Under the clock (Hud.cs): the frame rate when F6 or the menu asked for it, and the credit's weather when it is
+	// not a clear day (the grip is down on a wet road). The damage gauge (T6) belongs above them.
+	struct FLeftLine
+	{
+		FString Text;
+		FLinearColor Colour;
+	};
+	TArray<FLeftLine, TInlineAllocator<2>> LeftLines;
+	// The plate is as wide as its widest line; the counter's by three figures, so that it does not breathe with them.
+	float LeftWide = 0.f;
+	if (G->ShowsFrameRate())
+	{
+		// Dashes for the game's first half second: there is no count yet, and a nought would be a figure.
+		LeftLines.Add({ FrameRate.Shown() > 0 ? FString::Printf(TEXT("%d FPS"), FrameRate.Shown()) : FString(TEXT("-- FPS")), FGlpPainter::Srgb(0.7f, 0.9f, 0.7f) });
+		LeftWide = P.TextWidth(TEXT("000 FPS"), 16.f);
+	}
+	if (const TCHAR* Weather = GlpHudLines::WeatherLabel(S.weather); *Weather)
+	{
+		LeftLines.Add({ Weather, FGlpPainter::Srgb(0.75f, 0.85f, 1.f) });
+		LeftWide = FMath::Max(LeftWide, P.TextWidth(Weather, 16.f));
+	}
+	const float LeftFirst = GlpHudLines::First(bFilm);
+	if (!bFilm && !LeftLines.IsEmpty())
+	{
+		P.Rect(12.f, LeftFirst - 15.f, LeftWide + 16.f, LeftLines.Num() * GlpHudLines::Pitch, Band);
+	}
+	for (int32 i = 0; i < LeftLines.Num(); i++)
+	{
+		P.Text(LeftLines[i].Text, 20.f, LeftFirst + i * GlpHudLines::Pitch, EAlign::Left, -1.f, 16.f, LeftLines[i].Colour);
 	}
 
 	// ---- centre messages ------------------------------------------------------------------------
@@ -364,7 +508,7 @@ void AGlpHud::DrawHUD()
 		const FString Notice = G->UpdateNotice();
 		if (Notice.IsEmpty())
 		{
-			Centred(FString::Printf(TEXT("v%s   F10 or the menu: check for updates"), *G->Version()), Y + 370.f, 15.f, Grey);
+			Centred(FString::Printf(TEXT("v%s   F6 frame rate   F10 or the menu: check for updates"), *G->Version()), Y + 370.f, 15.f, Grey);
 		}
 		else
 		{

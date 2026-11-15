@@ -171,6 +171,16 @@ void FGlpPainter::Texture(UTexture* Texture, float X, float Y, float W, float H)
 	Canvas->DrawItem(Item);
 }
 
+float FGlpPainter::TextWidth(const FString& Text, float Size) const
+{
+	if (Text.IsEmpty() || !Font || !FSlateApplication::IsInitialized() || Scale <= 0.f)
+	{
+		return 0.f;
+	}
+	const FSlateFontInfo Info(Font, Size * Scale * PointsPerPixel, TEXT("Bold"));
+	return static_cast<float>(FSlateApplication::Get().GetRenderer()->GetFontMeasureService()->Measure(Text, Info).X) / Scale;
+}
+
 void FGlpPainter::Text(const FString& Text, float X, float Y, EAlign Align, float Width, float Size, const FLinearColor& Colour) const
 {
 	if (Text.IsEmpty() || !Font || !FSlateApplication::IsInitialized())

@@ -96,7 +96,8 @@ opens the showroom (0.79, below), 1, 2 and
 3 the gearbox, H the weather, L the hour (day, sunrise, dusk, night, random), Enter starts; then the arrow keys or
 WASD drive, E and Q (or 1 to 7, N, R) change gear, Shift is the clutch, Space skips the replay or puts the car back on
 the road, C steps the camera (the seat, behind the car, the film view), U the units, Esc opens the menu, F5
-starts a new game, F9 the attract mode, F10 checks for updates, F11 full screen and F12 takes a screenshot. A gamepad
+starts a new game, F6 shows the frame rate under the clock, F9 the attract mode, F10 checks for updates, F11 full
+screen and F12 takes a screenshot. A gamepad
 has the Godot version's layout (left stick steers, the triggers are the pedals, RB / LB shift and pick the gearbox on
 the title screen, X clutch, A starts, B skips, Y camera, Back the menu, the d-pad stands in for all). At the end of a
 credit that makes the top ten, the initials are entered as in the Godot version. Settings, the best laps, the high
@@ -268,7 +269,7 @@ and the night's sounds for an ambience in `GlpAudio`.
   with a film's black bars and the speed, gear and revs set in the lower one. C steps seat, chase, film;
   `-GlpView=cockpit|chase|film`.
 - **The menu** (T1; `GlpMenu.h`, `AGlpGame::RunMenu`, drawn by `GlpHud`). Esc or the pad's Back: CONTINUE, NEW GAME,
-  CAR (since 0.79 it opens the showroom), PAINT (0.79), CAMERA, the upscaler's lines, WEATHER, LIGHT, UNITS, FULL SCREEN, the updater's line, QUIT GAME; up and down
+  CAR (since 0.79 it opens the showroom), PAINT (0.79), CAMERA, the upscaler's lines, WEATHER, LIGHT, UNITS, FULL SCREEN, FRAME RATE (0.81), the updater's line, QUIT GAME; up and down
   choose, left and right change, Enter or a click takes a line. The game holds still and silent behind it
   (`GlpAudio::SetHush`). For checks the keys are scripted as everywhere (`-GlpKeys=3:Escape+4:Up+5:Enter`) and so is
   the mouse, which a hidden window never has: `-GlpMouse=6:800,420+7:800,420:click`, in the HUD's 1600 x 900 canvas.
